@@ -1,121 +1,134 @@
 ---
-title: Скилл new-project — спецификация
-description: Что делает скилл «новый проект», как устроены папки, защита внутренних файлов, опрос, анализ стека и проверка. Читать перед любыми изменениями скилла.
+title: new-project skill — design spec
+description: What the "new project" skill does, folder layout, protection of internal files, interview, stack analysis and verification. Read before changing the skill.
 status: draft
 files: [skills/new-project/]
 related: []
 updated: 2026-11-02
 ---
 
-# Скилл `new-project` — спецификация
+# `new-project` skill — design spec
 
-## 1. Цель
-По фразе «новый проект» Claude проводит опрос, анализирует платформы, стек и архитектуру,
-согласует решения с пользователем и создаёт каркас проекта по единому стандарту.
-Итог: все проекты устроены одинаково, а внутренние файлы (CLAUDE.md, docs/, .claude/)
-физически не могут попасть в публичный репозиторий.
+## 1. Goal
+When the user says "новый проект" (new project), Claude runs an interview, analyzes platforms,
+stack and architecture, agrees every decision with the user, and scaffolds the project to one
+standard. Result: all projects share the same layout, and internal files (CLAUDE.md, docs/,
+.claude/) physically cannot end up in a public repository.
 
-Пользователь — менеджер, код не читает. Скилл общается по-русски, простыми словами,
-термины поясняет при первом упоминании, каждое решение показывает и ждёт «ок».
+The user is a manager who does not read code. The skill talks to the user in Russian, in plain
+words, explains terms on first use, presents each decision and waits for "ок".
 
-## 2. Структура папок (подход «приватная рабочая папка», вариант 4)
-Обоснование выбора — сравнение 5 подходов в истории сессии 2026-11-02: симлинки
-наружу проекта ломают правила с `paths:` (docs: code.claude.com/docs/en/memory),
-а CLAUDE.md подхватывается из всех родительских папок.
+## 2. Language policy
+- **English:** all code, code comments, identifiers, every Markdown file (CLAUDE.md, docs/,
+  .claude/rules/, README, ADRs, specs, SKILL.md and its references) and git commit messages.
+- **Russian:** conversation with the user only. Interview answers are written to `brief.md`
+  in English.
+- **App UI languages:** chosen in the interview; UI strings live in localization files,
+  never hard-coded.
+
+## 3. Folder layout (private workspace with nested code repo)
+Rationale: symlinks pointing outside the project break path-scoped rules (`paths:`) and are
+skipped in Cowork, while CLAUDE.md is loaded from every parent directory
+(https://code.claude.com/docs/en/memory). Five approaches were compared on 2026-11-02;
+this one is the only one that is native to Claude Code, works on Windows, keeps one private
+repo, and keeps the code repo free of internal files.
 
 ```
-~/Projects/                      ← латиница: кириллица в пути ломает сборку Android/Flutter
-  CoreKit/                       ← этот репозиторий: скиллы и шаблоны
-  Core/                          ← ОДИН приватный репозиторий `core` на GitHub
-    README.md, PROJECTS.md       ← PROJECTS.md: одна строка на проект
-    <имя-проекта>/               ← здесь запускается Claude Code
+~/Projects/                      ← Latin only: non-ASCII paths break Android/Flutter builds
+  CoreKit/                       ← this repo: skills and templates
+  Core/                          ← ONE private GitHub repo `core`
+    README.md, PROJECTS.md       ← PROJECTS.md: one line per project
+    <project-name>/              ← Claude Code is launched here
       CLAUDE.md
       docs/INDEX.md, brief.md, architecture.md, features/, decisions/
       .claude/rules/*.md
-      code/                      ← отдельный git-репозиторий кода; Core его игнорирует
+      code/                      ← separate git repo with the code; ignored by Core
 ```
-Имя проекта: латиница, строчные, через дефис, без пробелов. Скилл предлагает имя сам.
+Project name: Latin, lowercase, hyphen-separated, no spaces. The skill proposes the name.
 
-## 3. Запуск
-Срабатывает на: «новый проект», «создай проект», «начнём новое приложение», «new project».
-Не срабатывает на: «новый проект в Jira/Notion», «создай задачу», «добавь функцию в проект»,
-вопросы про уже существующий проект.
+## 4. Triggers
+Fires on: "новый проект", "создай проект", "начнём новое приложение", "new project".
+Does not fire on: "новый проект в Jira/Notion", "создай задачу", "добавь функцию в проект",
+questions about an existing project.
 
-## 4. Поток работы
-0. **Предпроверки.** git, gh (+ `gh auth status`), папка ~/Projects/Core (если нет — создать
-   и инициализировать), свободное имя проекта (если папка или репозиторий есть — стоп и вопрос).
-   Инструменты стека проверяются после выбора стека (шаг 3).
-1. **Опрос** по 2–3 вопроса за раз (AskUserQuestion), темы:
-   суть и для кого; платформы; тип (приложение, утилита, бот, сайт); функции v1 (3–7) и «потом»;
-   данные (устройство/облако, вход, офлайн); внешние сервисы (API, платежи, уведомления);
-   дизайн (стиль, тёмная тема, языки); будет ли код публичным; критерии готовности.
-   После каждого блока ответы дописываются в `docs/brief.md` — опрос можно продолжить позже.
-2. **Анализ** через `superpowers:brainstorming` (если не установлен — встроенная упрощённая
-   версия из references/analysis.md):
-   - ограничения платформ (iOS — Mac + Xcode + Apple Developer; Windows-сборка — на Windows и т.п.);
-   - 2–3 варианта стека с оценкой: покрытие платформ, офлайн, «родной» вид, насколько хорошо
-     ИИ-агенты пишут на стеке, сообщество, стоимость, сложность сборки;
-   - один субагент-исследователь проверяет варианты по официальной документации
-     (актуальные версии, поддержка платформ, известные проблемы) и даёт ссылки;
-   - архитектура: части приложения, хранение и синхронизация данных, внешние сервисы, риски.
-   Каждую часть пользователь утверждает «ок». Стек пользователь сам не выбирает — скилл
-   рекомендует с объяснением.
-3. **Запись решений:** `docs/architecture.md`, `docs/decisions/001-stack.md`,
-   `002-architecture.md` (ADR), обновить `docs/INDEX.md`. Проверить инструменты стека.
-4. **Каркас:** папки и файлы из templates/, `code/` через штатный генератор стека
-   (например `flutter create`), `.gitignore` по стеку, хуки, `git init` в code/,
-   строка в Core/PROJECTS.md.
-5. **Git и GitHub:**
-   - коммит в `core` и в `code/`;
-   - `core`: если на GitHub нет — `gh repo create core --private`; pre-push-хук Core
-     блокирует push, если `gh api repos/OWNER/core --jq .private` ≠ true;
-   - `code/`: по умолчанию `--private`; публичный — только если в опросе явно сказано «публичный».
-6. **Проверка:** сборка/запуск пустого проекта командой стека; итог — простыми словами,
-   что создано, как проверить самому, что может сломаться.
-7. **По желанию:** план первой версии через `superpowers:writing-plans`.
+## 5. Flow
+0. **Preflight.** git, gh (+ `gh auth status`), ~/Projects/Core exists (create and init if not),
+   project name is free (if the folder or GitHub repo exists — stop and ask).
+   Stack tooling is checked after the stack is chosen (step 3).
+1. **Interview**, 2–3 questions at a time (AskUserQuestion), topics:
+   what it does and for whom; platforms; type (app, utility, bot, website); v1 features (3–7)
+   and "later"; data (device/cloud, sign-in, offline); external services (APIs, payments,
+   notifications); design (style, dark theme, UI languages); will the code be public;
+   definition of done. After each block, answers are appended to `docs/brief.md` so the
+   interview can be resumed later.
+2. **Analysis** via `superpowers:brainstorming` (fallback without Superpowers:
+   references/analysis.md):
+   - platform constraints (iOS needs a Mac, Xcode and an Apple Developer account; Windows
+     builds need Windows, etc.);
+   - 2–3 stack options scored on: platform coverage, offline, native look and feel, how well
+     AI agents write this stack, community, cost, build complexity;
+   - one research subagent checks the options against official documentation (current
+     versions, platform support, known issues) and returns links;
+   - architecture: components, data storage and sync, external services, risks.
+   The user approves each part with "ок". The user does not pick the stack — the skill
+   recommends one and explains why.
+3. **Record decisions:** `docs/architecture.md`, `docs/decisions/001-stack.md`,
+   `002-architecture.md` (ADRs), update `docs/INDEX.md`. Check stack tooling.
+4. **Scaffold:** folders and files from templates/, `code/` via the stack's official generator
+   (e.g. `flutter create`), stack-specific `.gitignore`, hooks, `git init` in code/,
+   a line in Core/PROJECTS.md.
+5. **Git and GitHub:**
+   - commit to `core` and to `code/`;
+   - `core`: if missing on GitHub — `gh repo create core --private`; Core pre-push hook blocks
+     the push unless `gh api repos/OWNER/core --jq .private` is true;
+   - `code/`: `--private` by default; public only if the interview explicitly says so.
+6. **Verify:** build/run the empty project with the stack's command; report in plain Russian
+   what was created, how to check it, and what may break.
+7. **Optional:** v1 implementation plan via `superpowers:writing-plans`.
 
-## 5. Защита внутренних файлов
-- Внутренние файлы лежат вне репозитория кода — утечь нечему.
-- `code/.git/hooks/pre-commit`: блокирует коммит файлов CLAUDE.md, CLAUDE.local.md, AGENTS.md,
-  docs/superpowers/, .claude/, .env*, *.pem, *.key; объясняет по-русски, что делать.
+## 6. Protecting internal files
+- Internal files live outside the code repo — nothing to leak.
+- `code/.git/hooks/pre-commit` blocks committing CLAUDE.md, CLAUDE.local.md, AGENTS.md,
+  docs/superpowers/, .claude/, .env*, *.pem, *.key, and explains what to do.
 - `Core/.gitignore`: `*/code/`, `.env*`, `.DS_Store`.
-- Хуки в .git/hooks не версионируются: скрипт `scripts/install-hooks.sh` ставит их, скилл
-  проверяет наличие.
+- Hooks in .git/hooks are not versioned: `scripts/install-hooks.sh` installs them; the skill
+  checks they are present.
 
-## 6. Содержимое CLAUDE.md проекта (до ~150 строк)
-Суть (1–2 фразы), стек, команды сборки/тестов/запуска (из папки code/), структура папок,
-правила, ссылка на `docs/INDEX.md` обычным текстом (без @-импорта). Правила:
-- после изменения функции обновить её страницу в docs/features/ и поле `updated`;
-- новое архитектурное решение — новый файл docs/decisions/NNN-*.md;
-- после рабочего шага — два коммита: в `code/` и в `Core` (команда указана);
-- не читать .env и ~/.ssh.
+## 7. Project CLAUDE.md (up to ~150 lines)
+Purpose (1–2 sentences), stack, build/test/run commands (run from code/), folder layout,
+rules, link to `docs/INDEX.md` as plain text (no @-import). Rules:
+- all code, comments and Markdown in English; talk to the user in Russian;
+- after changing a feature, update its page in docs/features/ and its `updated` field;
+- a new architectural decision → a new docs/decisions/NNN-*.md;
+- after each working step — two commits: in `code/` and in `Core` (command given);
+- never read .env or ~/.ssh.
 
-## 7. Wiki
-Каждая страница docs/ начинается с YAML-шапки: title, description (что внутри и когда читать),
-status, files, related, updated. INDEX.md — одна строка на файл.
-Правила в `.claude/rules/*.md` с `paths:` относительно папки проекта, например
-`code/test/**` для tests.md.
+## 8. Wiki
+Every docs/ page starts with YAML front matter: title, description (what is inside and when
+to read it), status, files, related, updated. INDEX.md has one line per file.
+Rules in `.claude/rules/*.md` use `paths:` relative to the project folder, e.g. `code/test/**`
+for tests.md.
 
-## 8. Состав скилла (CoreKit)
+## 9. Skill contents (CoreKit)
 ```
 skills/new-project/
-  SKILL.md                    ← короткий: поток и ссылки на references
-  references/interview.md     ← вопросы опроса
-  references/analysis.md      ← критерии анализа, fallback без Superpowers, промпт субагента
-  references/stacks.md        ← стартовые варианты стеков и команды генерации
+  SKILL.md                    ← short: the flow and links to references
+  references/interview.md     ← interview questions
+  references/analysis.md      ← analysis criteria, fallback without Superpowers, subagent prompt
+  references/stacks.md        ← starting stack options and generator commands
   templates/                  ← CLAUDE.md, docs/*, rules/*, gitignore/*
-  scripts/scaffold.sh         ← создаёт структуру из шаблонов
+  scripts/scaffold.sh         ← creates the structure from templates
   scripts/install-hooks.sh, hooks/pre-commit-code, hooks/pre-push-core
-install.sh                    ← копирует skills/* в ~/.claude/skills/
+install.sh                    ← copies skills/* to ~/.claude/skills/
 ```
 
-## 9. Вне первой версии
-Перевод существующих проектов на стандарт (скилл `adopt-project`), обновление старых
-проектов при смене шаблона, PowerShell-версии скриптов для Windows.
+## 10. Out of scope for v1
+Migrating existing projects to the standard (an `adopt-project` skill), updating old projects
+when templates change, PowerShell versions of the scripts for Windows.
 
-## 10. Проверка
-- Evals (skill-creator): срабатывание на 8+ фраз, отсутствие срабатывания на 8+ чужих фраз;
-  2 сценария (Flutter на 4 платформы; утилита только для Mac).
-- Прогон на `~/Projects/Core/test-new-project`: структура, YAML-шапки, хуки блокируют
-  CLAUDE.md в code/, оба коммита есть.
-- GitHub и реальная сборка — проверяет пользователь на Mac по инструкции.
+## 11. Verification
+- Evals (skill-creator): fires on 8+ phrases, does not fire on 8+ unrelated phrases;
+  2 scenarios (Flutter for 4 platforms; a Mac-only utility).
+- Dry run on `~/Projects/Core/test-new-project`: layout, YAML front matter, hook blocks
+  CLAUDE.md in code/, both commits exist.
+- GitHub and a real build — the user checks on the Mac following the instructions.

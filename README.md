@@ -1,5 +1,5 @@
-# CoreKit — скиллы и шаблоны Claude Code
+# CoreKit — Claude Code skills and templates
 
-- `skills/new-project/` — скилл «новый проект»: опрос, анализ стека, каркас по стандарту.
-- `install.sh` — копирует скиллы в `~/.claude/skills/`.
-- `docs/specs/` — спецификации.
+- `skills/new-project/` — the "new project" skill: interview, stack analysis, scaffold to the standard.
+- `install.sh` — copies the skills to `~/.claude/skills/`.
+- `docs/specs/` — design specs.
