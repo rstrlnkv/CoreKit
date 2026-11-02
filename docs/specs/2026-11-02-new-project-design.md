@@ -10,19 +10,21 @@ updated: 2026-11-02
 # `new-project` skill — design spec
 
 ## 1. Goal
-When the user says "новый проект" (new project), Claude runs an interview, analyzes platforms,
+When the user asks to start a new project, Claude runs an interview, analyzes platforms,
 stack and architecture, agrees every decision with the user, and scaffolds the project to one
 standard. Result: all projects share the same layout, and internal files (CLAUDE.md, docs/,
 .claude/) physically cannot end up in a public repository.
 
-The user is a manager who does not read code. The skill talks to the user in Russian, in plain
-words, explains terms on first use, presents each decision and waits for "ок".
+The user may not read code. The skill talks to the user in their language (see §2), in plain
+words, explains terms on first use, presents each decision and waits for explicit approval.
 
 ## 2. Language policy
 - **English:** all code, code comments, identifiers, every Markdown file (CLAUDE.md, docs/,
   .claude/rules/, README, ADRs, specs, SKILL.md and its references) and git commit messages.
-- **Russian:** conversation with the user only. Interview answers are written to `brief.md`
-  in English.
+- **User's language:** conversation with the user only. The language is taken from the user's
+  Claude settings or instructions (user preferences, project instructions, CLAUDE.md);
+  if none is set, use the language the user writes in. Interview answers are written to
+  `brief.md` in English.
 - **App UI languages:** chosen in the interview; UI strings live in localization files,
   never hard-coded.
 
@@ -47,9 +49,10 @@ repo, and keeps the code repo free of internal files.
 Project name: Latin, lowercase, hyphen-separated, no spaces. The skill proposes the name.
 
 ## 4. Triggers
-Fires on: "новый проект", "создай проект", "начнём новое приложение", "new project".
-Does not fire on: "новый проект в Jira/Notion", "создай задачу", "добавь функцию в проект",
-questions about an existing project.
+Fires on a request to start a new app/project in any language, e.g. "new project",
+"start a new app", "новый проект", "создай проект".
+Does not fire on: a new project in another tool ("new project in Jira/Notion"), creating a task,
+adding a feature to an existing project, questions about an existing project.
 
 ## 5. Flow
 0. **Preflight.** git, gh (+ `gh auth status`), ~/Projects/Core exists (create and init if not),
@@ -70,7 +73,7 @@ questions about an existing project.
    - one research subagent checks the options against official documentation (current
      versions, platform support, known issues) and returns links;
    - architecture: components, data storage and sync, external services, risks.
-   The user approves each part with "ок". The user does not pick the stack — the skill
+   The user approves each part explicitly. The user does not pick the stack — the skill
    recommends one and explains why.
 3. **Record decisions:** `docs/architecture.md`, `docs/decisions/001-stack.md`,
    `002-architecture.md` (ADRs), update `docs/INDEX.md`. Check stack tooling.
@@ -82,8 +85,8 @@ questions about an existing project.
    - `core`: if missing on GitHub — `gh repo create core --private`; Core pre-push hook blocks
      the push unless `gh api repos/OWNER/core --jq .private` is true;
    - `code/`: `--private` by default; public only if the interview explicitly says so.
-6. **Verify:** build/run the empty project with the stack's command; report in plain Russian
-   what was created, how to check it, and what may break.
+6. **Verify:** build/run the empty project with the stack's command; report in plain words in the
+   user's language what was created, how to check it, and what may break.
 7. **Optional:** v1 implementation plan via `superpowers:writing-plans`.
 
 ## 6. Protecting internal files
@@ -97,7 +100,8 @@ questions about an existing project.
 ## 7. Project CLAUDE.md (up to ~150 lines)
 Purpose (1–2 sentences), stack, build/test/run commands (run from code/), folder layout,
 rules, link to `docs/INDEX.md` as plain text (no @-import). Rules:
-- all code, comments and Markdown in English; talk to the user in Russian;
+- all code, comments and Markdown in English; talk to the user in their language
+  (from Claude settings or instructions; otherwise the language they write in);
 - after changing a feature, update its page in docs/features/ and its `updated` field;
 - a new architectural decision → a new docs/decisions/NNN-*.md;
 - after each working step — two commits: in `code/` and in `Core` (command given);
