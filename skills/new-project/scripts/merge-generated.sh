@@ -5,7 +5,7 @@
 set -u
 SRC="${1:?generated dir}"; DST="${2:?code dir}"
 [ -d "$SRC" ] && [ -d "$DST" ] || { echo "Both directories must exist." >&2; exit 1; }
-( cd "$SRC" && find . -type f -not -path './.git/*' -not -name .gitignore ) | while read -r f; do
+( cd "$SRC" && find . -type f -not -path './.git/*' -not -path ./.gitignore ) | while IFS= read -r f; do
   if [ -e "$DST/$f" ]; then echo "skipped ${f#./}"
   else mkdir -p "$DST/$(dirname "$f")"; cp -p "$SRC/$f" "$DST/$f"; fi
 done

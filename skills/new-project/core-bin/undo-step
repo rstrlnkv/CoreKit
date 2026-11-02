@@ -1,55 +1,67 @@
 #!/usr/bin/env bash
-# Undoes the last saved step (or the given Step-Id) in both repos with git revert.
-# History is kept. Usage: undo-step [STEP_ID]
+# Undoes the last saved step of THIS project (or the given Step-Id) in both repos with
+# git revert. History is kept. All-or-nothing: on a conflict nothing is changed.
+# Usage: undo-step [STEP_ID]
 set -u
 . "$(dirname "$0")/_locate.sh"
 locate || exit 1
-REPOS="$MAIN $CORE"
 
-for r in $REPOS; do
-  if [ -n "$(git -C "$r" status --porcelain -- $([ "$r" = "$CORE" ] && echo "$CORE_PATHS"))" ]; then
-    echo "Unsaved changes in $(basename "$r"). Run save or discard them first." >&2; exit 1
-  fi
-done
-
-# commits_of <repo> <id> — commits carrying that Step-Id that are not yet undone
-commits_of() {
-  git -C "$1" log --format=%H --grep="^Step-Id: $2\$" | while read -r c; do
-    git -C "$1" log --format=%H -n1 --grep="^Undo-Of: $2\$" | grep -q . || echo "$c"
-  done
+# log_of <code|core> <git log args...> — Core history is limited to this project's folder.
+log_of() {
+  local which="$1"; shift
+  if [ "$which" = code ]; then git -C "$CODE" log "$@"
+  else git -C "$CORE" log "$@" -- "$NAME"; fi
 }
+repo_of() { [ "$1" = code ] && echo "$CODE" || echo "$CORE"; }
+
+if [ -n "$(git -C "$CODE" status --porcelain)" ] || \
+   [ -n "$(git -C "$CORE" status --porcelain -- "$NAME")" ]; then
+  echo "Unsaved changes in this project. Run save or discard them first." >&2; exit 1
+fi
+
+is_undone() { log_of code -n1 --format=%H --grep="^Undo-Of: $1\$" | grep -q . || \
+              log_of core -n1 --format=%H --grep="^Undo-Of: $1\$" | grep -q .; }
+commits_of() { log_of "$1" --format=%H --grep="^Step-Id: $2\$"; }
 
 ID="${1:-}"
 if [ -z "$ID" ]; then
-  # Latest step that has not been undone yet, across both repos.
-  ID=$(for r in $REPOS; do
-         git -C "$r" log --format=%B | sed -n 's/^Step-Id: //p'
-       done | sort -ru | while read -r i; do
-         for r in $REPOS; do git -C "$r" log -n1 --format=%H --grep="^Undo-Of: $i\$" | grep -q . && continue 2; done
-         echo "$i"; break
-       done)
+  # Latest not-yet-undone step of this project, by commit time (robust to clock changes).
+  ID=$( { log_of code --format='%ct %B'; log_of core --format='%ct %B'; } \
+        | awk '/^[0-9]+ /{t=$1} /^Step-Id: /{print t, $2}' | sort -rn -k1,1 | awk '{print $2}' \
+        | while read -r i; do is_undone "$i" || { echo "$i"; break; }; done )
 fi
 [ -n "$ID" ] || { echo "No saved step to undo." >&2; exit 1; }
+if is_undone "$ID"; then echo "Step $ID was already undone."; exit 0; fi
 
 # The project's first step created it; undoing it would delete the project and shared files.
-for r in $REPOS; do
-  for c in $(commits_of "$r" "$ID"); do
-    if [ "$(git -C "$r" rev-list --parents -n1 "$c" | wc -w | tr -d ' ')" = "1" ]; then
+for w in code core; do
+  for c in $(commits_of "$w" "$ID"); do
+    if [ "$(git -C "$(repo_of "$w")" rev-list --parents -n1 "$c" | wc -w | tr -d ' ')" = "1" ]; then
       echo "Step $ID is the project's first step (its creation) and can't be undone with undo-step." >&2
       exit 1
     fi
   done
 done
 
-done_any=0
-for r in $REPOS; do
-  label=$([ "$r" = "$CORE" ] && echo docs || echo code)
-  for c in $(commits_of "$r" "$ID"); do
-    subj=$(git -C "$r" log -1 --format=%s "$c")
-    git -C "$r" revert --no-commit "$c" && \
-      git -C "$r" commit -q -m "Undo step $ID: $subj" -m "Undo-Of: $ID" || {
-        git -C "$r" revert --abort 2>/dev/null; echo "Could not undo in $label (conflict)." >&2; exit 1; }
-    echo "reverted $label ($subj)"; done_any=1
+# Phase 1: apply all reverts without committing; abort everything on any conflict.
+started=""
+abort_all() {
+  for w in $started; do git -C "$(repo_of "$w")" reset -q --merge 2>/dev/null; done
+  echo "Could not undo step $ID: it conflicts with later changes. Nothing was changed." >&2
+  exit 1
+}
+for w in code core; do
+  for c in $(commits_of "$w" "$ID"); do
+    started="$started $w"
+    git -C "$(repo_of "$w")" revert --no-commit "$c" >/dev/null 2>&1 || abort_all
   done
 done
-[ $done_any -eq 1 ] || echo "Step $ID was already undone."
+[ -n "$started" ] || { echo "Nothing to undo for step $ID."; exit 0; }
+
+# Phase 2: commit in each repo that has staged reverts.
+for w in code core; do
+  r=$(repo_of "$w"); git -C "$r" diff --cached --quiet && continue
+  subj=$(git -C "$r" log -1 --format=%s "$(commits_of "$w" "$ID" | head -1)")
+  git -C "$r" commit -q -m "Undo step $ID: $subj" -m "Undo-Of: $ID"
+  echo "reverted $([ "$w" = core ] && echo docs || echo code) ($subj)"
+done
