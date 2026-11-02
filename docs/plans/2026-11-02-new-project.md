@@ -6,7 +6,7 @@
 
 **Architecture:** Deterministic work (folders, templates, git, hooks) lives in bash scripts with bash tests; judgment work (interview, analysis, stack choice) lives in SKILL.md + references. Scripts read `CORE_DIR` (default `~/Projects/Core`) so tests run against a temp folder.
 
-**Tech Stack:** bash 3.2+ (macOS default), git, gh, jq-free JSON parsing (python3 fallback not allowed — use `grep`/`sed`), Markdown.
+**Tech Stack:** bash 3.2+ (macOS default), git, gh, no jq (JSON from hook stdin parsed with `grep`/`sed`), Markdown.
 
 **Spec:** `docs/specs/2026-11-02-new-project-design.md`
 
@@ -38,10 +38,10 @@
 - Create: `skills/new-project/templates/` — `CLAUDE.md.tmpl`, `docs/INDEX.md.tmpl`, `docs/brief.md.tmpl`, `docs/architecture.md.tmpl`, `docs/decisions/001-stack-and-architecture.md.tmpl`, `rules/tests.md.tmpl`, `code/gitignore-common`, `code/settings.local.json.tmpl`, `code/worktreeinclude`, `core/gitignore`, `core/README.md`, `core/PROJECTS.md`
 
 **Interfaces:**
-- Produces: `bash scaffold.sh --name <name> [--dry-run]` → creates `$CORE_DIR/<name>/{CLAUDE.md,docs/...,.claude/rules/tests.md,code/}` and inits `$CORE_DIR` repo if missing; prints `created <path>` / `skipped <path>`; exit 2 on invalid name. Placeholders `{{NAME}}`, `{{PROJECT_DIR}}`, `{{DATE}}` replaced with `sed`.
+- Produces: `bash scaffold.sh --name <name> [--dry-run]` → creates `$CORE_DIR/<name>/{CLAUDE.md,docs/...,.claude/rules/tests.md,code/}` and inits `$CORE_DIR` repo if missing; prints `created <path>` / `skipped <path>`; exit 2 on invalid name. Placeholders `{{NAME}}`, `{{PROJECT_DIR}}`, `{{CORE_DIR}}`, `{{DATE}}` replaced with `sed`.
 - Produces: `tests/lib.sh` with `assert_file`, `assert_no_file`, `assert_contains <file> <text>`, `assert_exit <code> <cmd...>`, `new_sandbox` (temp `CORE_DIR`).
 
-- [ ] Step 1: Write `tests/test_scaffold.sh`: valid name creates every file above; every docs page starts with `---` and has `title:`, `description:`, `status:`, `files:`, `related:`, `updated:`; CLAUDE.md contains `../docs/INDEX.md` and no line starting with `@`; `settings.local.json` contains the absolute project path; names `MyApp`, `my app`, `проект`, `1app` → exit 2; second run → only `skipped` lines and identical checksums; `--dry-run` → nothing on disk.
+- [ ] Step 1: Write `tests/test_scaffold.sh`: valid name creates every file above; every docs page starts with `---` and has `title:`, `description:`, `status:`, `files:`, `related:`, `updated:`; CLAUDE.md contains `../docs/INDEX.md` and no line starting with `@`; `settings.local.json` contains the absolute project path; `$CORE_DIR/PROJECTS.md` gains exactly one line for the project; names `MyApp`, `my app`, `проект`, `1app` → exit 2; second run → only `skipped` lines and identical checksums; `--dry-run` → nothing on disk.
 - [ ] Step 2: `bash tests/run.sh` → FAIL (scaffold.sh missing).
 - [ ] Step 3: Write templates (English) and `scaffold.sh`.
 - [ ] Step 4: `bash tests/run.sh` → PASS.
@@ -82,7 +82,7 @@
 
 **Files:**
 - Create: `skills/new-project/hooks/stop-remind.sh`, `tests/test_stop_hook.sh`
-- Modify: `templates/code/settings.local.json.tmpl` — add `hooks.Stop` calling `bash {{PROJECT_DIR}}/../bin/../.. ` → exact command: `bash "$CORE_DIR_ABS/bin/stop-remind.sh"` (scaffold copies the script to `$CORE_DIR/bin/`).
+- Modify: `templates/code/settings.local.json.tmpl` — add a `Stop` hook with command `bash "{{CORE_DIR}}/bin/stop-remind.sh"`; `scaffold.sh` copies the script to `$CORE_DIR/bin/` and fills `{{CORE_DIR}}` with the absolute path.
 
 **Interfaces:**
 - Consumes: hook JSON on stdin (`cwd`, `stop_hook_active`).
