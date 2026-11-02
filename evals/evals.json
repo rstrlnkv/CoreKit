@@ -1,0 +1,3 @@
+{"skill_name":"new-project","evals":[
+ {"id":1,"name":"eval-1-notes-app","prompt":"новый проект: хочу приложение-заметки с напоминаниями для iPhone, Android и Mac, с синхронизацией между устройствами. Код будет приватным.","expected_output":"Core/<name>/ docs + separate code repo, cross-platform recommendation from scored options, English docs, hooks, skeleton only","files":[]},
+ {"id":2,"name":"eval-2-menubar-utility","prompt":"Хочу маленькую утилиту для Mac в строке меню, которая показывает курс доллара к рублю. Давай начнём новый проект.","expected_output":"Same layout; public code repo without internal files; native Mac recommendation; skeleton only","files":[]}]}
