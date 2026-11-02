@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Undoes the last saved step (or the given Step-Id) in both repos with git revert.
+# History is kept. Usage: undo-step [STEP_ID]
+set -u
+. "$(dirname "$0")/_locate.sh"
+locate || exit 1
+REPOS="$MAIN $CORE"
+
+for r in $REPOS; do
+  if [ -n "$(git -C "$r" status --porcelain -- $([ "$r" = "$CORE" ] && echo "$CORE_PATHS"))" ]; then
+    echo "Unsaved changes in $(basename "$r"). Run save or discard them first." >&2; exit 1
+  fi
+done
+
+# commits_of <repo> <id> — commits carrying that Step-Id that are not yet undone
+commits_of() {
+  git -C "$1" log --format=%H --grep="^Step-Id: $2\$" | while read -r c; do
+    git -C "$1" log --format=%H -n1 --grep="^Undo-Of: $2\$" | grep -q . || echo "$c"
+  done
+}
+
+ID="${1:-}"
+if [ -z "$ID" ]; then
+  # Latest step that has not been undone yet, across both repos.
+  ID=$(for r in $REPOS; do
+         git -C "$r" log --format=%B | sed -n 's/^Step-Id: //p'
+       done | sort -ru | while read -r i; do
+         for r in $REPOS; do git -C "$r" log -n1 --format=%H --grep="^Undo-Of: $i\$" | grep -q . && continue 2; done
+         echo "$i"; break
+       done)
+fi
+[ -n "$ID" ] || { echo "No saved step to undo." >&2; exit 1; }
+
+done_any=0
+for r in $REPOS; do
+  label=$([ "$r" = "$CORE" ] && echo docs || echo code)
+  for c in $(commits_of "$r" "$ID"); do
+    subj=$(git -C "$r" log -1 --format=%s "$c")
+    git -C "$r" revert --no-commit "$c" && \
+      git -C "$r" commit -q -m "Undo step $ID: $subj" -m "Undo-Of: $ID" || {
+        git -C "$r" revert --abort 2>/dev/null; echo "Could not undo in $label (conflict)." >&2; exit 1; }
+    echo "reverted $label ($subj)"; done_any=1
+  done
+done
+[ $done_any -eq 1 ] || echo "Step $ID was already undone."

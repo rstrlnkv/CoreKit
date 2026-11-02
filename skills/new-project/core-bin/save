@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Saves one working step: commits the code repo and this project's docs in Core
+# with the same message and a shared "Step-Id" trailer.
+# Usage: save "<message>" [--push]
+set -u
+. "$(dirname "$0")/_locate.sh"
+MSG=""; PUSH=0
+for a in "$@"; do case "$a" in --push) PUSH=1 ;; *) MSG="$a" ;; esac; done
+[ -n "$MSG" ] || { echo 'Usage: save "<message>" [--push]' >&2; exit 2; }
+locate || exit 1
+
+# Make sure protective hooks are in place.
+if [ ! -x "$MAIN/.git/hooks/pre-commit" ] || [ ! -x "$CORE/.git/hooks/pre-push" ]; then
+  CORE_DIR="$CORE" bash "$CORE/bin/install-hooks" "$PROJECT" >/dev/null || exit 1
+fi
+
+ID=$(date +%Y%m%d-%H%M%S); saved=0
+git -C "$CODE" add -A
+if ! git -C "$CODE" diff --cached --quiet; then
+  git -C "$CODE" commit -q -m "$MSG" -m "Step-Id: $ID" || { echo "Code commit failed; nothing saved." >&2; exit 1; }
+  echo "saved code ($(git -C "$CODE" rev-parse --abbrev-ref HEAD))"; saved=1
+fi
+# shellcheck disable=SC2086
+git -C "$CORE" add -A -- $CORE_PATHS
+if ! git -C "$CORE" diff --cached --quiet -- $CORE_PATHS; then
+  git -C "$CORE" commit -q -m "$MSG" -m "Step-Id: $ID" -- $CORE_PATHS || { echo "Docs commit failed." >&2; exit 1; }
+  echo "saved docs"; saved=1
+fi
+[ $saved -eq 1 ] || echo "nothing to save"
+
+if [ $PUSH -eq 1 ]; then
+  for r in "$CODE" "$CORE"; do
+    if git -C "$r" remote get-url origin >/dev/null 2>&1; then
+      git -C "$r" push -q -u origin HEAD && echo "pushed $(basename "$r")" || { echo "Push failed: $r" >&2; exit 1; }
+    else
+      echo "no remote for $(basename "$r") — skipped push"
+    fi
+  done
+fi

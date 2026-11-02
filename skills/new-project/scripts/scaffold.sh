@@ -68,6 +68,16 @@ put "$TPL/core/gitignore"   "$CORE_DIR/.gitignore" copy
 put "$TPL/core/README.md"   "$CORE_DIR/README.md" copy
 put "$TPL/core/PROJECTS.md" "$CORE_DIR/PROJECTS.md" copy
 
+# Shared commands and hook sources (copied once; never overwritten)
+put "$SKILL_DIR/core-bin/save"           "$CORE_DIR/bin/save" copy
+put "$SKILL_DIR/core-bin/undo-step"      "$CORE_DIR/bin/undo-step" copy
+put "$SKILL_DIR/core-bin/_locate.sh"     "$CORE_DIR/bin/_locate.sh" copy
+put "$SKILL_DIR/scripts/install-hooks.sh" "$CORE_DIR/bin/install-hooks" copy
+for h in blocked-patterns pre-commit-code pre-push-code pre-push-core; do
+  put "$SKILL_DIR/hooks/$h" "$CORE_DIR/hooks/$h" copy
+done
+[ $DRY -eq 1 ] || chmod +x "$CORE_DIR/bin/save" "$CORE_DIR/bin/undo-step" "$CORE_DIR/bin/install-hooks" 2>/dev/null
+
 # Project docs
 put "$TPL/CLAUDE.md.tmpl"            "$P/CLAUDE.md"
 put "$TPL/docs/INDEX.md.tmpl"        "$P/docs/INDEX.md"
