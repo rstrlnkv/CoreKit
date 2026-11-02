@@ -1,0 +1,33 @@
+# {{NAME}}
+
+<!-- Internal file. Lives in the private Core repo; never commit it to the code repo. -->
+
+## Purpose
+{{PURPOSE}}
+
+## Stack
+See `../docs/decisions/001-stack-and-architecture.md`. Fill in after the analysis step.
+
+## Commands (run in `code/`)
+- Build: _set after scaffolding_
+- Test: _set after scaffolding_
+- Run: _set after scaffolding_
+
+## Layout
+- `code/` — the code repository (this is where Claude Code is launched).
+- `../docs/` — project wiki. Start with `../docs/INDEX.md` (one line per page).
+- `../.claude/rules/` — detailed rules scoped with `paths:`.
+- Docs live in the private `Core` repo; code lives in its own repo.
+
+## Rules
+- Write all code, comments and Markdown in English. Talk to the user in their language
+  (from their Claude settings or instructions; otherwise the language they write in).
+- After each working step run `save "<message>"` (commits code and docs together).
+  To undo a step: `undo-step`. To publish: `save "<message>" --push`.
+  Both commands live in `{{CORE_DIR}}/bin/`.
+- After changing a feature, update its page in `../docs/features/` and its `updated` field.
+- A new architectural decision gets a new file `../docs/decisions/NNN-<slug>.md`.
+- Put specs and plans (e.g. from Superpowers) in `../docs/superpowers/`, not in `code/`.
+- Never edit `../docs/` from a worktree under `code/.claude/worktrees/`; the main session
+  updates docs after merging.
+- Never read `.env` files or `~/.ssh`.
