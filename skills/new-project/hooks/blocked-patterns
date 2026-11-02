@@ -1,0 +1,7 @@
+(^|/)CLAUDE(\.local)?\.md$
+^\.claude/
+^docs/superpowers/
+(^|/)\.env$
+(^|/)\.env\.
+\.pem$
+\.key$

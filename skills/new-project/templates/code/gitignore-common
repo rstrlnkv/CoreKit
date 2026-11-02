@@ -1,7 +1,6 @@
 # Internal Claude files — they live in the private Core repo, never here
 CLAUDE.md
 CLAUDE.local.md
-AGENTS.md
 .claude/
 docs/superpowers/
 
