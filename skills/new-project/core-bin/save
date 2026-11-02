@@ -14,7 +14,13 @@ if [ ! -x "$MAIN/.git/hooks/pre-commit" ] || [ ! -x "$CORE/.git/hooks/pre-push" 
   CORE_DIR="$CORE" bash "$CORE/bin/install-hooks" "$PROJECT" >/dev/null || exit 1
 fi
 
-ID=$(date +%Y%m%d-%H%M%S); saved=0
+ID=$(date +%Y%m%d-%H%M%S); n=1; base="$ID"
+# Keep Step-Ids unique even for several saves within one second.
+while git -C "$CODE" log --all --format=%B 2>/dev/null | grep -qx "Step-Id: $ID" || \
+      git -C "$CORE" log --format=%B 2>/dev/null | grep -qx "Step-Id: $ID"; do
+  n=$((n + 1)); ID="$base-$n"
+done
+saved=0
 git -C "$CODE" add -A
 if ! git -C "$CODE" diff --cached --quiet; then
   git -C "$CODE" commit -q -m "$MSG" -m "Step-Id: $ID" || { echo "Code commit failed; nothing saved." >&2; exit 1; }

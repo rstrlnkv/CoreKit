@@ -31,6 +31,16 @@ if [ -z "$ID" ]; then
 fi
 [ -n "$ID" ] || { echo "No saved step to undo." >&2; exit 1; }
 
+# The project's first step created it; undoing it would delete the project and shared files.
+for r in $REPOS; do
+  for c in $(commits_of "$r" "$ID"); do
+    if [ "$(git -C "$r" rev-list --parents -n1 "$c" | wc -w | tr -d ' ')" = "1" ]; then
+      echo "Step $ID is the project's first step (its creation) and can't be undone with undo-step." >&2
+      exit 1
+    fi
+  done
+done
+
 done_any=0
 for r in $REPOS; do
   label=$([ "$r" = "$CORE" ] && echo docs || echo code)
