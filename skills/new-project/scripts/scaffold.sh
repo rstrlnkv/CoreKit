@@ -72,6 +72,7 @@ put "$TPL/core/PROJECTS.md" "$CORE_DIR/PROJECTS.md" copy
 put "$SKILL_DIR/core-bin/save"           "$CORE_DIR/bin/save" copy
 put "$SKILL_DIR/core-bin/undo-step"      "$CORE_DIR/bin/undo-step" copy
 put "$SKILL_DIR/core-bin/_locate.sh"     "$CORE_DIR/bin/_locate.sh" copy
+put "$SKILL_DIR/core-bin/stop-remind.sh" "$CORE_DIR/bin/stop-remind.sh" copy
 put "$SKILL_DIR/scripts/install-hooks.sh" "$CORE_DIR/bin/install-hooks" copy
 for h in blocked-patterns pre-commit-code pre-push-code pre-push-core; do
   put "$SKILL_DIR/hooks/$h" "$CORE_DIR/hooks/$h" copy

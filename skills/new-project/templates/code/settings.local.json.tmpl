@@ -1,5 +1,14 @@
 {
   "permissions": {
     "additionalDirectories": ["{{PROJECT_DIR}}"]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "bash \"{{CORE_DIR}}/bin/stop-remind.sh\"" }
+        ]
+      }
+    ]
   }
 }
