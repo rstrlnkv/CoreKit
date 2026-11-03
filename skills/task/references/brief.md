@@ -19,7 +19,9 @@ The first line of every brief, exactly. `<path>` is `fix`, `full`, `question`, `
    them in `files:`.
 4. **Check** — the command to run for this step: the touched modules' tests, or the project's
    `check:` line when this is the final run.
-5. **Budget** (only if `maxTurns` is not honoured) — "stop after about 60 turns and return what
+5. **Plugin paths** (engineer and verifier only) — the absolute paths of the plugin's
+   `reference/wiki.md` and `scripts/wiki-check.sh`, which an agent cannot find by itself.
+6. **Budget** (only if `maxTurns` is not honoured) — "stop after about 60 turns and return what
    is done and what is left".
 
 ## Never

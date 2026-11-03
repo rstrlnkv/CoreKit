@@ -164,4 +164,10 @@ sec_has "$PA" release 'one engineer call'
 sec_has "$PA" release '<version>'
 assert_contains "$PA" 'was clean at Start'
 
+# brief.md passes the plugin file paths that engineer and verifier cannot find by themselves.
+assert_contains "$BR" 'Plugin paths'
+assert_contains "$BR" '(engineer and verifier only)'
+assert_contains "$BR" 'reference/wiki.md'
+assert_contains "$BR" 'scripts/wiki-check.sh'
+
 finish
