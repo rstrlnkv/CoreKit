@@ -14,7 +14,7 @@ locate() {
   fi
   # Core-level files that belong to every step: this project plus shared files.
   CORE_PATHS="$NAME"
-  for f in PROJECTS.md README.md .gitignore bin hooks; do
+  for f in PROJECTS.md README.md .gitignore .coredev standards knowledge session-rules.md bin hooks; do
     [ -e "$CORE/$f" ] && CORE_PATHS="$CORE_PATHS $f"
   done
   return 0

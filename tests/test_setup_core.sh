@@ -116,6 +116,43 @@ printf '#!/bin/sh\necho gh-called >> "%s/gh.log"\n' "$SANDBOX" > "$SANDBOX/stub/
 PATH="$SANDBOX/stub:$PATH" bash "$SC" "$CORE_DIR" >/dev/null
 assert_no_file "$SANDBOX/gh.log"
 
+# --- no git identity: plain message, exit 1, nothing created; with an identity it works
+new_sandbox
+noid() { env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL \
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null HOME="$SANDBOX/nohome" \
+  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.useConfigOnly GIT_CONFIG_VALUE_0=true "$@"; }
+assert_exit 1 noid bash "$SC" "$CORE_DIR"
+echo "$OUT" | grep -q 'user.name' && echo "$OUT" | grep -q 'user.email' && pass || fail "no hint about git identity: $OUT"
+assert_no_file "$CORE_DIR"
+assert_exit 0 bash "$SC" "$CORE_DIR"
+assert_eq "$(git -C "$CORE_DIR" rev-list --count HEAD)" "1" "commit after identity was set"
+# nothing to create: no identity needed
+assert_exit 0 noid bash "$SC" "$CORE_DIR"
+
+# --- the commit fails (a failing pre-commit hook): files exist, exit 1; the next run commits them
+new_sandbox
+git init -q "$CORE_DIR"; mkdir -p "$CORE_DIR/.git/hooks"
+printf '#!/bin/sh\nexit 1\n' > "$CORE_DIR/.git/hooks/pre-commit"; chmod +x "$CORE_DIR/.git/hooks/pre-commit"
+assert_exit 1 bash "$SC" "$CORE_DIR"
+assert_file "$CORE_DIR/.coredev"
+assert_eq "$(git -C "$CORE_DIR" rev-list --count HEAD 2>/dev/null || echo 0)" "0" "commit should have failed"
+rm "$CORE_DIR/.git/hooks/pre-commit"
+assert_exit 0 bash "$SC" "$CORE_DIR"
+echo "$OUT" | grep -q '^created' && fail "re-run created again: $OUT" || pass
+assert_eq "$(git -C "$CORE_DIR" rev-list --count HEAD)" "1" "re-run did not commit the setup files"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "setup files still uncommitted"
+# the retry never sweeps in a user's own README.md or PROJECTS.md
+new_sandbox
+git init -q "$CORE_DIR"; mkdir -p "$CORE_DIR/.git/hooks"
+printf 'mine\n' > "$CORE_DIR/README.md"; printf -- '- app\n' > "$CORE_DIR/PROJECTS.md"
+printf '#!/bin/sh\nexit 1\n' > "$CORE_DIR/.git/hooks/pre-commit"; chmod +x "$CORE_DIR/.git/hooks/pre-commit"
+assert_exit 1 bash "$SC" "$CORE_DIR"
+rm "$CORE_DIR/.git/hooks/pre-commit"
+assert_exit 0 bash "$SC" "$CORE_DIR"
+files=$(git -C "$CORE_DIR" show --name-only --format= HEAD)
+echo "$files" | grep -qx '.coredev' && pass || fail "retry did not commit .coredev: $files"
+echo "$files" | grep -qxE 'README.md|PROJECTS.md' && fail "retry swept in user files: $files" || pass
+
 # --- usage errors
 assert_exit 2 bash "$SC" --bogus
 finish

@@ -68,8 +68,9 @@ above. Internal files never sit inside the code repo, so publishing the code can
 Five safety layers: separate folders, `.gitignore`, pre-commit and pre-push hooks in the code
 repo, and a Core pre-push hook that refuses to push unless the GitHub repo is private.
 
-`bin/save "<message>"` commits code and docs together as one step; `bin/undo-step` reverts the
-last step in both (with `git revert`, history kept). A Stop hook reminds Claude to save.
+Claude runs the plugin's `save` tool to commit code and docs together as one step, and `undo-step`
+to revert the last step in both (with `git revert`, history kept). Nothing is copied into your
+docs repo. A Stop hook reminds Claude to save.
 
 ## Known limitations
 - Auto-triggering competes with other planning skills (e.g. Superpowers' brainstorming). Start it

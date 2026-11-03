@@ -16,6 +16,8 @@ input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "clean repo sho
 echo x > "$C/new.txt"
 OUT=$(input "$C" false | bash "$H" 2>&1); rc=$?
 assert_eq "$rc" "2" "dirty code should block"; echo "$OUT" | grep -q 'save' && pass || fail "message lacks save"
+echo "$OUT" | grep -qF "bash \"$SCRIPTS/save\"" && pass || fail "message does not name the plugin's save ($SCRIPTS/save): $OUT"
+echo "$OUT" | grep -qF "/bin/save" && fail "message names a Core/bin copy: $OUT" || pass
 echo "$OUT" | grep -q 'waiting for the user' && pass || fail "message lacks the waiting-for-approval case"
 # already reminded -> 0
 input "$C" true | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "stop_hook_active must not loop"

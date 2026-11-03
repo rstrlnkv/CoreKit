@@ -80,4 +80,19 @@ sleep 1; echo "v3" > "$C/app.txt"; echo y >> "$P/docs/brief.md"
 (cd "$C" && bash "$SAVE" "Publish" --push) > "$SANDBOX/out" 2>&1
 assert_eq "$(git -C "$SANDBOX/code.git" log -1 --format=%s main 2>/dev/null)" "Publish"
 assert_eq "$(git -C "$SANDBOX/core.git" log -1 --format=%s main 2>/dev/null)" "Publish"
+# knowledge/standards/.coredev changes ride along with the step
+mkdir -p "$CORE_DIR/knowledge"; echo "symptom -> cause -> guard" > "$CORE_DIR/knowledge/engineer.md"
+echo "a note" >> "$CORE_DIR/standards/README.md"; printf 'x\n' > "$CORE_DIR/session-rules.md"
+sleep 1; echo "v3" > "$C/app.txt"
+(cd "$C" && bash "$SAVE" "With knowledge") >/dev/null 2>&1
+files=$(git -C "$CORE_DIR" show --name-only --format= HEAD)
+for f in knowledge/engineer.md standards/README.md session-rules.md; do
+  echo "$files" | grep -qx "$f" && pass || fail "$f not in the step commit: $files"
+done
+assert_eq "$(git -C "$CORE_DIR" status --porcelain | grep -v 'other/')" "" "knowledge changes left uncommitted"
+# a knowledge-only change is a step of its own
+echo "more" >> "$CORE_DIR/knowledge/engineer.md"; nd=$(cnt "$CORE_DIR")
+(cd "$C" && bash "$SAVE" "Knowledge only") >/dev/null 2>&1
+assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "knowledge-only change not saved"
+
 finish
