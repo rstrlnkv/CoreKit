@@ -355,7 +355,9 @@ One ✗ → stop; the finding goes to engineer; no second cycle. Never tags, nev
    `docs/`, `.claude/`. Show the plan in plain words; wait for "ok".
 2. Create `<Core>/<name>/`; copy `CLAUDE.md`, `docs/` and `.claude/` (except
    `settings.local.json` and `worktrees/`) there, then remove them from the repo in one commit
-   (revertible). Docs the user wants to keep public stay in the repo and are listed in
+   (revertible). The same commit appends to the repo's `.gitignore` the coredev lines of the
+   new-project template it lacks (`CLAUDE.md`, `CLAUDE.local.md`, `.claude/`, `docs/superpowers/`,
+   `.env`, `.env.*` and the `.env` template exceptions); user lines are never changed or removed. Docs the user wants to keep public stay in the repo and are listed in
    `<Core>/<name>/CLAUDE.md` as `public-docs: <paths>` (`guard-code` allows them).
 3. Move the repo folder to `<Core>/<name>/code` (`mv`; history unchanged). Refuse if the target
    exists. Print the old and new paths.

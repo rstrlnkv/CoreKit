@@ -14,7 +14,9 @@ No crew, no tester: only you and the script. Talk to the user in plain words; ne
    letters, digits and hyphens). A refusal (one line, exit 2) is final: explain it in plain
    words, say what to do about it, change nothing. Otherwise tell the user in plain words:
    the name; which files move to `<Core>/<name>/`; that git history stays and one commit
-   "Move internal Claude files to Core" removes them from the repo; that the folder itself is
+   "Move internal Claude files to Core" removes them from the repo and adds the coredev ignore
+   lines the repo's `.gitignore` lacks (listed under "add to code/.gitignore"; the user's own lines
+   stay as they are), so local Claude files never reach a commit; that the folder itself is
    moved to `<Core>/<name>/code`, so the old path stops working; what gets created.
    If the plan lists `CLAUDE.md` or `.claude/` under "stays in code (ignored by git)", tell
    the user: the Core gets a template `CLAUDE.md`, and their own file stays in `code/`.

@@ -28,6 +28,9 @@
   help the user write their own standards into `<Core>/standards/`; the plugin ships none.
   `reference/knowledge.md` defines the knowledge files (`docs/knowledge/`, `<Core>/knowledge/`).
 - Added `docs/migration-0.2.md`: the seven steps for an existing 0.1.x user.
+- `/coredev:task adopt` adds the missing coredev ignore lines (`CLAUDE.md`, `.claude/`, `.env`, ...)
+  to the repo's `.gitignore` in its "Move internal Claude files to Core" commit, so a local
+  `.claude/settings.local.json` or a `.claude/worktrees/` worktree never blocks `save`.
 - Added `/coredev:task <task>`: the orchestrator runs a task along one of four paths (`fix`,
   `full`, `question`, `batch`) and ends with a report with proof and one commit.
 - `/coredev:task release <version>` runs seven checks (tests, wiki, version, changelog) and commits the release; it tags and pushes nothing.

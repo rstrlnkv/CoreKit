@@ -59,7 +59,7 @@ C="$P/code"
 assert_eq "$(git -C "$C" rev-list --count HEAD)" "$((N0 + 1))" "commit count"
 assert_eq "$(git -C "$C" log -1 --format=%s)" "Move internal Claude files to Core" "repo commit subject"
 assert_eq "$(git -C "$C" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ';')" \
-  ".claude/settings.json;CLAUDE.md;docs/guide.md;" "removed files"
+  ".claude/settings.json;.gitignore;CLAUDE.md;docs/guide.md;" "removed files (and the .gitignore lines)"
 assert_file "$C/.claude/settings.local.json"
 assert_file "$C/.claude/worktrees/w/f.txt"
 assert_file "$C/src/a.sh"
@@ -96,7 +96,7 @@ assert_contains "$P/CLAUDE.md" "public-docs: docs/"
 assert_contains "$P/CLAUDE.md" "check: bash tests/run.sh"
 assert_not_contains "$P/CLAUDE.md" "check: <set after scaffolding>"
 assert_eq "$(git -C "$C" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ';')" \
-  ".claude/settings.json;CLAUDE.md;" "removed files (public docs kept)"
+  ".claude/settings.json;.gitignore;CLAUDE.md;" "removed files (public docs kept)"
 assert_file "$P/docs/INDEX.md"
 bash "$WC" "$P" >/dev/null 2>&1 && pass || fail "wiki-check (public docs): $(bash "$WC" "$P" 2>&1)"
 
@@ -168,6 +168,13 @@ echo "$OUT" | grep -q "could not commit" && pass || fail "commit failure message
 after="$(state "$SANDBOX/in" "$CORE_DIR"; find "$SANDBOX" -not -path '*/.git/*' | LC_ALL=C sort)"
 assert_eq "$after" "$before" "commit failure changed something"
 assert_eq "$(git -C "$F" diff --cached --name-only)" "" "index not restored"
+# the same with a .gitignore of the user's: it comes back byte for byte
+printf 'build/\n' > "$F/.gitignore"; git -C "$F" add .gitignore; git -C "$F" commit -q --no-verify -m gi
+before="$(state "$SANDBOX/in" "$CORE_DIR"; find "$SANDBOX" -not -path '*/.git/*' | LC_ALL=C sort)"
+assert_exit 2 bash "$AD" --from "$F"
+after="$(state "$SANDBOX/in" "$CORE_DIR"; find "$SANDBOX" -not -path '*/.git/*' | LC_ALL=C sort)"
+assert_eq "$after" "$before" "commit failure changed something (existing .gitignore)"
+assert_eq "$(cat "$F/.gitignore")" "build/" ".gitignore not restored"
 
 # --- spaces and non-ASCII characters in the folder and in file names
 new_sandbox; setup_core
@@ -187,13 +194,15 @@ assert_file "$P/code/src/a.sh"
 assert_eq "$(git -C "$P/code" status --porcelain)" "" "code repo dirty"
 bash "$WC" "$P" >/dev/null 2>&1 && pass || fail "wiki-check (non-ASCII): $(bash "$WC" "$P" 2>&1)"
 
-# --- a repo with no internal files: no repo commit; CLAUDE.md comes from the template
+# --- a repo with no internal files: the repo commit only adds the .gitignore lines; CLAUDE.md comes
+# from the template
 new_sandbox; setup_core
 F="$SANDBOX/in/bare-app"; mkdir -p "$F"; git init -q "$F" && git -C "$F" symbolic-ref HEAD refs/heads/main
 echo code > "$F/main.sh"; git -C "$F" add -A && git -C "$F" commit -q -m "initial"
 assert_exit 0 bash "$AD" --from "$F" --check "make test"
 P="$CORE_DIR/bare-app"
-assert_eq "$(git -C "$P/code" rev-list --count HEAD)" "1" "no repo commit"
+assert_eq "$(git -C "$P/code" rev-list --count HEAD)" "2" "one repo commit"
+assert_eq "$(git -C "$P/code" show --name-only --format= HEAD)" ".gitignore" "the repo commit holds only .gitignore"
 assert_contains "$P/CLAUDE.md" "# bare-app"
 assert_contains "$P/CLAUDE.md" "check: make test"
 assert_not_contains "$P/CLAUDE.md" "check: <set after scaffolding>"
@@ -348,5 +357,49 @@ assert_exit 0 bash "$AD" --from "$F"
 P="$CORE_DIR/wt-app"
 git -C "$P/code/.claude/worktrees/w1" status >/dev/null 2>&1 && pass || fail "worktree broken after adopt: $(git -C "$P/code/.claude/worktrees/w1" status 2>&1)"
 echo "$OUT" | grep -q '^warning:' && fail "worktree warning: $OUT" || pass
+
+# --- the coredev ignore lines: adopt adds the missing ones (never removes a user line), so a local
+# .claude/settings.local.json or a .claude/worktrees/<w> worktree never blocks `save`
+new_sandbox; setup_core; sync_tools
+F="$SANDBOX/in/gi-app"; mkdir -p "$F/src"; git init -q "$F" && git -C "$F" symbolic-ref HEAD refs/heads/main
+printf 'node_modules/\n.env.*\n' > "$F/.gitignore"
+printf '# Old\n' > "$F/CLAUDE.md"; echo 'echo a' > "$F/src/a.sh"
+git -C "$F" add -A && git -C "$F" commit -q -m initial
+# the lines adopt owes: the coredev lines of the new-project template (internal files, .env)
+WANT="$(grep -E '^(CLAUDE|\.claude/|docs/superpowers/|!?\.env)' "$SKILL/templates/code/gitignore-common")"
+[ "$(printf '%s\n' "$WANT" | grep -c .)" -ge 7 ] && pass || fail "fixture: template ignore lines: $WANT"
+assert_exit 0 bash "$AD" --from "$F" --dry-run
+echo "$OUT" | grep -qF "add to code/.gitignore (in the same commit):" && pass || fail "plan lacks the .gitignore lines: $OUT"
+echo "$OUT" | grep -qxF "  .claude/" && pass || fail "plan lacks .claude/: $OUT"
+echo "$OUT" | grep -qxF "  .env.*" && fail "plan re-adds a line the file has: $OUT" || pass
+assert_eq "$(cat "$F/.gitignore")" "$(printf 'node_modules/\n.env.*')" "dry run changed .gitignore"
+assert_exit 0 bash "$AD" --from "$F"
+C="$CORE_DIR/gi-app/code"
+assert_eq "$(sed -n 1,2p "$C/.gitignore")" "$(printf 'node_modules/\n.env.*')" "user lines kept first"
+while IFS= read -r l; do
+  [ -n "$l" ] || continue
+  grep -qxF -- "$l" "$C/.gitignore" && pass || fail ".gitignore lacks: $l"
+done <<< "$WANT"
+assert_eq "$(grep -cxF '.env.*' "$C/.gitignore")" "1" ".env.* duplicated"
+assert_eq "$(git -C "$C" log -1 --format=%s)" "Move internal Claude files to Core" "repo commit subject"
+assert_eq "$(git -C "$C" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ';')" ".gitignore;CLAUDE.md;" "repo commit files"
+assert_eq "$(git -C "$C" status --porcelain)" "" "code repo dirty after adopt"
+mkdir -p "$C/.claude"; printf '{"permissions":{}}\n' > "$C/.claude/settings.local.json"
+git -C "$C" worktree add -q "$C/.claude/worktrees/w1" -b w1 2>/dev/null
+echo 'echo b' > "$C/src/b.sh"
+OUT="$(cd "$C" && bash "$SCRIPTS/save" "Add b" 2>&1)"; rc=$?
+assert_eq "$rc" "0" "save after adopt: $OUT"
+echo "$OUT" | grep -qF "saved code" && pass || fail "save did not commit the code: $OUT"
+assert_eq "$(git -C "$C" ls-files -- .claude)" "" "local Claude files were committed"
+assert_eq "$(git -C "$C" status --porcelain)" "" "code repo dirty after save"
+# a .gitignore that already has every line: nothing added, no repo commit
+new_sandbox; setup_core
+F="$SANDBOX/in/gi-full"; mkdir -p "$F"; git init -q "$F" && git -C "$F" symbolic-ref HEAD refs/heads/main
+grep -v '^#' "$SKILL/templates/code/gitignore-common" > "$F/.gitignore"; echo x > "$F/main.sh"
+git -C "$F" add -A && git -C "$F" commit -q -m initial
+assert_exit 0 bash "$AD" --from "$F" --dry-run
+echo "$OUT" | grep -qF ".gitignore" && fail "plan touches a complete .gitignore: $OUT" || pass
+assert_exit 0 bash "$AD" --from "$F"
+assert_eq "$(git -C "$CORE_DIR/gi-full/code" rev-list --count HEAD)" "1" "commit made without changes"
 
 finish
