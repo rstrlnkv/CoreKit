@@ -12,6 +12,7 @@ See `../docs/decisions/001-stack-and-architecture.md`. Fill in after the analysi
 - Build: _set after scaffolding_
 - Test: _set after scaffolding_
 - Run: _set after scaffolding_
+check: <set after scaffolding>
 
 ## Layout
 - `code/` — the code repository (this is where Claude Code is launched).
@@ -26,8 +27,9 @@ See `../docs/decisions/001-stack-and-architecture.md`. Fill in after the analysi
   Claude runs it; its path is printed at session start, or `<plugin>/scripts/save`).
   To publish: `save "<message>" --push`. `undo-step` reverts the last step in both repos,
   including knowledge and standards edits made in that step.
-- After changing a feature, update its page in `../docs/features/` and its `updated` field.
-- A new architectural decision gets a new file `../docs/decisions/NNN-<slug>.md`.
+- After changing a feature, update its page in `../docs/features/` and its `updated` field;
+  a new page gets a map line in `../docs/INDEX.md`.
+- A new architectural decision gets a new file `../docs/decisions/NNN-<slug>.md` and a map line.
 - Put specs and plans (e.g. from Superpowers) in `../docs/superpowers/`, not in `code/`.
 - Never edit `../docs/` from a worktree under `code/.claude/worktrees/`; the main session
   updates docs after merging.

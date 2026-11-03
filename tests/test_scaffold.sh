@@ -48,6 +48,21 @@ assert_contains "$P/CLAUDE.md" "../docs/INDEX.md"
 grep -qE '^\s*-?\s*@' "$P/CLAUDE.md" && fail "CLAUDE.md has @-import" || pass
 grep -rq '{{' "$P" --exclude-dir=.git && fail "unfilled placeholder" || pass
 
+# wiki: a fresh scaffold passes wiki-check; CLAUDE.md has the check: line; knowledge/ exists
+assert_exit 0 bash "$SCRIPTS/wiki-check.sh" "$P"
+[ -z "$OUT" ] && pass || fail "wiki-check printed: $OUT"
+grep -q '^check: ' "$P/CLAUDE.md" && pass || fail "CLAUDE.md has no 'check: ' line"
+assert_eq "$(grep -c '^check: ' "$P/CLAUDE.md")" "1" "check: lines"
+assert_dir "$P/docs/knowledge"
+# the map is a plain path in CLAUDE.md, not a link wiki-check would resolve elsewhere
+grep -qF '](../docs/INDEX.md' "$P/CLAUDE.md" && fail "CLAUDE.md links INDEX.md" || pass
+# a page added without a map line turns wiki-check red (the check is live on the scaffold)
+printf -- '---\ntitle: T\ndescription: d\nstatus: draft\nfiles: []\nrelated: []\nupdated: 2026-01-01\n---\n\n# T\n' \
+  > "$P/docs/features/t.md"
+assert_exit 1 bash "$SCRIPTS/wiki-check.sh" "$P"
+echo "$OUT" | grep -qF 'wiki-check: features/t.md: not in INDEX.md' && pass || fail "red output: $OUT"
+rm -f "$P/docs/features/t.md"
+
 # settings.local.json grants the absolute project dir
 assert_contains "$P/code/.claude/settings.local.json" "\"$P\""
 # rules use worktree-safe path pattern

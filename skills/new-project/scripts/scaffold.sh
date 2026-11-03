@@ -58,6 +58,7 @@ put "$TPL/docs/architecture.md.tmpl" "$P/docs/architecture.md"
 put "$TPL/docs/decisions/001-stack-and-architecture.md.tmpl" \
     "$P/docs/decisions/001-stack-and-architecture.md"
 mkdir_p "$P/docs/features"
+mkdir_p "$P/docs/knowledge"
 put "$TPL/rules/tests.md.tmpl"       "$P/.claude/rules/tests.md"
 
 # Code repo

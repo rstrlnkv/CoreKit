@@ -78,8 +78,8 @@ repos and the docs skeleton. Fill `docs/brief.md` with the answers (English), se
 **3. Analysis.** Follow `references/analysis.md` and `references/stacks.md`: constraints → 2–3
 scored stack options with one recommendation → research subagent verifies them → architecture.
 Get approval for each part. Write `docs/architecture.md` and
-`docs/decisions/001-stack-and-architecture.md`; add a line to `docs/INDEX.md` for every new page;
-set `stage: decided`.
+`docs/decisions/001-stack-and-architecture.md`; add a line to `docs/INDEX.md` for every new page
+(see Wiki); set `stage: decided`.
 
 **4. Scaffold.** First the app id prefix: if the chosen stack uses `<org>` in
 `references/stacks.md` and `<prefix>` (see Settings) is empty, ask for it (`com.<their-name>`,
@@ -87,8 +87,8 @@ never invent it) and save it with
 `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" set app-id-prefix <prefix>`.
 This runs on every entry to stage 4, so it also happens when resuming at `decided`. Generate the app with the stack's command from `references/stacks.md` **in a temp
 dir**, then `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/scripts/merge-generated.sh" <tmp>/<folder> <Core>/<name>/code`. Never run a
-generator with `--force`/`--overwrite` in `code/`. Fill the Commands and Stack sections of
-`CLAUDE.md`. `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/install-hooks.sh" <Core>/<name>`. Then from `code/`:
+generator with `--force`/`--overwrite` in `code/`. Fill the Build/Test/Run and Stack sections of
+`CLAUDE.md` (leave the `check:` line for stage 6). `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/install-hooks.sh" <Core>/<name>`. Then from `code/`:
 `bash "${CLAUDE_SKILL_DIR}/../../scripts/save" "Scaffold <stack> project"`. Set `stage: scaffolded`.
 
 **5. GitHub.** Ask separately before each repo is created, naming it and its visibility:
@@ -96,12 +96,24 @@ generator with `--force`/`--overwrite` in `code/`. Fill the Commands and Stack s
 - code: `gh repo create <name> --private --source <Core>/<name>/code --push`; use `--public`
   only if the user said "public" in the interview.
 
-**6. Verify.** Run the stack's check command from `references/stacks.md`. Set `stage: ready` and
-`save "Ready"`. Report in the user's language: what was created and where; how to open it
+**6. Verify.** Run the stack's check command from `references/stacks.md` (from `code/`). Once the
+first build and that command succeed, replace the placeholder line `check: <set after scaffolding>`
+in `<Core>/<name>/CLAUDE.md` with the real single command, e.g. `check: flutter test` (the one
+test/check command, run in `code/`; hooks and the verifier read it). Then run
+`bash "${CLAUDE_SKILL_DIR}/../../scripts/wiki-check.sh" <Core>/<name>` and fix every
+`wiki-check:` line it prints (silent = green). Set `stage: ready` and `save "Ready"`. Report in the user's language: what was created and where; how to open it
 (`cd <Core>/<name>/code && claude`); how to check it themselves; what may break.
 
 **7. Offer a plan.** Offer a v1 plan with `superpowers:writing-plans`, saved to
 `../docs/superpowers/plans/`. Do not write app features in this skill.
+
+## Wiki
+The docs are a wiki; the rules are in `${CLAUDE_SKILL_DIR}/../../reference/wiki.md` (read it before
+writing pages). In short: `docs/INDEX.md` has one map line per page, pages carry the six
+front-matter fields, and `wiki-check.sh` must stay green. Whenever a page is added (a feature page
+under `docs/features/`, any other page), add its map line to `docs/INDEX.md` in the same step. A new
+decision is a new file `docs/decisions/NNN-<slug>.md` plus a map line. `docs/knowledge/`,
+`docs/standards/` and `docs/superpowers/` are outside the wiki checks.
 
 ## Red flags — stop
 | Thought | Reality |
