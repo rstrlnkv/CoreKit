@@ -395,6 +395,10 @@ run_bash 'exec 3<> docs/x.md';               blocked "Bash exec 3<> docs/x.md" "
 run_bash 'cat <> docs/rw.md';                blocked "Bash cat <> docs/rw.md" "$C/docs/rw.md" "$CORE_DIR/p/docs/rw.md"
 run_bash 'cat <> src/rw.md';                 ok "Bash cat <> src/rw.md"
 
+# --- a "<<" that ends a double-quoted string is not a heredoc: the judging goes on
+run_bash 'grep -n \"<<\" f.sh; echo x > docs/a.md'; blocked "Bash \"<<\" as a string, then a write" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+run_bash 'grep -n \"<<\" f.sh'; ok "Bash \"<<\" as a string"
+
 # --- if scripts/*.awk is missing, the Bash path fails open (silently); file tools are still judged
 PL="$SANDBOX/plugin-noawk"; mkdir -p "$PL/hooks" "$PL/scripts"
 cp "$HOOKS/guard-code.sh" "$PL/hooks/"; cp "$SCRIPTS/lib.sh" "$PL/scripts/"

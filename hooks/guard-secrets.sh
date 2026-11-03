@@ -31,9 +31,11 @@
 #   comments are skipped, wrapper words (sudo, env, time) are skipped, and command substitutions are looked
 #   into, also inside double quotes: export $(cat .env), echo "$(cat .env)", x="`cat .env`" (the body is
 #   lexed again as a command line). `<> .env` (read and write) counts as a read.
-#   grep/rg options that take a value (-A 2, -m 1, -g '*.ts', -t ts, ...) are known, so their value is not
-#   mistaken for the pattern: `grep -A 2 .env .gitignore` and `rg -g '*.ts' .env src` pass; `-e`/`--regexp`
-#   values are patterns; `-f FILE` and `-g GLOB`/`--include` values are judged as files.
+#   grep/rg/rsync options that take a value (-A 2, -m 1, -g '*.ts', -t ts, --exclude .env, ...) are known, so
+#   their value is not mistaken for the pattern or a source: `grep -A 2 .env .gitignore`, `rg -g '*.ts' .env
+#   src` and `rsync -av --exclude .env src/ host:/` pass; `-e`/`--regexp` values are patterns; `-f FILE`,
+#   `-g GLOB`/`--include` and `--exclude-from FILE` values are judged as files. A cluster is read letter by
+#   letter: the first value-taking letter takes what follows it (-A2n) or, at the end, the next word (-rnA 2).
 #   The tokenizer is the one linear awk pass of guard-code (scripts/bash-lex.awk). After a cd the name
 #   rule still applies (cd .. && cat .env is blocked) but a relative ~/.ssh is unknown. Not caught: git
 #   (git add .env is not a read; git show HEAD:.env is), output redirects, ls, a recursive grep over a
@@ -41,7 +43,8 @@
 #   When the lexer stops early (more than 200 candidates, or <<"WORD" inside "$(...)") the rest of the command
 #   is unknown: if the command text has a secret-looking string (see raw_hit below) the hook fails closed.
 #   The tokenizer lives in scripts/bash-lex.awk and scripts/bashlex-guard-secrets.awk: if they are missing
-#   the Bash path fails open (silently); the file tools are still judged.
+#   the Bash path fails open (silently); the file tools are still judged. If awk is there but fails, the
+#   hook fails closed when the command has a secret-looking string.
 # - Inert outside <Core>/<project>/: cwd missing or not in a Core project -> exit 0 at once (so ~/.ssh is
 #   open when Claude works outside the Core, spec D17). No network, no git.
 #
@@ -149,7 +152,10 @@ if [ "$tool" = Bash ]; then
   fi
   # Cheap exit: no .env and no .ssh anywhere in the command.
   printf '%s' "$cmd" | LC_ALL=C grep -qiE '\.env|\.ssh' || exit 0
+  [ -r "$SELF/scripts/bash-lex.awk" ] && [ -r "$SELF/scripts/bashlex-guard-secrets.awk" ] || exit 0
   targets="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r' '\002 ' | LC_ALL=C awk -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-guard-secrets.awk" 2>/dev/null)"
+  # awk itself failed: the command is unknown, so a secret-looking string in it is refused
+  if [ "$?" -ne 0 ]; then hit="$(printf '%s' "$cmd" | raw_hit)" && die "$hit"; exit 0; fi
   [ -n "$targets" ] || exit 0
   TAB="$(printf '\t')"
   stopped=""

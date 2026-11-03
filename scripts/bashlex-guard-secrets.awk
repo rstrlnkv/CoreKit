@@ -33,6 +33,8 @@ BEGIN {
   reg(VO, "ag ack", "-A -B -C -m -G -g --depth --max-count --after --before --context")
   reg(FO, "ag", "-p --path-to-ignore")
   reg(VO, "sed", "-l --line-length")
+  reg(VO, "rsync", "--exclude --include --filter -f -e --rsh")
+  reg(FO, "rsync", "--exclude-from --include-from")
   reg(VO, "awk gawk mawk", "-v -F --assign --field-separator")
 }
 # reg(table, "cmd cmd", "opt opt") — table[cmd, opt] = 1
@@ -87,6 +89,22 @@ function cand(a,   l, t, x) {
   ne++
   printf "P\t%s\t%d\n", a, cdseen
 }
+# short_opt(a) — a is a short option word (-x, or a cluster such as -rnA). When one of its letters takes a value, sets
+# sk (E F G V, or T for cp -t), sl (the letter as "-x") and sv (the value attached after it, "" when the value is the
+# next word) and returns 1. The first value-taking letter ends the cluster: what follows it is its value (-A2n).
+function short_opt(a,   p, n, l, kind) {
+  n = length(a)
+  for (p = 2; p <= n; p++) {
+    l = "-" substr(a, p, 1); kind = ""
+    if ((cmd, l) in EO) kind = "E"
+    else if ((cmd, l) in FO) kind = "F"
+    else if ((cmd, l) in GO) kind = "G"
+    else if ((cmd, l) in VO) kind = "V"
+    else if (cmd == "cp" && l == "-t") kind = "T"
+    if (kind != "") { sk = kind; sl = l; sv = substr(a, p + 1); return 1 }
+  }
+  return 0
+}
 function finalize(   k, a, dd, pat, nm, v, nop, tdir, j, n, ops, key) {
   if (cmd == "" || cmd == "?") return
   dd = 0; pat = (cmd in PAT); nop = 0; tdir = ""
@@ -94,10 +112,18 @@ function finalize(   k, a, dd, pat, nm, v, nop, tdir, j, n, ops, key) {
     a = args[k]
     if (!dd && a == "--") { dd = 1; continue }
     if (!dd && substr(a, 1, 1) == "-" && a != "-") {
-      if ((cmd in CP) && a == "-t") { tdir = "x"; k++; continue }
-      if ((cmd in CP) && a ~ /^--target-directory=/) { tdir = "x"; continue }
+      if (cmd == "cp" && a ~ /^--target-directory=/) { tdir = "x"; continue }
+      if (a ~ /^-[A-Za-z0-9]/ && short_opt(a)) {
+        v = sv
+        if (v == "") { v = args[k + 1]; k++ }
+        if (sk == "E") pat = 0
+        else if (sk == "F") { cand(v); if (sl == "-f") pat = 0 }
+        else if (sk == "G") cand(v)
+        else if (sk == "T") tdir = "x"
+        continue
+      }
       if ((cmd, a) in EO) { k++; pat = 0; continue }
-      if ((cmd, a) in FO) { cand(args[k + 1]); k++; if (a == "-f" || a == "--file") pat = 0; continue }
+      if ((cmd, a) in FO) { cand(args[k + 1]); k++; if (a == "--file") pat = 0; continue }
       if ((cmd, a) in GO) { cand(args[k + 1]); k++; continue }
       if ((cmd, a) in VO) { k++; continue }
       if (a ~ /^--[A-Za-z][A-Za-z-]*=/) {

@@ -29,14 +29,18 @@ function seg(a, b,   r, x) {
   for (x = a; x < b; x++) r = r C[x]
   return r
 }
-# append text to the word being read; a word longer than 4096 bytes is dropped (it is not a path)
-function app(t) {
+# append text to the word being read; a word longer than 4096 bytes is dropped (it is not a path).
+# wx is the same word with every $ and backtick that is only text (escaped, or inside single quotes) turned
+# into \003: that is what on_subst() gets, so it only sees real substitutions. tx is that text, when it differs.
+function app(t, tx) {
   if (wbad) return
-  if (t == "\001") { wbad = 1; word = ""; return }
+  if (t == "\001") { wbad = 1; word = ""; wx = ""; return }
   wl += length(t)
-  if (wl > 4096) { wbad = 1; word = ""; return }
-  word = word t
+  if (wl > 4096) { wbad = 1; word = ""; wx = ""; return }
+  word = word t; wx = wx (tx == "" ? t : tx)
 }
+# escx(c) — an escaped character as it goes into wx
+function escx(c) { return (c == "$" || c == "`") ? "\003" : c }
 function base(p,   r) {
   r = p
   while (length(r) > 1 && substr(r, length(r), 1) == "/") r = substr(r, 1, length(r) - 1)
@@ -57,11 +61,11 @@ function skip_heredocs(   k, j, line, found) {
   }
   hdn = 0
 }
-function endword(   w, qd, b, rw) {
+function endword(   w, qd, b, rw, x) {
   if (!inword) return
-  w = word; qd = hasq
-  inword = 0; word = ""; hasq = 0; wl = 0; wbad = 0
-  if (wsub) { wsub = 0; on_subst(w) }
+  w = word; qd = hasq; x = wx
+  inword = 0; word = ""; wx = ""; hasq = 0; wl = 0; wbad = 0
+  if (wsub) { wsub = 0; on_subst(x) }
   if (skip_next) { skip_next = 0; return }
   if (want_hd) { want_hd = 0; hdn++; hd[hdn] = w; hds[hdn] = hdstrip; return }
   if (want_redir) {
@@ -92,7 +96,7 @@ function enqueue(t) { if (nq < 50) Q[++nq] = t }
 { buf = (NR == 1 ? "" : buf) $0 }
 function lex(text) {
   len = split(text, C, ""); i = 1
-  inword = 0; word = ""; hasq = 0; wl = 0; wbad = 0; hdn = 0; wsub = 0
+  inword = 0; word = ""; wx = ""; hasq = 0; wl = 0; wbad = 0; hdn = 0; wsub = 0
   while (i <= len && !full) {
     c = C[i]
     if (c == " " || c == "\t") { endword(); i++; continue }
@@ -101,7 +105,7 @@ function lex(text) {
     if (c == "\\") {
       if (i < len) {
         d = C[i + 1]
-        if (d != NL) { app(d); inword = 1; hasq = 1 }
+        if (d != NL) { app(d, escx(d)); inword = 1; hasq = 1 }
         i += 2
       } else i++
       continue
@@ -109,7 +113,7 @@ function lex(text) {
     if (c == "\047") {
       inword = 1; hasq = 1; j = i + 1
       while (j <= len && C[j] != "\047") j++
-      app(seg(i + 1, j))
+      sq = seg(i + 1, j); sqx = sq; gsub(/[$`]/, "\003", sqx); app(sq, sqx)
       i = j + 1; continue
     }
     if (c == "\"") {
@@ -124,7 +128,12 @@ function lex(text) {
         if (d == "<" && C[j + 1] == "<" && C[j + 2] != "<") {
           p = j + 2; st = 0
           if (C[p] == "-") { st = 1; p++ }
-          if (C[p] == "\"") { nomore = 1; break }
+          # <<"WORD" inside "$(...)": stop judging. A "<<" that is the end of the string ("<<" followed by
+          # something that is no delimiter word and quote) is only text.
+          if (C[p] == "\"") {
+            q = p + 1; while (q <= len && C[q] != "" && index(WORDCH, C[q]) > 0) q++
+            if (q > p + 1 && C[q] == "\"") { nomore = 1; break }
+          }
           dl = ""
           if (C[p] == "\047") {
             q = p + 1; while (q <= len && C[q] != "\047" && C[q] != NL && C[q] != "\"") q++
@@ -137,7 +146,7 @@ function lex(text) {
         }
         if (d == "\\" && j < len) {
           e = C[j + 1]
-          if (e == "\"" || e == "\\" || e == "$" || e == "`") { app(seg(k, j)); app(e); j += 2; k = j; continue }
+          if (e == "\"" || e == "\\" || e == "$" || e == "`") { app(seg(k, j)); app(e, escx(e)); j += 2; k = j; continue }
           if (e == NL) { app(seg(k, j)); j += 2; k = j; continue }
         }
         j++
@@ -156,7 +165,7 @@ function lex(text) {
       stmt_end(); i++; continue
     }
     if (c == ">") {
-      if (inword && !hasq && !wbad && word ~ /^[0-9]+$/) { inword = 0; word = ""; wl = 0 } else endword()
+      if (inword && !hasq && !wbad && word ~ /^[0-9]+$/) { inword = 0; word = ""; wx = ""; wl = 0 } else endword()
       i++
       if (C[i] == "(") continue
       d = C[i]
