@@ -75,4 +75,12 @@ OUT=$(input "$O/proj/code" false | bash "$H" 2>&1); rc=$?
 assert_eq "$rc" "0" "non-Core other/proj/code must pass"
 assert_eq "$OUT" "" "hook must stay silent in a non-Core other/proj/code"
 assert_no_file "$O/proj/code/.git/new-project-stop-remind"
+# attribution=forbid: the reminder's save command carries --no-attribution
+echo more >> "$C/new.txt"
+OUT=$(input "$C" false | CLAUDE_PLUGIN_OPTION_ATTRIBUTION=forbid bash "$H" 2>&1)
+echo "$OUT" | grep -qF "bash \"$SCRIPTS/save\" \"<short English message>\" --no-attribution" && pass || fail "forbid: reminder lacks --no-attribution: $OUT"
+echo more >> "$C/new.txt"
+OUT=$(input "$C" false | bash "$H" 2>&1)
+echo "$OUT" | grep -qF -- "--no-attribution" && fail "allow: reminder has --no-attribution: $OUT" || pass
+
 finish

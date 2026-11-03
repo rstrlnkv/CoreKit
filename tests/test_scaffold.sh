@@ -111,4 +111,10 @@ assert_eq "$(grep -c 'nl-app' "$CORE_DIR/PROJECTS.md")" "1" "PROJECTS.md entry s
 assert_contains "$CORE_DIR/PROJECTS.md" "First line. Second line."
 assert_contains "$CORE_DIR/nl-app/CLAUDE.md" "First line. Second line."
 
+# the wiki has one place for all worktrees: <Core>/<p>/docs/, which the task skill updates from a
+# worktree too (no "never edit ../docs/ from a worktree" that contradicts it)
+T="$SKILL/templates/CLAUDE.md.tmpl"
+assert_not_contains "$T" "Never edit \`../docs/\` from a worktree"
+assert_contains "$T" "one wiki for every worktree"
+assert_contains "$T" "{{PROJECT_DIR}}/docs/"
 finish

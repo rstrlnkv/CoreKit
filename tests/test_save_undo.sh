@@ -98,7 +98,7 @@ assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "knowledge-only change not saved"
 
 # --no-attribution drops Co-Authored-By / Generated with lines from the message (both repos)
 sleep 1; echo "v2" > "$C/app.txt"; echo "x" >> "$P/docs/features/f.md"
-msg="$(printf 'Fix thing\n\nWhy it was wrong.\n\nCo-Authored-By: Someone <a@b.c>\nco-authored-by: Other <d@e.f>\n\U0001F916 Generated with [Claude Code](https://x)')"
+msg="$(printf 'Fix thing\n\nWhy it was wrong.\n\nCo-Authored-By: Someone <a@b.c>\nco-authored-by: Other <d@e.f>\n\360\237\244\226 Generated with [Claude Code](https://x)')"
 (cd "$C" && bash "$SAVE" "$msg" --no-attribution) > "$SANDBOX/out" 2>&1
 assert_contains "$SANDBOX/out" "saved code"
 assert_eq "$(git -C "$C" log -1 --format=%B | grep -icE 'co-authored-by|generated with')" "0" "attribution left in code commit"
@@ -136,5 +136,14 @@ run_chk | grep -qF 'session-rules.md' && pass || fail "check misses a deleted se
 (cd "$C" && bash "$SAVE" "Drop session rules") >/dev/null 2>&1
 git -C "$CORE_DIR" show --name-only --format= HEAD | grep -qx 'session-rules.md' && pass || fail "save did not commit the deletion"
 assert_eq "$(CORE_DIR="$CORE_DIR" bash "$LIB" core-paths 2>&1 >/dev/null | head -1)" "Usage: lib.sh core-paths <project>" "core-paths without a project"
+
+# --no-attribution drops only attribution lines: "Generated with" is matched at the start of a line
+# (an optional robot emoji before it), so a subject or body that says "generated with" stays.
+sleep 1; echo "csv" > "$C/app.txt"
+msg="$(printf 'Fix CSV generated with a wrong delimiter\n\nRows generated with the old tool had commas.\n\n  \360\237\244\226 Generated with [Claude Code](https://x)\nGENERATED WITH a tool\nCo-Authored-By: A <a@b.c>')"
+(cd "$C" && bash "$SAVE" "$msg" --no-attribution) >/dev/null 2>&1
+assert_eq "$(git -C "$C" log -1 --format=%s)" "Fix CSV generated with a wrong delimiter" "subject with 'generated with' dropped"
+git -C "$C" log -1 --format=%B | grep -qxF 'Rows generated with the old tool had commas.' && pass || fail "body line with 'generated with' dropped"
+assert_eq "$(git -C "$C" log -1 --format=%B | grep -ciE 'generated with \[claude|generated with a tool|co-authored-by')" "0" "attribution lines left"
 
 finish

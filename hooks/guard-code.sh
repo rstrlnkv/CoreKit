@@ -4,6 +4,7 @@
 #   CLAUDE.md (and CLAUDE.local.md), docs/**, .claude/**
 # under <Core>/<project>/code/**, with exit 2 and a message naming the right place:
 #   coredev: <path> is an internal file and must not live in code/. Write it to <Core>/<project>/<relative path> instead.
+#   Docs meant to stay public in code/: list them on a "public-docs: <paths>" line in <Core>/<project>/CLAUDE.md.
 # (spec section 14, item 3). Nothing is ever printed to stdout.
 #
 # Rules, all compared on the canonical path (".." and symlinks resolved, letter case as on disk
@@ -96,6 +97,8 @@ check_path() {
   esac
   printf 'coredev: %s is an internal file and must not live in code/. Write it to %s instead.\n' \
     "$CORE_DIR/$proj/code/${rest:5}" "$CORE_DIR/$proj/$tgt" >&2
+  printf 'Docs meant to stay public in code/: list them on a "public-docs: <paths>" line in %s.\n' \
+    "$CORE_DIR/$proj/CLAUDE.md" >&2
   exit 2
 }
 

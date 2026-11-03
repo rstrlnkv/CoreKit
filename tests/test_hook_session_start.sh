@@ -52,6 +52,10 @@ echo "$OUT" | grep -qF "$T/undo-step" && pass || fail "undo-step path missing: $
 echo "$OUT" | grep -qF "Standards: none" && pass || fail "standards 'none' missing: $OUT"
 echo "$OUT" | grep -qiE "layout|schema|install-hooks|session rules" && fail "unexpected note on a fresh Core: $OUT" || pass
 echo "$OUT" | grep -qF "Core not found" && fail "hint inside a project" || pass
+# attribution=forbid: the save command it prints carries --no-attribution; allow (default) does not
+echo "$OUT" | grep -qF -- "--no-attribution" && fail "--no-attribution without forbid: $OUT" || pass
+OUT="$(input "$C" | CLAUDE_PLUGIN_OPTION_ATTRIBUTION=forbid bash "$H" 2>&1)"
+echo "$OUT" | grep -qF "bash \"$T/save\" \"<message>\" --no-attribution" && pass || fail "forbid: save line lacks --no-attribution: $OUT"
 # standards: names on one line, README.md left out
 printf -- '---\nname: alpha\n---\n' > "$CORE_DIR/standards/alpha.md"; : > "$CORE_DIR/standards/beta.md"
 run_rc "$C"

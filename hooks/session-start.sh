@@ -39,7 +39,8 @@ fi
 P="$CORE_DIR/$proj"; T="$DATA/tools"
 echo "coredev: you are in the Core project \"$proj\" (Core: $CORE_DIR)"
 echo "Project docs index: $P/docs/INDEX.md"
-echo "Save a finished step: bash \"$T/save\" \"<message>\"; undo the last step: bash \"$T/undo-step\""
+noattr=""; [ "$ATTRIBUTION" = forbid ] && noattr=" --no-attribution"
+echo "Save a finished step: bash \"$T/save\" \"<message>\"$noattr; undo the last step: bash \"$T/undo-step\""
 names=""
 for f in "$CORE_DIR"/standards/*.md; do
   [ -f "$f" ] || continue

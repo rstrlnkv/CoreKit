@@ -40,7 +40,12 @@ run_file() {
 }
 # run_bash <json-escaped command> [cwd]
 run_bash() { run_json "$(printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"}}' "${2-$C}" "$1")"; }
-msg() { printf 'coredev: %s is an internal file and must not live in code/. Write it to %s instead.' "$1" "$2"; }
+# The second line points at public-docs: in the project's CLAUDE.md (<Core>/<p>, the part of the shown
+# path before its first /code/).
+msg() {
+  printf 'coredev: %s is an internal file and must not live in code/. Write it to %s instead.\n' "$1" "$2"
+  printf 'Docs meant to stay public in code/: list them on a "public-docs: <paths>" line in %s.' "${1%%/code/*}/CLAUDE.md"
+}
 # ok <label> — exit 0, silent
 ok() { assert_eq "$RC" "0" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_eq "$ERR" "" "$1: stderr"; }
 # blocked <label> <path shown> <target in the Core> — exit 2, the exact message, nothing on stdout

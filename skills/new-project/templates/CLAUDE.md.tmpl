@@ -31,6 +31,7 @@ check: <set after scaffolding>
   a new page gets a map line in `../docs/INDEX.md`.
 - A new architectural decision gets a new file `../docs/decisions/NNN-<slug>.md` and a map line.
 - Put specs and plans (e.g. from Superpowers) in `../docs/superpowers/`, not in `code/`.
-- Never edit `../docs/` from a worktree under `code/.claude/worktrees/`; the main session
-  updates docs after merging.
+- The wiki is `{{PROJECT_DIR}}/docs/`, one wiki for every worktree. From a worktree under
+  `code/.claude/worktrees/<w>/`, edit it there by that absolute path (`../docs/` does not reach
+  it from a worktree); `save` run in the worktree commits the wiki with the worktree's code.
 - Never read `.env` files or `~/.ssh`.

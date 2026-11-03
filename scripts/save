@@ -2,15 +2,16 @@
 # Saves one working step: commits the code repo and this project's docs in Core
 # with the same message and a shared "Step-Id" trailer.
 # Usage: save "<message>" [--push] [--no-attribution]
-# --no-attribution drops "Co-Authored-By:" and "Generated with" lines from the message (the
-# user's attribution=forbid setting; the release check greps the same two phrases).
+# --no-attribution drops "Co-Authored-By:" lines and lines that start with "Generated with" (after
+# optional spaces and a robot emoji) from the message: the user's attribution=forbid setting. A
+# subject or body that only mentions "generated with" mid-line stays.
 set -u
 . "$(dirname "$0")/_locate.sh"
 MSG=""; PUSH=0; NOATTR=0
 for a in "$@"; do case "$a" in --push) PUSH=1 ;; --no-attribution) NOATTR=1 ;; *) MSG="$a" ;; esac; done
 if [ "$NOATTR" = 1 ]; then
   # drop the lines, then trailing blank lines (awk keeps the rest of the message as written)
-  MSG="$(printf '%s\n' "$MSG" | grep -viE '^[[:space:]]*co-authored-by:|generated with' |
+  MSG="$(printf '%s\n' "$MSG" | grep -viE '^[[:space:]]*co-authored-by:|^[[:space:]]*(🤖[[:space:]]*)?generated with' |
     awk '{ l[NR] = $0 } END { n = NR; while (n > 0 && l[n] ~ /^[[:space:]]*$/) n--; for (i = 1; i <= n; i++) print l[i] }')"
 fi
 [ -n "$MSG" ] || { echo 'Usage: save "<message>" [--push] [--no-attribution]' >&2; exit 2; }

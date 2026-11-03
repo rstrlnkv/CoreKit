@@ -37,5 +37,6 @@ changes() {
 sum=$({ changes "$CODE"; changes "$CORE" $CORE_PATHS; } | cksum)
 [ "$(cat "$STATE" 2>/dev/null)" = "$sum" ] && exit 0
 echo "$sum" > "$STATE"
-echo "Uncommitted changes in $dirty. If this working step is finished, run: bash \"$SAVE\" \"<short English message>\". If you are waiting for the user's answer or approval, do not save; just end your turn." >&2
+noattr=""; [ "$ATTRIBUTION" = forbid ] && noattr=" --no-attribution"
+echo "Uncommitted changes in $dirty. If this working step is finished, run: bash \"$SAVE\" \"<short English message>\"$noattr. If you are waiting for the user's answer or approval, do not save; just end your turn." >&2
 exit 2

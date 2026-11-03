@@ -124,12 +124,14 @@ assert_eq "$(project_names "$SANDBOX/missing.md")" "" "missing PROJECTS.md gives
 
 # --- The real repo ----------------------------------------------------------------------------
 if [ -f "$REAL_CORE/PROJECTS.md" ]; then
-  project_names "$REAL_CORE/PROJECTS.md" > "$SANDBOX/real-names"
+  # a real check: the names come from the list items (never more names than items)
+  project_names "$REAL_CORE/PROJECTS.md" > "$SANDBOX/real-names" \
+    && [ "$(wc -l < "$SANDBOX/real-names")" -le "$(grep -c '^[-*][[:space:]]' "$REAL_CORE/PROJECTS.md")" ] \
+    && pass || fail "could not read project names from the Core's PROJECTS.md"
 else
   : > "$SANDBOX/real-names"
   echo "  note: no PROJECTS.md in the Core; project-name check skipped"
 fi
-pass   # the PROJECTS.md step ran (or was skipped with the note above)
 scan_repo "$ROOT" "$SANDBOX/real-names" > "$SANDBOX/real-hits"
 [ -s "$SANDBOX/real-hits" ] && fail "personal data in tracked files: $(cat "$SANDBOX/real-hits" | tr '\n' ' ')" || pass
 finish
