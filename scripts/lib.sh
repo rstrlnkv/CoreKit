@@ -15,7 +15,8 @@ expand_home() {
   esac
 }
 
-# canon_dir <path> — the physical path (symlinks resolved). For a path that does not exist
+# canon_dir <path> — the physical path (symlinks resolved, letter case as on disk: /bin/pwd -P
+# reports the case on disk, the shell's own pwd keeps what was typed). For a path that does not exist
 # yet, the deepest existing ancestor is resolved and the missing components are appended, so
 # the string stays the same after the directory is created. No trailing slash.
 canon_dir() {
@@ -25,7 +26,7 @@ canon_dir() {
   while [ ! -d "$base" ] && [ "$base" != "/" ] && [ "$base" != "." ]; do
     rest="/$(basename "$base")$rest"; base="$(dirname "$base")"
   done
-  c="$(cd -P "$base" 2>/dev/null && pwd)" || { printf '%s\n' "$p"; return 0; }
+  c="$(cd -P "$base" 2>/dev/null && { /bin/pwd -P 2>/dev/null || pwd; })" || { printf '%s\n' "$p"; return 0; }
   [ "$c" = "/" ] && c=""
   [ -z "$c$rest" ] && c="/"
   printf '%s%s\n' "$c" "$rest"
@@ -114,6 +115,9 @@ load_settings() {
 # surrogate becomes U+FFFD; \u0000 is dropped). Whitespace and newlines around ':' are fine.
 # A missing key, a value that is not a string, or malformed input prints nothing; the exit
 # status is always 0. A key name that only appears inside a string value is not a key.
+# Linear time: the text is split at the quote characters once, so a string is a run of pieces
+# (a piece that ends in an odd number of backslashes ends at an escaped quote), and a value is
+# decoded by splitting each piece at its backslashes. No loop walks single characters.
 json_str() {
   printf '%s' "${1:-}" | JSON_KEY="${2:-}" LC_ALL=C awk '
     function hexval(h,   i, d, v) {
@@ -131,68 +135,69 @@ json_str() {
       if (cp < 65536) return chr[224 + int(cp / 4096)] chr[128 + int(cp / 64) % 64] chr[128 + cp % 64]
       return chr[240 + int(cp / 262144)] chr[128 + int(cp / 4096) % 64] chr[128 + int(cp / 64) % 64] chr[128 + cp % 64]
     }
-    function isws(c) { return c == " " || c == "\t" || c == "\r" || c == "\n" }
-    { buf = buf $0 "\n" }
+    # 1 when the piece ends in an odd number of backslashes (the quote after it is escaped)
+    function oddbs(s,   l) {
+      l = length(s)
+      if (l == 0 || substr(s, l, 1) != "\\") return 0
+      match(s, /\\+$/)
+      return RLENGTH % 2
+    }
+    # print the decoded text t (pieces joined with escaped quotes already appended)
+    function emit(t,   m, S, j, c, r, cp, lo) {
+      gsub(/\002/, "\n", t)
+      m = split(t, S, "\\")
+      printf "%s", S[1]
+      for (j = 2; j <= m; j++) {
+        r = S[j]
+        if (r == "") {                      # "\\" : one backslash; the next piece is plain text
+          if (j == m) break
+          printf "%s", "\\"; j++; printf "%s", S[j]; continue
+        }
+        c = substr(r, 1, 1); r = substr(r, 2)
+        if (c == "n") printf "%s", "\n"
+        else if (c == "t") printf "%s", "\t"
+        else if (c == "r") printf "%s", "\r"
+        else if (c == "b") printf "%s", chr[8]
+        else if (c == "f") printf "%s", chr[12]
+        else if (c == "u") {
+          if (length(r) < 4) continue       # short escape: dropped with what is left
+          cp = hexval(substr(r, 1, 4)); r = substr(r, 5)
+          if (cp < 0) { printf "%s", r; continue }
+          if (cp >= 55296 && cp <= 56319) {
+            lo = -1
+            if (r == "" && j < m && length(S[j + 1]) >= 5 && substr(S[j + 1], 1, 1) == "u") lo = hexval(substr(S[j + 1], 2, 4))
+            if (lo >= 56320 && lo <= 57343) { cp = 65536 + (cp - 55296) * 1024 + (lo - 56320); j++; r = substr(S[j], 6) }
+            else cp = 65533
+          } else if (cp >= 56320 && cp <= 57343) cp = 65533
+          if (cp > 0) printf "%s", utf8(cp)
+        }
+        else printf "%s", c                 # \" \/ and unknown escapes: the character itself
+        printf "%s", r
+      }
+    }
+    BEGIN { RS = "\001" }
+    { buf = (NR == 1 ? "" : buf "\001") $0 }
     END {
       key = ENVIRON["JSON_KEY"] ""
       if (key == "") exit 0
       for (n = 1; n < 256; n++) chr[n] = sprintf("%c", n)
       chr[0] = ""
-      len = length(buf); i = 1
-      while (i <= len) {
-        if (substr(buf, i, 1) != "\"") { i++; continue }
-        s = i + 1; j = s
-        while (j <= len) {
-          d = substr(buf, j, 1)
-          if (d == "\\") j += 2
-          else if (d == "\"") break
-          else j++
+      gsub(/\n/, "\002", buf)               # BWK awk split() also splits at newlines
+      n = split(buf, P, "\"")               # P[1] is outside a string, P[2] inside, and so on
+      i = 2
+      while (i < n) {
+        e = i
+        while (e < n && oddbs(P[e])) e++
+        if (e >= n) exit 0                  # unterminated string
+        if (e == i && (P[i] "") == key && e + 2 <= n && P[e + 1] ~ /^[ \t\r\002]*:[ \t\r\002]*$/) {
+          v = e + 2; w = v                  # a string value starts at piece v
+          while (w < n && oddbs(P[w])) w++
+          if (w >= n) exit 0
+          for (k = v; k < w; k++) emit(P[k] "\"")
+          emit(P[w])
+          exit 0
         }
-        if (j > len) exit 0
-        raw = substr(buf, s, j - s) ""
-        i = j + 1
-        if (raw != key) continue
-        k = i
-        while (k <= len && isws(substr(buf, k, 1))) k++
-        if (substr(buf, k, 1) != ":") continue
-        k++
-        while (k <= len && isws(substr(buf, k, 1))) k++
-        if (substr(buf, k, 1) != "\"") continue
-        s = k + 1; j = s
-        while (j <= len) {
-          d = substr(buf, j, 1)
-          if (d == "\\") j += 2
-          else if (d == "\"") break
-          else j++
-        }
-        if (j > len) exit 0
-        raw = substr(buf, s, j - s)
-        out = ""; p = 1; rl = length(raw)
-        while (p <= rl) {
-          d = substr(raw, p, 1)
-          if (d != "\\") { out = out d; p++; continue }
-          e = substr(raw, p + 1, 1); p += 2
-          if (e == "n") out = out "\n"
-          else if (e == "t") out = out "\t"
-          else if (e == "r") out = out "\r"
-          else if (e == "b") out = out chr[8]
-          else if (e == "f") out = out chr[12]
-          else if (e == "u") {
-            cp = hexval(substr(raw, p, 4))
-            if (length(substr(raw, p, 4)) < 4 || cp < 0) { p += 4; continue }
-            p += 4
-            if (cp >= 55296 && cp <= 56319) {
-              lo = -1
-              if (substr(raw, p, 2) == "\\u") lo = hexval(substr(raw, p + 2, 4))
-              if (lo >= 56320 && lo <= 57343) { cp = 65536 + (cp - 55296) * 1024 + (lo - 56320); p += 6 }
-              else cp = 65533
-            } else if (cp >= 56320 && cp <= 57343) cp = 65533
-            if (cp > 0) out = out utf8(cp)
-          }
-          else out = out e
-        }
-        printf "%s", out
-        exit 0
+        i = e + 2
       }
     }
   ' || true

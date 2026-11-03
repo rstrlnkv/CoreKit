@@ -7,9 +7,7 @@
 D="$(dirname "$0")"
 [ -f "$D/_locate.sh" ] || D="$D/../scripts"
 . "$D/_locate.sh"
-# json_str comes from lib.sh; an old copy of this hook in <Core>/bin has no lib.sh next to it.
-if [ -f "$D/lib.sh" ]; then . "$D/lib.sh"
-else json_str() { printf '%s' "$1" | sed -nE "s/.*\"$2\" *: *\"([^\"]*)\".*/\1/p"; }; fi
+. "$D/lib.sh"   # json_str; sits next to _locate.sh in the plugin and in the tools copy
 SAVE="$(cd "$D" && pwd)/save"
 in=$(cat)
 printf '%s' "$in" | tr -d '\r\n' | grep -qE '"stop_hook_active"[[:space:]]*:[[:space:]]*true' && exit 0

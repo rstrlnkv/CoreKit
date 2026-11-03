@@ -8,7 +8,7 @@ assert_file "$H"
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
 
 input() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"SessionStart","source":"startup"}' "$1"; }
-run() { input "$1" | bash "$H" 2>&1; }   # run <cwd>; sets RC through run_rc
+# run_rc <cwd> — stdout and stderr in OUT, exit code in RC
 run_rc() { OUT="$(input "$1" | bash "$H" 2>&1)"; RC=$?; }
 
 # --- no Core yet: the hint comes once per machine; tools are synced either way
@@ -67,6 +67,10 @@ printf 'Rule one: be kind.\nRule two: "quote" and \\ backslash.\n' > "$CORE_DIR/
 run_rc "$C"
 echo "$OUT" | grep -qxF 'Rule one: be kind.' && pass || fail "session rule 1 missing: $OUT"
 echo "$OUT" | grep -qxF 'Rule two: "quote" and \ backslash.' && pass || fail "session rule 2 missing: $OUT"
+printf 'Last rule, no newline' > "$CORE_DIR/session-rules.md"; printf 'schema: 0\n' > "$CORE_DIR/.coredev"
+run_rc "$C"; echo "$OUT" | grep -qxF 'Last rule, no newline' && pass || fail "rules without final newline run into the next line: $OUT"
+echo "$OUT" | grep -q '^Layout note' && pass || fail "layout note missing after rules: $OUT"
+printf 'schema: 1\n' > "$CORE_DIR/.coredev"
 rm "$CORE_DIR/session-rules.md"
 run_rc "$C"; echo "$OUT" | grep -qF "Rule one" && fail "rules shown without file" || pass
 
@@ -87,7 +91,8 @@ run_rc "$C"
 echo "$OUT" | grep -qF "$P/docs/INDEX.md" && pass || fail "old Core: project context missing: $OUT"
 echo "$OUT" | grep -qF "$FIX" && pass || fail "old Core: fix command missing: $OUT"
 echo "$OUT" | grep -qF "Core not found" && fail "old Core in project: hint shown" || pass
-run_rc "$SANDBOX/elsewhere"; case "$OUT" in "coredev: Core not found"*) pass ;; *) fail "old Core elsewhere: hint expected: $OUT" ;; esac
+run_rc "$SANDBOX/elsewhere"
+assert_eq "$OUT" "coredev: Core at $CORE_DIR is not set up — /coredev:new-project or /coredev:task adopt <folder> will set it up" "old Core elsewhere: hint says not set up"
 cp "$SANDBOX/coredev.bak" "$CORE_DIR/.coredev"
 
 # --- git hooks: only an old "new-project hook" is named; shims and a user's own hook are left alone
@@ -129,10 +134,30 @@ ln -s "$E" "$SANDBOX/sym"; export CORE_DIR="$SANDBOX/sym/Ядро"
 run_rc "$SANDBOX/sym/Ядро/esc-app/code"
 echo "$OUT" | grep -qF "$EP/docs/INDEX.md" && pass || fail "symlinked core_dir: $OUT"
 
-# --- a failing tools sync never blocks; one short line only
+# --- a failing tools sync never blocks; one short line. Outside a project it goes to stderr, in a project to stdout.
 export CORE_DIR="$P/.."; mkdir -p "$SANDBOX/emptyroot/scripts"
-OUT="$(input "$SANDBOX/elsewhere" | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" bash "$H" 2>&1)"; RC=$?
+sync_fail() {  # sync_fail <cwd> — stdout in OUT, stderr in ERR, exit code in RC
+  OUT="$(input "$1" | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" bash "$H" 2>"$SANDBOX/err")"; RC=$?; ERR="$(cat "$SANDBOX/err")"
+}
+sync_fail "$SANDBOX/elsewhere"
 assert_eq "$RC" "0" "sync failure: exit"
-echo "$OUT" | grep -qE "^coredev: tools" && pass || fail "sync failure: expected one 'coredev: tools' line, got: $OUT"
-assert_eq "$(echo "$OUT" | wc -l | tr -d ' ')" "1" "sync failure: one line"
+assert_eq "$OUT" "" "sync failure outside a project: nothing on stdout"
+case "$ERR" in "coredev: tools not refreshed"*) pass ;; *) fail "sync failure outside a project: stderr line expected, got: $ERR" ;; esac
+assert_eq "$(echo "$ERR" | wc -l | tr -d ' ')" "1" "sync failure: one line"
+sync_fail "$C"
+assert_eq "$RC" "0" "sync failure in a project: exit"
+echo "$OUT" | grep -q "^coredev: tools not refreshed" && pass || fail "sync failure in a project: stdout line expected, got: $OUT"
+assert_eq "$ERR" "" "sync failure in a project: nothing on stderr"
+
+# --- letter case: Core path typed in another case than on disk (macOS volumes are case-insensitive)
+mkdir -p "$SANDBOX/cs/a"
+if [ -d "$SANDBOX/cs/A" ]; then
+  export CORE_DIR="$SANDBOX/CaseCore/Ядро"; setup_core
+  CP="$CORE_DIR/MyApp"; mkdir -p "$CP/code" "$CP/docs"; echo "# MyApp" > "$CP/CLAUDE.md"
+  export CORE_DIR="$SANDBOX/casecore/ядро"
+  run_rc "$CP/code"; echo "$OUT" | grep -qF "$CP/docs/INDEX.md" && pass || fail "CORE_DIR in other case, cwd as on disk: $OUT"
+  run_rc "$SANDBOX/CASECORE/ЯДРО/myapp/code"; echo "$OUT" | grep -qF "$CP/docs/INDEX.md" && pass || fail "cwd in other case: $OUT"
+else
+  echo "  note: case-sensitive volume, letter-case test skipped"; pass
+fi
 finish

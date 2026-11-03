@@ -11,19 +11,23 @@ DATA="${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/coredev-corekit}"
 in=""; [ -t 0 ] || in="$(cat)"
 
 # 1. Tools: quiet unless it failed.
+# A failure is reported below: on stdout inside a project, on stderr elsewhere (no context noise).
+syncerr=""
 msg="$(bash "$ROOT/scripts/sync-tools.sh" "$ROOT" "$DATA/tools" 2>&1)" \
-  || echo "coredev: tools not refreshed: $(printf '%s' "$msg" | head -1)"
+  || syncerr="coredev: tools not refreshed: $(printf '%s' "$msg" | head -1)"
 
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 load_settings
 cwd="$(json_str "$in" cwd)"
 [ -n "$cwd" ] || cwd="$PWD"
 proj="$(project_of "$cwd")"
+[ -z "$syncerr" ] || { if [ -n "$proj" ]; then echo "$syncerr"; else echo "$syncerr" >&2; fi; }
 
 # 2. No Core yet, session elsewhere: the hint, once per machine.
 if ! core_ready && [ -z "$proj" ]; then
   if [ ! -e "$DATA/state/core-hint-shown" ]; then
-    echo "coredev: Core not found at $CORE_DIR — /coredev:new-project or /coredev:task adopt <folder> will set it up"
+    if [ -d "$CORE_DIR" ]; then what="Core at $CORE_DIR is not set up"; else what="Core not found at $CORE_DIR"; fi
+    echo "coredev: $what — /coredev:new-project or /coredev:task adopt <folder> will set it up"
     { mkdir -p "$DATA/state" && : > "$DATA/state/core-hint-shown"; } 2>/dev/null
   fi
   exit 0
@@ -46,6 +50,7 @@ echo "Standards: ${names:-none}"
 if [ -f "$CORE_DIR/session-rules.md" ]; then
   echo "Session rules ($CORE_DIR/session-rules.md):"
   cat "$CORE_DIR/session-rules.md"
+  [ -z "$(tail -c 1 "$CORE_DIR/session-rules.md")" ] || echo   # no final newline: end the line
 fi
 
 # Layout notes: .coredev has no schema line, or an older schema than this plugin writes.

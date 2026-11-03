@@ -50,6 +50,37 @@ doc="{\"content\":\"$big\",\"cwd\":\"/after/big\"}"
 assert_eq "$(json_str "$doc" cwd)" "/after/big" "key after a large value"
 [ $((SECONDS - start)) -le 5 ] && pass || fail "json_str too slow on a large payload"
 
+# Linear time: decoding a 600 KB value with many escapes and scanning past a 1 MB payload.
+chunk='abc \"q\" \\ \u0430 \n padding padding'
+exp_chunk="$(printf 'abc "q" \\ а \n padding padding')"
+big="$chunk"; want="$exp_chunk"
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do big="$big$big"; want="$want$want"; done
+doc="{\"content\":\"$big\",\"cwd\":\"/after/600k\"}"
+t0=$(date +%s); got="$(json_str "$doc" content)"; t1=$(date +%s)
+[ "$got" = "$want" ] && pass || fail "decoded 600 KB value differs (${#got} bytes vs ${#want})"
+echo "  timing: decode of $((${#big} / 1000)) KB value: $((t1 - t0)) s"
+[ $((t1 - t0)) -le 2 ] && pass || fail "decode of a 600 KB value took $((t1 - t0)) s"
+big="$big$big"; doc="{\"content\":\"$big\",\"x\":1,\"cwd\":\"/after/1m\"}"
+t0=$(date +%s); got="$(json_str "$doc" cwd)"; t1=$(date +%s)
+assert_eq "$got" "/after/1m" "key after a 1 MB value"
+echo "  timing: scan past $((${#big} / 1000)) KB: $((t1 - t0)) s"
+[ $((t1 - t0)) -le 2 ] && pass || fail "scan past 1 MB took $((t1 - t0)) s"
+# many small tokens (a long pretty-printed document) are scanned in linear time too
+many="$(awk 'BEGIN{printf "{\n"; for(i=0;i<40000;i++) printf "  \"k%d\": \"v%d\",\n", i, i; printf "  \"cwd\": \"/after/many\"\n}\n"}')"
+t0=$(date +%s); got="$(json_str "$many" cwd)"; t1=$(date +%s)
+assert_eq "$got" "/after/many" "key after 80000 tokens"
+[ $((t1 - t0)) -le 2 ] && pass || fail "scan past 80000 tokens took $((t1 - t0)) s"
+# adversarial: a value that is all escaped quotes / all escaped backslashes
+adv="$(awk 'BEGIN{for(i=0;i<50000;i++) printf "%s", "\\" "\""}')"
+doc="{\"a\":\"$adv\",\"cwd\":\"/ok\"}"
+assert_eq "$(json_str "$doc" cwd)" "/ok" "scan past escaped quotes"
+adv="$(awk 'BEGIN{for(i=0;i<50000;i++) printf "%s", "\\\\"}')"
+doc="{\"a\":\"$adv\",\"cwd\":\"/ok2\"}"
+assert_eq "$(json_str "$doc" cwd)" "/ok2" "scan past escaped backslashes"
+assert_eq "$(json_str '{"a":"x\"y\\","cwd":"/ok3"}' cwd)" "/ok3" "quote parity"
+assert_eq "$(json_str '{"a":"x\\\"y","cwd":"/ok4"}' cwd)" "/ok4" "quote parity, odd run"
+assert_eq "$(json_str '{"a":"x\\\"y\\\\"}' a)" 'x\"y\\' "decode: escaped backslash then escaped quote"
+
 # --- project_of
 unset CORE_DIR
 mkdir -p "$SANDBOX/real/My Проекты/Ядро"
@@ -91,4 +122,17 @@ ln -s "$SANDBOX/real/My Проекты/Ядро" "$HOME/Core"
 export CORE_DIR="~/Core"; load_settings
 assert_eq "$CORE_DIR" "$SANDBOX/real/My Проекты/Ядро" "~ CORE_DIR resolved"
 assert_eq "$(project_of "~/Core/p2/code")" "p2" "path with ~"
+
+# --- letter case: the spelling on disk wins (macOS volumes are case-insensitive, `cd -P` keeps what was typed)
+mkdir -p "$SANDBOX/cs/a"
+if [ -d "$SANDBOX/cs/A" ]; then
+  mkdir -p "$SANDBOX/CaseCore/Ядро/MyApp/code"; echo "# app" > "$SANDBOX/CaseCore/Ядро/MyApp/CLAUDE.md"
+  export CORE_DIR="$SANDBOX/casecore/ядро"; load_settings
+  assert_eq "$CORE_DIR" "$SANDBOX/CaseCore/Ядро" "CORE_DIR takes the case on disk"
+  assert_eq "$(canon_dir "$SANDBOX/CASECORE/ядро/myapp/new/file")" "$SANDBOX/CaseCore/Ядро/MyApp/new/file" "canon_dir: existing part on-disk case, missing part as typed"
+  assert_eq "$(project_of "$SANDBOX/CaseCore/Ядро/MyApp/code")" "MyApp" "cwd as on disk"
+  assert_eq "$(project_of "$SANDBOX/CASECORE/ЯДРО/myapp/code")" "MyApp" "cwd in other case"
+else
+  echo "  note: case-sensitive volume, letter-case test skipped"; pass
+fi
 finish
