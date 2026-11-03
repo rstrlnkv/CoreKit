@@ -141,13 +141,14 @@ git_init() {
   echo "created $rel/.git"
 }
 
-# CLI: bash lib.sh get <key> | set <key> <value> | ready (exit 0 when core_ready)
+# CLI: bash lib.sh get <key> | set <key> <value> | ready (exit 0 when core_ready) | core-dir (absolute path)
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   load_settings
   case "${1:-}" in
     get) [ $# -eq 2 ] || { echo "Usage: lib.sh get <key>" >&2; exit 2; }; coredev_get "$2" ;;
     set) [ $# -eq 3 ] || { echo "Usage: lib.sh set <key> <value>" >&2; exit 2; }; coredev_set "$2" "$3" ;;
     ready) core_ready ;;
-    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready" >&2; exit 2 ;;
+    core-dir) printf '%s\n' "$CORE_DIR" ;;
+    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir" >&2; exit 2 ;;
   esac
 fi

@@ -115,6 +115,11 @@ CORE_DIR="$RD" bash "$LIB" ready && fail "CLI ready should exit 1" || pass
 # the unset CORE_DIR in a sourced shell does not make a bogus path ready
 CORE_DIR= bash -c '. "$1"; core_ready' _ "$LIB" && fail "ready with empty CORE_DIR" || pass
 
+# core-dir prints the absolute Core path
+assert_eq "$(CORE_DIR="$RD" bash "$LIB" core-dir)" "$RD" "core-dir prints CORE_DIR"
+assert_eq "$(CORE_DIR='${user_config.core_dir}' HOME="$SANDBOX/h" bash "$LIB" core-dir)" "$SANDBOX/h/Projects/Core" "core-dir ignores an unsubstituted placeholder"
+assert_eq "$(CORE_DIR='~/xx' HOME="$SANDBOX/h" bash "$LIB" core-dir)" "$SANDBOX/h/xx" "core-dir expands ~"
+
 # scaffold uses the plugin option when CORE_DIR is unset
 unset CORE_DIR
 mkdir -p "$SANDBOX/optcore"; CORE_DIR="$SANDBOX/optcore" setup_core

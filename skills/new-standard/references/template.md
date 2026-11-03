@@ -13,8 +13,8 @@ updated: YYYY-MM-DD
 
 ## Why
 <!-- One line per rule, same numbers: the failure the rule prevents. -->
-1. <the failure rule 1 prevents>
-2. <the failure rule 2 prevents>
+1. <the failure this rule prevents>
+2. <the failure this rule prevents>
 
 ## How to check
 <!-- One entry per rule number, in exactly one of two forms:
@@ -27,12 +27,13 @@ updated: YYYY-MM-DD
 none
 
 ## Sources
-- <what the rules rest on: a link, a document, or "the owner's own experience">
+- <what the rules rest on: a link, a document, or your own experience>
 
 <!--
 Fill-in notes (delete this whole comment block):
-- File: <Core>/standards/<name>.md, English, under 120 lines. <name> is the file name without .md.
+- File: <Core>/standards/<name>.md, English, at most 120 lines. <name> is the file name without .md.
 - applies-to: any of engineer, tester, security, verifier, localizer, designer, release
   (release = the release procedure). Comma-separated inside [ ].
-- The five "## " headings stay in this order. scripts/check-standard.sh checks the shape.
+- The five "## " headings stay in this order. scripts/check-standard.sh checks the shape and
+  rejects leftover placeholders (the <...> texts above) and leftover comments.
 -->

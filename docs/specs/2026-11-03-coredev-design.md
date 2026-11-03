@@ -210,7 +210,7 @@ exists, otherwise `<Core>/standards/<name>.md`; none → `Standards: none in Cor
 4. Shows the draft in the user's language; on "ok" writes `<Core>/standards/<name>.md` (an
    existing standard: shows `diff -u` and needs a second "ok" before overwriting), runs
    `scripts/check-standard.sh <file>` (front matter, five sections in order, a check per rule,
-   known roles, under 120 lines; exit 0/1 with a list) until it is silent, then commits only
+   known roles, no leftover placeholders or comments, at most 120 lines; exit 0/1 with a list) until it is silent, then commits only
    that file in Core: `git -C <Core> add standards/<name>.md && git -C <Core> commit -m "Add
    standard <name>"` (`Update standard <name>` for an existing one). Not through `save`: `save`
    needs a project. Never pushes.

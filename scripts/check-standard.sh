@@ -31,6 +31,9 @@
 #   no rules in ## Rule                  the section has no "<n>. <text>" line
 #   rule <n> has no check                no "<n>. ..." entry in ## How to check
 #   check <n> is malformed (...)         entry is neither of the two line forms
+#   placeholder left: <text>             a template placeholder (the exact <...> texts of
+#                                        references/template.md) is still in the file
+#   comment left                         an unfenced "<!--" (template guidance not removed)
 #   over 120 lines
 # Exit 2: usage error or unreadable file. Portable bash 3.2 + BSD awk.
 
@@ -48,10 +51,16 @@ fi
 
 ROLES="engineer tester security verifier localizer designer release"
 
-OUT="$(awk -v roles="$ROLES" '
+OUT="$(LC_ALL=C awk -v roles="$ROLES" '
 function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
 function problem(msg) { print "check-standard: " msg }
+function scan(l,   t) {
+  if (index(l, "<!--") > 0 && !commented) { commented = 1 }
+  for (t = 1; t <= nph; t++) if (index(l, PH[t]) > 0 && !(PH[t] in PHSEEN)) { PHSEEN[PH[t]] = 1; PHORD[++nphseen] = PH[t] }
+}
 BEGIN {
+  nph = split("<kebab-case>|<one line: what it rules and when an agent needs it>|<roles that must read it>|<Title>|<imperative rule>|<the failure this rule prevents>|<expected output>|<the risk that stays>|<what the rules rest on: a link, a document, or your own experience>", PH, "|")
+
   nsec = split("Rule|Why|How to check|Exceptions|Sources", SEC, "|")
   nfld = split("name description applies-to updated", FLD, " ")
   nrole = split(roles, ROLE, " ")
@@ -64,6 +73,7 @@ BEGIN {
   }
   if (state == 1) {
     if ($0 == "---") { state = 2; closed = 1; next }
+    scan($0)
     i = index($0, ":")
     if (i > 1) {
       key = substr($0, 1, i - 1); val = trim(substr($0, i + 1))
@@ -75,6 +85,7 @@ BEGIN {
   line = $0
   if (line ~ /^[ \t]*(```|~~~)/) { fence = !fence; next }
   if (fence) next
+  scan(line)
   if (line ~ /^## /) {
     h = trim(substr(line, 4)); cur = ""
     for (k = 1; k <= nsec; k++) if (h == SEC[k]) {
@@ -137,6 +148,8 @@ END {
       else if (!(n in OKCHK)) problem("check " n " is malformed (want \"<command> → <expected>\" or \"no guard — <risk>\")")
     }
   }
+  for (t = 1; t <= nphseen; t++) problem("placeholder left: " PHORD[t])
+  if (commented) problem("comment left")
   if (NR > 120) problem("over 120 lines")
 }
 ' "$FILE")" || { echo "check-standard: internal error (awk failed)" >&2; exit 2; }

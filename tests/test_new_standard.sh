@@ -63,13 +63,32 @@ sed 's/^applies-to:.*/applies-to: [engineer, tester, security, verifier, localiz
   "$FX/standard-good.md" > "$E/roles.md"
 assert_exit 0 bash "$C" "$E/roles.md"
 
-# The template itself, with placeholders filled, passes; unfilled it still has every section.
+# The template itself: fully filled (placeholders and comments gone) passes.
 assert_file "$TPL"
-sed -e 's/<kebab-case>/demo/' -e 's/<one line[^>]*>/Demo rule./' \
-    -e 's/<roles[^>]*>/engineer, tester/' -e 's/YYYY-MM-DD/2026-11-03/' \
-    "$TPL" > "$E/template-filled.md"
+FILL_FM=(-e 's/<kebab-case>/demo/' -e 's/<one line[^>]*>/Demo rule./' \
+    -e 's/<roles[^>]*>/engineer, tester/' -e 's/YYYY-MM-DD/2026-11-03/')
+sed "${FILL_FM[@]}" "$TPL" > "$E/template-fm.md"      # only the front matter filled
+sed "${FILL_FM[@]}" -e 's/<Title>/Demo/' -e 's/<imperative rule>/Do it./' \
+    -e 's/<the failure this rule prevents>/It breaks./' -e 's/<command> → <expected output>/true → exit 0/' \
+    -e 's/<the risk that stays>/It may break./' -e 's/<what the rules rest on[^>]*>/my notes/' \
+    "$TPL" | awk '/^<!--/{c=1} !c{print} c&&/-->/{c=0}' > "$E/template-filled.md"
 assert_exit 0 bash "$C" "$E/template-filled.md"
-assert_exit 1 bash "$C" "$TPL"        # placeholders left: description/roles are not real values
+# Front matter only: placeholders and comments are reported.
+assert_exit 1 bash "$C" "$E/template-fm.md"
+assert_eq "$OUT" "check-standard: placeholder left: <Title>
+check-standard: placeholder left: <imperative rule>
+check-standard: placeholder left: <the failure this rule prevents>
+check-standard: placeholder left: <expected output>
+check-standard: placeholder left: <the risk that stays>
+check-standard: placeholder left: <what the rules rest on: a link, a document, or your own experience>
+check-standard: comment left" "front-matter-only template"
+# A comment alone is reported; legitimate <Core>-style text is not a placeholder.
+sed 's/^none$/none <!-- todo -->/' "$FX/standard-good.md" > "$E/comment.md"
+assert_exit 1 bash "$C" "$E/comment.md"
+assert_eq "$OUT" "check-standard: comment left" "comment left"
+sed 's|^- The owner.s own habit.|- Legitimate <Core>/standards/<name>.md text is not a placeholder|' "$FX/standard-good.md" > "$E/angle.md"
+assert_exit 0 bash "$C" "$E/angle.md"
+assert_exit 1 bash "$C" "$TPL"        # the raw template is never green
 assert_not_contains <(printf '%s' "$OUT") "missing section"
 assert_not_contains <(printf '%s' "$OUT") "out of order"
 for w in '→' 'no guard —' 'engineer' 'release' 'designer'; do assert_contains "$TPL" "$w"; done
@@ -91,6 +110,14 @@ assert_contains "$SK" "lib.sh\" ready"
 assert_contains "$SK" "/coredev:new-project"
 assert_contains "$SK" "general-purpose"
 assert_contains "$SK" "300 words"
+assert_contains "$SK" "lib.sh\" core-dir"
+assert_contains "$SK" "TMPDIR"
+assert_contains "$SK" "at most 120 lines"
+assert_not_contains "$SK" "under 120"
+assert_not_contains "$TPL" "under 120"
+assert_not_contains "$ROOT/docs/specs/2026-11-03-coredev-design.md" "under 120 lines"
+assert_contains "$SK" "imperative rule"
+assert_contains "$SK" "writes nothing"
 assert_contains "$SK" "diff -u"
 grep -qiE 'never write[s]? into the plugin' "$SK" && pass || fail "SKILL.md must say it never writes into the plugin"
 [ "$(wc -l < "$SK")" -lt 500 ] && pass || fail "SKILL.md is 500 lines or more"
