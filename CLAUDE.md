@@ -1,28 +1,44 @@
 # CoreKit
 
-Claude Code skills, published as the `corekit` plugin (github.com/rstrlnkv/CoreKit).
+Claude Code skills, published as the `coredev` plugin in the `corekit` marketplace
+(github.com/rstrlnkv/CoreKit).
 The main skill is `new-project`: an interview, stack and architecture analysis, and a project
 skeleton whose internal docs live in a private repo (`~/Projects/Core/<project>/`) while the
 code lives in a separate nested repo (`<project>/code/`).
 
-Requirements source: docs/specs/2026-11-02-new-project-design.md (read before changing the
-skill). Implementation plan: docs/plans/2026-11-02-new-project.md.
+Requirements source: docs/specs/2026-11-03-coredev-design.md (read before changing the
+plugin) and docs/specs/2026-11-02-new-project-design.md (the `new-project` skill). Plans: docs/plans/.
 
 ## Layout
 ```
-.claude-plugin/          plugin.json (version lives here), marketplace.json
-skills/new-project/
-  SKILL.md               flow and stages; links to references and scripts
-  references/            interview, analysis method, stack table with generator commands
-  scripts/               scaffold, preflight, configure, install-hooks, merge-generated
-  core-bin/              save, undo-step, stop-remind.sh — copied to Core/bin/
-  hooks/                 git hooks copied to Core/hooks/ and installed into both repos
-  templates/             CLAUDE.md, docs/*, rules/*, code/* and core/* templates
-tests/                   bash tests: lib.sh helpers, test_*.sh, run.sh
-evals/                   trigger evals for the skill description
-install.sh               manual install: copies skills/* to ~/.claude/skills/
+.claude-plugin/
+  plugin.json          name "coredev", version lives here, userConfig, dependencies
+  marketplace.json     marketplace "corekit"; plugin "coredev"; renames; cross-marketplace allowance
+skills/
+  new-project/         as today; uses scripts/setup-core.sh; wiki templates
+  task/                SKILL.md; references/: paths.md, brief.md, report.md, release.md, adopt.md
+  new-standard/        SKILL.md; references/template.md
+agents/                engineer tester security verifier localizer designer
+hooks/
+  hooks.json           five hooks, explicit timeouts
+  session-start.sh one-suite.sh guard-code.sh guard-secrets.sh stop-remind.sh
+reference/
+  wiki.md              wiki rules
+  knowledge.md         knowledge format
+scripts/               all machinery, portable bash
+  lib.sh               read settings, parse hook JSON without jq, locate <Core> and project
+  setup-core.sh        create or upgrade the Core skeleton
+  adopt.sh             move an existing project into the layout
+  wiki-check.sh        wiki checks
+  check-standard.sh    standard file checks
+  save, undo-step      one step = code + docs commit / revert
+  git-hooks/           pre-commit-code, pre-push-code, pre-push-core, blocked-patterns
+tests/                 bash: lib.sh, test_*.sh, run.sh, fixtures/
+evals/                 trigger evals (new-project)
 CHANGELOG.md, README.md
 ```
+No top-level `bin/` (claude.ai and Cowork refuse plugins that have one). Spec section 4.1 is the
+target tree; some parts arrive in later phases of docs/plans/.
 
 ## Commands
 ```bash

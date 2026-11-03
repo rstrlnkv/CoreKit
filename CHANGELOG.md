@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 — 2026-11-03
+- The plugin is now `coredev` (the marketplace and repo stay `corekit`). The marketplace
+  `renames` map migrates old installs; run `/plugin install coredev@corekit` once.
+  Commands are `/coredev:...`.
+- Plugin settings (`userConfig`): `core_dir`, `attribution` (`allow`/`forbid`),
+  `model_profile` (`economy`/`balanced`/`strong`).
+- The plugin depends on `feature-dev` from `claude-plugins-official`; the marketplace allows
+  that cross-marketplace dependency.
+- Added `tests/test_manifest.sh`.
+
 ## 0.1.1 — 2026-11-03
 - `save` reinstalls hooks when the code pre-push hook or `blocked-patterns` is missing
   (without the patterns file every commit was blocked and `save` never recovered).

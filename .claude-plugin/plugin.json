@@ -1,10 +1,35 @@
 {
-  "name": "corekit",
-  "version": "0.1.1",
-  "description": "Start every new app the same way: interview, stack and architecture analysis, recorded decisions, and a project skeleton whose internal Claude files live in a private docs repo, separate from the code.",
+  "name": "coredev",
+  "version": "0.2.0",
+  "description": "Develop every project the same way: start a new app from an interview, run tasks with a crew of agents, keep standards and lessons in your own private Core repo.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",
   "repository": "https://github.com/rstrlnkv/CoreKit",
   "license": "MIT",
-  "keywords": ["new-project", "scaffold", "claude-md", "project-setup", "git"]
+  "keywords": ["new-project", "scaffold", "claude-md", "project-setup", "git", "workflow"],
+  "dependencies": [
+    { "name": "feature-dev", "marketplace": "claude-plugins-official" }
+  ],
+  "userConfig": {
+    "core_dir": {
+      "type": "directory",
+      "title": "Core folder",
+      "description": "Where your private Core repo lives: standards, lessons and the internal docs of every project.",
+      "default": "~/Projects/Core"
+    },
+    "attribution": {
+      "type": "string",
+      "title": "Commit attribution",
+      "description": "allow: Claude may add Co-Authored-By and Generated-with lines to commits and pull requests. forbid: never.",
+      "options": ["allow", "forbid"],
+      "default": "allow"
+    },
+    "model_profile": {
+      "type": "string",
+      "title": "Model profile",
+      "description": "Which models the crew uses: economy (cheapest), balanced, or strong (best model for every role).",
+      "options": ["economy", "balanced", "strong"],
+      "default": "balanced"
+    }
+  }
 }
