@@ -21,12 +21,17 @@ assert_exit() {
   [ "$got" = "$want" ] && pass || fail "exit $got (want $want): $* :: $OUT"
 }
 
-# Fresh sandbox: exports CORE_DIR inside a new temp dir; git identity for commits.
+# Fresh sandbox: exports CORE_DIR inside a new temp dir; git identity for commits; HOME, XDG and
+# git config isolated (see below).
 new_sandbox() {
   SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/np-test.XXXXXX")"
   SANDBOX="$(cd -P "$SANDBOX" && pwd)"   # physical path: scripts print canonical paths
   export CORE_DIR="$SANDBOX/Projects/Core"
   export CLAUDE_PLUGIN_DATA="$SANDBOX/plugin-data"   # never the real ~/.claude
+  # Nothing from the developer's machine: no real HOME, XDG config, global or system git config
+  # (a global excludes file, init.defaultBranch, ...). Git identity comes from the env vars below.
+  mkdir -p "$SANDBOX/home" "$SANDBOX/xdg"; : > "$SANDBOX/gitconfig"
+  export HOME="$SANDBOX/home" XDG_CONFIG_HOME="$SANDBOX/xdg" GIT_CONFIG_GLOBAL="$SANDBOX/gitconfig" GIT_CONFIG_NOSYSTEM=1
   export COREDEV_TOOLS="$CLAUDE_PLUGIN_DATA/tools"
   export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com
   export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com

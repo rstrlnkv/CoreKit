@@ -15,6 +15,8 @@ Talk to the user in plain words; never run `adopt.sh` before "ok".
    the name; which files move to `<Core>/<name>/`; that git history stays and one commit
    "Move internal Claude files to Core" removes them from the repo; that the folder itself is
    moved to `<Core>/<name>/code`, so the old path stops working; what gets created.
+   If the plan lists `CLAUDE.md` or `.claude/` under "stays in code (ignored by git)", tell
+   the user: the Core gets a template `CLAUDE.md`, and their own file stays in `code/`.
 3. **Public docs.** Ask which docs, if any, stay in the repo for everyone to read (for
    example `docs/`, or one page). Those paths are not moved and are listed as `public-docs:`.
 4. **Purpose.** Ask for one line on what the project is for; it goes on the `PROJECTS.md`

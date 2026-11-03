@@ -10,7 +10,9 @@
 #   invalid project name '<n>' (use --name) | target exists: <path> | Core is not set up
 #   not found: <path>                  a --public-docs path that is not in the repo
 #   symlink: <path> -> <target>; replace it with a file first   (a tracked file to be copied)
-#   different disk: move the folder next to Core first          (the move must be a rename)
+#   submodule: <path>; adopt cannot move it                     (a tracked gitlink to be copied)
+#   different disk: move the folder next to Core first          (the move must be a rename;
+#       also "different disk: could not compare disks; ..." when df gives no usable answer)
 #   git does not know your name and email (...)
 # Only files git tracks are copied and removed; ignored files stay in <Core>/<n>/code untouched.
 # Exit 1 (nothing deleted; the message says where the files are): a failed mv after the commit.
@@ -115,18 +117,26 @@ while IFS= read -r f; do
   esac
 done <<< "$TRACKED"
 
-# Symlinks cannot be moved faithfully: refuse if a file that would be copied is one.
-while IFS= read -r f; do
-  [ -n "$f" ] || continue
+# Symlinks and submodules (gitlinks) cannot be moved faithfully: refuse if a file that would be
+# copied is one.
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  f="${line#*$'\t'}"
   [ "$(kind "$f")" = copy ] || continue
-  refuse "symlink: $f -> $(readlink "$FROM/$f"); replace it with a file first"
+  case "$line" in
+    120000*) refuse "symlink: $f -> $(readlink "$FROM/$f"); replace it with a file first" ;;
+    160000*) refuse "submodule: $f; adopt cannot move it" ;;
+  esac
 done <<< "$(git -C "$FROM" -c core.quotepath=false ls-files -s -- CLAUDE.md docs .claude \
-  | awk -F'\t' '$1 ~ /^120000 / { print substr($0, index($0, "\t") + 1) }')"
+  | awk -F'\t' '$1 ~ /^(120000|160000) / { print substr($1, 1, 6) "\t" substr($0, index($0, "\t") + 1) }')"
 
 # The move must be a rename: the folder (and its parent) and the Core must share a file system.
 mount_of() { df -P "$1" 2>/dev/null | sed -n '2s/^[^ ]* *[0-9]* *[0-9]* *[0-9]* *[0-9]*% *//p'; }
-M_CORE="$(mount_of "$CORE_DIR")"
-{ [ "$(mount_of "$FROM")" = "$M_CORE" ] && [ "$(mount_of "$(dirname "$FROM")")" = "$M_CORE" ]; } \
+M_CORE="$(mount_of "$CORE_DIR")"; M_FROM="$(mount_of "$FROM")"; M_PAR="$(mount_of "$(dirname "$FROM")")"
+# An empty answer (df failed or printed something unparseable) is a refusal: fail closed.
+{ [ -n "$M_CORE" ] && [ -n "$M_FROM" ] && [ -n "$M_PAR" ]; } \
+  || refuse "different disk: could not compare disks; move the folder next to Core first"
+{ [ "$M_FROM" = "$M_CORE" ] && [ "$M_PAR" = "$M_CORE" ]; } \
   || refuse "different disk: move the folder next to Core first"
 
 # Git needs an identity for the commits: refuse now rather than half way.

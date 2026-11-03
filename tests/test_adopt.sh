@@ -14,8 +14,7 @@ mkrepo() {
   printf '{"local":true}\n' > "$1/.claude/settings.local.json"
   printf 'x\n' > "$1/.claude/worktrees/w/f.txt"
   printf 'echo a\n' > "$1/src/a.sh"
-  git -C "$1" add -A && git -C "$1" add -f .claude/settings.local.json .claude/worktrees/w/f.txt 2>/dev/null
-  git -C "$1" commit -q -m "initial"
+  git -C "$1" add -A && git -C "$1" commit -q -m "initial"
 }
 # state <dir>... — everything a refusal must not change: files, HEAD, status, branches
 state() {
@@ -278,6 +277,26 @@ refuses "git does not know your name and email (git config --global user.name / 
 refuses "git does not know your name and email (git config --global user.name / user.email)" --from "$G"
 export HOME="$SAVE_HOME" GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com
 unset GIT_CONFIG_NOSYSTEM GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+
+# --- a tracked submodule among the internal files: refuse
+new_sandbox; setup_core
+F="$SANDBOX/in/sub-app"; mkrepo "$F"
+SUB="$SANDBOX/in/sub-origin"; mkdir -p "$SUB"; git init -q "$SUB"; echo s > "$SUB/s.txt"
+git -C "$SUB" add -A && git -C "$SUB" commit -q -m s
+git -C "$F" -c protocol.file.allow=always submodule add -q "$SUB" docs/vendor >/dev/null 2>&1
+git -C "$F" commit -q -m "submodule"
+assert_eq "$(git -C "$F" ls-files -s docs/vendor | cut -c1-6)" "160000" "fixture: gitlink"
+refuses "submodule: docs/vendor; adopt cannot move it" --from "$F"
+refuses "submodule: docs/vendor; adopt cannot move it" --from "$F" --dry-run
+
+# --- df gives nothing usable: the disk check fails closed
+new_sandbox; setup_core
+F="$SANDBOX/in/df-app"; mkrepo "$F"
+mkdir -p "$SANDBOX/stub"; printf '#!/bin/sh\nexit 0\n' > "$SANDBOX/stub/df"; chmod +x "$SANDBOX/stub/df"
+SAVE_PATH="$PATH"; PATH="$SANDBOX/stub:$PATH"
+refuses "different disk: could not compare disks; move the folder next to Core first" --from "$F"
+refuses "different disk: could not compare disks; move the folder next to Core first" --from "$F" --dry-run
+PATH="$SAVE_PATH"
 
 # --- different disk: refuse (df stub reports another mount point for the Core)
 new_sandbox; setup_core
