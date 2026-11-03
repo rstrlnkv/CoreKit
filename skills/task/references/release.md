@@ -49,12 +49,11 @@ found → ask the user first, then brief engineer with the answer.
    In the code root, only with attribution=forbid:
    `git log --format=%B <range> | grep -icE 'co-authored-by|generated with'` (forbid only),
    with `<range>` = `<code base>..HEAD`. In `<Core>`, also only with forbid:
-   `git -C <Core> log --format=%B <Core base>..HEAD -- <project>` (add `knowledge` when
-   knowledge lines were written) piped to the same grep. Both print `0` → ✓.
+   `git -C "<Core>" log --format=%B <Core base>..HEAD -- $(CORE_DIR="<Core>" bash "<scripts>/lib.sh" core-paths <project>)`
+   piped to the same grep (the paths `save` commits). Both print `0` → ✓.
    With `allow` show "skipped (attribution=allow)".
-7. **Clean tree.** In the code root `git status --short`; in the Core
-   `git -C <Core> status --short -- <project>` (add `knowledge` when knowledge lines were
-   written). Both empty → ✓.
+7. **Clean tree.** In the code root `git status --short`; in the Core, for the same paths `save`
+   commits: `git -C "<Core>" status --short -- $(CORE_DIR="<Core>" bash "<scripts>/lib.sh" core-paths <project>)`. Both empty → ✓.
 
 ## When a line is ✗
 - ✗ at 1–4: stop; the finding goes to engineer as one repair, tester confirms (on the release path: no tester; the rerun of 1 is the

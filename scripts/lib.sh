@@ -361,7 +361,8 @@ projects_entry() {
 }
 
 # CLI: bash lib.sh get <key> | set <key> <value> | ready (exit 0 when core_ready) | core-dir (absolute path)
-#      | schema (the plugin's schema number)
+#      | schema (the plugin's schema number) | core-paths <project> (the Core paths `save` commits for
+#      the project, one line, space-separated; from _locate.sh next to this file)
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   load_settings
   case "${1:-}" in
@@ -370,6 +371,10 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     ready) core_ready ;;
     core-dir) printf '%s\n' "$CORE_DIR" ;;
     schema) printf '%s\n' "$COREDEV_SCHEMA" ;;
-    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | schema" >&2; exit 2 ;;
+    core-paths)
+      [ $# -eq 2 ] && [ -n "$2" ] || { echo "Usage: lib.sh core-paths <project>" >&2; exit 2; }
+      . "$(dirname "${BASH_SOURCE[0]}")/_locate.sh" || exit 1
+      core_paths "$CORE_DIR" "$2" ;;
+    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | schema | core-paths <project>" >&2; exit 2 ;;
   esac
 fi

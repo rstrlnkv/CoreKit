@@ -12,10 +12,20 @@ locate() {
   if [ "$(basename "$MAIN")" != "code" ] || [ -z "$CORE" ] || [ "$CORE" = "$MAIN" ]; then
     echo "This folder is not a new-project layout (Core/<name>/code)." >&2; return 1
   fi
-  # Core-level files that belong to every step: this project plus shared files.
-  CORE_PATHS="$NAME"
-  for f in PROJECTS.md README.md .gitignore .coredev standards knowledge session-rules.md bin hooks; do
-    [ -e "$CORE/$f" ] && CORE_PATHS="$CORE_PATHS $f"
-  done
+  CORE_PATHS="$(core_paths "$CORE" "$NAME")"
   return 0
+}
+
+# core_paths <core> <project> — the Core paths that belong to every step of <project>, on one line,
+# space-separated: the project folder plus the shared files. `save` commits exactly these, and the
+# task skill's clean-tree checks look at exactly these (`lib.sh core-paths <project>`). A shared
+# file counts when it exists or git still tracks it (a deletion is part of the step too).
+core_paths() {
+  local core="$1" out="$2" f
+  for f in PROJECTS.md README.md .gitignore .coredev standards knowledge session-rules.md bin hooks; do
+    if [ -e "$core/$f" ] || git -C "$core" ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
+      out="$out $f"
+    fi
+  done
+  printf '%s\n' "$out"
 }

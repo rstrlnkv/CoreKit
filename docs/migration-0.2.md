@@ -88,7 +88,9 @@ plugin tools copy in the plugin data folder. It is safe to run again; it prints 
 ### Step 6. Move personal rules, turn on auto-update
 
 - Move your personal rules (the ones you keep for every project) into
-  `<Core>/session-rules.md`.
+  `<Core>/session-rules.md`, and commit it: `git -C <Core> add session-rules.md && git -C <Core>
+  commit -m "Add session rules"`. `/coredev:task` stops while a Core file it commits with a step
+  has uncommitted changes.
 - Auto-update is off by default for third-party marketplaces: `/plugin` → Marketplaces →
   corekit → Enable auto-update. Updates arrive only when the plugin's `version` changes.
 

@@ -145,8 +145,8 @@ section "$PA" release | grep -qF 'wiki-check' && fail "paths.md release duplicat
 assert_contains "$SK" 'Never tag, never push'
 
 # Fix round 1: scoped Core checks, explicit changed-file lists, no repair after the commit.
-assert_contains "$REL" 'git -C <Core> status --short -- <project>'
-assert_contains "$REL" 'git -C <Core> log --format=%B <Core base>..HEAD -- <project>'
+assert_contains "$REL" 'git -C "<Core>" status --short -- $(CORE_DIR="<Core>" bash "<scripts>/lib.sh" core-paths <project>)'
+assert_contains "$REL" 'git -C "<Core>" log --format=%B <Core base>..HEAD -- $(CORE_DIR="<Core>" bash "<scripts>/lib.sh" core-paths <project>)'
 assert_contains "$REL" "{ git diff --name-only <code base>; git ls-files --others --exclude-standard; }"
 assert_contains "$REL" "{ git -C <Core> diff --name-only <Core base> -- <project>/docs; git -C <Core> ls-files --others --exclude-standard -- <project>/docs; }"
 assert_contains "$REL" '`<project>/docs/` prefix'

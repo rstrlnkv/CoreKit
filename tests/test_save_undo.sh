@@ -110,4 +110,31 @@ sleep 1; echo "v3" > "$C/app.txt"
 (cd "$C" && bash "$SAVE" "$(printf 'Keep\n\nCo-Authored-By: A <a@b.c>')") >/dev/null 2>&1
 assert_eq "$(git -C "$C" log -1 --format=%B | grep -ic 'co-authored-by')" "1" "message changed without the flag"
 
+# One Core path set: `lib.sh core-paths <project>` prints what save commits (CORE_PATHS), and the
+# clean-tree check written in task Start and release postcondition 7 uses it, so an uncommitted
+# session-rules.md (or standards/) stops the chain instead of riding along in its commit.
+LIB="$SCRIPTS/lib.sh"
+CHK='git -C "<Core>" status --short -- $(CORE_DIR="<Core>" bash "<scripts>/lib.sh" core-paths <project>)'
+assert_contains "$ROOT/skills/task/SKILL.md" "$CHK"
+assert_contains "$ROOT/skills/task/references/release.md" "$CHK"
+assert_not_contains "$ROOT/skills/task/SKILL.md" 'status --short -- <project> knowledge'
+cp_locate() { (cd "$C" && . "$SCRIPTS/_locate.sh" && locate && printf '%s\n' "$CORE_PATHS"); }
+assert_eq "$(CORE_DIR="$CORE_DIR" bash "$LIB" core-paths save-app)" "$(cp_locate)" "core-paths differs from save's CORE_PATHS"
+# the documented command, with <Core>, <scripts> and <project> filled in
+run_chk() { (cd "$C" && eval "$(printf '%s' "$CHK" | sed -e "s|<Core>|$CORE_DIR|g" -e "s|<scripts>|$SCRIPTS|g" -e 's|<project>|save-app|g')"); }
+assert_eq "$(run_chk | grep -v 'other/')" "" "clean Core: the check prints nothing"
+echo "a new rule" >> "$CORE_DIR/session-rules.md"
+run_chk | grep -qF 'session-rules.md' && pass || fail "check misses an uncommitted session-rules.md: $(run_chk)"
+git -C "$CORE_DIR" checkout -q -- session-rules.md
+echo "x" >> "$CORE_DIR/standards/README.md"
+run_chk | grep -qF 'standards/README.md' && pass || fail "check misses an uncommitted standards/ file"
+git -C "$CORE_DIR" checkout -q -- standards/README.md
+# a deleted tracked file still counts (save commits the deletion; the check shows it)
+rm "$CORE_DIR/session-rules.md"
+CORE_DIR="$CORE_DIR" bash "$LIB" core-paths save-app | tr ' ' '\n' | grep -qx 'session-rules.md' && pass || fail "core-paths drops a deleted tracked file"
+run_chk | grep -qF 'session-rules.md' && pass || fail "check misses a deleted session-rules.md"
+(cd "$C" && bash "$SAVE" "Drop session rules") >/dev/null 2>&1
+git -C "$CORE_DIR" show --name-only --format= HEAD | grep -qx 'session-rules.md' && pass || fail "save did not commit the deletion"
+assert_eq "$(CORE_DIR="$CORE_DIR" bash "$LIB" core-paths 2>&1 >/dev/null | head -1)" "Usage: lib.sh core-paths <project>" "core-paths without a project"
+
 finish

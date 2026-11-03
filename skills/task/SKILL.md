@@ -78,10 +78,13 @@ attribution value resolved at Start" instead of placeholders:
    (it is committed with the chain) so the next chain does not ask. List the file names of
    `<Core>/standards/`, `<Core>/knowledge/` and `<Core>/<project>/docs/knowledge/`, and read the
    `applies-to` front matter of each standard (rule 9 needs it).
-5. **Clean tree.** Run `git status --short` in the code root and
-   `git -C <Core> status --short -- <project> knowledge`. If either has uncommitted changes, tell the
-   user and stop. `save` does `git add -A`; the tree must be clean so it commits only this
-   chain's work. On `question` check this only before writing accepted knowledge lines; `adopt`
+5. **Clean tree.** Run `git status --short` in the code root and, for the Core paths `save`
+   commits (the project folder plus `PROJECTS.md`, `standards/`, `knowledge/`, `session-rules.md`
+   and the other shared files), `git -C "<Core>" status --short -- $(CORE_DIR="<Core>" bash "<scripts>/lib.sh" core-paths <project>)`.
+   If either shows uncommitted changes, name those files to the user, say they must be committed first
+   (in the code root, or `git -C "<Core>" add <files> && git -C "<Core>" commit -m "<message>"`),
+   and stop. `save` does `git add -A` on the same paths; the tree must be clean so it commits only
+   this chain's work. On `question` check this only before writing accepted knowledge lines; `adopt`
    skips it (adopt.md has its own checks).
 6. **Base commits.** Record `git rev-parse HEAD` in the code root and in `<Core>`: these are the
    chain's base commits; release attribution ranges and `--changed` start from them.

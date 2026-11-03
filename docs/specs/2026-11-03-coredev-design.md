@@ -346,7 +346,8 @@ command → output → ✓/✗:
    none → ask the user;
 5. commit through `save`: code and docs as one step, message in English (what and why);
 6. with `attribution=forbid`: `git log --format=%B <range> | grep -icE 'co-authored-by|generated with'` → `0`;
-7. `git status --short` clean in `code/` and in the project's Core folder.
+7. `git status --short` clean in `code/` and in the Core paths `save` commits (`lib.sh core-paths
+   <project>`: the project folder and the shared files; `task` Start checks the same set).
 One ✗ → stop; the finding goes to engineer; no second cycle. Never tags, never pushes.
 
 ## 11. Adopt (`/coredev:task adopt <folder>`, `scripts/adopt.sh`)
