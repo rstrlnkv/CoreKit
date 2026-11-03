@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# coredev git hook: allows pushing the Core repo only to a PRIVATE GitHub repository.
+url="$2"
+repo=$(printf '%s' "$url" | sed -nE 's#^(https://|git@|ssh://git@)github\.com[:/]([^/]+/[^/]+)$#\2#p' | sed 's/\.git$//')
+if [ -z "$repo" ]; then
+  echo "Push blocked: Core may only be pushed to GitHub (remote: $url)." >&2; exit 1
+fi
+if ! command -v gh >/dev/null 2>&1; then
+  echo "Push blocked: the GitHub CLI (gh) is not installed, so privacy of $repo cannot be checked." >&2
+  echo "Install it (brew install gh), run 'gh auth login', then push again." >&2; exit 1
+fi
+private=$(gh api "repos/$repo" --jq .private 2>/dev/null)
+if [ "$private" != "true" ]; then
+  echo "Push blocked: GitHub repository $repo is not private (or gh is not logged in)." >&2
+  echo "Make it private in the repository settings or run 'gh auth login', then push again." >&2
+  exit 1
+fi

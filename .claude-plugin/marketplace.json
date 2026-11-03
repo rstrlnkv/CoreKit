@@ -1,12 +1,15 @@
 {
   "name": "corekit",
-  "description": "CoreKit: skills for starting and running projects with Claude Code.",
+  "description": "CoreKit: the coredev plugin for starting and running projects with Claude Code.",
   "owner": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "plugins": [
     {
-      "name": "corekit",
+      "name": "coredev",
       "source": "./",
-      "description": "new-project skill: interview, stack analysis and a standard project skeleton with a private docs repo."
+      "description": "Start projects from an interview and run tasks with a crew of agents; standards and lessons live in your private Core repo."
     }
-  ]
+  ],
+  "renames": {
+    "corekit": "coredev"
+  }
 }

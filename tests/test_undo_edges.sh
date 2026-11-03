@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/lib.sh"
-new_sandbox
+new_sandbox; setup_core; sync_tools
 bash "$SKILL/scripts/scaffold.sh" --name edge-app >/dev/null
-C="$CORE_DIR/edge-app/code"; SAVE="$CORE_DIR/bin/save"; UNDO="$CORE_DIR/bin/undo-step"
+C="$CORE_DIR/edge-app/code"; SAVE="$SCRIPTS/save"; UNDO="$SCRIPTS/undo-step"
 cd "$C" || exit 1
 bash "$SAVE" "Scaffold" >/dev/null
 # two saves within the same second get different Step-Ids
@@ -16,5 +16,5 @@ assert_file "$C/a.txt"; assert_no_file "$C/b.txt"
 bash "$UNDO" >/dev/null; assert_no_file "$C/a.txt"
 assert_exit 1 bash "$UNDO"
 echo "$OUT" | grep -qi 'first step' && pass || fail "no first-step message"
-assert_file "$CORE_DIR/bin/save"; assert_file "$CORE_DIR/edge-app/CLAUDE.md"
+assert_file "$SAVE"; assert_file "$CORE_DIR/edge-app/CLAUDE.md"
 finish

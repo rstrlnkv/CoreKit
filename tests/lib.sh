@@ -2,6 +2,8 @@
 FAILS=0; PASSES=0
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SKILL="$ROOT/skills/new-project"
+SCRIPTS="$ROOT/scripts"
+HOOKS="$ROOT/hooks"
 
 pass() { PASSES=$((PASSES + 1)); }
 fail() { FAILS=$((FAILS + 1)); echo "  FAIL: $*"; }
@@ -19,17 +21,32 @@ assert_exit() {
   [ "$got" = "$want" ] && pass || fail "exit $got (want $want): $* :: $OUT"
 }
 
-# Fresh sandbox: exports CORE_DIR inside a new temp dir; git identity for commits.
+# Fresh sandbox: exports CORE_DIR inside a new temp dir; git identity for commits; HOME, XDG and
+# git config isolated (see below).
 new_sandbox() {
   SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/np-test.XXXXXX")"
+  SANDBOX="$(cd -P "$SANDBOX" && pwd)"   # physical path: scripts print canonical paths
   export CORE_DIR="$SANDBOX/Projects/Core"
-  export NEW_PROJECT_CONFIG="$SANDBOX/config"
+  export CLAUDE_PLUGIN_DATA="$SANDBOX/plugin-data"   # never the real ~/.claude
+  # Nothing from the developer's machine: no real HOME, XDG config, global or system git config
+  # (a global excludes file, init.defaultBranch, ...). Git identity comes from the env vars below.
+  mkdir -p "$SANDBOX/home" "$SANDBOX/xdg"; : > "$SANDBOX/gitconfig"
+  export HOME="$SANDBOX/home" XDG_CONFIG_HOME="$SANDBOX/xdg" GIT_CONFIG_GLOBAL="$SANDBOX/gitconfig" GIT_CONFIG_NOSYSTEM=1
+  export COREDEV_TOOLS="$CLAUDE_PLUGIN_DATA/tools"
   export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com
   export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com
 }
 
+# setup_core — creates the Core skeleton in $CORE_DIR (what scaffold.sh requires).
+setup_core() { bash "$SCRIPTS/setup-core.sh" "$CORE_DIR" >/dev/null; }
+
+# sync_tools — copies the plugin's scripts into $COREDEV_TOOLS (what session-start does),
+# so git hook shims installed in the sandbox have something to run.
+sync_tools() { bash "$SCRIPTS/sync-tools.sh" "$ROOT" "$COREDEV_TOOLS" >/dev/null; }
+
 # Checksum of all files under a dir, excluding .git internals.
-tree_sum() { (cd "$1" && find . -type f -not -path '*/.git/*' | LC_ALL=C sort | xargs cksum); }
+# (NUL-separated, so names with spaces or non-ASCII characters are summed too.)
+tree_sum() { (cd "$1" && find . -type f -not -path '*/.git/*' -print0 | xargs -0 cksum | LC_ALL=C sort -k3); }
 
 finish() {
   echo "$(basename "$0"): $PASSES passed, $FAILS failed"

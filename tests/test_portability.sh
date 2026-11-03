@@ -50,9 +50,11 @@ local dir="$1"
 EOF
 assert_eq "$(scan "$good")" "" "portable lines flagged"
 
-# scripts <repo> — shell scripts on disk (tracked or not): *.sh or a file with a shell shebang
+# scripts <repo> — shell scripts on disk (tracked or not) in scripts/ (incl. git-hooks/), hooks/,
+# skills/ (incl. skills/*/scripts/) and tests/: *.sh, or an extensionless file with a shell
+# shebang. Other files (*.awk, *.md, templates without a shell shebang) are not shell code.
 scripts() {
-  (cd "$1" && find install.sh skills tests -type f 2>/dev/null | while IFS= read -r f; do
+  (cd "$1" && find skills scripts hooks tests -type f 2>/dev/null | while IFS= read -r f; do
     [ "$f" = tests/test_portability.sh ] && continue
     case "$f" in *.sh) ;; *) head -1 "$f" | grep -qE '^#!.*sh' || continue ;; esac
     echo "$f"
@@ -60,10 +62,16 @@ scripts() {
 }
 
 # Self-check: new scripts not yet added to git and names with spaces are scanned too.
-R="$SANDBOX/repo"; mkdir -p "$R/skills"; git -C "$R" init -q
-echo 'echo ok' > "$R/install.sh"; git -C "$R" add install.sh
+R="$SANDBOX/repo"; mkdir -p "$R/skills/s/scripts" "$R/scripts/git-hooks" "$R/hooks"; git -C "$R" init -q
+echo 'echo ok' > "$R/scripts/tool.sh"; git -C "$R" add scripts/tool.sh
 echo 'mapfile -t x' > "$R/skills/new.sh"; echo 'grep -P x' > "$R/skills/a b.sh"
-assert_eq "$(scripts "$R" | LC_ALL=C sort | tr '\n' ';')" "install.sh;skills/a b.sh;skills/new.sh;" \
+printf '#!/usr/bin/env bash\necho ok\n' > "$R/scripts/git-hooks/pre-x"      # no extension, shebang
+printf '#!/bin/bash\necho ok\n' > "$R/hooks/guard.sh"
+printf '#!/bin/bash\necho ok\n' > "$R/skills/s/scripts/run"
+printf '#!/usr/bin/awk -f\n{ print }\n' > "$R/scripts/lex.awk"               # awk: not shell
+printf '# notes\n' > "$R/skills/s/readme.md"
+assert_eq "$(scripts "$R" | LC_ALL=C sort | tr '\n' ';')" \
+  "hooks/guard.sh;scripts/git-hooks/pre-x;scripts/tool.sh;skills/a b.sh;skills/new.sh;skills/s/scripts/run;" \
   "script list"
 
 # Every shell script in the repo.
@@ -72,5 +80,8 @@ scripts "$ROOT" | while IFS= read -r f; do
   [ -z "$hits" ] || echo "$hits"
 done > "$SANDBOX/hits"
 [ -s "$SANDBOX/hits" ] && fail "not portable to macOS bash 3.2 / BSD: $(cat "$SANDBOX/hits")" || pass
-scripts "$ROOT" | grep -qx 'skills/new-project/core-bin/save' && pass || fail "scripts without .sh not scanned"
+scripts "$ROOT" | grep -qx 'scripts/save' && pass || fail "scripts without .sh not scanned"
+for want in hooks/guard-code.sh skills/new-project/scripts/scaffold.sh scripts/git-hooks/pre-commit-code; do
+  scripts "$ROOT" | grep -qx "$want" && pass || fail "$want not scanned"
+done
 finish

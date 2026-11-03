@@ -2,8 +2,22 @@
 source "$(dirname "$0")/lib.sh"
 S="$SKILL/scripts/scaffold.sh"
 
-# --- valid name creates the full layout
+# --- Core not set up: scaffold refuses (exit 3) and creates nothing
 new_sandbox
+assert_exit 3 bash "$S" --name demo-app
+echo "$OUT" | grep -qF "Core is not set up at $CORE_DIR: run setup-core.sh first" && pass || fail "message: $OUT"
+assert_no_file "$CORE_DIR"
+assert_exit 3 bash "$S" --name demo-app --dry-run
+assert_no_file "$CORE_DIR"
+# a .coredev without "schema:" still counts as not set up (e.g. only an app id prefix)
+mkdir -p "$CORE_DIR"; printf 'app-id-prefix: com.x\n' > "$CORE_DIR/.coredev"
+assert_exit 3 bash "$S" --name demo-app
+assert_no_file "$CORE_DIR/demo-app"
+# an invalid name is reported before the Core check
+assert_exit 2 bash "$S" --name "Bad Name"
+
+# --- valid name creates the full layout
+new_sandbox; setup_core
 assert_exit 0 bash "$S" --name demo-app --purpose "Test app"
 P="$CORE_DIR/demo-app"
 for f in CLAUDE.md docs/INDEX.md docs/brief.md docs/architecture.md \
@@ -17,6 +31,8 @@ assert_dir "$CORE_DIR/.git"
 assert_file "$CORE_DIR/.gitignore"
 assert_contains "$CORE_DIR/.gitignore" "*/code/"
 assert_file "$CORE_DIR/README.md"
+# scaffold copies no machinery into Core
+assert_no_file "$CORE_DIR/bin"; assert_no_file "$CORE_DIR/hooks"
 
 # docs pages have full YAML front matter
 for f in INDEX.md brief.md architecture.md decisions/001-stack-and-architecture.md; do
@@ -32,13 +48,36 @@ assert_contains "$P/CLAUDE.md" "../docs/INDEX.md"
 grep -qE '^\s*-?\s*@' "$P/CLAUDE.md" && fail "CLAUDE.md has @-import" || pass
 grep -rq '{{' "$P" --exclude-dir=.git && fail "unfilled placeholder" || pass
 
+# wiki: a fresh scaffold passes wiki-check; CLAUDE.md has the check: line; knowledge/ exists
+assert_exit 0 bash "$SCRIPTS/wiki-check.sh" "$P"
+[ -z "$OUT" ] && pass || fail "wiki-check printed: $OUT"
+grep -q '^check: ' "$P/CLAUDE.md" && pass || fail "CLAUDE.md has no 'check: ' line"
+assert_eq "$(grep -c '^check: ' "$P/CLAUDE.md")" "1" "check: lines"
+assert_dir "$P/docs/knowledge"
+# the map is a plain path in CLAUDE.md, not a link wiki-check would resolve elsewhere
+grep -qF '](../docs/INDEX.md' "$P/CLAUDE.md" && fail "CLAUDE.md links INDEX.md" || pass
+# a page added without a map line turns wiki-check red (the check is live on the scaffold)
+printf -- '---\ntitle: T\ndescription: d\nstatus: draft\nfiles: []\nrelated: []\nupdated: 2026-01-01\n---\n\n# T\n' \
+  > "$P/docs/features/t.md"
+assert_exit 1 bash "$SCRIPTS/wiki-check.sh" "$P"
+echo "$OUT" | grep -qF 'wiki-check: features/t.md: not in INDEX.md' && pass || fail "red output: $OUT"
+rm -f "$P/docs/features/t.md"
+
 # settings.local.json grants the absolute project dir
 assert_contains "$P/code/.claude/settings.local.json" "\"$P\""
 # rules use worktree-safe path pattern
 assert_contains "$P/.claude/rules/tests.md" "code/**/"
 # code .gitignore blocks internal files
-for pat in CLAUDE.md CLAUDE.local.md .claude/ docs/superpowers/ .env '*.pem' '*.key'; do
+for pat in CLAUDE.md CLAUDE.local.md .claude/ docs/superpowers/ .env '*.pem' '*.key' \
+           '!.env.example' '!.env.sample' '!.env.template'; do
   assert_contains "$P/code/.gitignore" "$pat"
+done
+# the .env templates stay committable; real .env files are ignored
+for f in .env.example .env.sample .env.template; do
+  git -C "$P/code" check-ignore -q "$f" && fail "$f is ignored" || pass
+done
+for f in .env .env.local .env.production; do
+  git -C "$P/code" check-ignore -q "$f" && pass || fail "$f is not ignored"
 done
 # PROJECTS.md gets exactly one line
 c=$(grep -c '^- demo-app ' "$CORE_DIR/PROJECTS.md"); assert_eq "$c" "1" "PROJECTS.md lines"
@@ -54,22 +93,28 @@ assert_eq "$before" "$after" "tree changed on re-run"
 
 # --- invalid names
 for bad in MyApp "my app" проект 1app a -app app- ; do
-  new_sandbox
+  new_sandbox; setup_core
   assert_exit 2 bash "$S" --name "$bad"
   assert_no_file "$CORE_DIR/$bad"
 done
 
 # --- dry run touches nothing
-new_sandbox
+new_sandbox; setup_core
 assert_exit 0 bash "$S" --name dry-app --dry-run
-assert_no_file "$CORE_DIR"
+assert_no_file "$CORE_DIR/dry-app"
 echo "$OUT" | grep -q 'would create' && pass || fail "dry-run printed nothing"
 
 # a purpose with line breaks becomes one line
-new_sandbox
+new_sandbox; setup_core
 assert_exit 0 bash "$S" --name nl-app --purpose "$(printf 'First line.\r\nSecond line.')"
 assert_eq "$(grep -c 'nl-app' "$CORE_DIR/PROJECTS.md")" "1" "PROJECTS.md entry split"
 assert_contains "$CORE_DIR/PROJECTS.md" "First line. Second line."
 assert_contains "$CORE_DIR/nl-app/CLAUDE.md" "First line. Second line."
 
+# the wiki has one place for all worktrees: <Core>/<p>/docs/, which the task skill updates from a
+# worktree too (no "never edit ../docs/ from a worktree" that contradicts it)
+T="$SKILL/templates/CLAUDE.md.tmpl"
+assert_not_contains "$T" "Never edit \`../docs/\` from a worktree"
+assert_contains "$T" "one wiki for every worktree"
+assert_contains "$T" "{{PROJECT_DIR}}/docs/"
 finish
