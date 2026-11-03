@@ -19,6 +19,8 @@ while [ $# -gt 0 ]; do
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+# The purpose is one line in PROJECTS.md and a sed replacement: no line breaks.
+PURPOSE="$(printf '%s' "$PURPOSE" | tr '\r\n' '  ' | tr -s ' ')"
 
 if ! LC_ALL=C bash -c '[[ "$1" =~ ^[a-z][a-z0-9-]{1,38}[a-z0-9]$ ]]' _ "$NAME"; then
   echo "Invalid project name '$NAME': use 3-40 Latin lowercase letters, digits and hyphens," >&2

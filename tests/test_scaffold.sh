@@ -65,4 +65,11 @@ assert_exit 0 bash "$S" --name dry-app --dry-run
 assert_no_file "$CORE_DIR"
 echo "$OUT" | grep -q 'would create' && pass || fail "dry-run printed nothing"
 
+# a purpose with line breaks becomes one line
+new_sandbox
+assert_exit 0 bash "$S" --name nl-app --purpose "$(printf 'First line.\r\nSecond line.')"
+assert_eq "$(grep -c 'nl-app' "$CORE_DIR/PROJECTS.md")" "1" "PROJECTS.md entry split"
+assert_contains "$CORE_DIR/PROJECTS.md" "First line. Second line."
+assert_contains "$CORE_DIR/nl-app/CLAUDE.md" "First line. Second line."
+
 finish
