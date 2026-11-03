@@ -10,7 +10,8 @@ for a in "$@"; do case "$a" in --push) PUSH=1 ;; *) MSG="$a" ;; esac; done
 locate || exit 1
 
 # Make sure protective hooks are in place.
-if [ ! -x "$MAIN/.git/hooks/pre-commit" ] || [ ! -x "$CORE/.git/hooks/pre-push" ]; then
+if [ ! -x "$MAIN/.git/hooks/pre-commit" ] || [ ! -x "$MAIN/.git/hooks/pre-push" ] || \
+   [ ! -x "$CORE/.git/hooks/pre-push" ]; then
   CORE_DIR="$CORE" bash "$CORE/bin/install-hooks" "$PROJECT" >/dev/null || exit 1
 fi
 

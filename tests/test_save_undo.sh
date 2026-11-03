@@ -60,6 +60,13 @@ assert_contains "$SANDBOX/out" "docs"
 assert_eq "$(cat "$P/docs/features/f.md")" "feature" "undo did not restore docs"
 assert_not_contains "$SANDBOX/out" "reverted code"
 
+# save restores a missing code pre-push hook (protection layer 4)
+rm -f "$C/.git/hooks/pre-push"
+sleep 1; echo "hook" > "$C/app.txt"
+(cd "$C" && bash "$SAVE" "Restore hook") >/dev/null 2>&1
+[ -x "$C/.git/hooks/pre-push" ] && pass || fail "save did not restore code pre-push hook"
+assert_contains "$C/.git/hooks/pre-push" "new-project hook"
+
 # --push pushes both to their remotes
 git init -q --bare "$SANDBOX/code.git"; git -C "$C" remote add origin "$SANDBOX/code.git"
 git init -q --bare "$SANDBOX/core.git"; git -C "$CORE_DIR" remote add origin "$SANDBOX/core.git"
