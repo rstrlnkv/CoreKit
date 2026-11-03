@@ -8,7 +8,7 @@ description: Use when the user wants to start a new app, program, bot, website o
 ## Overview
 Turns an idea into a project that follows one standard: interview → analysis → recorded
 decisions → scaffold → GitHub → build check. **Core principle:** internal files (CLAUDE.md,
-docs/, .claude/) live in the private `Core` repo and physically never sit inside the code repo,
+docs/, .claude/) live in a private docs repo and physically never sit inside the code repo,
 so a public code repo cannot leak them.
 
 All scripts below are relative to this skill's base directory. Run them with `bash`.
@@ -19,21 +19,25 @@ All scripts below are relative to this skill's base directory. Run them with `ba
 - Write **everything on disk in English**: code, comments, every Markdown file, commit messages.
   After writing a document, show a 2–4 line summary of it in chat in the user's language.
 
+## Settings
+`bash scripts/configure.sh --show` prints the user's settings. Below, `<Core>` means its
+`CORE_DIR`, `<CoreName>` its `CORE_NAME`, `<prefix>` its `APP_ID_PREFIX`.
+
 ## Layout (do not improvise another one)
 ```
-~/Projects/Core/                 private GitHub repo "Core"; CORE_DIR overrides the path
+<Core>/                          private GitHub repo <CoreName> (default ~/Projects/Core)
   PROJECTS.md, bin/, hooks/
   <name>/CLAUDE.md, docs/, .claude/rules/
   <name>/code/                   separate git repo "<name>"; Claude Code is launched here
 ```
 
 ## Stages
-Progress lives in `stage:` in `Core/<name>/docs/brief.md`. If the user mentions a project that
+Progress lives in `stage:` in `<Core>/<name>/docs/brief.md`. If the user mentions a project that
 already has a brief, read it and resume at the next stage instead of starting over.
 
 | stage | next step |
 |-------|-----------|
-| (none) | 0 Preflight, 1 Interview, 2 Name |
+| (none) | 0 Setup and preflight, 1 Interview, 2 Name |
 | interviewed | 3 Analysis |
 | decided | 4 Scaffold |
 | scaffolded | 5 GitHub, 6 Verify |
@@ -45,15 +49,19 @@ Suggest a fresh session between "decided" and "scaffold" when the conversation i
 A stage advances only when its step really succeeded. If a generator, build or `gh` command
 cannot run (tool missing, error), stop at the current stage, explain in plain words what to
 install or fix, and give the exact command; do not mark the stage done.
-**0. Preflight.** `bash scripts/preflight.sh`. Explain any FAIL in plain words with the fix; WARN
-about non-Latin paths means Android/Flutter builds may break — say so. Stop on FAIL.
+
+**0. Setup and preflight.** If `configure.sh --show` says `configured=no`, ask (one
+AskUserQuestion call, defaults recommended): where to keep projects (`~/Projects`), the name of
+the private docs repo (`Core`), the app id prefix (`com.<their-name>`, never invent it). Save with
+`bash scripts/configure.sh --projects-dir <abs path> --core-name <name> --app-id-prefix <prefix>`.
+Then `bash scripts/preflight.sh`. Explain any FAIL in plain words with the fix; WARN about
+non-Latin paths means Android/Flutter builds may break — say so. Stop on FAIL.
 
 **1. Interview.** Follow `references/interview.md`: 2–3 questions per AskUserQuestion call.
 Never ask the user to pick a stack.
 
 **2. Name.** Propose a name (Latin, lowercase, hyphens, 3–40 chars) and a one-sentence purpose
-in English; for app stacks also ask for the reverse-DNS prefix of the app id (e.g. `com.<their-name>`)
-— never invent it. Get approval. `bash scripts/preflight.sh --name <name>` — stop if taken. Then
+in English. App ids use `<prefix>` from the settings. Get approval. `bash scripts/preflight.sh --name <name>` — stop if taken. Then
 `bash scripts/scaffold.sh --name <name> --purpose "<purpose>"` creates the folders, both git
 repos and the docs skeleton. Fill `docs/brief.md` with the answers (English), set
 `stage: interviewed`.
@@ -71,13 +79,13 @@ generator with `--force`/`--overwrite` in `code/`. Fill the Commands and Stack s
 `bash <Core>/bin/save "Scaffold <stack> project"`. Set `stage: scaffolded`.
 
 **5. GitHub.** Ask separately before each repo is created, naming it and its visibility:
-- `Core` (once): `gh repo create Core --private --source <Core> --push`
+- docs repo (once): `gh repo create <CoreName> --private --source <Core> --push`
 - code: `gh repo create <name> --private --source <Core>/<name>/code --push`; use `--public`
   only if the user said "public" in the interview.
 
 **6. Verify.** Run the stack's check command from `references/stacks.md`. Set `stage: ready` and
 `save "Ready"`. Report in the user's language: what was created and where; how to open it
-(`cd ~/Projects/Core/<name>/code && claude`); how to check it themselves; what may break.
+(`cd <Core>/<name>/code && claude`); how to check it themselves; what may break.
 
 **7. Offer a plan.** Offer a v1 plan with `superpowers:writing-plans`, saved to
 `../docs/superpowers/plans/`. Do not write app features in this skill.
@@ -95,6 +103,7 @@ generator with `--force`/`--overwrite` in `code/`. Fill the Commands and Stack s
 ## Quick reference
 | Need | Command |
 |------|---------|
+| Settings | `bash scripts/configure.sh --show` |
 | Check tools / name | `bash scripts/preflight.sh [--name <name>]` |
 | Create skeleton | `bash scripts/scaffold.sh --name <name> --purpose "<text>" [--dry-run]` |
 | Copy generated app | `bash scripts/merge-generated.sh <generated> <code>` |

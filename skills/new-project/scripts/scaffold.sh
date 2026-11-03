@@ -2,11 +2,13 @@
 # Creates a project skeleton in $CORE_DIR/<name>/ from templates.
 # Never overwrites existing files. Usage:
 #   bash scaffold.sh --name <name> [--purpose "<text>"] [--dry-run]
-# Env: CORE_DIR (default: $HOME/Projects/Core)
+# Env: CORE_DIR overrides the configured location (see configure.sh)
 set -u
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TPL="$SKILL_DIR/templates"
-CORE_DIR="${CORE_DIR:-$HOME/Projects/Core}"
+. "$SKILL_DIR/scripts/config-lib.sh"
+load_config
+CORE_NAME="$(basename "$CORE_DIR")"
 NAME=""; PURPOSE="TODO: one or two sentences."; DRY=0
 
 while [ $# -gt 0 ]; do
@@ -35,6 +37,7 @@ render() {  # render <template> <dest>
       -e "s|{{PURPOSE}}|$(esc "$PURPOSE")|g" \
       -e "s|{{PROJECT_DIR}}|$(esc "$P")|g" \
       -e "s|{{CORE_DIR}}|$(esc "$CORE_DIR")|g" \
+      -e "s|{{CORE_NAME}}|$(esc "$CORE_NAME")|g" \
       -e "s|{{DATE}}|$DATE|g" "$1" > "$2"
 }
 

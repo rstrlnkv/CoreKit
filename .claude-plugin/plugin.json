@@ -1,0 +1,10 @@
+{
+  "name": "corekit",
+  "version": "0.1.0",
+  "description": "Start every new app the same way: interview, stack and architecture analysis, recorded decisions, and a project skeleton whose internal Claude files live in a private docs repo, separate from the code.",
+  "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
+  "homepage": "https://github.com/rstrlnkv/CoreKit",
+  "repository": "https://github.com/rstrlnkv/CoreKit",
+  "license": "MIT",
+  "keywords": ["new-project", "scaffold", "claude-md", "project-setup", "git"]
+}

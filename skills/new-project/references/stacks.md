@@ -18,7 +18,7 @@ bash <skill>/scripts/merge-generated.sh "$TMP/<generated-folder>" "<project>/cod
 ```
 `merge-generated.sh` never overwrites files and appends missing `.gitignore` lines.
 Names: `<name>` = project name (`my-notes-app`), `<snake>` = `my_notes_app`,
-`<Camel>` = `MyNotesApp`, `<org>` = reverse-DNS prefix agreed with the user (e.g. `com.yourname`).
+`<Camel>` = `MyNotesApp`, `<org>` = `APP_ID_PREFIX` from `scripts/configure.sh --show` (e.g. `com.yourname`).
 
 ## Choosing a stack
 | Need | First choice | Also consider |
