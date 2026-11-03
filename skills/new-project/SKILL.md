@@ -55,10 +55,6 @@ cannot run (tool missing, error), stop at the current stage, explain in plain wo
 install or fix, and give the exact command; do not mark the stage done.
 
 **0. Preflight.** `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/scripts/preflight.sh"`.
-The app id prefix is asked only when the chosen stack uses `<org>` in `references/stacks.md`
-(known after stage 3) and `<prefix>` is empty: ask for it (`com.<their-name>`, never invent it)
-and save it with
-`CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" set app-id-prefix <prefix>`.
 Explain any FAIL in plain words with the fix; WARN about
 non-Latin paths means Android/Flutter builds may break — say so. Stop on FAIL.
 
@@ -66,7 +62,7 @@ non-Latin paths means Android/Flutter builds may break — say so. Stop on FAIL.
 Never ask the user to pick a stack.
 
 **2. Name.** Propose a name (Latin, lowercase, hyphens, 3–40 chars) and a one-sentence purpose
-in English. App ids use `<prefix>` from the settings. Get approval. `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/scripts/preflight.sh" --name <name>` — stop if taken. Then
+in English. Get approval (the app id prefix is not needed yet; it is asked in stage 4). `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/scripts/preflight.sh" --name <name>` — stop if taken. Then
 `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/scripts/scaffold.sh" --name <name> --purpose "<purpose>"` creates the folders, both git
 repos and the docs skeleton. Fill `docs/brief.md` with the answers (English), set
 `stage: interviewed`.
@@ -77,7 +73,11 @@ Get approval for each part. Write `docs/architecture.md` and
 `docs/decisions/001-stack-and-architecture.md`; add a line to `docs/INDEX.md` for every new page;
 set `stage: decided`.
 
-**4. Scaffold.** Generate the app with the stack's command from `references/stacks.md` **in a temp
+**4. Scaffold.** First the app id prefix: if the chosen stack uses `<org>` in
+`references/stacks.md` and `<prefix>` (see Settings) is empty, ask for it (`com.<their-name>`,
+never invent it) and save it with
+`CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" set app-id-prefix <prefix>`.
+This runs on every entry to stage 4, so it also happens when resuming at `decided`. Generate the app with the stack's command from `references/stacks.md` **in a temp
 dir**, then `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/scripts/merge-generated.sh" <tmp>/<folder> <Core>/<name>/code`. Never run a
 generator with `--force`/`--overwrite` in `code/`. Fill the Commands and Stack sections of
 `CLAUDE.md`. `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/install-hooks.sh" <Core>/<name>`. Then from `code/`:

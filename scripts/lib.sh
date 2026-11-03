@@ -12,15 +12,19 @@ expand_home() {
   esac
 }
 
-# canon_dir <path> — the physical path if the directory exists, else the expanded path
-# without trailing slashes.
+# canon_dir <path> — the physical path (symlinks resolved). For a path that does not exist
+# yet, the deepest existing ancestor is resolved and the missing components are appended, so
+# the string stays the same after the directory is created. No trailing slash.
 canon_dir() {
-  local p; p="$(expand_home "$1")"
-  if [ -d "$p" ]; then
-    (cd -P "$p" 2>/dev/null && pwd) && return 0
-  fi
+  local p rest="" base c; p="$(expand_home "$1")"
   while [ "${#p}" -gt 1 ] && [ "${p%/}" != "$p" ]; do p="${p%/}"; done
-  printf '%s\n' "$p"
+  base="$p"
+  while [ ! -d "$base" ] && [ "$base" != "/" ] && [ "$base" != "." ]; do
+    rest="/$(basename "$base")$rest"; base="$(dirname "$base")"
+  done
+  c="$(cd -P "$base" 2>/dev/null && pwd)" || { printf '%s\n' "$p"; return 0; }
+  [ "$c" = "/" ] && c=""
+  printf '%s%s\n' "$c" "$rest"
 }
 
 # coredev_get <key> — prints the value of "key: value" in $CORE_DIR/.coredev (first match).

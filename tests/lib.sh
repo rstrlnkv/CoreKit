@@ -24,6 +24,7 @@ assert_exit() {
 # Fresh sandbox: exports CORE_DIR inside a new temp dir; git identity for commits.
 new_sandbox() {
   SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/np-test.XXXXXX")"
+  SANDBOX="$(cd -P "$SANDBOX" && pwd)"   # physical path: scripts print canonical paths
   export CORE_DIR="$SANDBOX/Projects/Core"
   export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com
   export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com
