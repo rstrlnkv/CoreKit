@@ -76,17 +76,18 @@ timeout 10 s.
 - A `keep` answer, or a pick equal to the current level, changes nothing and asks nothing.
 
 ### 4.4 How the level is applied
-1. Set the effort row of the config menu (`$.config.set`) when it exists, is not locked and has
-   the level.
-2. Otherwise hold the level: put it on every main-chat request (`turn.step` rewrite) and store it
-   as `override`.
-3. A held level is released when the person moves the menu (the request's own effort changes
-   from the value seen when the hold started) or turns the plugin off.
+1. Hold the level: put it on every main-chat request of this chat (`turn.step` rewrite) and store
+   it as `override`. The app's own effort setting is never written: `$.config.set` would change
+   the person's default for every session, including later ones, which nobody agreed to.
+2. A held level is released when the person moves the menu (the request's own effort changes
+   from the value seen when the hold started), turns the plugin off, or a session starts (a new
+   session, or a reload of the plugin, which keeps `$.state` but not the hold).
 
 ### 4.5 What the person sees
 - After a switch, a line above the prompt for 15 s: "Effort: High (was Medium) · <why>".
-- While a level is held, a label "Effort High" in the footer slot beside the model menu: the
-  menu itself keeps showing the person's own setting, which a chat cannot change.
+- While a level is held, a label "Effort High" added to the footer slot beside the model menu (the
+  slot's other labels stay): the menu itself keeps showing the person's own setting, which the
+  plugin leaves alone.
 - `/effort-picker` prints the mode and the level the chat really runs at.
 - Interface texts are in Russian when the prompt is mostly Cyrillic, English otherwise; the
   classifier writes its `why` in the language of the prompt.
@@ -181,5 +182,5 @@ Not part of `tests/run.sh` (it needs the network).
 
 ## 9. Out of scope
 - Effort for coredev's crew agents (`/coredev:task`).
-- Changing the app's effort menu itself (a chat cannot).
+- Changing the app's effort setting itself (§4.4: it would outlive the chat).
 - Any learning from the person's past choices.

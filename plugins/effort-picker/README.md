@@ -20,11 +20,11 @@ The texts are in Russian for a Russian prompt and in English otherwise.
 
 ## The effort menu does not move
 
-When the app's effort setting can take the level, the plugin sets it. When it cannot, the plugin
-puts the level on every request of the main chat, and the menu next to the model name keeps
-showing your own setting: a chat cannot change that menu. The footer then shows a label such as
-**Effort High**, and `/effort-picker` prints the level the chat really runs at. Move the menu
-yourself and the plugin lets go of its level.
+The plugin puts the chosen level on every request of this chat only. It never writes your effort
+setting, so other chats and later sessions keep your own default. The menu next to the model name
+therefore keeps showing your own setting; the footer shows a label such as **Effort High**, and
+`/effort-picker` prints the level the chat really runs at. Move the menu yourself, or start a new
+session, and the plugin lets go of its level.
 
 ## Commands
 

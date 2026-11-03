@@ -29,8 +29,43 @@ test('suggest asks and Switch applies', async ($, on) => {
   await submit($, 'fix the login, it throws 500')
   await step($, 'medium')
   expect(w.asked).toEqual([['Switch to High', 'Switch, and auto-adjust from now', 'Keep Medium']])
-  expect(w.set).toEqual([{ key: 'effortLevel', value: 'High' }])
   expect(w.efforts).toEqual(['high'])
+})
+
+test('the app setting is never written: the level is held in the chat', async ($, on) => {
+  const w = world(on)
+  w.reply = 'Switch to High'
+  await start($)
+  await submit($, 'fix the login')
+  await step($, 'medium')
+  await step($, 'medium', 1)
+  expect(w.set.length).toBe(0)
+  expect(w.efforts).toEqual(['high', 'high'])
+})
+
+test('a turn with no new prompt keeps the held level only until the menu moves', async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"xhigh","why":"w"}'
+  w.reply = 'Switch to Extra high'
+  await start($)
+  await submit($, 'build the whole app, work alone')
+  await step($, 'medium')
+  await step($, 'medium', 0)
+  await step($, 'low', 0)
+  await step($, 'low', 1)
+  expect(w.model.length).toBe(1)
+  expect(w.efforts).toEqual(['xhigh', 'xhigh', 'low', 'low'])
+})
+
+test('a new session start lets go of a held level', async ($, on) => {
+  const w = world(on)
+  w.reply = 'Switch to High'
+  await start($)
+  await submit($, 'fix the login')
+  await step($, 'medium')
+  await start($)
+  await step($, 'medium', 0)
+  expect(w.efforts).toEqual(['high', 'medium'])
 })
 
 test('suggest Keep, a dismissed question and an other answer keep the level', async ($, on) => {

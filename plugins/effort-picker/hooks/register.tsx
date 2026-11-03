@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { ConfigRow, EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
 import type { Band, Level } from '../types'
 import { buildPrompt, parseAnswer, toLevel } from './classifier'
@@ -12,7 +12,6 @@ const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5' } as con
 const MODES: readonly Mode[] = ['suggest', 'auto', 'off']
 const LOG_KEEP = 20_000
 const BAND_MS = 15_000
-const ACCENT = '#d97757'
 
 // Module variables start over on a reload; what must outlive one is in $.state or $.store.
 // Bumped on every prompt, so a pick for an older prompt is dropped.
@@ -20,10 +19,9 @@ let gen = 0
 let nextBand = 1
 // The prompt waiting for its pick at the turn's first request.
 let held: { text: string; gen: number; lang: Lang } | null = null
-// The level for the rest of the running turn, chosen by a switch.
-let turnLevel: Level | null = null
-// A level the config menu could not take: put on every main-chat request until the menu moves.
-// `base` is the menu's level when the hold began.
+// The chosen level, put on every main-chat request until the person moves the menu. It lives in
+// this chat only: the app's own effort setting is never written. `base` is the menu's level when
+// the hold began.
 let hold: { level: Level; base: string } | null = null
 // The level the last main-chat request ran at, and the language of the last prompt.
 let seen: Level | '' = ''
@@ -47,28 +45,8 @@ export async function currentMode($: EngineInterface, options: { mode?: unknown 
   return MODES.includes(options.mode as Mode) ? (options.mode as Mode) : 'suggest'
 }
 
-function isEffortRow(r: ConfigRow) {
-  return /effort/i.test(`${r.key} ${r.label}`) && r.kind === 'choice' && (r.options ?? []).some(o => toLevel(o) !== '')
-}
-
-/** Switches to `level`: through the config menu when it takes it, else by holding it on every request. */
+/** Switches to `level` by holding it on this chat's requests (spec §4.4). */
 export async function applyLevel($: EngineInterface, level: Level, base: string): Promise<void> {
-  turnLevel = level
-  try {
-    const row = (await $.config.list()).find(isEffortRow)
-    const option = row?.options?.find(o => toLevel(o) === level)
-    if (row && option && !row.isLocked) {
-      const r = await $.config.set({ key: row.key, value: option })
-      if (!r.deny) {
-        hold = null
-        await update($, override, () => null)
-        return
-      }
-      await log($, 'config.set', r.deny)
-    }
-  } catch (err) {
-    await log($, 'config', err)
-  }
   hold = { level, base }
   await update($, override, () => level)
 }
@@ -155,7 +133,6 @@ export const register: Register = (on, options) => {
     const text = e.text.trim()
     if (!text || text.startsWith('/')) return next(e)
     gen += 1
-    turnLevel = null
     lastLang = uiLang(text)
     held = { text, gen, lang: lastLang }
     return next(e)
@@ -167,8 +144,7 @@ export const register: Register = (on, options) => {
     const asked = e.effort
     if (hold && asked !== hold.base) {
       hold = null
-      turnLevel = null
-      await update($, override, () => null)
+        await update($, override, () => null)
     }
     if (held && e.index === 0) {
       const h = held
@@ -179,13 +155,18 @@ export const register: Register = (on, options) => {
         await log($, 'pick', err)
       }
     }
-    const want = turnLevel ?? hold?.level ?? null
+    const want = hold?.level ?? null
     seen = want ?? (toLevel(asked) || seen)
     if (!want || want === asked) return yield* next(e)
     return yield* next({ ...e, effort: want })
   })
 
   on('session.start', async ($, e, next) => {
+    // A new session, or a reload of this module, starts with no held level: drop what $.state kept.
+    hold = null
+    held = null
+    await update($, override, () => null)
+    await update($, band, () => null)
     await $.command.register({
       name: 'effort-picker',
       description: 'Effort picker: show the real effort level, or set the mode (auto, suggest, off, on)',
@@ -204,8 +185,7 @@ export const register: Register = (on, options) => {
     if (arg === 'off') {
       await $.store.set('mode', 'off')
       hold = null
-      turnLevel = null
-      await update($, override, () => null)
+        await update($, override, () => null)
       await update($, band, () => null)
       return { text: 'Effort picker is off. /effort-picker on turns it back on.' }
     }
@@ -230,12 +210,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
     const level = await read($, override)
     if (!level) return next(e)
-    const label = texts(lastLang).label(level)
-    if (e.surface === 'desktop' || e.surface === 'vscode') {
-      const { Text } = $.ui.resolve(e)
-      return <Text color={ACCENT}>{label}</Text>
-    }
-    return next({ ...e, props: { ...e.props, modes: [...e.props.modes, label] } })
+    return next({ ...e, props: { ...e.props, modes: [...e.props.modes, texts(lastLang).label(level)] } })
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

@@ -67,8 +67,24 @@ test('the footer names a held level and leaves the slot alone otherwise', { opti
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...MODE, surface })
     expect((await ui.find({ type: 'Text', text: /Effort High/ })) !== undefined).toBe(true)
+    expect((await ui.find({ type: 'Text', text: /default/ })) !== undefined).toBe(true)
     await ui.unmount()
   }
+})
+
+test('a new session start clears the footer label and the line', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await start($)
+  const footer = await $.ui.mount({ ...MODE, surface: 'desktop' })
+  expect(await footer.find({ type: 'Text', text: /Effort High/ })).toBe(undefined)
+  await footer.unmount()
+  const above = await $.ui.mount({ ...ABOVE, surface: 'desktop' })
+  expect(await above.find({ type: 'Text', text: /Effort:/ })).toBe(undefined)
+  await above.unmount()
 })
 
 async function run($: Eng, args: string) {
