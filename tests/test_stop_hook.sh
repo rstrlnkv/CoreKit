@@ -16,8 +16,15 @@ input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "clean repo sho
 echo x > "$C/new.txt"
 OUT=$(input "$C" false | bash "$H" 2>&1); rc=$?
 assert_eq "$rc" "2" "dirty code should block"; echo "$OUT" | grep -q 'save' && pass || fail "message lacks save"
+echo "$OUT" | grep -q 'waiting for the user' && pass || fail "message lacks the waiting-for-approval case"
 # already reminded -> 0
 input "$C" true | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "stop_hook_active must not loop"
+# same changes at the next stop (e.g. waiting for approval) -> no repeat
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "repeated reminder for unchanged state"
+# new edits, also to an already untracked file -> remind again
+echo more >> "$C/new.txt"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "no reminder after new edits"
+assert_eq "$(git -C "$C" status --porcelain)" "?? new.txt" "hook left files in the worktree"
 # dirty docs only -> 2
 (cd "$C" && bash "$CORE_DIR/bin/save" "s") >/dev/null 2>&1; echo y >> "$P/docs/brief.md"
 input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "dirty docs should block"
