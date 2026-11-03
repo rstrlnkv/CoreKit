@@ -299,6 +299,8 @@ bg sec_content
 sec_bash() {
 b() { run_bash "$1"; blocked "Bash: $1" "$2"; }
 b 'cat .env' '.env'
+b 'tar -czf out.tgz .env src' '.env'
+b 'scp -i ~/.ssh/deploy .env host:' '.env'
 b 'source .env' '.env'
 b '. .env' '.env'
 b 'head ~/.ssh/config' '~/.ssh/config'
@@ -572,6 +574,10 @@ p "rsync -av --filter '- .env' src host:"
 p "rsync -av -e 'ssh -p 22' src host:"
 p 'rsync -av --include .env.example --exclude .env src host:'
 p 'rsync -rt .env.example .env'
+p 'tar -czf out.tgz --exclude=.env src'
+p 'tar -czf out.tgz --exclude .env src'
+p 'scp -i ~/.ssh/id_rsa src/a host:/app'
+p 'scp -P 2222 -i ~/.ssh/deploy src/a host:'
 p 'grep -n "<<" src/x.sh; grep -c .env .gitignore'
 p 'grep -n "<<" src/x.sh'
 p 'echo "<<" .env.example'

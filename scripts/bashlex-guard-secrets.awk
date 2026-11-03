@@ -36,6 +36,9 @@ BEGIN {
   reg(VO, "rsync", "--exclude --include --filter -f -e --rsh")
   reg(FO, "rsync", "--exclude-from --include-from")
   reg(VO, "awk gawk mawk", "-v -F --assign --field-separator")
+  # a key handed to scp (-i) is used by ssh, not shown to Claude; tar excludes and the archive name are not reads
+  reg(VO, "scp", "-i -P -F -o -J -l -c -S")
+  reg(VO, "tar", "--exclude -f --file -C --directory")
 }
 # reg(table, "cmd cmd", "opt opt") — table[cmd, opt] = 1
 function reg(tab, cmds, opts,   nc, no, x, y, cl, ol) {
