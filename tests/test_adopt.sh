@@ -75,9 +75,9 @@ head -1 "$P/docs/guide.md" | grep -qx -- '---' && pass || fail "guide.md: no fro
 assert_contains "$P/docs/INDEX.md" "guide.md"
 bash "$WC" "$P" >/dev/null 2>&1 && pass || fail "wiki-check not green: $(bash "$WC" "$P" 2>&1)"
 echo "$OUT1" | grep -q 'wiki-check:' && fail "wiki problems printed: $OUT1" || pass
-assert_contains "$C/.git/hooks/pre-commit" "coredev hook shim"
-assert_contains "$C/.git/hooks/pre-push" "coredev hook shim"
-assert_contains "$CORE_DIR/.git/hooks/pre-push" "coredev hook shim"
+assert_contains "$C/.git/hooks/pre-commit" "corecrew hook shim"
+assert_contains "$C/.git/hooks/pre-push" "corecrew hook shim"
+assert_contains "$CORE_DIR/.git/hooks/pre-push" "corecrew hook shim"
 grep -q '^- my-app — .* — my-app/code/$' "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md line"
 assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "Adopt my-app" "Core commit"
 assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "Core dirty"
@@ -358,14 +358,14 @@ P="$CORE_DIR/wt-app"
 git -C "$P/code/.claude/worktrees/w1" status >/dev/null 2>&1 && pass || fail "worktree broken after adopt: $(git -C "$P/code/.claude/worktrees/w1" status 2>&1)"
 echo "$OUT" | grep -q '^warning:' && fail "worktree warning: $OUT" || pass
 
-# --- the coredev ignore lines: adopt adds the missing ones (never removes a user line), so a local
+# --- the corecrew ignore lines: adopt adds the missing ones (never removes a user line), so a local
 # .claude/settings.local.json or a .claude/worktrees/<w> worktree never blocks `save`
 new_sandbox; setup_core; sync_tools
 F="$SANDBOX/in/gi-app"; mkdir -p "$F/src"; git init -q "$F" && git -C "$F" symbolic-ref HEAD refs/heads/main
 printf 'node_modules/\n.env.*\n' > "$F/.gitignore"
 printf '# Old\n' > "$F/CLAUDE.md"; echo 'echo a' > "$F/src/a.sh"
 git -C "$F" add -A && git -C "$F" commit -q -m initial
-# the lines adopt owes: the coredev lines of the new-project template (internal files, .env)
+# the lines adopt owes: the corecrew lines of the new-project template (internal files, .env)
 WANT="$(grep -E '^(CLAUDE|\.claude/|docs/superpowers/|!?\.env)' "$SKILL/templates/code/gitignore-common")"
 [ "$(printf '%s\n' "$WANT" | grep -c .)" -ge 7 ] && pass || fail "fixture: template ignore lines: $WANT"
 assert_exit 0 bash "$AD" --from "$F" --dry-run

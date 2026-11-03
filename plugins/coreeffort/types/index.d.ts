@@ -15,7 +15,7 @@ export type Band = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'effort-picker': {
+    'coreeffort': {
       band: Band | null
       /** The level put on every main-chat request when the effort setting could not take it. */
       override: Level | null

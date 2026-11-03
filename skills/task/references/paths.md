@@ -39,7 +39,7 @@ A new capability or a behaviour change.
 ## question
 A question about the code or the project; no files change.
 - `feature-dev:code-explorer` for how something works across files (needs feature-dev), or one
-  coredev role when the question is in its field (tester: how it is tested; security: what
+  corecrew role when the question is in its field (tester: how it is tested; security: what
   an input can reach; and so on).
 - Proof is a `file:line` for every claim. An answer with no `file:line` goes back once.
 - No files change, so no release. Only if the user accepts knowledge lines from the reply: write
@@ -73,7 +73,7 @@ the repair, tester confirms, and each checker whose finding was repaired re-chec
 place. A finding that engineer cannot repair goes to `Open`.
 
 ## release
-`/coredev:task release <version>`: the release procedure with a version and a changelog entry.
+`/corecrew:task release <version>`: the release procedure with a version and a changelog entry.
 Read `references/release.md` (listed in SKILL.md) and follow it in full: every postcondition,
 and postcondition 4 (version and changelog) applies on this path. Before postcondition 1 there
 is one engineer call: it writes `<version>` and the changelog entry per the versioning standard
@@ -81,6 +81,6 @@ is one engineer call: it writes `<version>` and the changelog entry per the vers
 tagged or pushed.
 
 ## adopt
-`/coredev:task adopt <folder>`: bring an existing project into the Core layout.
+`/corecrew:task adopt <folder>`: bring an existing project into the Core layout.
 Read `references/adopt.md` (listed in SKILL.md) and follow it. This path works outside
 `<Core>/<project>/`.

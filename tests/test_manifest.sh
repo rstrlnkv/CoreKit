@@ -5,8 +5,8 @@ P="$ROOT/.claude-plugin/plugin.json"
 M="$ROOT/.claude-plugin/marketplace.json"
 
 # plugin.json
-assert_contains "$P" '"name": "coredev"'
-assert_contains "$P" '"version": "0.2.1"'
+assert_contains "$P" '"name": "corecrew"'
+assert_contains "$P" '"version": "0.3.0"'
 assert_contains "$P" '"userConfig"'
 for key in core_dir attribution model_profile ui_language; do assert_contains "$P" "\"$key\""; done
 assert_contains "$P" '"type": "directory"'
@@ -16,28 +16,31 @@ assert_contains "$P" '"default": "allow"'
 assert_contains "$P" '"options": ["economy", "balanced", "strong"]'
 assert_contains "$P" '"default": "balanced"'
 assert_contains "$P" '"title": "Hook messages language"'
-assert_contains "$P" '"description": "Language of the messages coredev hooks show: en (English) or ru (Russian)."'
+assert_contains "$P" '"description": "Language of the messages corecrew hooks show: en (English) or ru (Russian)."'
 assert_contains "$P" '"options": ["en", "ru"]'
 assert_contains "$P" '"default": "en"'
 assert_contains "$ROOT/README.md" '`ui_language`'
-assert_contains "$ROOT/README.md" 'claude plugin install coredev@corekit --config ui_language=ru'
-assert_not_contains "$P" '"dependencies"'   # a hard dependency stops coredev loading when feature-dev is synced from claude.ai
+assert_contains "$ROOT/README.md" 'claude plugin install corecrew@corekit --config ui_language=ru'
+assert_not_contains "$P" '"dependencies"'   # a hard dependency stops corecrew loading when feature-dev is synced from claude.ai
 assert_not_contains "$P" '"marketplace": "claude-plugins-official"'
 
 # marketplace.json
 assert_contains "$M" '"name": "corekit"'
-assert_contains "$M" '"name": "coredev"'
+assert_contains "$M" '"name": "corecrew"'
 assert_contains "$M" '"renames"'
-assert_contains "$M" '"corekit": "coredev"'
+assert_contains "$M" '"corekit": "corecrew"'
+assert_contains "$M" '"coredev": "corecrew"'
+assert_contains "$M" '"effort-picker": "coreeffort"'
 assert_not_contains "$M" 'allowCrossMarketplaceDependenciesOn'
-assert_contains "$M" '"name": "effort-picker"'
-assert_contains "$M" '"source": "./plugins/effort-picker"'
+assert_contains "$M" '"name": "coreeffort"'
+assert_contains "$M" '"source": "./plugins/coreeffort"'
 
 # README and CHANGELOG
-assert_contains "$ROOT/README.md" '/plugin install coredev@corekit'
+assert_contains "$ROOT/README.md" '/plugin install corecrew@corekit'
 assert_not_contains "$ROOT/README.md" '/corekit:'
 assert_not_contains "$ROOT/README.md" 'corekit@corekit'
-assert_eq "$(grep -m1 '^## ' "$ROOT/CHANGELOG.md" | cut -c1-9)" '## 0.2.1 ' "CHANGELOG first entry"
+assert_eq "$(grep -m1 '^## ' "$ROOT/CHANGELOG.md" | cut -c1-9)" '## 0.3.0 ' "CHANGELOG first entry"
+assert_contains "$ROOT/CHANGELOG.md" '## 0.3.0 — 2026-11-04'
 assert_contains "$ROOT/CHANGELOG.md" '## 0.2.1 — 2026-11-04'
 assert_contains "$ROOT/CHANGELOG.md" '## 0.2.0 — '
 
@@ -103,5 +106,14 @@ assert_not_contains "$MG" 'TODO'
 assert_contains "$MG" 'install-hooks.sh'
 assert_contains "$MG" 'session-rules.md'
 for n in 1 2 3 4 5 6 7; do assert_contains "$MG" "### Step $n"; done
+
+# migration note 0.3: the rename coredev -> corecrew, effort-picker -> coreeffort
+M3="$ROOT/docs/migration-0.3.md"
+assert_file "$M3"
+assert_contains "$M3" '/plugin install corecrew@corekit'
+assert_contains "$M3" '/plugin install coreeffort@corekit'
+assert_contains "$M3" 'install-hooks.sh'
+assert_contains "$M3" 'corecrew-corekit'
+assert_contains "$ROOT/README.md" 'docs/migration-0.3.md'
 
 finish

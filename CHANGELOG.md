@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 — 2026-11-04
+- The plugin is now `corecrew` (brand CoreCrew); the marketplace and repo stay `corekit`.
+  Commands are `/corecrew:...`, agents `corecrew:<role>`, hook messages start with `corecrew:`.
+  The marketplace `renames` map moves `coredev` and `corekit` installs to `corecrew`.
+  Steps: [docs/migration-0.3.md](docs/migration-0.3.md).
+- The plugin data folder is now `corecrew-corekit`. Git hook shims of 0.2.x (`# coredev hook shim`)
+  count as old: the session start names them, and `install-hooks.sh` replaces them.
+- `<Core>/.coredev` keeps its name, so existing Cores need no change.
+- The second plugin `effort-picker` is now `coreeffort` (0.2.0); its command is `/coreeffort`.
+
 ## 0.2.1 — 2026-11-04
 - New plugin setting `ui_language` (`en` default, `ru`): the language of every message the
   hooks show. All hook texts live in one table, `hooks/messages.sh`; a new language is one more

@@ -11,7 +11,7 @@ new_sandbox
 
 SELF="tests/test_no_personal.sh"
 # Words that are also part of this repo's own vocabulary: never a "personal" project name.
-GENERIC='core corekit coredev test-coredev demo test tests example examples sample project projects code docs todo hello world'
+GENERIC='core corekit corecrew test-coredev demo test tests example examples sample project projects code docs todo hello world'
 
 # project_names <PROJECTS.md> — one name per line, from list items "- <name> — <purpose> — <path>".
 # Drops names under 4 characters and generic words. Names are only ever written to a file.
@@ -112,7 +112,7 @@ One line per project: name — purpose — path to code.
 - Zorblax Quill — fake purpose — Zorblax Quill/code/
 - app — too short — app/code/
 - Demo — generic word — Demo/code/
-- coredev — generic word — coredev/code/
+- corecrew — generic word — corecrew/code/
 - Frumbly — fake purpose — Frumbly/code/
 EOF
 project_names "$FAKE" > "$SANDBOX/names"
@@ -120,7 +120,7 @@ assert_eq "$(tr '\n' ';' < "$SANDBOX/names")" "Zorblax Quill;Frumbly;" "extracte
 P="$SANDBOX/repo2"; mkdir -p "$P/skills" "$P/docs"; git -C "$P" init -q
 printf 'Uses the zorblax quill library\n' > "$P/skills/leak.md"      # hit: case-insensitive phrase
 printf 'a frumbly day\nfrumblyish\n' > "$P/skills/word.md"           # hit line 1 only (whole word)
-printf 'app demo coredev test\n' > "$P/skills/generic.md"            # fine: short / generic names
+printf 'app demo corecrew test\n' > "$P/skills/generic.md"            # fine: short / generic names
 printf 'Frumbly lives here\n' > "$P/docs/ok.md"                      # fine: docs/
 git -C "$P" add -A >/dev/null
 out="$(scan_repo "$P" "$SANDBOX/names" | LC_ALL=C sort)"

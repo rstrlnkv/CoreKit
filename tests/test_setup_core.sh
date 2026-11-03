@@ -20,9 +20,9 @@ assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "Set up Core" "commit subje
 assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "worktree dirty after setup"
 assert_eq "$(git -C "$CORE_DIR" symbolic-ref HEAD)" "refs/heads/main" "branch"
 assert_contains "$CORE_DIR/.gitignore" "*/code/"
-assert_contains "$CORE_DIR/standards/README.md" "/coredev:new-standard"
+assert_contains "$CORE_DIR/standards/README.md" "/corecrew:new-standard"
 assert_contains "$CORE_DIR/knowledge/README.md" "symptom"
-assert_contains "$CORE_DIR/knowledge/README.md" "/coredev:task"
+assert_contains "$CORE_DIR/knowledge/README.md" "/corecrew:task"
 assert_not_contains "$CORE_DIR/README.md" "bin/"
 for f in standards/README.md knowledge/README.md; do
   [ "$(wc -l < "$CORE_DIR/$f")" -le 15 ] && pass || fail "$f longer than 15 lines"

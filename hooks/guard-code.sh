@@ -3,7 +3,7 @@
 # internal files must not live in its code repo. It blocks writes of
 #   CLAUDE.md (and CLAUDE.local.md), docs/**, .claude/**
 # under <Core>/<project>/code/**, with exit 2 and a message naming the right place:
-#   coredev: <path> is an internal file and must not live in code/. Write it to <Core>/<project>/<relative path> instead.
+#   corecrew: <path> is an internal file and must not live in code/. Write it to <Core>/<project>/<relative path> instead.
 #   Docs meant to stay public in code/: list them on a "public-docs: <paths>" line in <Core>/<project>/CLAUDE.md.
 # (spec section 14, item 3). Nothing is ever printed to stdout.
 #

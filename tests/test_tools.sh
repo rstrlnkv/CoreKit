@@ -89,7 +89,7 @@ F="$SANDBOX/foreign"; mkdir -p "$F/sub"; echo mine > "$F/notes.txt"; echo x > "$
 before="$(tree_sum "$F")"
 assert_exit 2 bash "$SYNC" "$ROOT" "$F"
 echo "$OUT" | grep -qF "$F" && pass || fail "refusal does not name the folder: $OUT"
-echo "$OUT" | grep -qi 'not replaced\|not a coredev' && pass || fail "refusal is not a plain message: $OUT"
+echo "$OUT" | grep -qi 'not replaced\|not a corecrew' && pass || fail "refusal is not a plain message: $OUT"
 assert_eq "$(tree_sum "$F")" "$before" "foreign folder changed"
 assert_eq "$(ls -A "$SANDBOX" | grep -c 'foreign\.')" "0" "temp dir left next to the foreign folder"
 # a file in place of the target: refused too

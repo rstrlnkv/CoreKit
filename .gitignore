@@ -2,4 +2,4 @@
 .env
 .env.*
 .superpowers/
-plugins/effort-picker/.claude-plugin/types/
+plugins/coreeffort/.claude-plugin/types/

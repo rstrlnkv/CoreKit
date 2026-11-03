@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Claude Code PreToolUse hook on Read|Edit|MultiEdit|Write|NotebookEdit|Grep|Glob|Bash: secrets are not
 # read. Inside a Core project it blocks .env, .env.* and ~/.ssh/**, with exit 2 and the message
-#   coredev: reading secrets is blocked (<path>)
+#   corecrew: reading secrets is blocked (<path>)
 #   Ask the user to check the value themselves, or use .env.example.
 # (spec section 14, item 4). <path> is the path as the tool was given it (a "~" stays a "~", a relative
 # path stays relative); nothing is ever printed to stdout.

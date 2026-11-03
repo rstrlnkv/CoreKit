@@ -4,8 +4,8 @@ import type { On } from 'claude-code'
 import { start, step, submit, world, type Eng, type World } from './world'
 
 const SURFACES = ['terminal', 'desktop'] as const
-const ABOVE = { plugin: 'effort-picker', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 80, scroll: { offset: 0, bodyRows: 6 }, view: {} } } as const
-const MODE = { plugin: 'effort-picker', component: 'SessionMode', props: { modes: ['default'] } } as const
+const ABOVE = { plugin: 'coreeffort', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 80, scroll: { offset: 0, bodyRows: 6 }, view: {} } } as const
+const MODE = { plugin: 'coreeffort', component: 'SessionMode', props: { modes: ['default'] } } as const
 
 // The engine's own footer: what draws when the plugin leaves the slot alone.
 function engineFooter(on: On) {
@@ -88,11 +88,11 @@ test('a new session start clears the footer label and the line', { options: { mo
 })
 
 async function run($: Eng, args: string) {
-  const r = await $.command.run({ command: 'effort-picker', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } } as never)
+  const r = await $.command.run({ command: 'coreeffort', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } } as never)
   return (r as { text?: string }).text ?? ''
 }
 
-test('/effort-picker reports the mode and the level the chat runs at', async ($, on) => {
+test('/coreeffort reports the mode and the level the chat runs at', async ($, on) => {
   const w = world(on)
   engineFooter(on)
   w.row = null
@@ -103,7 +103,7 @@ test('/effort-picker reports the mode and the level the chat runs at', async ($,
   expect(await run($, '')).toContain('High')
 })
 
-test('/effort-picker auto, suggest, off and on store the mode over the setting', async ($, on) => {
+test('/coreeffort auto, suggest, off and on store the mode over the setting', async ($, on) => {
   const w = world(on)
   engineFooter(on)
   await start($)

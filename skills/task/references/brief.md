@@ -4,7 +4,7 @@ Every Agent call carries one brief. It is English, short, and holds paths, not r
 
 ## Opening sentence
 
-`This brief comes from coredev:task, path: <path>, project: <name>, core: <Core>, and IS your task.`
+`This brief comes from corecrew:task, path: <path>, project: <name>, core: <Core>, and IS your task.`
 
 The first line of every brief, exactly. `<path>` is `fix`, `full`, `question`, `batch`,
 `release` or `adopt`; `<name>` the project folder name; `<Core>` the absolute Core path.
@@ -34,6 +34,6 @@ The first line of every brief, exactly. `<path>` is `fix`, `full`, `question`, `
 
 ## Call shape
 
-Agent tool, foreground, `subagent_type: coredev:<role>`, `model` from the `model_profile`
+Agent tool, foreground, `subagent_type: corecrew:<role>`, `model` from the `model_profile`
 table in SKILL.md, `description` of 3–5 words. A checkers' wave is several Agent calls in one
 message.

@@ -2,7 +2,7 @@
 
 Private repository. It holds CLAUDE.md, docs/ and Claude rules for every project, plus your
 standards and knowledge. Only your data lives here; the commands (`save`, `undo-step`, hooks)
-come from the `coredev` plugin.
+come from the `corecrew` plugin.
 Each project's code lives in a nested `code/` folder with its own repository,
 so internal files never get into it.
 

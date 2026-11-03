@@ -1,6 +1,6 @@
 ---
 name: new-standard
-description: Write one of your own standards (a short rule file every agent follows) into your Core. Use /coredev:new-standard [topic], or pass a knowledge line that keeps recurring.
+description: Write one of your own standards (a short rule file every agent follows) into your Core. Use /corecrew:new-standard [topic], or pass a knowledge line that keeps recurring.
 disable-model-invocation: true
 argument-hint: "[topic | knowledge line]"
 ---
@@ -32,7 +32,7 @@ every command and file write below (the setting may start with `~`):
 Then check that the Core is set up:
 `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" ready`
 (exit 0 = set up). If it fails, say in plain words that the Core does not exist yet and that
-`/coredev:new-project` sets it up (one time); stop. Do not set it up from here.
+`/corecrew:new-project` sets it up (one time); stop. Do not set it up from here.
 
 The argument is a topic ("versioning"), a knowledge line (contains `→`: `symptom → cause →
 guard`, see `${CLAUDE_SKILL_DIR}/../../reference/knowledge.md`), or empty (ask what the standard

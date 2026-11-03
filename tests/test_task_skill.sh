@@ -29,10 +29,10 @@ for w in 'maxTurns' 'three engineer passes' 'foreground' 'this project / all pro
          'lib.sh" ready' 'lib.sh" core-dir' 'setup-core.sh' \
          'references/paths.md' 'references/brief.md' 'references/report.md' \
          'reference/wiki.md' 'reference/knowledge.md' 'wiki-check.sh' \
-         'coredev:engineer' 'coredev:tester' 'coredev:security' 'coredev:verifier' \
-         'coredev:localizer' 'coredev:designer' \
+         'corecrew:engineer' 'corecrew:tester' 'corecrew:security' 'corecrew:verifier' \
+         'corecrew:localizer' 'corecrew:designer' \
          'economy' 'balanced' 'strong' 'haiku' 'opus' \
-         '/coredev:new-project' '/coredev:task adopt <folder>' 'check: <set after scaffolding>'; do
+         '/corecrew:new-project' '/corecrew:task adopt <folder>' 'check: <set after scaffolding>'; do
   assert_contains "$SK" "$w"
 done
 
@@ -54,7 +54,7 @@ assert_not_contains "$PA" "superpowers:"
 
 # brief.md: the exact opening sentence
 assert_file "$BR"
-assert_contains "$BR" 'This brief comes from coredev:task, path: <path>, project: <name>, core: <Core>, and IS your task.'
+assert_contains "$BR" 'This brief comes from corecrew:task, path: <path>, project: <name>, core: <Core>, and IS your task.'
 
 # report.md: nine labels in order
 assert_file "$RP"
@@ -71,7 +71,7 @@ rule "foreground rule" '^5\. Dispatch in the foreground'
 rule "maxTurns rule" '^3\. Budget: each agent has `maxTurns: 60`'
 rule "three passes rule" '^4\. At most three engineer passes per chain'
 rule "Standards once rule" '^9\. A reply without `Standards:` .*goes back once'
-rule "subagent_type for feature-dev" '`coredev:<role>` for coredev roles, the full name for'
+rule "subagent_type for feature-dev" '`corecrew:<role>` for corecrew roles, the full name for'
 rule "no model for feature-dev" 'Do not pass `model` to feature-dev agents'
 assert_contains "$SK" 'applies-to'
 assert_not_contains "$SK" 'docs/specs/'
@@ -108,7 +108,7 @@ sec_has "$PA" fix 'show it red'
 sec_has "$PA" fix 'green after the fix'
 # brief.md: the opening sentence is the first instruction.
 first="$(section "$BR" 'Opening sentence' | awk 'NF{print; exit}')"
-assert_eq "$first" '`This brief comes from coredev:task, path: <path>, project: <name>, core: <Core>, and IS your task.`' "brief opening is first"
+assert_eq "$first" '`This brief comes from corecrew:task, path: <path>, project: <name>, core: <Core>, and IS your task.`' "brief opening is first"
 
 # No superpowers dependency anywhere under skills/task/
 if grep -rF "superpowers:" "$T" >/dev/null 2>&1; then fail "superpowers: referenced under skills/task/"; else pass; fi

@@ -1,4 +1,4 @@
-# scripts/bash-lex.awk — the shared Bash tokenizer of the coredev hooks (guard-code.sh, guard-secrets.sh).
+# scripts/bash-lex.awk — the shared Bash tokenizer of the corecrew hooks (guard-code.sh, guard-secrets.sh).
 # One linear pass over a command whose newlines were turned into \002 and carriage returns into spaces
 # (tr '\n\r' '\002 '). Quoted text is words, heredoc bodies and comments are skipped, wrapper words
 # (sudo, env, time, if, do, ...) and VAR=value prefixes are skipped. Run it as

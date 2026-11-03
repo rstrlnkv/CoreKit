@@ -15,7 +15,7 @@ run_rc() { OUT="$(input "$1" | bash "$H" 2>&1)"; RC=$?; }
 mkdir -p "$SANDBOX/elsewhere"
 run_rc "$SANDBOX/elsewhere"
 assert_eq "$RC" "0" "exit code without Core"
-assert_eq "$OUT" "coredev: Core not found at $CORE_DIR — /coredev:new-project or /coredev:task adopt <folder> will set it up" "hint text"
+assert_eq "$OUT" "corecrew: Core not found at $CORE_DIR — /corecrew:new-project or /corecrew:task adopt <folder> will set it up" "hint text"
 assert_file "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
 assert_file "$CLAUDE_PLUGIN_DATA/tools/VERSION"
 assert_file "$CLAUDE_PLUGIN_DATA/tools/save"
@@ -24,7 +24,7 @@ assert_eq "$RC" "0" "exit code on the second run"; assert_eq "$OUT" "" "hint is 
 # stdin without a cwd falls back to $PWD; empty and broken stdin never fail
 rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
 OUT="$(cd "$SANDBOX/elsewhere" && echo '{"session_id":"s"}' | bash "$H" 2>&1)"; assert_eq "$?" "0" "no cwd: exit"
-case "$OUT" in "coredev: Core not found at "*) pass ;; *) fail "no cwd: hint expected, got: $OUT" ;; esac
+case "$OUT" in "corecrew: Core not found at "*) pass ;; *) fail "no cwd: hint expected, got: $OUT" ;; esac
 rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
 OUT="$(cd "$SANDBOX/elsewhere" && bash "$H" </dev/null 2>&1)"; assert_eq "$?" "0" "empty stdin: exit"
 OUT="$(printf '{"cwd":"unterminated' | bash "$H" 2>&1)"; assert_eq "$?" "0" "broken JSON: exit"
@@ -79,7 +79,7 @@ rm "$CORE_DIR/session-rules.md"
 run_rc "$C"; echo "$OUT" | grep -qF "Rule one" && fail "rules shown without file" || pass
 
 # --- layout note when .coredev is older
-cp "$CORE_DIR/.coredev" "$SANDBOX/coredev.bak"
+cp "$CORE_DIR/.coredev" "$SANDBOX/corecrew.bak"
 FIX="bash \"$ROOT/scripts/setup-core.sh\" \"$CORE_DIR\""
 printf 'app-id-prefix: com.example\n' > "$CORE_DIR/.coredev"          # no schema line
 run_rc "$C"; echo "$OUT" | grep -qF "$FIX" && pass || fail "no schema: fix command missing: $OUT"
@@ -96,8 +96,8 @@ echo "$OUT" | grep -qF "$P/docs/INDEX.md" && pass || fail "old Core: project con
 echo "$OUT" | grep -qF "$FIX" && pass || fail "old Core: fix command missing: $OUT"
 echo "$OUT" | grep -qF "Core not found" && fail "old Core in project: hint shown" || pass
 run_rc "$SANDBOX/elsewhere"
-assert_eq "$OUT" "coredev: Core at $CORE_DIR is not set up — /coredev:new-project or /coredev:task adopt <folder> will set it up" "old Core elsewhere: hint says not set up"
-cp "$SANDBOX/coredev.bak" "$CORE_DIR/.coredev"
+assert_eq "$OUT" "corecrew: Core at $CORE_DIR is not set up — /corecrew:new-project or /corecrew:task adopt <folder> will set it up" "old Core elsewhere: hint says not set up"
+cp "$SANDBOX/corecrew.bak" "$CORE_DIR/.coredev"
 
 # --- git hooks: only an old "new-project hook" is named; shims and a user's own hook are left alone
 INST="bash \"$ROOT/scripts/install-hooks.sh\" \"$P\""
@@ -115,8 +115,11 @@ run_rc "$C"; echo "$OUT" | grep -qF "$INST" && pass || fail "old Core pre-push: 
 echo "$OUT" | grep -qF "$CORE_DIR/.git/hooks/pre-push" && pass || fail "old Core pre-push not named: $OUT"
 rm "$CORE_DIR/.git/hooks/pre-push"
 printf '#!/bin/sh\n# coredev hook shim\nexec true\n' > "$C/.git/hooks/pre-commit"
+run_rc "$C"; echo "$OUT" | grep -qF "$INST" && pass || fail "0.2.x shim: install command missing: $OUT"
+rm "$C/.git/hooks/pre-commit"
+printf '#!/bin/sh\n# corecrew hook shim\nexec true\n' > "$C/.git/hooks/pre-commit"
 printf '#!/bin/sh\n# my own hook\nexit 0\n' > "$C/.git/hooks/pre-push"
-printf '#!/bin/sh\n# new-project hook\n# coredev hook shim\n' > "$CORE_DIR/.git/hooks/pre-push"
+printf '#!/bin/sh\n# new-project hook\n# corecrew hook shim\n' > "$CORE_DIR/.git/hooks/pre-push"
 run_rc "$C"; echo "$OUT" | grep -qF "install-hooks.sh" && fail "shim or user hook reported: $OUT" || pass
 rm -f "$C/.git/hooks/pre-commit" "$C/.git/hooks/pre-push" "$CORE_DIR/.git/hooks/pre-push"
 # real installer output is a shim: nothing to report
@@ -146,11 +149,11 @@ sync_fail() {  # sync_fail <cwd> — stdout in OUT, stderr in ERR, exit code in 
 sync_fail "$SANDBOX/elsewhere"
 assert_eq "$RC" "0" "sync failure: exit"
 assert_eq "$OUT" "" "sync failure outside a project: nothing on stdout"
-case "$ERR" in "coredev: tools not refreshed"*) pass ;; *) fail "sync failure outside a project: stderr line expected, got: $ERR" ;; esac
+case "$ERR" in "corecrew: tools not refreshed"*) pass ;; *) fail "sync failure outside a project: stderr line expected, got: $ERR" ;; esac
 assert_eq "$(echo "$ERR" | wc -l | tr -d ' ')" "1" "sync failure: one line"
 sync_fail "$C"
 assert_eq "$RC" "0" "sync failure in a project: exit"
-echo "$OUT" | grep -q "^coredev: tools not refreshed" && pass || fail "sync failure in a project: stdout line expected, got: $OUT"
+echo "$OUT" | grep -q "^corecrew: tools not refreshed" && pass || fail "sync failure in a project: stdout line expected, got: $OUT"
 assert_eq "$ERR" "" "sync failure in a project: nothing on stderr"
 
 # --- letter case: Core path typed in another case than on disk (macOS volumes are case-insensitive)

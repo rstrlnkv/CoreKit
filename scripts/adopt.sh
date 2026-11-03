@@ -20,7 +20,7 @@
 # --public-docs paths) into a temp folder in the Core; add the wiki map and the pages the
 # new-project templates have that are missing, the check: line and public-docs: line; give
 # copied pages that lack wiki front matter the missing fields. Then one commit in the repo
-# "Move internal Claude files to Core" (git rm of the copied files, plus the coredev ignore lines of
+# "Move internal Claude files to Core" (git rm of the copied files, plus the corecrew ignore lines of
 # the new-project .gitignore template that the repo's .gitignore lacks, appended at its end: user lines
 # are never changed or removed; skipped when there is neither; if it fails, the files and .gitignore
 # come back and nothing else was touched). Then the temp folder becomes
@@ -119,7 +119,7 @@ while IFS= read -r f; do
   esac
 done <<< "$TRACKED"
 
-# The coredev ignore lines the repo's .gitignore lacks (internal Claude files and .env, from the
+# The corecrew ignore lines the repo's .gitignore lacks (internal Claude files and .env, from the
 # new-project template), so local Claude files (.claude/settings.local.json, .claude/worktrees/) never
 # end up in a `save`. When .env.* is added, its exceptions are added after it again (the last match
 # wins in .gitignore). A .gitignore that is a symlink or not a file is left alone, with a warning.
@@ -194,7 +194,7 @@ if [ "$DRY" -eq 1 ]; then
     echo "no repo commit: git tracks none of the copied files"
   fi
   show "add to code/.gitignore (in the same commit):" "$GI_ADD"
-  [ "$GI_SKIP" -eq 0 ] || echo "warning: .gitignore is not a plain file; add the coredev ignore lines to it yourself"
+  [ "$GI_SKIP" -eq 0 ] || echo "warning: .gitignore is not a plain file; add the corecrew ignore lines to it yourself"
   show "stays in code (public docs):" "$PUBKEEP"
   IGN="$(cd "$FROM" && for t in CLAUDE.md docs .claude; do
     { [ -e "$t" ] || [ -L "$t" ]; } && find "$t" -path .claude/worktrees -prune -o \( -type f -o -type l \) -print
@@ -306,13 +306,13 @@ while IFS= read -r pg; do
 done <<< "$(printf '%s\n' "$W" | sed -n 's/^wiki-check: \(.*\): not in INDEX\.md$/\1/p')"
 
 # The repo commit. If it fails the files and .gitignore come back; nothing else was touched.
-[ "$GI_SKIP" -eq 0 ] || echo "warning: .gitignore is not a plain file; add the coredev ignore lines to it yourself" >&2
+[ "$GI_SKIP" -eq 0 ] || echo "warning: .gitignore is not a plain file; add the corecrew ignore lines to it yourself" >&2
 GI_NEW=0
 if [ -n "$GI_ADD" ]; then
   if [ -e "$GI" ]; then cp -p "$GI" "$TMP/gitignore.orig" || { echo "adopt: could not back up .gitignore" >&2; exit 1; }
   else GI_NEW=1; fi
   { { [ ! -s "$GI" ] || [ -z "$(tail -c1 "$GI")" ] || printf '\n'; }
-    printf '# coredev: internal Claude files and secrets stay out of this repo\n%s' "$GI_ADD"; } >> "$GI" \
+    printf '# corecrew: internal Claude files and secrets stay out of this repo\n%s' "$GI_ADD"; } >> "$GI" \
     || { if [ "$GI_NEW" -eq 1 ]; then rm -f "$GI"; else cp -p "$TMP/gitignore.orig" "$GI"; fi
          echo "adopt: could not write $GI" >&2; exit 1; }
 fi

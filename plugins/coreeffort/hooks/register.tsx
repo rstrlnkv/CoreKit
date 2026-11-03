@@ -5,9 +5,9 @@ import type { Band, Level } from '../types'
 import { buildPrompt, parseAnswer, toLevel } from './classifier'
 import { decide, type Lang, type Mode, texts, uiLang } from './policy'
 
-const PLUGIN = 'effort-picker'
-const band = atom({ plugin: 'effort-picker', key: 'band' } as const, null)
-const override = atom({ plugin: 'effort-picker', key: 'override' } as const, null)
+const PLUGIN = 'coreeffort'
+const band = atom({ plugin: 'coreeffort', key: 'band' } as const, null)
+const override = atom({ plugin: 'coreeffort', key: 'override' } as const, null)
 const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5' } as const
 const MODES: readonly Mode[] = ['suggest', 'auto', 'off']
 const LOG_KEEP = 20_000
@@ -38,7 +38,7 @@ async function log($: EngineInterface, what: string, err: unknown) {
   }
 }
 
-/** The mode: what /effort-picker stored wins over the setting. */
+/** The mode: what /coreeffort stored wins over the setting. */
 export async function currentMode($: EngineInterface, options: { mode?: unknown }): Promise<Mode> {
   const stored = await $.store.get('mode')
   if (MODES.includes(stored as Mode)) return stored as Mode
@@ -168,40 +168,40 @@ export const register: Register = (on, options) => {
     await update($, override, () => null)
     await update($, band, () => null)
     await $.command.register({
-      name: 'effort-picker',
-      description: 'Effort picker: show the real effort level, or set the mode (auto, suggest, off, on)',
+      name: 'coreeffort',
+      description: 'CoreEffort: show the real effort level, or set the mode (auto, suggest, off, on)',
       argumentHint: '[auto|suggest|off|on]',
     })
     return next(e)
   })
 
-  on('command.run', { command: 'effort-picker' }, async ($, e) => {
+  on('command.run', { command: 'coreeffort' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
     if (arg === 'auto' || arg === 'suggest') {
       await $.store.set('mode', arg)
       await $.store.set('lastMode', arg)
-      return { text: `Effort picker: ${arg}. ${arg === 'auto' ? 'Levels change by themselves; xhigh and max still ask first.' : 'Every change of level asks first.'}` }
+      return { text: `CoreEffort: ${arg}. ${arg === 'auto' ? 'Levels change by themselves; xhigh and max still ask first.' : 'Every change of level asks first.'}` }
     }
     if (arg === 'off') {
       await $.store.set('mode', 'off')
       hold = null
         await update($, override, () => null)
       await update($, band, () => null)
-      return { text: 'Effort picker is off. /effort-picker on turns it back on.' }
+      return { text: 'CoreEffort is off. /coreeffort on turns it back on.' }
     }
     if (arg === 'on') {
       const last = await $.store.get('lastMode')
       const mode: Mode = last === 'auto' || last === 'suggest' ? last : options.mode === 'auto' ? 'auto' : 'suggest'
       await $.store.set('mode', mode)
-      return { text: `Effort picker is on: ${mode}.` }
+      return { text: `CoreEffort is on: ${mode}.` }
     }
     const mode = await currentMode($, options)
     const level = hold?.level ?? seen
     return {
       text: [
-        `Effort picker: ${mode}.`,
+        `CoreEffort: ${mode}.`,
         `This chat runs at: ${level ? texts('en').levelName(level) : 'unknown yet'}${hold ? ' (held by the plugin; the menu still shows your own setting)' : ''}.`,
-        'Type /effort-picker auto, suggest, off or on.',
+        'Type /coreeffort auto, suggest, off or on.',
       ].join('\n'),
     }
   })

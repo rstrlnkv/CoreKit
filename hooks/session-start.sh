@@ -7,7 +7,7 @@
 # Outside the Core it prints nothing else. Always exits 0: a hook must never block a session.
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)"
 ROOT="${CLAUDE_PLUGIN_ROOT:-$SELF}"
-DATA="${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/coredev-corekit}"
+DATA="${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/corecrew-corekit}"
 in=""; [ -t 0 ] || in="$(cat)"
 
 # 1. Tools: quiet unless it failed.
@@ -67,12 +67,13 @@ if [ "$old" -eq 1 ]; then
   printf '%s\n' "$(msg layout_note "$shown" "$COREDEV_SCHEMA" "$ROOT/scripts/setup-core.sh" "$CORE_DIR")"
 fi
 
-# Old git hooks from before the plugin ("new-project hook"). A shim, or a hook of the user's own, is left alone.
+# Old git hooks: from before the plugin ("new-project hook") or 0.2.x shims of coredev, which run a
+# tools copy that is no longer updated. A current shim, or a hook of the user's own, is left alone.
 stale=""
 for h in "$P/code/.git/hooks/pre-commit" "$P/code/.git/hooks/pre-push" "$CORE_DIR/.git/hooks/pre-push"; do
   [ -f "$h" ] || continue
-  grep -qF "# coredev hook shim" "$h" && continue
-  grep -qF "new-project hook" "$h" && stale="${stale:+$stale, }$h"
+  grep -qF "# corecrew hook shim" "$h" && continue
+  grep -qF -e "new-project hook" -e "# coredev hook shim" "$h" && stale="${stale:+$stale, }$h"
 done
 if [ -n "$stale" ]; then
   printf '%s\n' "$(msg old_hooks "$stale" "$ROOT/scripts/install-hooks.sh" "$P")"

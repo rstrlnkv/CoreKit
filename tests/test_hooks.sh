@@ -8,7 +8,7 @@ assert_file "$C/.git/hooks/pre-commit"; assert_file "$C/.git/hooks/pre-push"
 assert_file "$CORE_DIR/.git/hooks/pre-push"
 # the three hooks are shims that run the tools copy; blocked-patterns stays out of .git/hooks
 for h in "$C/.git/hooks/pre-commit" "$C/.git/hooks/pre-push" "$CORE_DIR/.git/hooks/pre-push"; do
-  assert_contains "$h" "# coredev hook shim"; [ -x "$h" ] && pass || fail "not executable: $h"
+  assert_contains "$h" "# corecrew hook shim"; [ -x "$h" ] && pass || fail "not executable: $h"
 done
 assert_contains "$C/.git/hooks/pre-commit" "$COREDEV_TOOLS/git-hooks/pre-commit-code"
 assert_contains "$C/.git/hooks/pre-push" "$COREDEV_TOOLS/git-hooks/pre-push-code"
@@ -65,21 +65,27 @@ echo x > "$C/ok.txt"; git -C "$C" add ok.txt
 OUT=$(git -C "$C" commit -m t 2>&1); rc=$?
 [ $rc -ne 0 ] && pass || fail "commit allowed with tools file missing"
 echo "$OUT" | grep -q 'is missing' && pass || fail "no 'is missing' message: $OUT"
-echo "$OUT" | grep -q 'Start Claude Code once with coredev enabled' && pass || fail "no fix hint: $OUT"
+echo "$OUT" | grep -q 'Start Claude Code once with corecrew enabled' && pass || fail "no fix hint: $OUT"
 echo "$OUT" | grep -qF "rm \"$C/.git/hooks/pre-commit\"" && pass || fail "no rm hint: $OUT"
 mv "$SANDBOX/pcc" "$COREDEV_TOOLS/git-hooks/pre-commit-code"; git -C "$C" reset -q; rm -f "$C/ok.txt"
 
 # an old 0.1.x hook (marker "new-project hook") is replaced by a shim
 printf '#!/bin/sh\n# new-project hook: OLDBODY\nexit 0\n' > "$C/.git/hooks/pre-commit"
 assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P"
-assert_contains "$C/.git/hooks/pre-commit" "# coredev hook shim"
+assert_contains "$C/.git/hooks/pre-commit" "# corecrew hook shim"
 assert_not_contains "$C/.git/hooks/pre-commit" "OLDBODY"
+
+# a 0.2.x shim (marker "coredev hook shim") is replaced by a current shim
+printf '#!/bin/sh\n# coredev hook shim\nT=OLDSHIM\n' > "$C/.git/hooks/pre-commit"
+assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P"
+assert_contains "$C/.git/hooks/pre-commit" "# corecrew hook shim"
+assert_not_contains "$C/.git/hooks/pre-commit" "OLDSHIM"
 
 # a foreign hook is left alone and warned about
 printf '#!/bin/sh\n# mine\nexit 0\n' > "$C/.git/hooks/pre-push"
 assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P"
 echo "$OUT" | grep -q 'WARN' && echo "$OUT" | grep -q 'left unchanged' && pass || fail "no WARN for foreign hook: $OUT"
-assert_contains "$C/.git/hooks/pre-push" "# mine"; assert_not_contains "$C/.git/hooks/pre-push" "coredev hook shim"
+assert_contains "$C/.git/hooks/pre-push" "# mine"; assert_not_contains "$C/.git/hooks/pre-push" "corecrew hook shim"
 
 # --tools overrides the default; a tools dir with a space works
 T2="$SANDBOX/my tools"; bash "$SCRIPTS/sync-tools.sh" "$ROOT" "$T2" >/dev/null

@@ -51,8 +51,8 @@ NASTY='/tmp/a b %s %d %% "q" '"'"'s'"'"' \n \\ & @2 @1 \1 $HOME `x` проект
 assert_eq "$(text en docs_index "$NASTY")" "Project docs index: $NASTY" "verbatim argument (en)"
 assert_eq "$(text ru docs_index "$NASTY")" "Индекс документации проекта: $NASTY" "verbatim argument (ru)"
 # two arguments: the second is not re-read as a placeholder, order is by placeholder number
-assert_eq "$(text en project_header '@2' '@1')" 'coredev: you are in the Core project "@2" (Core: @1)' "args are not re-substituted"
-assert_eq "$(text ru project_header 'p q' '/c d')" 'coredev: вы в проекте Core "p q" (Core: /c d)' "ru two args"
+assert_eq "$(text en project_header '@2' '@1')" 'corecrew: you are in the Core project "@2" (Core: @1)' "args are not re-substituted"
+assert_eq "$(text ru project_header 'p q' '/c d')" 'corecrew: вы в проекте Core "p q" (Core: /c d)' "ru two args"
 # a missing argument prints nothing for its placeholder; an unknown key prints nothing and succeeds
 assert_eq "$(text en docs_index)" "Project docs index: " "missing arg"
 assert_eq "$(text en no_such_key a)" "" "unknown key"
@@ -94,15 +94,15 @@ for v in "${VARIANTS[@]}"; do
   rm -rf "$CLAUDE_PLUGIN_DATA/state"
   OUT="$(input "$SANDBOX/elsewhere" | vrun "$v" bash "$H" 2>"$SANDBOX/err")"; RC=$?
   assert_eq "$RC" "0" "session-start hint exit [$v]"; assert_eq "$(cat "$SANDBOX/err")" "" "session-start hint: stderr empty [$v]"
-  check "$v" "core not found" "$OUT" "coredev: Core not found at $CORE_DIR — /coredev:new-project or /coredev:task adopt <folder> will set it up" \
-    "coredev: Core не найден в $CORE_DIR — /coredev:new-project или /coredev:task adopt <folder> создадут его"
+  check "$v" "core not found" "$OUT" "corecrew: Core not found at $CORE_DIR — /corecrew:new-project or /corecrew:task adopt <folder> will set it up" \
+    "corecrew: Core не найден в $CORE_DIR — /corecrew:new-project или /corecrew:task adopt <folder> создадут его"
 done
 mkdir -p "$CORE_DIR"
 for v in en ru; do
   rm -rf "$CLAUDE_PLUGIN_DATA/state"
   OUT="$(input "$SANDBOX/elsewhere" | vrun "$v" bash "$H" 2>&1)"
-  check "$v" "core not set up" "$OUT" "coredev: Core at $CORE_DIR is not set up — /coredev:new-project or /coredev:task adopt <folder> will set it up" \
-    "coredev: Core в $CORE_DIR не настроен — /coredev:new-project или /coredev:task adopt <folder> настроят его"
+  check "$v" "core not set up" "$OUT" "corecrew: Core at $CORE_DIR is not set up — /corecrew:new-project or /corecrew:task adopt <folder> will set it up" \
+    "corecrew: Core в $CORE_DIR не настроен — /corecrew:new-project или /corecrew:task adopt <folder> настроят его"
 done
 # inside a project with spaces, %s, quotes and Cyrillic in the names; no schema; an old hook; session rules; two standards
 PN="my app %s 'q' проект"
@@ -113,20 +113,20 @@ printf 'rule one\nrule two' > "$CORE_DIR/session-rules.md"
 for v in "${VARIANTS[@]}"; do
   OUT="$(input "$P/code" | vrun "$v" bash "$H" 2>"$SANDBOX/err")"; RC=$?
   assert_eq "$RC" "0" "session-start project exit [$v]"; assert_eq "$(cat "$SANDBOX/err")" "" "session-start project: stderr empty [$v]"
-  check "$v" "project" "$OUT" "coredev: you are in the Core project \"$PN\" (Core: $CORE_DIR)
+  check "$v" "project" "$OUT" "corecrew: you are in the Core project \"$PN\" (Core: $CORE_DIR)
 Project docs index: $P/docs/INDEX.md
 Save a finished step: bash \"$COREDEV_TOOLS/save\" \"<message>\"; undo the last step: bash \"$COREDEV_TOOLS/undo-step\"
 Standards: a, b
 Session rules ($CORE_DIR/session-rules.md):
 Layout note: this Core has layout schema none, the plugin expects 1. Bring it up to date (adds only what is missing): bash \"$ROOT/scripts/setup-core.sh\" \"$CORE_DIR\"
-Old git hooks (not coredev shims): $P/code/.git/hooks/pre-commit. Replace them with: bash \"$ROOT/scripts/install-hooks.sh\" \"$P\"" \
-"coredev: вы в проекте Core \"$PN\" (Core: $CORE_DIR)
+Old git hooks from an older version: $P/code/.git/hooks/pre-commit. Replace them with: bash \"$ROOT/scripts/install-hooks.sh\" \"$P\"" \
+"corecrew: вы в проекте Core \"$PN\" (Core: $CORE_DIR)
 Индекс документации проекта: $P/docs/INDEX.md
 Сохранить завершённый шаг: bash \"$COREDEV_TOOLS/save\" \"<message>\"; отменить последний шаг: bash \"$COREDEV_TOOLS/undo-step\"
 Стандарты: a, b
 Правила сессии ($CORE_DIR/session-rules.md):
 Заметка о структуре: структура этого Core — версия не указана, плагину нужна 1. Обновите её (добавится только недостающее): bash \"$ROOT/scripts/setup-core.sh\" \"$CORE_DIR\"
-Найдены старые git-хуки, не от coredev: $P/code/.git/hooks/pre-commit. Замените их командой: bash \"$ROOT/scripts/install-hooks.sh\" \"$P\""
+Найдены старые git-хуки от прошлой версии: $P/code/.git/hooks/pre-commit. Замените их командой: bash \"$ROOT/scripts/install-hooks.sh\" \"$P\""
   case "$OUT" in *"):"$'\n'"rule one"$'\n'"rule two"$'\n'*) pass ;; *) fail "session rules text not printed verbatim [$v]: $OUT" ;; esac
 done
 rm -f "$CORE_DIR/standards/a.md" "$CORE_DIR/standards/b.md"
@@ -140,11 +140,11 @@ check ru "forbid flag" "$OUT" "" "\"<message>\" --no-attribution; отменит
 # a failing tools refresh: on stdout inside a project, on stderr elsewhere
 mkdir -p "$SANDBOX/emptyroot"
 OUT="$(input "$P/code" | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" vrun ru bash "$H" 2>/dev/null)"
-check ru "sync failed (project, stdout)" "$OUT" "" "coredev: инструменты не обновлены: "
+check ru "sync failed (project, stdout)" "$OUT" "" "corecrew: инструменты не обновлены: "
 OUT="$(input "$P/code" | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" vrun en bash "$H" 2>/dev/null)"
-check en "sync failed (project, stdout)" "$OUT" "coredev: tools not refreshed: " ""
+check en "sync failed (project, stdout)" "$OUT" "corecrew: tools not refreshed: " ""
 OUT="$(input "$SANDBOX/elsewhere" | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" vrun ru bash "$H" 2>&1 >/dev/null)"
-check ru "sync failed (elsewhere, stderr)" "$OUT" "" "coredev: инструменты не обновлены: "
+check ru "sync failed (elsewhere, stderr)" "$OUT" "" "corecrew: инструменты не обновлены: "
 rm -rf "$CORE_DIR" "$CLAUDE_PLUGIN_DATA/state"
 
 # --- a project for the remaining hooks
@@ -159,9 +159,9 @@ for v in "${VARIANTS[@]}"; do
   pl "$C/docs/plan.md" | vrun "$v" bash "$H" >"$SANDBOX/out" 2>"$SANDBOX/err"; RC=$?
   assert_eq "$RC" "2" "guard-code exit [$v]"; assert_eq "$(cat "$SANDBOX/out")" "" "guard-code: stdout empty [$v]"
   check "$v" "guard-code" "$(cat "$SANDBOX/err")" \
-"coredev: $C/docs/plan.md is an internal file and must not live in code/. Write it to $CORE_DIR/$PN2/docs/plan.md instead.
+"corecrew: $C/docs/plan.md is an internal file and must not live in code/. Write it to $CORE_DIR/$PN2/docs/plan.md instead.
 Docs meant to stay public in code/: list them on a \"public-docs: <paths>\" line in $CORE_DIR/$PN2/CLAUDE.md." \
-"coredev: $C/docs/plan.md — внутренний файл, ему не место в code/. Запишите его в $CORE_DIR/$PN2/docs/plan.md.
+"corecrew: $C/docs/plan.md — внутренний файл, ему не место в code/. Запишите его в $CORE_DIR/$PN2/docs/plan.md.
 Документы, которые должны остаться в code/ публичными, перечислите в строке \"public-docs: <paths>\" в $CORE_DIR/$PN2/CLAUDE.md."
 done
 
@@ -173,9 +173,9 @@ for v in "${VARIANTS[@]}"; do
   pl "$C/.env" | vrun "$v" bash "$H" >"$SANDBOX/out" 2>"$SANDBOX/err"; RC=$?
   assert_eq "$RC" "2" "guard-secrets exit [$v]"; assert_eq "$(cat "$SANDBOX/out")" "" "guard-secrets: stdout empty [$v]"
   check "$v" "guard-secrets" "$(cat "$SANDBOX/err")" \
-"coredev: reading secrets is blocked ($C/.env)
+"corecrew: reading secrets is blocked ($C/.env)
 Ask the user to check the value themselves, or use .env.example." \
-"coredev: чтение секретов заблокировано ($C/.env)
+"corecrew: чтение секретов заблокировано ($C/.env)
 Попросите пользователя проверить значение самому или используйте .env.example."
 done
 

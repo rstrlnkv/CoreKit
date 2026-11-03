@@ -48,7 +48,7 @@ run_tool() {
 run_file() { local key=file_path; [ "$1" = NotebookEdit ] && key=notebook_path; run_tool "$1" "$key" "$2" "${3-$C}"; }
 # run_bash <command> [cwd]
 run_bash() { run_json "$(printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"}}' "${2-$C}" "$(jesc "$1")")"; }
-msg() { printf 'coredev: reading secrets is blocked (%s)\nAsk the user to check the value themselves, or use .env.example.' "$1"; }
+msg() { printf 'corecrew: reading secrets is blocked (%s)\nAsk the user to check the value themselves, or use .env.example.' "$1"; }
 # ok <label> — exit 0, silent
 ok() { assert_eq "$RC" "0" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_eq "$ERR" "" "$1: stderr"; }
 # blocked <label> <path shown> — exit 2, the exact message, nothing on stdout
@@ -56,7 +56,7 @@ blocked() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_e
 # closed <label> — exit 2 with the first line of the message (the shown text is whatever matched), nothing on stdout
 closed() {
   assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"
-  case "$ERR" in "coredev: reading secrets is blocked ("*")"*) pass ;; *) fail "$1: message: $ERR" ;; esac
+  case "$ERR" in "corecrew: reading secrets is blocked ("*")"*) pass ;; *) fail "$1: message: $ERR" ;; esac
 }
 
 # --- File tools: paths

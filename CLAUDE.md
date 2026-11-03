@@ -1,6 +1,6 @@
 # CoreKit
 
-Claude Code skills, published as the `coredev` plugin in the `corekit` marketplace
+Claude Code skills, published as the `corecrew` plugin in the `corekit` marketplace
 (the public GitHub repo `CoreKit`).
 The main skill is `new-project`: an interview, stack and architecture analysis, and a project
 skeleton whose internal docs live in a private repo (`~/Projects/Core/<project>/`) while the
@@ -12,8 +12,8 @@ plugin) and docs/specs/2026-11-02-new-project-design.md (the `new-project` skill
 ## Layout
 ```
 .claude-plugin/
-  plugin.json          name "coredev", version lives here, userConfig
-  marketplace.json     marketplace "corekit"; plugin "coredev"; renames
+  plugin.json          name "corecrew", version lives here, userConfig
+  marketplace.json     marketplace "corekit"; plugin "corecrew"; renames
 skills/
   new-project/         as today; uses scripts/setup-core.sh; wiki templates
   task/                SKILL.md; references/: paths.md, brief.md, report.md, release.md, adopt.md
@@ -36,8 +36,8 @@ scripts/               all machinery, portable bash
   git-hooks/           pre-commit-code, pre-push-code, pre-push-core, blocked-patterns
 tests/                 bash: lib.sh, test_*.sh, run.sh, fixtures/
 evals/                 trigger evals (new-project)
-plugins/effort-picker/ a second plugin (TypeScript hooks module); spec docs/specs/2026-11-04-effort-picker-design.md;
-                       own CHANGELOG; tests: `claude plugin test plugins/effort-picker` (run by tests/test_effort_picker.sh)
+plugins/coreeffort/    a second plugin (TypeScript hooks module); spec docs/specs/2026-11-04-effort-picker-design.md;
+                       own CHANGELOG; tests: `claude plugin test plugins/coreeffort` (run by tests/test_coreeffort.sh)
 CHANGELOG.md, README.md
 ```
 No top-level `bin/` (claude.ai and Cowork refuse plugins that have one). Spec section 4.1 is the

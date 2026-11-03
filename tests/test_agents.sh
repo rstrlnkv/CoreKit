@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The six coredev agents (spec section 13): frontmatter, sections, tools, reply format, wording.
+# The six corecrew agents (spec section 13): frontmatter, sections, tools, reply format, wording.
 source "$(dirname "$0")/lib.sh"
 AG="$ROOT/agents"
 ROLES="engineer tester security verifier localizer designer"
