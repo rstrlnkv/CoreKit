@@ -48,7 +48,8 @@ An install from the command line does not ask for the plugin's settings, so the 
 until you set them. To change them, in Claude Code open `/plugin` → Installed → coredev →
 Configure options. `claude plugin configure coredev@corekit` shows which settings are still
 unset. You can also give a value at install time, for example
-`claude plugin install coredev@corekit --config attribution=forbid`.
+`claude plugin install coredev@corekit --config attribution=forbid`, or
+`claude plugin install coredev@corekit --config ui_language=ru` for Russian hook messages.
 
 ## Update
 
@@ -83,6 +84,7 @@ Asked when the plugin is enabled from inside Claude Code (a command-line install
 | `core_dir` | a folder | `~/Projects/Core` | Where your private Core repo lives |
 | `attribution` | `allow` / `forbid` | `allow` | Whether Claude may add `Co-Authored-By` and "Generated with" lines to commits and pull requests |
 | `model_profile` | `economy` / `balanced` / `strong` | `balanced` | Which models the crew uses per role |
+| `ui_language` | `en` / `ru` | `en` | Language of the messages the hooks show |
 
 ## `new-project`
 

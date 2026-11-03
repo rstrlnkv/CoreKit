@@ -6,15 +6,21 @@ M="$ROOT/.claude-plugin/marketplace.json"
 
 # plugin.json
 assert_contains "$P" '"name": "coredev"'
-assert_contains "$P" '"version": "0.2.0"'
+assert_contains "$P" '"version": "0.2.1"'
 assert_contains "$P" '"userConfig"'
-for key in core_dir attribution model_profile; do assert_contains "$P" "\"$key\""; done
+for key in core_dir attribution model_profile ui_language; do assert_contains "$P" "\"$key\""; done
 assert_contains "$P" '"type": "directory"'
 assert_contains "$P" '"default": "~/Projects/Core"'
 assert_contains "$P" '"options": ["allow", "forbid"]'
 assert_contains "$P" '"default": "allow"'
 assert_contains "$P" '"options": ["economy", "balanced", "strong"]'
 assert_contains "$P" '"default": "balanced"'
+assert_contains "$P" '"title": "Hook messages language"'
+assert_contains "$P" '"description": "Language of the messages coredev hooks show: en (English) or ru (Russian)."'
+assert_contains "$P" '"options": ["en", "ru"]'
+assert_contains "$P" '"default": "en"'
+assert_contains "$ROOT/README.md" '`ui_language`'
+assert_contains "$ROOT/README.md" 'claude plugin install coredev@corekit --config ui_language=ru'
 assert_not_contains "$P" '"dependencies"'   # a hard dependency stops coredev loading when feature-dev is synced from claude.ai
 assert_not_contains "$P" '"marketplace": "claude-plugins-official"'
 
@@ -29,7 +35,8 @@ assert_not_contains "$M" 'allowCrossMarketplaceDependenciesOn'
 assert_contains "$ROOT/README.md" '/plugin install coredev@corekit'
 assert_not_contains "$ROOT/README.md" '/corekit:'
 assert_not_contains "$ROOT/README.md" 'corekit@corekit'
-assert_eq "$(grep -m1 '^## ' "$ROOT/CHANGELOG.md" | cut -c1-9)" '## 0.2.0 ' "CHANGELOG first entry"
+assert_eq "$(grep -m1 '^## ' "$ROOT/CHANGELOG.md" | cut -c1-9)" '## 0.2.1 ' "CHANGELOG first entry"
+assert_contains "$ROOT/CHANGELOG.md" '## 0.2.1 — 2026-11-04'
 assert_contains "$ROOT/CHANGELOG.md" '## 0.2.0 — '
 
 # hooks.json: plugin Stop hook; no install.sh any more
