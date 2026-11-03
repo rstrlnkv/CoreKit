@@ -12,7 +12,7 @@ while read -r lref lsha rref rsha; do
   else range=$(git rev-list "$rsha..$lsha"); fi
   for c in $range; do
     bad=$(git -c core.quotePath=false diff-tree --no-commit-id --name-only -r --diff-filter=ACMR "$c" \
-          | grep -iE -f "$PATTERNS" | grep -viE '(^|/)\.env\.example$')
+          | grep -iE -f "$PATTERNS" | grep -viE '(^|/)\.env\.(example|sample|template)$')
     if [ -n "$bad" ]; then
       echo "Push blocked: commit $(git rev-parse --short "$c") contains files that must not be published:" >&2
       echo "$bad" | sed 's/^/  - /' >&2

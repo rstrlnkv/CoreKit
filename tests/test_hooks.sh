@@ -27,7 +27,7 @@ for bad in CLAUDE.md sub/CLAUDE.local.md .claude/x.json .env .env.local docs/sup
   try_commit "$bad" && fail "commit allowed: $bad" || pass
   rm -rf "$C/$bad"
 done
-for ok in .env.example src/main.dart docs/README.md; do
+for ok in .env.example .env.sample .env.template sub/.env.sample src/main.dart docs/README.md; do
   try_commit "$ok" && pass || fail "commit blocked: $ok"
 done
 # blocked commit message names the file
@@ -38,6 +38,14 @@ git -C "$C" reset -q; rm -f "$C/CLAUDE.md"
 # pre-push catches a --no-verify commit
 git init -q --bare "$SANDBOX/remote.git"; git -C "$C" remote add origin "$SANDBOX/remote.git"
 git -C "$C" push -q origin main 2>/dev/null && pass || fail "clean push failed"
+# pre-push allows the same .env templates (committed with --no-verify, so only pre-push judges them)
+for ok in cfg/.env.example cfg/.env.sample cfg/.env.template; do
+  mkdir -p "$C/cfg"; echo x > "$C/$ok"; git -C "$C" add -f "$ok"; git -C "$C" commit -q --no-verify -m "add $ok"
+done
+git -C "$C" push -q origin main 2>/dev/null && pass || fail "push of .env.example/.sample/.template blocked"
+echo x > "$C/cfg/.env.prod"; git -C "$C" add -f cfg/.env.prod; git -C "$C" commit -q --no-verify -m "add env"
+git -C "$C" push -q origin main 2>/dev/null && fail "push of cfg/.env.prod allowed" || pass
+git -C "$C" reset -q --hard HEAD~1
 echo x > "$C/CLAUDE.md"; git -C "$C" add -f CLAUDE.md; git -C "$C" commit -q --no-verify -m sneaky
 git -C "$C" push -q origin main 2>/dev/null && fail "push of CLAUDE.md allowed" || pass
 

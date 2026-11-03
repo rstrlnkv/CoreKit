@@ -68,8 +68,16 @@ assert_contains "$P/code/.claude/settings.local.json" "\"$P\""
 # rules use worktree-safe path pattern
 assert_contains "$P/.claude/rules/tests.md" "code/**/"
 # code .gitignore blocks internal files
-for pat in CLAUDE.md CLAUDE.local.md .claude/ docs/superpowers/ .env '*.pem' '*.key'; do
+for pat in CLAUDE.md CLAUDE.local.md .claude/ docs/superpowers/ .env '*.pem' '*.key' \
+           '!.env.example' '!.env.sample' '!.env.template'; do
   assert_contains "$P/code/.gitignore" "$pat"
+done
+# the .env templates stay committable; real .env files are ignored
+for f in .env.example .env.sample .env.template; do
+  git -C "$P/code" check-ignore -q "$f" && fail "$f is ignored" || pass
+done
+for f in .env .env.local .env.production; do
+  git -C "$P/code" check-ignore -q "$f" && pass || fail "$f is not ignored"
 done
 # PROJECTS.md gets exactly one line
 c=$(grep -c '^- demo-app ' "$CORE_DIR/PROJECTS.md"); assert_eq "$c" "1" "PROJECTS.md lines"

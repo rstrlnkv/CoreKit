@@ -5,7 +5,7 @@ if [ ! -r "$PATTERNS" ]; then
   echo "Blocked: $PATTERNS is missing, so internal files can't be checked. Start Claude Code once with coredev enabled to refresh the tools." >&2
   exit 1
 fi
-bad=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR | grep -iE -f "$PATTERNS" | grep -viE '(^|/)\.env\.example$')
+bad=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR | grep -iE -f "$PATTERNS" | grep -viE '(^|/)\.env\.(example|sample|template)$')
 if [ -n "$bad" ]; then
   echo "Commit blocked: these files must not be in the code repository:" >&2
   echo "$bad" | sed 's/^/  - /' >&2
