@@ -28,6 +28,23 @@
   help the user write their own standards into `<Core>/standards/`; the plugin ships none.
   `reference/knowledge.md` defines the knowledge files (`docs/knowledge/`, `<Core>/knowledge/`).
 - Added `docs/migration-0.2.md`: the seven steps for an existing 0.1.x user.
+- Added `/coredev:task <task>`: the orchestrator runs a task along one of four paths (`fix`,
+  `full`, `question`, `batch`) and ends with a report with proof and one commit.
+- `/coredev:task release <version>` runs seven checks (tests, wiki, version, changelog) and commits the release; it tags and pushes nothing.
+- `/coredev:task adopt <folder>` (`scripts/adopt.sh`) moves an existing project into the Core
+  layout, keeps its git history and adds the missing wiki pages.
+- Six agents: `engineer`, `tester`, `security`, `verifier`, `localizer`, `designer`.
+- Five hooks: `session-start` (refreshes the tools, shows the project context), `one-suite`
+  (one test run at a time), `guard-code` (no internal files in `code/`), `guard-secrets`
+  (no `.env`, no `~/.ssh`) and `stop-remind` (the save reminder).
+- Wiki rules (`reference/wiki.md`) and `scripts/wiki-check.sh`; `new-project` and adopt create a
+  wiki that passes the check.
+- Knowledge: lessons per project (`docs/knowledge/`) and for all projects (`<Core>/knowledge/`),
+  read by the agents before they work.
+- Install and update with the `claude plugin` commands on Mac and Windows (README); Windows
+  needs Git for Windows.
+- Added the end-to-end fixture `tests/fixtures/make-test-coredev.sh` (a tiny project with a
+  planted bug) and `tests/test_fixture.sh`.
 
 ## 0.1.1 — 2026-11-03
 - `save` reinstalls hooks when the code pre-push hook or `blocked-patterns` is missing

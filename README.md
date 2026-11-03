@@ -5,23 +5,66 @@ and lessons in one private repo of your own. It lives in the `corekit` marketpla
 
 ## Install
 
-In Claude Code:
+You need Claude Code 2.1.271 or newer, git, and the GitHub CLI (`gh`, logged in with
+`gh auth login`). Stack tools (Flutter, Xcode, Node, Rust, uv) are checked when you pick a stack.
+
+### Mac (and Linux)
+
+Open Terminal and run these three commands, one after another:
+```
+claude plugin marketplace add rstrlnkv/CoreKit
+claude plugin install coredev@corekit
+claude plugin install feature-dev@claude-plugins-official
+```
+The first adds the `corekit` marketplace, the second installs this plugin, the third installs
+`feature-dev`, which `/coredev:task` needs (its `code-architect` and `code-explorer` agents).
+Skip the third if you already have `feature-dev` from claude.ai. It is not a hard dependency, so
+`coredev` loads either way, and `/coredev:task` tells you at start if it is missing.
+
+Start `claude` (restart it if it was open). Then run `/coredev:new-project`: on the first run
+it shows what it will create, and after your "ok" sets up your private Core repo.
+
+### Windows
+
+1. Install [Git for Windows](https://git-scm.com/download/win). It is required: the plugin's
+   hooks run in Git Bash. Full Windows support comes later, so expect rough edges.
+2. Install the GitHub CLI and run `gh auth login`.
+3. Run the same three `claude plugin ...` commands as on Mac, in PowerShell or in Git Bash.
+4. Start `claude` and run `/coredev:new-project`.
+
+### Inside Claude Code
+
+You can also type the same steps in a running Claude Code session. Claude Code then asks for
+the plugin's settings when it is enabled:
 ```
 /plugin marketplace add rstrlnkv/CoreKit
 /plugin install coredev@corekit
-```
-Claude Code asks for the three settings below when the plugin is enabled.
-
-`/coredev:task` also needs the `feature-dev` plugin (its `code-architect` and `code-explorer`
-agents). Install it too, unless you already have it from claude.ai:
-```
 /plugin install feature-dev@claude-plugins-official
 ```
-`/coredev:task` checks for it at start and tells you if it is missing. It is not a hard
-dependency, so `coredev` loads either way.
 
-**Requirements:** Claude Code 2.1.271 or newer (the plugin settings use `options`), macOS or
-Linux with bash, git, and the GitHub CLI (`gh`, logged in with `gh auth login`). Stack tools (Flutter, Xcode, Node, Rust, uv) are checked when you pick a stack.
+### Settings
+
+An install from the command line does not ask for the plugin's settings, so the defaults apply
+until you set them. To change them, in Claude Code open `/plugin` → Installed → coredev →
+Configure options. `claude plugin configure coredev@corekit` shows which settings are still
+unset. You can also give a value at install time, for example
+`claude plugin install coredev@corekit --config attribution=forbid`.
+
+## Update
+
+The same commands on Mac and on Windows (PowerShell or Git Bash):
+```
+claude plugin marketplace update corekit
+claude plugin update coredev@corekit
+```
+Then restart Claude Code. An update never touches your Core, standards or knowledge files.
+
+The plugin updates only when its `version` changes. Auto-update is off for third-party
+marketplaces by default: turn it on in `/plugin` → Marketplaces → corekit → Enable auto-update.
+
+If you used this plugin as `corekit`: the marketplace migrates the old name, but run
+`claude plugin install coredev@corekit` once. If you come from 0.1.x, follow
+[docs/migration-0.2.md](docs/migration-0.2.md).
 
 ## Commands
 
@@ -33,23 +76,13 @@ Linux with bash, git, and the GitHub CLI (`gh`, logged in with `gh auth login`).
 
 ## Settings
 
-Set when the plugin is enabled; change later in `/plugin` → Installed → coredev → Configure options.
+Asked when the plugin is enabled from inside Claude Code (a command-line install keeps the defaults until you set them); change later in `/plugin` → Installed → coredev → Configure options.
 
 | Key | Values | Default | Meaning |
 |---|---|---|---|
 | `core_dir` | a folder | `~/Projects/Core` | Where your private Core repo lives |
 | `attribution` | `allow` / `forbid` | `allow` | Whether Claude may add `Co-Authored-By` and "Generated with" lines to commits and pull requests |
 | `model_profile` | `economy` / `balanced` / `strong` | `balanced` | Which models the crew uses per role |
-
-## Updates
-
-The plugin updates only when its `version` changes. Auto-update is off for third-party
-marketplaces by default: turn it on in `/plugin` → Marketplaces → corekit → Enable auto-update,
-or update by hand with `/plugin marketplace update corekit`.
-
-If you used this plugin as `corekit`: the marketplace migrates the old name, but run
-`/plugin install coredev@corekit` once. Upgrading from 0.1.x: follow
-[docs/migration-0.2.md](docs/migration-0.2.md).
 
 ## `new-project`
 
@@ -84,7 +117,7 @@ docs repo. The plugin's Stop hook reminds Claude to save when a step is left unc
 - Auto-triggering competes with other planning skills (e.g. Superpowers' brainstorming). Start it
   explicitly with `/coredev:new-project`, or add to `~/.claude/CLAUDE.md`:
   `When I want to start a new project from scratch, use the new-project skill.`
-- Windows is not supported yet (the scripts are bash).
+- Windows needs Git for Windows (the hooks run in Git Bash) and is not fully supported yet.
 - `bin/` and `hooks/` copies that 0.1.x put in your docs repo are left as they are (they are
   your files); the plugin no longer writes there.
 

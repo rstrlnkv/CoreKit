@@ -11,7 +11,7 @@ new_sandbox
 
 SELF="tests/test_no_personal.sh"
 # Words that are also part of this repo's own vocabulary: never a "personal" project name.
-GENERIC='core corekit coredev demo test tests example examples sample project projects code docs todo hello world'
+GENERIC='core corekit coredev test-coredev demo test tests example examples sample project projects code docs todo hello world'
 
 # project_names <PROJECTS.md> — one name per line, from list items "- <name> — <purpose> — <path>".
 # Drops names under 4 characters and generic words. Names are only ever written to a file.
