@@ -447,12 +447,12 @@ its input lets the call through, except where noted.
    test, vitest, gradlew test, pytest, cargo test, flutter test, go test, `*tests?.sh`. Quoted
    text and heredoc bodies ignored; no `pgrep` → let through. The wait limit stays under the
    hook's `timeout`.
-3. **guard-code.sh** — `PreToolUse` Write|Edit|NotebookEdit (+ Bash, best effort): blocks
+3. **guard-code.sh** — `PreToolUse` Write|Edit|MultiEdit|NotebookEdit (+ Bash, best effort): blocks
    `CLAUDE.md`, `docs/**`, `.claude/**` inside any `<Core>/<project>/code/**`, worktrees
    included; allows `.claude/settings.local.json`, `.claude/worktrees/**` and `public-docs:`
    paths (§11). Paths compared after resolving `..` and case-folding. Bash: `>`, `>>`, `cp`,
    `mv`, `tee`, `touch` targets; not complete — the git pre-commit hook stays the last layer.
-4. **guard-secrets.sh** — `PreToolUse` Read|Grep|Glob|Edit|Write|Bash: blocks `.env`, `.env.*`
+4. **guard-secrets.sh** — `PreToolUse` Read|Grep|Glob|Edit|MultiEdit|Write|NotebookEdit|Bash: blocks `.env`, `.env.*`
    (allows `.env.example`, `.env.sample`, `.env.template`) and `~/.ssh/**`. Bash: best effort on
    command words with an explicit path; a recursive grep over a folder is not caught. Fails
    closed when the path matches but the JSON is odd.
