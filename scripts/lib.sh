@@ -107,6 +107,114 @@ load_settings() {
   APP_ID_PREFIX="$(coredev_get app-id-prefix)"
 }
 
+# --- Hook helpers (no jq).
+
+# json_str <json> <key> — prints the first string value of "<key>" anywhere in the JSON text.
+# Unescapes \" \\ \/ \b \f \n \r \t and decodes \uXXXX to UTF-8 (surrogate pairs too; a lone
+# surrogate becomes U+FFFD; \u0000 is dropped). Whitespace and newlines around ':' are fine.
+# A missing key, a value that is not a string, or malformed input prints nothing; the exit
+# status is always 0. A key name that only appears inside a string value is not a key.
+json_str() {
+  printf '%s' "${1:-}" | JSON_KEY="${2:-}" LC_ALL=C awk '
+    function hexval(h,   i, d, v) {
+      v = 0
+      for (i = 1; i <= length(h); i++) {
+        d = index("0123456789abcdef", tolower(substr(h, i, 1)))
+        if (d == 0) return -1
+        v = v * 16 + d - 1
+      }
+      return v
+    }
+    function utf8(cp) {
+      if (cp < 128) return chr[cp]
+      if (cp < 2048) return chr[192 + int(cp / 64)] chr[128 + cp % 64]
+      if (cp < 65536) return chr[224 + int(cp / 4096)] chr[128 + int(cp / 64) % 64] chr[128 + cp % 64]
+      return chr[240 + int(cp / 262144)] chr[128 + int(cp / 4096) % 64] chr[128 + int(cp / 64) % 64] chr[128 + cp % 64]
+    }
+    function isws(c) { return c == " " || c == "\t" || c == "\r" || c == "\n" }
+    { buf = buf $0 "\n" }
+    END {
+      key = ENVIRON["JSON_KEY"] ""
+      if (key == "") exit 0
+      for (n = 1; n < 256; n++) chr[n] = sprintf("%c", n)
+      chr[0] = ""
+      len = length(buf); i = 1
+      while (i <= len) {
+        if (substr(buf, i, 1) != "\"") { i++; continue }
+        s = i + 1; j = s
+        while (j <= len) {
+          d = substr(buf, j, 1)
+          if (d == "\\") j += 2
+          else if (d == "\"") break
+          else j++
+        }
+        if (j > len) exit 0
+        raw = substr(buf, s, j - s) ""
+        i = j + 1
+        if (raw != key) continue
+        k = i
+        while (k <= len && isws(substr(buf, k, 1))) k++
+        if (substr(buf, k, 1) != ":") continue
+        k++
+        while (k <= len && isws(substr(buf, k, 1))) k++
+        if (substr(buf, k, 1) != "\"") continue
+        s = k + 1; j = s
+        while (j <= len) {
+          d = substr(buf, j, 1)
+          if (d == "\\") j += 2
+          else if (d == "\"") break
+          else j++
+        }
+        if (j > len) exit 0
+        raw = substr(buf, s, j - s)
+        out = ""; p = 1; rl = length(raw)
+        while (p <= rl) {
+          d = substr(raw, p, 1)
+          if (d != "\\") { out = out d; p++; continue }
+          e = substr(raw, p + 1, 1); p += 2
+          if (e == "n") out = out "\n"
+          else if (e == "t") out = out "\t"
+          else if (e == "r") out = out "\r"
+          else if (e == "b") out = out chr[8]
+          else if (e == "f") out = out chr[12]
+          else if (e == "u") {
+            cp = hexval(substr(raw, p, 4))
+            if (length(substr(raw, p, 4)) < 4 || cp < 0) { p += 4; continue }
+            p += 4
+            if (cp >= 55296 && cp <= 56319) {
+              lo = -1
+              if (substr(raw, p, 2) == "\\u") lo = hexval(substr(raw, p + 2, 4))
+              if (lo >= 56320 && lo <= 57343) { cp = 65536 + (cp - 55296) * 1024 + (lo - 56320); p += 6 }
+              else cp = 65533
+            } else if (cp >= 56320 && cp <= 57343) cp = 65533
+            if (cp > 0) out = out utf8(cp)
+          }
+          else out = out e
+        }
+        printf "%s", out
+        exit 0
+      }
+    }
+  ' || true
+  return 0
+}
+
+# project_of <path> — with CORE_DIR loaded (load_settings), prints <project> when the canonical
+# path is <Core>/<project> or anything below it (worktrees under code/.claude/worktrees included);
+# exit 0. Otherwise prints nothing and exits 1. A project is a top-level folder of the Core that
+# holds a CLAUDE.md or a code/ folder; dot-folders, standards/ and knowledge/ never count.
+project_of() {
+  local p rest first
+  [ -n "${CORE_DIR:-}" ] && [ -n "${1:-}" ] || return 1
+  p="$(canon_dir "$1")"
+  case "$p" in "$CORE_DIR"/*) ;; *) return 1 ;; esac
+  rest="${p#"$CORE_DIR"/}"; first="${rest%%/*}"
+  case "$first" in ""|.*|standards|knowledge) return 1 ;; esac
+  [ -d "$CORE_DIR/$first" ] || return 1
+  [ -f "$CORE_DIR/$first/CLAUDE.md" ] || [ -d "$CORE_DIR/$first/code" ] || return 1
+  printf '%s\n' "$first"
+}
+
 # --- Helpers that create things in the Core. They honour DRY=1 (print "would create", touch
 # nothing) and print paths relative to $CORE_DIR ("." for the Core itself).
 

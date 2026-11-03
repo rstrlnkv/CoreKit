@@ -7,10 +7,13 @@
 D="$(dirname "$0")"
 [ -f "$D/_locate.sh" ] || D="$D/../scripts"
 . "$D/_locate.sh"
+# json_str comes from lib.sh; an old copy of this hook in <Core>/bin has no lib.sh next to it.
+if [ -f "$D/lib.sh" ]; then . "$D/lib.sh"
+else json_str() { printf '%s' "$1" | sed -nE "s/.*\"$2\" *: *\"([^\"]*)\".*/\1/p"; }; fi
 SAVE="$(cd "$D" && pwd)/save"
 in=$(cat)
-printf '%s' "$in" | grep -qE '"stop_hook_active" *: *true' && exit 0
-cwd=$(printf '%s' "$in" | sed -nE 's/.*"cwd" *: *"([^"]*)".*/\1/p')
+printf '%s' "$in" | tr -d '\r\n' | grep -qE '"stop_hook_active"[[:space:]]*:[[:space:]]*true' && exit 0
+cwd=$(json_str "$in" cwd)
 [ -n "$cwd" ] && [ -d "$cwd" ] || exit 0
 cd "$cwd" 2>/dev/null || exit 0
 locate 2>/dev/null || exit 0
