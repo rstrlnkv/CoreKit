@@ -177,6 +177,7 @@ assert_contains "$SK" 'Report now: what is done, what is left; no more tool call
 assert_contains "$SK" 'SendMessage'
 assert_contains "$SK" 'with no report'
 assert_contains "$SK" 'same pass'
+assert_contains "$SK" 'stop the chain and put it in `Open`'
 rule "turn-limit note rule" 'turn-limit note'
 
 finish

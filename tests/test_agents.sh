@@ -55,6 +55,7 @@ for r in $ROLES; do
   kc="$(printf '%s\n' "$rd" | grep -n "<Core>/knowledge/$r.md" | head -1 | cut -d: -f1)"
   [ -n "$a" ] && [ -n "$b" ] && [ -n "$p" ] && [ -n "$c" ] && [ -n "$k" ] && [ -n "$kc" ] \
     && [ "$a" -lt "$b" ] && [ "$b" -lt "$p" ] && [ "$p" -lt "$c" ] && [ "$c" -lt "$k" ] && [ "$k" -le "$kc" ] \
+    && printf "%s\n" "$rd" | awk -v a="docs/knowledge/$r.md" -v b="<Core>/knowledge/$r.md" '{s = s $0 "\n"} END {i = index(s, a); j = index(s, b); exit !(i > 0 && j > 0 && i < j)}' \
     && pass || fail "$r.md reading order is not CLAUDE.md, INDEX, page, standards, project knowledge, Core knowledge"
   # knowledge of another stack is skipped; a one-stack line is tagged (spec 12.3)
   sec_has "$f" "What to read first" 'skip lines tagged `[<stack>]` for another stack'

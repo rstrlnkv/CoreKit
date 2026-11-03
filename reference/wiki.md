@@ -64,4 +64,6 @@ reads `CLAUDE.md`, then the map, then the one page its task needs. A user standa
 | `drift: <code path> changed, page not updated` | `--changed` lists a code file that a page's `files:` names, and the page is not among the changed files |
 
 `--changed` takes code-relative paths (as `git diff --name-only` prints in `code/`). A changed
-page is passed as `../docs/<page>.md` or `docs/<page>.md`.
+page is passed as `../docs/<page>.md` or `docs/<page>.md`. Pages live in the Core repo, so list the
+changed ones there (read-only), then rewrite `<project>/docs/` to `../docs/`:
+`{ git -C <Core> diff --name-only HEAD -- <project>/docs; git -C <Core> ls-files --others --exclude-standard -- <project>/docs; }`.
