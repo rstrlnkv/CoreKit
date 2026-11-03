@@ -105,7 +105,7 @@ while :; do
     at="$(cat "$turn/at" 2>/dev/null)"; case "$at" in ''|*[!0-9]*) at=0 ;; esac
     if [ $((now - at)) -ge "$grace" ]; then
       rm -rf "$turn" 2>/dev/null
-      [ -e "$turn" ] && exit 0
+      { [ -e "$turn" ] || [ -L "$turn" ]; } && exit 0   # -L: a dangling symlink that stays
       continue
     fi
   fi
