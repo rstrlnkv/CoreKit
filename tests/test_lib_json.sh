@@ -16,7 +16,7 @@ assert_eq "$(json_str '{"cwd":"\u00e9\u00C9"}' cwd)" "éÉ" "two-byte escape, he
 assert_eq "$(json_str '{"cwd":"\u20ac"}' cwd)" "€" "three-byte escape"
 assert_eq "$(json_str '{"cwd":"\ud83d\ude00"}' cwd)" "😀" "surrogate pair"
 assert_eq "$(json_str '{"cwd":"x\ud83dy"}' cwd)" "x�y" "lone surrogate becomes U+FFFD"
-assert_eq "$(json_str '{"cwd":"/Users/x/Ядро/проект"}' cwd)" "/Users/x/Ядро/проект" "raw UTF-8 passes through"
+assert_eq "$(json_str '{"cwd":"/x/Ядро/проект"}' cwd)" "/x/Ядро/проект" "raw UTF-8 passes through"
 assert_eq "$(json_str '{"cwd" : "/a b"}' cwd)" "/a b" "spaces around colon"
 assert_eq "$(json_str "$(printf '{\n  "session_id": "s",\n  "cwd"\n  :\n  "/multi/line",\n  "x": 1\n}\n')" cwd)" "/multi/line" "several lines"
 assert_eq "$(json_str "$(printf '{\r\n\t"cwd":\t"/crlf"\r\n}')" cwd)" "/crlf" "tabs and CRLF"

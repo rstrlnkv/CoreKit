@@ -81,8 +81,8 @@ for r in $ROLES; do
   sec_has "$f" "What not to do" 'path: question'
   sec_has "$f" "What not to do" 'change no files'
   sec_has "$f" "What not to do" '`file:line`'
-  # forbidden strings
-  for s in '/Users/' '.claude/crew' 'Helm' 'Mafia' 'CoreCrew' 'superpowers' '${CLAUDE_'; do
+  # forbidden strings (home paths and archive project names: tests/test_no_personal.sh scans all)
+  for s in '.claude/crew' 'CoreCrew' 'superpowers' '${CLAUDE_'; do
     grep -qF -- "$s" "$f" && fail "$r.md contains: $s" || pass
   done
   # no plugin-relative path; "../docs/<page>.md" (a --changed argument) is the one allowed form

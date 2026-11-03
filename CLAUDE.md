@@ -1,7 +1,7 @@
 # CoreKit
 
 Claude Code skills, published as the `coredev` plugin in the `corekit` marketplace
-(github.com/rstrlnkv/CoreKit).
+(the public GitHub repo `CoreKit`).
 The main skill is `new-project`: an interview, stack and architecture analysis, and a project
 skeleton whose internal docs live in a private repo (`~/Projects/Core/<project>/`) while the
 code lives in a separate nested repo (`<project>/code/`).

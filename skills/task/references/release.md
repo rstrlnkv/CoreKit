@@ -16,7 +16,7 @@ this chain's work. `<files>` for the wiki check, run in the code root (code-rela
 
 **Release path, before postcondition 1:** engineer writes the version (`<version>` from
 `/coredev:task release <version>`) and the changelog entry, following
-`<Core>/standards/versioning.md` or any standard whose `applies-to` names `release`. None
+a versioning standard in `<Core>/standards/` (any standard whose `applies-to` names `release`). None
 found → ask the user first, then brief engineer with the answer.
 
 1. **Tests.** Chains with a tester: show the result of the final tester `check:` run (rule 7
