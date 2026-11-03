@@ -10,8 +10,15 @@ In Claude Code:
 /plugin marketplace add rstrlnkv/CoreKit
 /plugin install coredev@corekit
 ```
-Claude Code asks for the three settings below when the plugin is enabled. The plugin depends on
-`feature-dev` from the official `claude-plugins-official` marketplace and installs it with itself.
+Claude Code asks for the three settings below when the plugin is enabled.
+
+`/coredev:task` also needs the `feature-dev` plugin (its `code-architect` and `code-explorer`
+agents). Install it too, unless you already have it from claude.ai:
+```
+/plugin install feature-dev@claude-plugins-official
+```
+`/coredev:task` checks for it at start and tells you if it is missing. It is not a hard
+dependency, so `coredev` loads either way.
 
 **Requirements:** Claude Code 2.1.271 or newer (the plugin settings use `options`), macOS or
 Linux with bash, git, and the GitHub CLI (`gh`, logged in with `gh auth login`). Stack tools (Flutter, Xcode, Node, Rust, uv) are checked when you pick a stack.

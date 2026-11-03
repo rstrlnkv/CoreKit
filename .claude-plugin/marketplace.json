@@ -2,7 +2,6 @@
   "name": "corekit",
   "description": "CoreKit: the coredev plugin for starting and running projects with Claude Code.",
   "owner": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
-  "allowCrossMarketplaceDependenciesOn": ["claude-plugins-official"],
   "plugins": [
     {
       "name": "coredev",

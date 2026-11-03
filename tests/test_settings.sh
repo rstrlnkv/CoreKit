@@ -27,6 +27,13 @@ assert_eq "$(CLAUDE_PLUGIN_OPTION_CORE_DIR="$SANDBOX/opt" settings CORE_DIR)" "$
 assert_eq "$(CORE_DIR= CLAUDE_PLUGIN_OPTION_CORE_DIR="$SANDBOX/opt" settings CORE_DIR)" "$RS/opt" "option used when env empty"
 assert_eq "$(CORE_DIR="$SANDBOX/x/Docs" settings CORE_NAME)" "Docs" "CORE_NAME is basename"
 
+# an unsubstituted ${user_config.*} placeholder counts as unset (plugin not configured)
+assert_eq "$(CORE_DIR='${user_config.core_dir}' settings CORE_DIR)" "$RH/Projects/Core" "literal placeholder -> default"
+assert_eq "$(CORE_DIR='${user_config.core_dir}' CLAUDE_PLUGIN_OPTION_CORE_DIR="$SANDBOX/opt" settings CORE_DIR)" "$RS/opt" "literal placeholder -> option"
+assert_eq "$(CLAUDE_PLUGIN_OPTION_CORE_DIR='${user_config.core_dir}' settings CORE_DIR)" "$RH/Projects/Core" "literal in the option -> default"
+assert_eq "$(CLAUDE_PLUGIN_OPTION_ATTRIBUTION='${user_config.attribution}' settings ATTRIBUTION)" "allow" "literal attribution -> default"
+assert_eq "$(CLAUDE_PLUGIN_OPTION_MODEL_PROFILE='${user_config.model_profile}' settings MODEL_PROFILE)" "balanced" "literal model_profile -> default"
+
 # ~ expansion and trailing slash
 assert_eq "$(CORE_DIR='~/x' settings CORE_DIR)" "$RH/x" "~/x"
 assert_eq "$(CORE_DIR='~/x/' settings CORE_DIR)" "$RH/x" "~/x/"

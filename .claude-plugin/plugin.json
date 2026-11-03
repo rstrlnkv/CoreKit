@@ -7,9 +7,6 @@
   "repository": "https://github.com/rstrlnkv/CoreKit",
   "license": "MIT",
   "keywords": ["new-project", "scaffold", "claude-md", "project-setup", "git", "workflow"],
-  "dependencies": [
-    { "name": "feature-dev", "marketplace": "claude-plugins-official" }
-  ],
   "userConfig": {
     "core_dir": {
       "type": "directory",

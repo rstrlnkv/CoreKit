@@ -15,16 +15,15 @@ assert_contains "$P" '"options": ["allow", "forbid"]'
 assert_contains "$P" '"default": "allow"'
 assert_contains "$P" '"options": ["economy", "balanced", "strong"]'
 assert_contains "$P" '"default": "balanced"'
-assert_contains "$P" '"dependencies"'
-assert_contains "$P" '"name": "feature-dev"'
-assert_contains "$P" '"marketplace": "claude-plugins-official"'
+assert_not_contains "$P" '"dependencies"'   # a hard dependency stops coredev loading when feature-dev is synced from claude.ai
+assert_not_contains "$P" '"marketplace": "claude-plugins-official"'
 
 # marketplace.json
 assert_contains "$M" '"name": "corekit"'
 assert_contains "$M" '"name": "coredev"'
 assert_contains "$M" '"renames"'
 assert_contains "$M" '"corekit": "coredev"'
-assert_contains "$M" '"allowCrossMarketplaceDependenciesOn": ["claude-plugins-official"]'
+assert_not_contains "$M" 'allowCrossMarketplaceDependenciesOn'
 
 # README and CHANGELOG
 assert_contains "$ROOT/README.md" '/plugin install coredev@corekit'
@@ -40,6 +39,7 @@ assert_contains "$ROOT/hooks/hooks.json" '"timeout"'
 assert_no_file "$ROOT/install.sh"; assert_no_file "$ROOT/tests/test_install.sh"
 assert_not_contains "$ROOT/README.md" 'install.sh'
 assert_contains "$ROOT/README.md" '2.1.271'
+assert_contains "$ROOT/README.md" '/plugin install feature-dev@claude-plugins-official'
 T="$ROOT/skills/new-project/templates"
 assert_not_contains "$T/code/settings.local.json.tmpl" '"hooks"'
 assert_contains "$T/code/settings.local.json.tmpl" '"additionalDirectories"'
@@ -51,7 +51,9 @@ assert_contains "$T/CLAUDE.md.tmpl" 'printed at session start'
 MG="$ROOT/docs/migration-0.2.md"
 assert_file "$MG"
 assert_contains "$MG" '/plugin install coredev@corekit'
-assert_contains "$MG" 'claude.ai-synced install: see below'
+assert_contains "$MG" 'claude plugin disable corekit@synced'
+assert_not_contains "$MG" 'see below'
+assert_not_contains "$MG" 'TODO'
 assert_contains "$MG" 'install-hooks.sh'
 assert_contains "$MG" 'session-rules.md'
 for n in 1 2 3 4 5 6 7; do assert_contains "$MG" "### Step $n"; done

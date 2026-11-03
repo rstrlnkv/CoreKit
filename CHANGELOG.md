@@ -6,8 +6,12 @@
   Commands are `/coredev:...`.
 - Plugin settings (`userConfig`): `core_dir`, `attribution` (`allow`/`forbid`),
   `model_profile` (`economy`/`balanced`/`strong`).
-- The plugin depends on `feature-dev` from `claude-plugins-official`; the marketplace allows
-  that cross-marketplace dependency.
+- `feature-dev` (from `claude-plugins-official`, or from claude.ai) is needed by `/coredev:task`
+  but is not declared as a hard dependency: a hard dependency stopped `coredev` from loading
+  when `feature-dev` came from claude.ai sync or another marketplace. Install it with
+  `/plugin install feature-dev@claude-plugins-official`; `task` checks for it at start.
+- Settings: a value that is still the literal text `${user_config.…}` (plugin not configured)
+  counts as unset, so scripts fall back to `CLAUDE_PLUGIN_OPTION_*` and then the defaults.
 - Added `tests/test_manifest.sh`.
 - Git hooks installed in repos are small shims that run the plugin's scripts from a stable
   copy in the plugin data folder (`sync-tools.sh`); the copy is refreshed on version change, so

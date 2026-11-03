@@ -84,12 +84,23 @@ coredev_set() {
   mv "$tmp" "$f"
 }
 
+# opt_value <value> — the value, or nothing when it is empty or still holds the literal text
+# "${user_config." (Claude Code leaves placeholders unsubstituted while the plugin is not configured).
+opt_value() {
+  case "$1" in *'${user_config.'*) return 0 ;; esac
+  printf '%s' "$1"
+}
+
 # load_settings — CORE_DIR: $CORE_DIR, else $CLAUDE_PLUGIN_OPTION_CORE_DIR, else ~/Projects/Core.
+# A value that is an unsubstituted ${user_config.*} placeholder counts as unset.
 load_settings() {
-  CORE_DIR="$(canon_dir "${CORE_DIR:-${CLAUDE_PLUGIN_OPTION_CORE_DIR:-$HOME/Projects/Core}}")"
+  local c o a m
+  c="$(opt_value "${CORE_DIR:-}")"; o="$(opt_value "${CLAUDE_PLUGIN_OPTION_CORE_DIR:-}")"
+  a="$(opt_value "${CLAUDE_PLUGIN_OPTION_ATTRIBUTION:-}")"; m="$(opt_value "${CLAUDE_PLUGIN_OPTION_MODEL_PROFILE:-}")"
+  CORE_DIR="$(canon_dir "${c:-${o:-$HOME/Projects/Core}}")"
   CORE_NAME="$(basename "$CORE_DIR")"
-  ATTRIBUTION="${CLAUDE_PLUGIN_OPTION_ATTRIBUTION:-allow}"
-  MODEL_PROFILE="${CLAUDE_PLUGIN_OPTION_MODEL_PROFILE:-balanced}"
+  ATTRIBUTION="${a:-allow}"
+  MODEL_PROFILE="${m:-balanced}"
   APP_ID_PREFIX="$(coredev_get app-id-prefix)"
 }
 

@@ -34,7 +34,7 @@ The old crew (`github.com/rstrlnkv/CoreCrew`, read-only) is a source of lessons,
 |---|---|---|
 | D1 | The orchestrator is a skill (`task`) in the main session, not a subagent. | The old `lead` subagent re-read everything on every step and was most of the cost; in the main session it can talk to the user. |
 | D2 | Six agents; localizer stays separate from designer. Old `product`, `architect`, `lead`, `release` are not agents. | Owner's choice; architect/explorer come from feature-dev (D3), lead and release are `task` (D1, §10). |
-| D3 | coredev depends on one plugin, `feature-dev` (`code-architect`, `code-explorer`), declared in `plugin.json` `dependencies` so it installs with coredev. superpowers is not a dependency. | No duplicate roles. superpowers' brainstorming may only hand over to writing-plans, and its session hook pulls work away from the chain. |
+| D3 | coredev uses one other plugin, `feature-dev` (`code-architect`, `code-explorer`). It is not declared as a hard dependency: a hard dependency stops coredev loading when feature-dev comes from claude.ai sync or another marketplace; `task` checks for it at start. superpowers is not a dependency. | No duplicate roles. superpowers' brainstorming may only hand over to writing-plans, and its session hook pulls work away from the chain. |
 | D4 | Commit attribution is a setting (`attribution`: `allow` or `forbid`). With `forbid`, release checks there are no `Co-Authored-By` / `Generated with` lines. The owner sets `forbid`. | A personal rule must not be hard-coded in a universal plugin. |
 | D5 | Knowledge lines are shown in the `task` report and written only after the user's "ok", with a choice "this project / all projects". | The user does not read code; the report is where they approve. |
 | D6 | Only `task` and `new-standard` are command-only (`disable-model-invocation: true`); `new-project` triggers by meaning as today. Setup and release are not commands: they run inside `new-project` / `task`. | Fewer commands to remember; no per-turn description cost; no fights with other planning skills. |
@@ -62,9 +62,8 @@ The old crew (`github.com/rstrlnkv/CoreCrew`, read-only) is a source of lessons,
 ### 4.1 The plugin (this repo, public)
 ```
 .claude-plugin/
-  plugin.json          name "coredev", version 0.2.0, userConfig (§5), dependencies (D3)
-  marketplace.json     marketplace "corekit"; plugin "coredev"; renames {"corekit": "coredev"};
-                       allowCrossMarketplaceDependenciesOn for feature-dev's marketplace
+  plugin.json          name "coredev", version 0.2.0, userConfig (§5); no `dependencies` (D3)
+  marketplace.json     marketplace "corekit"; plugin "coredev"; renames {"corekit": "coredev"}
 skills/
   new-project/         as today; uses scripts/setup-core.sh; wiki templates per §8
   task/                SKILL.md; references/: paths.md, brief.md, report.md, release.md, adopt.md
@@ -137,8 +136,17 @@ Hooks read them as `CLAUDE_PLUGIN_OPTION_<KEY>`; skills and agents as `${user_co
 Scripts get values as arguments from the skill. `APP_ID_PREFIX` stays a `new-project` question,
 saved in `<Core>/.coredev` as `app-id-prefix:` (per user, rarely needed).
 
-To verify in phase 1: `~` expansion in a `directory` default; that a CLI install (which does not
-prompt) falls back to the defaults; behaviour for a plugin synced from claude.ai.
+Found in phase 1 (live check, Claude Code 2.1.316, `claude -p --plugin-dir`, unconfigured):
+`${user_config.*}` placeholders stay literal in skill text (`${CLAUDE_SKILL_DIR}` is
+substituted), and hooks get no `CLAUDE_PLUGIN_OPTION_*`. Scripts therefore treat a value that
+still contains the literal `${user_config.` as unset (`load_settings`: option, then default).
+The data folder id under `--plugin-dir` is `coredev-inline` (installed from the marketplace:
+`coredev-corekit`). A plugin with a hard dependency does not load when the dependency comes from
+claude.ai sync (`feature-dev@synced`): "unmet dependency" (D3).
+
+To confirm when installed from the marketplace: that `${user_config.*}` is substituted once the
+plugin is configured; `~` expansion in a `directory` default; that a CLI install (which does not
+prompt) falls back to the defaults.
 
 ### 5.2 Core skeleton (`scripts/setup-core.sh <core_dir>`)
 Run by `new-project` and `task` when `<core_dir>/.coredev` is missing, after showing the user
@@ -460,7 +468,7 @@ Windows: hooks need Git for Windows (Git Bash); full support is a later subproje
 
 ## 16. Testing and done
 - `bash tests/run.sh` green, one test file per part: `test_rename.sh`, `test_settings.sh`
-  (userConfig, dependencies), `test_setup_core.sh`, `test_adopt.sh`, `test_wiki_check.sh`,
+  (userConfig), `test_setup_core.sh`, `test_adopt.sh`, `test_wiki_check.sh`,
   `test_new_standard.sh` (+ `check-standard.sh` fixtures), `test_task_skill.sh` (paths, report
   labels, release and adopt references, flags), `test_agents.sh` (≤ 60 lines, six sections,
   frontmatter, `Agent` disallowed, checkers without Edit/Write, closing lines), one
@@ -469,14 +477,14 @@ Windows: hooks need Git for Windows (Git Bash); full support is a later subproje
   `$CORE_DIR/PROJECTS.md` when present — the list itself never enters the repo).
 - `claude plugin validate .` green.
 - `claude --plugin-dir .` loads: three commands, six `coredev:*` agents, the settings prompt.
-- Installs from the marketplace on a clean Claude Code config, with feature-dev pulled in.
+- Installs from the marketplace on a clean Claude Code config, with feature-dev installed.
 - End to end: `<Core>/test-coredev/` (hand-made: `CLAUDE.md` with `check:`, a wiki passing
   `wiki-check`, `code/` with a tiny bash script, its test and a planted bug);
   `/coredev:task fix <bug>` returns the §9.6 report with proof and a commit without attribution.
 - Hand-over: exact install and update commands for Mac and Windows; what the owner commits to Core.
 
 ## 17. Phases (stop after each for the owner's check)
-1. **Foundation:** rename and renames; `userConfig`; `dependencies`; move scripts to `scripts/`;
+1. **Foundation:** rename and renames; `userConfig`; move scripts to `scripts/`;
    data-folder tools and git hook shims; `setup-core.sh`; `install.sh` removed; migration note.
 2. **Wiki, knowledge, standards:** `reference/wiki.md`, `reference/knowledge.md`,
    `wiki-check.sh`, new-project wiki templates; `new-standard`; the owner's `versioning` and
