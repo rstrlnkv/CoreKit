@@ -66,4 +66,13 @@ assert_eq "$?" "2" "escaped cwd (quote, space, \\u) must still find the project"
 export CORE_DIR="$OLD_CORE"
 # a cwd that is not valid JSON-wise parseable lets the stop through
 printf '{"cwd":"/no/such/\\' | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "broken JSON passes"
+# a nested repo with the Core shape but outside the Core (other/proj/code): the hook stays inert
+O="$SANDBOX/other"; mkdir -p "$O/proj/code"
+git init -q "$O"; echo r > "$O/readme.txt"; git -C "$O" add -A; git -C "$O" commit -q -m o
+git init -q "$O/proj/code"; echo a > "$O/proj/code/a.txt"; git -C "$O/proj/code" add -A; git -C "$O/proj/code" commit -q -m a
+echo dirty > "$O/proj/code/new.txt"; echo dirty >> "$O/proj/notes.md"
+OUT=$(input "$O/proj/code" false | bash "$H" 2>&1); rc=$?
+assert_eq "$rc" "0" "non-Core other/proj/code must pass"
+assert_eq "$OUT" "" "hook must stay silent in a non-Core other/proj/code"
+assert_no_file "$O/proj/code/.git/new-project-stop-remind"
 finish

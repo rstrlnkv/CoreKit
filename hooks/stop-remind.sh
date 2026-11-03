@@ -2,18 +2,21 @@
 # Claude Code Stop hook: reminds Claude to run `save` when the code repo or this
 # project's docs have uncommitted changes. Reminds once per stop (stop_hook_active) and
 # once per set of changes, so it stays quiet while Claude waits for the user's approval.
+# Inert outside <Core>/<project>/ (spec section 14): a repo with the same shape elsewhere passes.
 # _locate.sh sits next to this file (old copies in <Core>/bin) or under ../scripts in the plugin;
 # `save` sits next to _locate.sh.
 D="$(dirname "$0")"
 [ -f "$D/_locate.sh" ] || D="$D/../scripts"
 . "$D/_locate.sh"
-. "$D/lib.sh"   # json_str; sits next to _locate.sh in the plugin and in the tools copy
+. "$D/lib.sh" 2>/dev/null || exit 0   # json_str, load_settings, project_of; next to _locate.sh
 SAVE="$(cd "$D" && pwd)/save"
 in=$(cat)
 printf '%s' "$in" | tr -d '\r\n' | grep -qE '"stop_hook_active"[[:space:]]*:[[:space:]]*true' && exit 0
 cwd=$(json_str "$in" cwd)
 [ -n "$cwd" ] && [ -d "$cwd" ] || exit 0
 cd "$cwd" 2>/dev/null || exit 0
+load_settings
+project_of "$cwd" >/dev/null || exit 0
 locate 2>/dev/null || exit 0
 dirty=""
 [ -n "$(git -C "$CODE" status --porcelain)" ] && dirty="code"
