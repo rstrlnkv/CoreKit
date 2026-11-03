@@ -1,0 +1,109 @@
+---
+name: task
+description: Run one development task through the coredev crew (fix, full feature, question, batch), with proof and one commit. Use /coredev:task <task>, release <version> or adopt <folder>.
+disable-model-invocation: true
+argument-hint: "<task> | release <version> | adopt <folder>"
+---
+
+# Task
+
+## Overview
+You are the orchestrator, in the main session. You do not write code: the crew does, one agent
+per step, and you carry the user's task from request to one verified commit. One `/coredev:task`
+call is one chain. Spec: `docs/specs/2026-11-03-coredev-design.md` § 9 (in the plugin repo).
+
+Detail lives in references, read when you reach that step:
+- `${CLAUDE_SKILL_DIR}/references/paths.md` — the six paths and the checkers' wave
+- `${CLAUDE_SKILL_DIR}/references/brief.md` — how to write a brief to an agent
+- `${CLAUDE_SKILL_DIR}/references/report.md` — the final report
+- `${CLAUDE_SKILL_DIR}/references/release.md` — the release postconditions (every chain that changed files)
+- `${CLAUDE_SKILL_DIR}/references/adopt.md` — bringing an existing project into the Core layout
+
+Shared files: `${CLAUDE_SKILL_DIR}/../../reference/wiki.md` (wiki rules),
+`${CLAUDE_SKILL_DIR}/../../reference/knowledge.md` (knowledge format),
+`${CLAUDE_SKILL_DIR}/../../scripts/wiki-check.sh`, `${CLAUDE_SKILL_DIR}/../../scripts/save`.
+
+## Language
+Talk to the user in their language, in plain words. Everything on disk (code, docs, commit
+messages, briefs) is English. Report labels (`Path:`, `Proof:` …) stay English.
+
+## Settings
+Settings arrive as `${user_config.core_dir}`, `${user_config.attribution}` and
+`${user_config.model_profile}`. A value that still reads literally `${user_config.` means the
+plugin is unconfigured: treat it as unset and use the defaults: `core_dir` `~/Projects/Core`,
+`attribution` `allow`, `model_profile` `balanced`.
+
+Model per role, from `model_profile`; pass it as the `model` of every Agent call:
+
+| Role | economy | balanced | strong |
+|---|---|---|---|
+| engineer, tester | haiku | sonnet | sonnet |
+| security, verifier, localizer, designer | sonnet | sonnet | opus |
+
+## Start
+1. **Core.** `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" ready`
+   (exit 0 = set up). If not, say in plain words that a one-time setup is needed and list what it
+   creates (a git repo `<Core>` with `standards/`, `knowledge/`, `.coredev`, `PROJECTS.md`); on
+   "ok" run `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/setup-core.sh" "${user_config.core_dir}"`.
+   Resolve `<Core>` to an absolute path (the setting may start with `~`) and use it everywhere:
+   `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" core-dir`.
+2. **Project.** The working directory must be inside `<Core>/<project>/`. If not: for `adopt`
+   follow `references/adopt.md`; for anything else say in one line that
+   `/coredev:new-project` (a new project) or `/coredev:task adopt <folder>` (an existing one)
+   brings it into the layout, and stop.
+3. **feature-dev.** Look at the agent types listed for your Agent tool. If
+   `feature-dev:code-architect` or `feature-dev:code-explorer` is missing, name the install
+   command `/plugin install feature-dev@claude-plugins-official`. Paths that need them stop
+   until it is installed: `full`, `fix` when more than one module is affected, and `question`
+   via code-explorer. Other paths go on.
+4. **Read** `<Core>/<project>/CLAUDE.md` and its `check: <command>` line. A line that still reads
+   `check: <set after scaffolding>` means unset: ask the user for the command and stop until you
+   have it. List the file names (not contents) in `<Core>/standards/`, `<Core>/knowledge/`
+   and `<Core>/<project>/docs/knowledge/`.
+5. **Choose the path** (`fix`, `full`, `question`, `batch`, `release`, `adopt`; see
+   `references/paths.md`) and name it in the first line you say to the user.
+
+## Running the chain
+Briefs follow `references/brief.md`. Each agent is `coredev:<role>`: `coredev:engineer`,
+`coredev:tester`, `coredev:security`, `coredev:verifier`, `coredev:localizer`,
+`coredev:designer`. Architect and explorer are `feature-dev:code-architect` and
+`feature-dev:code-explorer`.
+
+## Rules
+1. One author of changes: engineer. A checker's finding goes back to engineer.
+2. tester runs before security, never on the same place at once.
+3. Budget: each agent has `maxTurns: 60`; at the limit it returns what is done and what is left.
+   If an agent ignores the limit, put a budget sentence in its brief.
+4. At most three engineer passes per chain (a checkers' wave counts as one). The third failed
+   pass: stop and report. Two fixes on one premise that fail the same check: state the premise
+   in one sentence; make no third attempt on it.
+5. Dispatch in the foreground, always. A wave is several Agent calls in one message.
+6. Every Agent call passes `subagent_type` `coredev:<role>` and the `model` from the table above.
+7. Only the touched modules' tests per pass; the full `check:` once, at the end, as its own
+   tester call.
+8. Never retell `CLAUDE.md` in a brief; give paths.
+9. A reply without `Standards:` from a role whose `applies-to` standards exist in
+   `<Core>/standards/` (or the project's `docs/standards/`) goes back once, asking for the line.
+   A second reply without it: note it in `Open`.
+10. Extra tasks in one brief are not done; they come back in `Open`.
+11. Wiki rules are `${CLAUDE_SKILL_DIR}/../../reference/wiki.md`: engineer keeps the wiki,
+    verifier runs `wiki-check.sh`. You do not edit wiki pages yourself.
+12. Never tag, never push. With `${user_config.attribution}` = `forbid`, no commit message gets a
+    `Co-Authored-By` or `Generated with` line.
+
+## Knowledge
+Every agent reply ends with `Knowledge line: <symptom → cause → guard | none>`. Collect them.
+- None: go to release.
+- Some: show them in plain words, one by one. For each the user answers ok / no, and, if ok,
+  "this project / all projects". Write accepted lines as the format in
+  `${CLAUDE_SKILL_DIR}/../../reference/knowledge.md` says: into
+  `<Core>/<project>/docs/knowledge/<role>.md` (this project) or `<Core>/knowledge/<role>.md`
+  (all projects). They go into the same commit as the chain (release step 5).
+- A line whose cause already appears in another project's knowledge or in
+  `<Core>/knowledge/` is a recurring lesson: offer to turn it into a standard with
+  `/coredev:new-standard` (pass the line). Do not write the standard yourself.
+
+## Finish
+Run `references/release.md` (for every chain that changed files), then give the report in
+`references/report.md`. No `Proof` → no report. Stopped chains also get a report, with
+`Commit: stopped — <why>`.
