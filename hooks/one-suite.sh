@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Claude Code PreToolUse hook on Bash: holds a test run while another one is running on this
+# machine, and lets it through when that one ends. Two suites at once fail each other — they share
+# settings, the Trash, $TMPDIR and a scratch path — and a note in a project's knowledge saying so
+# does not stop anyone from doing it. The hook waits here rather than refusing: a refused agent has
+# nothing to wait with, so it asks again or looks at `ps` once per step, and every step re-reads its
+# whole context. Only a wait longer than ONE_SUITE_WAIT seconds is refused (exit 2; stderr goes back
+# to the caller: "run the same command again").
+# Inert outside <Core>/<project>/: with no cwd, or a cwd that is not inside a Core project, it exits 0
+# at once, before it looks at the command or at any process (spec section 14, item 2).
+# Only the command is read, never the description: "see whether swift test runs" is not a test run.
+# Anything this hook cannot judge passes (exit 0): a stuck guard would stop every Bash call, which is
+# worse than one clash. It never prints to stdout. No jq, no python. Without pgrep it lets everything
+# through.
+#
+# Env knobs, for tests: ONE_SUITE_PROCS (the process pattern, replaces the default), ONE_SUITE_WAIT
+# (seconds to wait; default 480), ONE_SUITE_GRACE (seconds a turn stays fresh; default 10),
+# ONE_SUITE_TURN (the turn directory).
+# The default wait of 480 s must stay under this hook's `timeout` in hooks/hooks.json (Task 19 sets
+# it to 540) and under the stream watchdog, which stops an agent that is silent for 600 s.
+SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
+in=""; [ -t 0 ] || in="$(cat)"
+. "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
+
+# Inert outside the Core.
+cwd="$(json_str "$in" cwd)"
+[ -n "$cwd" ] || exit 0
+load_settings
+project_of "$cwd" >/dev/null 2>&1 || exit 0
+
+cmd="$(json_str "$in" command)"
+[ -n "$cmd" ] || exit 0
+
+# Only command words count. A heredoc's body is cut at its `<<`; a new line (or CR) separates
+# commands like `;` does; then quoted text (a commit message, a `python -c` body: 'x' or "x", with \"
+# inside double quotes) is cut. A command that merely mentions a runner is no run.
+bare="$(printf '%s' "${cmd%%<<*}" | LC_ALL=C tr '\n\r\t' ';; ' \
+  | LC_ALL=C sed -E "s/('[^']*'|\"([^\"\\\\]|\\\\.)*\")//g")"
+
+# A runner is a command word: after a separator, optionally behind env assignments and wrappers
+# (time, sudo, uv run, ...) and a path (./gradlew, .venv/bin/pytest); `cat tests.sh`, `pip install
+# pytest` and `grep -rn pytest .` are not runs. A project's test script is run as a command
+# (`bash Scripts/test.sh`, `./run-tests.sh`); `cat Scripts/test.sh` reads it and is not a run.
+sp='[[:space:]]'; stop='[^[:space:];&|]'
+pre="(^|[;&|(])$sp*(([A-Za-z_][A-Za-z0-9_]*=$stop*|then|do|else|time|exec|command|nohup|sudo|env|nice|xcrun|caffeinate|(uv|poetry|pipenv)$sp+run|bundle$sp+exec)$sp+)*($stop*/)?"
+end="($sp|[;&|)]|\$)"
+runners="swift$sp+test$end"
+runners="$runners|xcodebuild[^;&|]*$sp+test$end"
+runners="$runners|npm$sp+(run$sp+)?test([:_-]$stop*)?$end"
+runners="$runners|npx($sp+-$stop+)*$sp+(test|vitest)$end"
+runners="$runners|vitest$sp+run$end"
+runners="$runners|gradlew[^;&|]*[[:space:]:][a-zA-Z]*[tT]est"
+runners="$runners|(python[0-9.]*$sp+-m$sp+)?pytest$end"
+runners="$runners|cargo($sp+[+-]$stop*)*$sp+test$end"
+runners="$runners|flutter$sp+test$end"
+runners="$runners|go$sp+test$end"
+script="(^|[;&|(])$sp*(([A-Za-z_][A-Za-z0-9_]*=$stop*|time|exec|nohup|sudo)$sp+)*((ba|z)?sh($sp+-[a-z]+)*$sp+)?$stop*tests?\\.sh$end"
+printf '%s' "$bare" | LC_ALL=C grep -qE "${pre}(${runners})|${script}" || exit 0
+command -v pgrep >/dev/null 2>&1 || exit 0
+
+# ONE_SUITE_PROCS replaces the process pattern (ERE, matched against whole command lines by
+# `pgrep -f`), so this hook's own tests do not depend on what happens to be running on the machine.
+# Every alternative is anchored on a command word, so an editor or `grep` with the name of a runner
+# as an argument does not count; the hook's own command line matches nothing here.
+default_procs='(^|/)swift[- ]test( |$)|(^|/)xctest( |$)|(^|/)xcodebuild( .*)? test( |$)|node_modules/(\.bin/vitest|vitest/dist/)|(^|/)vitest run( |$)|(^|/)gradlew( .*)? ([^ ]*[:-])?[tT]est[^ ]*( |$)|Gradle Test Executor|(^|/)pytest( |$)|(^|/)py\.test( |$)|-m pytest( |$)|(^|/)cargo( \+[^ ]+)? test( |$)|(^|/)flutter test( |$)|flutter_tools\.snapshot test( |$)|(^|/)go test( |$)|/go-build[0-9]+/.*\.test( |$)|(^|/)(ba|z)?sh( -[a-z]+)* [^ ]*tests?\.sh( |$)'
+procs="${ONE_SUITE_PROCS:-$default_procs}"
+
+# The turn: a directory only one waiter can make. A run that was let through takes a moment to
+# appear among the processes, and without the turn every waiter would see "nothing running" in that
+# moment and start together. A turn older than its grace belongs to a run that has started or never
+# will, and the next waiter takes it.
+turn="${ONE_SUITE_TURN:-${TMPDIR:-/tmp}/coredev-one-suite.turn}"
+grace="${ONE_SUITE_GRACE:-10}"; limit="${ONE_SUITE_WAIT:-480}"
+case "$grace" in ''|*[!0-9]*) grace=10 ;; esac
+case "$limit" in ''|*[!0-9]*) limit=480 ;; esac
+start="$(date +%s)"; running=""
+while :; do
+  running="$(pgrep -f "$procs" 2>/dev/null | command grep -vx "$$" | head -3 | tr '\n' ' ')"
+  now="$(date +%s)"
+  if [ -z "$running" ]; then
+    if mkdir "$turn" 2>/dev/null; then echo "$now" > "$turn/at"; exit 0; fi
+    at="$(cat "$turn/at" 2>/dev/null)"; case "$at" in ''|*[!0-9]*) at=0 ;; esac
+    [ $((now - at)) -ge "$grace" ] && { rm -rf "$turn"; continue; }
+  fi
+  [ $((now - start)) -ge "$limit" ] && break
+  sleep 2
+done
+echo "one-suite: a test run is still in progress after ${limit} s of waiting (pid ${running:-starting}) — run the same command again: this hook waits for it, do not poll it yourself" >&2
+exit 2
