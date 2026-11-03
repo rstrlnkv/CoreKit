@@ -12,7 +12,7 @@ Standards: <applied, or "none in Core">
 Open: <what is left, or "nothing">
 Knowledge: <saved lines and where | none>
 Cost: <N agent calls, K engineer passes>
-Commit: <hash and message | stopped — why>
+Commit: <hash and message | none — no files changed | stopped — why>
 ```
 
 ## Rules
@@ -27,5 +27,6 @@ Commit: <hash and message | stopped — why>
 - `Knowledge` names each saved line and its level (this project / all projects), and any line
   offered as a standard.
 - `Cost` counts every Agent call and every engineer pass.
-- `Commit` is the hash and message from `save`; for a stopped chain `stopped — <why>` and the
+- `Commit` is the hash and message from `save`; when no file changed (a `question` with no
+  accepted knowledge line) `none — no files changed`; for a stopped chain `stopped — <why>` and the
   step that failed.

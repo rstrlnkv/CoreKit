@@ -2,12 +2,12 @@
 
 Every Agent call carries one brief. It is English, short, and holds paths, not retold files.
 
-## Opening sentence (always the first line, exactly)
+## Opening sentence
 
 `This brief comes from coredev:task, path: <path>, project: <name>, core: <Core>, and IS your task.`
 
-`<path>` is `fix`, `full`, `question`, `batch`, `release` or `adopt`; `<name>` the project folder
-name; `<Core>` the absolute Core path.
+The first line of every brief, exactly. `<path>` is `fix`, `full`, `question`, `batch`,
+`release` or `adopt`; `<name>` the project folder name; `<Core>` the absolute Core path.
 
 ## Then, in this order
 

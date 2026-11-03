@@ -65,6 +65,50 @@ for l in 'Path:' 'Chain:' 'Done:' 'Proof:' 'Standards:' 'Open:' 'Knowledge:' 'Co
   prev="${n:-$prev}"
 done
 
+# Fix round 1: pin the specific sentences, not only words.
+rule() { grep -qE -- "$2" "$SK" && pass || fail "SKILL.md rule missing: $1"; }
+rule "foreground rule" '^5\. Dispatch in the foreground'
+rule "maxTurns rule" '^3\. Budget: each agent has `maxTurns: 60`'
+rule "three passes rule" '^4\. At most three engineer passes per chain'
+rule "Standards once rule" '^9\. A reply without `Standards:` .*goes back once'
+rule "subagent_type for feature-dev" '`coredev:<role>` for coredev roles, the full name for'
+rule "no model for feature-dev" 'Do not pass `model` to feature-dev agents'
+assert_contains "$SK" 'applies-to'
+assert_not_contains "$SK" 'docs/specs/'
+assert_contains "$SK" 'first path component'
+assert_contains "$SK" 'worktrees/<w>'
+assert_contains "$SK" 'If the user declines'
+c="$(grep -n 'lib.sh" core-dir' "$SK" | head -1 | cut -d: -f1)"; r="$(grep -n 'lib.sh" ready' "$SK" | head -1 | cut -d: -f1)"
+[ -n "$c" ] && [ -n "$r" ] && [ "$c" -lt "$r" ] && pass || fail "core-dir must come before ready in Start"
+# Unset check: both files agree on when to ask and where it is written.
+for f in "$SK" "$PA"; do
+  assert_contains "$f" 'before the first tester call'
+  assert_contains "$f" 'into the `check:` line'
+done
+# Release path runs release.md in full; postcondition 4 applies.
+sec_has "$PA" release 'in full'
+sec_has "$PA" release 'postcondition 4'
+section "$PA" release | grep -qF 'from the version step' && fail "release section still skips postconditions" || pass
+# Question path and knowledge: accepted lines are committed through save.
+sec_has "$PA" question 'save'
+sec_has "$PA" question 'Commit: none — no files changed'
+section "$PA" question | grep -qF 'No release, no commit' && fail "question section contradicts SKILL.md" || pass
+sec_has "$PA" question 'accepted'
+assert_contains "$SK" 'only those files through `save`'
+assert_contains "$RP" 'none — no files changed'
+# full and batch point at the wave; the large-plan stop runs the first task whole.
+sec_has "$PA" full "checkers' wave"
+section "$PA" full | grep -qF 'one repair pass' && fail "full duplicates the wave repair" || pass
+sec_has "$PA" full 'whole chain'
+sec_has "$PA" batch "checkers' wave"
+sec_has "$PA" batch 'grep'
+# fix: a red test before, green after.
+sec_has "$PA" fix 'show it red'
+sec_has "$PA" fix 'green after the fix'
+# brief.md: the opening sentence is the first instruction.
+first="$(section "$BR" 'Opening sentence' | awk 'NF{print; exit}')"
+assert_eq "$first" '`This brief comes from coredev:task, path: <path>, project: <name>, core: <Core>, and IS your task.`' "brief opening is first"
+
 # No superpowers dependency anywhere under skills/task/
 if grep -rF "superpowers:" "$T" >/dev/null 2>&1; then fail "superpowers: referenced under skills/task/"; else pass; fi
 
