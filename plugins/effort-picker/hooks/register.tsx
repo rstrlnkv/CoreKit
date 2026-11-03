@@ -117,7 +117,7 @@ async function runPick($: EngineInterface, options: { mode?: unknown; classifier
   }
   let pick
   try {
-    pick = await classify($, h.text, now, options.classifier === 'sonnet' ? MODELS.sonnet : MODELS.haiku)
+    pick = await classify($, h.text, now, options.classifier === 'haiku' ? MODELS.haiku : MODELS.sonnet)
   } catch (err) {
     await log($, 'classify', err)
     return

@@ -103,7 +103,7 @@ Every failure (classifier, config, UI) is caught, written to
 | Key | Options | Default |
 |---|---|---|
 | `mode` | `suggest`, `auto`, `off` | `suggest` |
-| `classifier` | `haiku`, `sonnet` | per E5 |
+| `classifier` | `haiku`, `sonnet` | `sonnet` (E5: on 2026-11-04 Sonnet 9/9, Haiku 8/9, missing xhigh on the unattended app) |
 
 `/effort-picker auto|suggest|off|on` changes the mode for every session and is kept in
 `$.store`; it wins over the setting. `on` returns to the last mode that was not `off`.

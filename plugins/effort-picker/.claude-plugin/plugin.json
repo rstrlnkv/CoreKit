@@ -19,9 +19,9 @@
     "classifier": {
       "type": "string",
       "title": "Classifier model",
-      "description": "The model that reads each prompt and picks the level: haiku (faster, cheaper) or sonnet.",
+      "description": "The model that reads each prompt and picks the level: sonnet (more accurate) or haiku (faster, cheaper).",
       "options": ["haiku", "sonnet"],
-      "default": "haiku"
+      "default": "sonnet"
     }
   }
 }

@@ -170,20 +170,20 @@ test('the payload is cut and the classifier model follows the setting', async ($
   await start($)
   await submit($, 'p'.repeat(5000))
   await step($, 'medium')
-  expect(w.model).toEqual(['claude-haiku-5-5'])
+  expect(w.model).toEqual(['claude-sonnet-5-5'])
   expect(w.prompts[0]!.includes('p'.repeat(4000))).toBe(true)
   expect(w.prompts[0]!.includes('p'.repeat(4001))).toBe(false)
   expect(w.prompts[0]!.includes('r'.repeat(600))).toBe(true)
   expect(w.prompts[0]!.includes('r'.repeat(601))).toBe(false)
 })
 
-test('sonnet when the setting says so', { options: { classifier: 'sonnet' } }, async ($, on) => {
+test('haiku when the setting says so', { options: { classifier: 'haiku' } }, async ($, on) => {
   const w = world(on)
   w.answer = '{"level":"keep","why":"w"}'
   await start($)
   await submit($, 'fix the login')
   await step($, 'medium')
-  expect(w.model).toEqual(['claude-sonnet-5-5'])
+  expect(w.model).toEqual(['claude-haiku-5-5'])
 })
 
 test('a Russian prompt gets the question in Russian', async ($, on) => {
