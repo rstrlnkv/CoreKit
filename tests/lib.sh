@@ -30,6 +30,9 @@ new_sandbox() {
   export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com
 }
 
+# setup_core — creates the Core skeleton in $CORE_DIR (what scaffold.sh requires).
+setup_core() { bash "$SCRIPTS/setup-core.sh" "$CORE_DIR" >/dev/null; }
+
 # Checksum of all files under a dir, excluding .git internals.
 tree_sum() { (cd "$1" && find . -type f -not -path '*/.git/*' | LC_ALL=C sort | xargs cksum); }
 

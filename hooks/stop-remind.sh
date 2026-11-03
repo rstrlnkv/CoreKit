@@ -2,10 +2,12 @@
 # Claude Code Stop hook: reminds Claude to run `save` when the code repo or this
 # project's docs have uncommitted changes. Reminds once per stop (stop_hook_active) and
 # once per set of changes, so it stays quiet while Claude waits for the user's approval.
-# _locate.sh sits next to this file in <Core>/bin and under ../scripts in the plugin.
+# _locate.sh sits next to this file (old copies in <Core>/bin) or under ../scripts in the plugin;
+# `save` sits next to _locate.sh.
 D="$(dirname "$0")"
 [ -f "$D/_locate.sh" ] || D="$D/../scripts"
 . "$D/_locate.sh"
+SAVE="$(cd "$D" && pwd)/save"
 in=$(cat)
 printf '%s' "$in" | grep -qE '"stop_hook_active" *: *true' && exit 0
 cwd=$(printf '%s' "$in" | sed -nE 's/.*"cwd" *: *"([^"]*)".*/\1/p')
@@ -31,5 +33,5 @@ changes() {
 sum=$({ changes "$CODE"; changes "$CORE" $CORE_PATHS; } | cksum)
 [ "$(cat "$STATE" 2>/dev/null)" = "$sum" ] && exit 0
 echo "$sum" > "$STATE"
-echo "Uncommitted changes in $dirty. If this working step is finished, run: bash \"$CORE/bin/save\" \"<short English message>\". If you are waiting for the user's answer or approval, do not save; just end your turn." >&2
+echo "Uncommitted changes in $dirty. If this working step is finished, run: bash \"$SAVE\" \"<short English message>\". If you are waiting for the user's answer or approval, do not save; just end your turn." >&2
 exit 2

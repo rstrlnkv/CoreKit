@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/lib.sh"
-new_sandbox
+new_sandbox; setup_core
 bash "$SKILL/scripts/scaffold.sh" --name hook-app >/dev/null
 P="$CORE_DIR/hook-app"; C="$P/code"
 assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P"

@@ -30,7 +30,7 @@ Claude Code asks for the plugin options when the plugin is enabled. Below, `<Cor
 ## Layout (do not improvise another one)
 ```
 <Core>/                          private GitHub repo <CoreName> (default ~/Projects/Core)
-  PROJECTS.md, bin/, hooks/
+  .coredev, PROJECTS.md, README.md, standards/, knowledge/
   <name>/CLAUDE.md, docs/, .claude/rules/
   <name>/code/                   separate git repo "<name>"; Claude Code is launched here
 ```
@@ -54,7 +54,15 @@ A stage advances only when its step really succeeded. If a generator, build or `
 cannot run (tool missing, error), stop at the current stage, explain in plain words what to
 install or fix, and give the exact command; do not mark the stage done.
 
-**0. Preflight.** `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/scripts/preflight.sh"`.
+**0. Core and preflight.** First check that the Core is set up:
+`CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" ready`
+(exit 0 = set up; it means `<Core>/.coredev` has a `schema:` line). If it fails, tell the user in
+plain words that a one-time setup is needed and list what it creates in `<Core>`: a git repo
+(only on this computer; nothing goes to GitHub), `.gitignore`, `README.md`, `PROJECTS.md`,
+`standards/README.md`, `knowledge/README.md` and `.coredev`, in one commit "Set up Core". Existing
+files are never overwritten. Wait for their "ok", then run
+`CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/setup-core.sh" "${user_config.core_dir}"`.
+Then preflight: `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/scripts/preflight.sh"`.
 Explain any FAIL in plain words with the fix; WARN about
 non-Latin paths means Android/Flutter builds may break — say so. Stop on FAIL.
 
@@ -81,7 +89,7 @@ This runs on every entry to stage 4, so it also happens when resuming at `decide
 dir**, then `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/scripts/merge-generated.sh" <tmp>/<folder> <Core>/<name>/code`. Never run a
 generator with `--force`/`--overwrite` in `code/`. Fill the Commands and Stack sections of
 `CLAUDE.md`. `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/install-hooks.sh" <Core>/<name>`. Then from `code/`:
-`bash <Core>/bin/save "Scaffold <stack> project"`. Set `stage: scaffolded`.
+`bash "${CLAUDE_SKILL_DIR}/../../scripts/save" "Scaffold <stack> project"`. Set `stage: scaffolded`.
 
 **5. GitHub.** Ask separately before each repo is created, naming it and its visibility:
 - docs repo (once): `gh repo create <CoreName> --private --source <Core> --push`
@@ -111,7 +119,8 @@ Every `…` below stands for `CORE_DIR="${user_config.core_dir}"`.
 |------|---------|
 | App id prefix | `… bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" get\|set app-id-prefix [<prefix>]` |
 | Check tools / name | `… bash "${CLAUDE_SKILL_DIR}/scripts/preflight.sh" [--name <name>]` |
+| Core set up? / set up | `… bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" ready` · `… bash "${CLAUDE_SKILL_DIR}/../../scripts/setup-core.sh" "${user_config.core_dir}" [--dry-run]` |
 | Create skeleton | `… bash "${CLAUDE_SKILL_DIR}/scripts/scaffold.sh" --name <name> --purpose "<text>" [--dry-run]` |
 | Copy generated app | `… bash "${CLAUDE_SKILL_DIR}/scripts/merge-generated.sh" <generated> <code>` |
 | Protective hooks | `… bash "${CLAUDE_SKILL_DIR}/../../scripts/install-hooks.sh" <project_dir>` |
-| Save / undo a step | `bash <Core>/bin/save "<msg>" [--push]` · `bash <Core>/bin/undo-step` |
+| Save / undo a step | `bash "${CLAUDE_SKILL_DIR}/../../scripts/save" "<msg>" [--push]` · `bash "${CLAUDE_SKILL_DIR}/../../scripts/undo-step"` |

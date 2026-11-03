@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Creates a project skeleton in $CORE_DIR/<name>/ from templates.
-# Never overwrites existing files. Usage:
+# Never overwrites existing files. Needs a set-up Core (scripts/setup-core.sh); exits 3 if not.
+# Usage:
 #   bash scaffold.sh --name <name> [--purpose "<text>"] [--dry-run]
 # Env: CORE_DIR overrides the plugin option core_dir (CLAUDE_PLUGIN_OPTION_CORE_DIR); see scripts/lib.sh
 set -u
@@ -28,13 +29,19 @@ if ! LC_ALL=C bash -c '[[ "$1" =~ ^[a-z][a-z0-9-]{1,38}[a-z0-9]$ ]]' _ "$NAME"; 
   exit 2
 fi
 
+if ! core_ready; then
+  echo "Core is not set up at $CORE_DIR: run setup-core.sh first" >&2
+  exit 3
+fi
+
 P="$CORE_DIR/$NAME"
 DATE="$(date +%Y-%m-%d)"
 
 # Escape a value for use as a sed replacement with '|' delimiter.
 esc() { printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'; }
 
-render() {  # render <template> <dest>
+# render <template> <dest> — used by lib.sh's put
+render() {
   sed -e "s|{{NAME}}|$(esc "$NAME")|g" \
       -e "s|{{PURPOSE}}|$(esc "$PURPOSE")|g" \
       -e "s|{{PROJECT_DIR}}|$(esc "$P")|g" \
@@ -43,48 +50,7 @@ render() {  # render <template> <dest>
       -e "s|{{DATE}}|$DATE|g" "$1" > "$2"
 }
 
-# put <template> <dest> [copy] — create dest from template unless it exists.
-put() {
-  local src="$1" dest="$2" mode="${3:-render}"
-  if [ -e "$dest" ]; then echo "skipped ${dest#$CORE_DIR/}"; return; fi
-  if [ $DRY -eq 1 ]; then echo "would create ${dest#$CORE_DIR/}"; return; fi
-  mkdir -p "$(dirname "$dest")"
-  if [ "$mode" = copy ]; then cp "$src" "$dest"; else render "$src" "$dest"; fi
-  echo "created ${dest#$CORE_DIR/}"
-}
-
-mkdir_p() {
-  if [ -d "$1" ]; then return; fi
-  if [ $DRY -eq 1 ]; then echo "would create ${1#$CORE_DIR/}/"; return; fi
-  mkdir -p "$1"; echo "created ${1#$CORE_DIR/}/"
-}
-
-git_init() {  # git_init <dir>
-  if [ -d "$1/.git" ]; then echo "skipped ${1#$CORE_DIR/}/.git"; return; fi
-  if [ $DRY -eq 1 ]; then echo "would create ${1#$CORE_DIR/}/.git"; return; fi
-  git init -q "$1" && git -C "$1" symbolic-ref HEAD refs/heads/main
-  echo "created ${1#$CORE_DIR/}/.git"
-}
-
-# Core repo
-mkdir_p "$CORE_DIR"
-git_init "$CORE_DIR"
-put "$TPL/core/gitignore"   "$CORE_DIR/.gitignore" copy
-put "$TPL/core/README.md"   "$CORE_DIR/README.md" copy
-put "$TPL/core/PROJECTS.md" "$CORE_DIR/PROJECTS.md" copy
-
-# Shared commands and hook sources (copied once; never overwritten)
-put "$ROOT_DIR/scripts/save"                "$CORE_DIR/bin/save" copy
-put "$ROOT_DIR/scripts/undo-step"           "$CORE_DIR/bin/undo-step" copy
-put "$ROOT_DIR/scripts/_locate.sh"          "$CORE_DIR/bin/_locate.sh" copy
-put "$ROOT_DIR/hooks/stop-remind.sh"        "$CORE_DIR/bin/stop-remind.sh" copy
-put "$ROOT_DIR/scripts/install-hooks.sh"  "$CORE_DIR/bin/install-hooks" copy
-for h in blocked-patterns pre-commit-code pre-push-code pre-push-core; do
-  put "$ROOT_DIR/scripts/git-hooks/$h" "$CORE_DIR/hooks/$h" copy
-done
-[ $DRY -eq 1 ] || chmod +x "$CORE_DIR/bin/save" "$CORE_DIR/bin/undo-step" "$CORE_DIR/bin/install-hooks" 2>/dev/null
-
-# Project docs
+# Project docs (the Core itself comes from setup-core.sh)
 put "$TPL/CLAUDE.md.tmpl"            "$P/CLAUDE.md"
 put "$TPL/docs/INDEX.md.tmpl"        "$P/docs/INDEX.md"
 put "$TPL/docs/brief.md.tmpl"        "$P/docs/brief.md"

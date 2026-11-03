@@ -12,7 +12,7 @@ locate || exit 1
 # Make sure protective hooks are in place.
 if [ ! -x "$MAIN/.git/hooks/pre-commit" ] || [ ! -x "$MAIN/.git/hooks/pre-push" ] || \
    [ ! -r "$MAIN/.git/hooks/blocked-patterns" ] || [ ! -x "$CORE/.git/hooks/pre-push" ]; then
-  CORE_DIR="$CORE" bash "$CORE/bin/install-hooks" "$PROJECT" >/dev/null || exit 1
+  CORE_DIR="$CORE" bash "$(dirname "$0")/install-hooks.sh" "$PROJECT" >/dev/null || exit 1
 fi
 
 ID=$(date +%Y%m%d-%H%M%S); n=1; base="$ID"

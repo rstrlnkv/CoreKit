@@ -2,8 +2,22 @@
 source "$(dirname "$0")/lib.sh"
 S="$SKILL/scripts/scaffold.sh"
 
-# --- valid name creates the full layout
+# --- Core not set up: scaffold refuses (exit 3) and creates nothing
 new_sandbox
+assert_exit 3 bash "$S" --name demo-app
+echo "$OUT" | grep -qF "Core is not set up at $CORE_DIR: run setup-core.sh first" && pass || fail "message: $OUT"
+assert_no_file "$CORE_DIR"
+assert_exit 3 bash "$S" --name demo-app --dry-run
+assert_no_file "$CORE_DIR"
+# a .coredev without "schema:" still counts as not set up (e.g. only an app id prefix)
+mkdir -p "$CORE_DIR"; printf 'app-id-prefix: com.x\n' > "$CORE_DIR/.coredev"
+assert_exit 3 bash "$S" --name demo-app
+assert_no_file "$CORE_DIR/demo-app"
+# an invalid name is reported before the Core check
+assert_exit 2 bash "$S" --name "Bad Name"
+
+# --- valid name creates the full layout
+new_sandbox; setup_core
 assert_exit 0 bash "$S" --name demo-app --purpose "Test app"
 P="$CORE_DIR/demo-app"
 for f in CLAUDE.md docs/INDEX.md docs/brief.md docs/architecture.md \
@@ -17,6 +31,8 @@ assert_dir "$CORE_DIR/.git"
 assert_file "$CORE_DIR/.gitignore"
 assert_contains "$CORE_DIR/.gitignore" "*/code/"
 assert_file "$CORE_DIR/README.md"
+# scaffold copies no machinery into Core
+assert_no_file "$CORE_DIR/bin"; assert_no_file "$CORE_DIR/hooks"
 
 # docs pages have full YAML front matter
 for f in INDEX.md brief.md architecture.md decisions/001-stack-and-architecture.md; do
@@ -54,19 +70,19 @@ assert_eq "$before" "$after" "tree changed on re-run"
 
 # --- invalid names
 for bad in MyApp "my app" проект 1app a -app app- ; do
-  new_sandbox
+  new_sandbox; setup_core
   assert_exit 2 bash "$S" --name "$bad"
   assert_no_file "$CORE_DIR/$bad"
 done
 
 # --- dry run touches nothing
-new_sandbox
+new_sandbox; setup_core
 assert_exit 0 bash "$S" --name dry-app --dry-run
-assert_no_file "$CORE_DIR"
+assert_no_file "$CORE_DIR/dry-app"
 echo "$OUT" | grep -q 'would create' && pass || fail "dry-run printed nothing"
 
 # a purpose with line breaks becomes one line
-new_sandbox
+new_sandbox; setup_core
 assert_exit 0 bash "$S" --name nl-app --purpose "$(printf 'First line.\r\nSecond line.')"
 assert_eq "$(grep -c 'nl-app' "$CORE_DIR/PROJECTS.md")" "1" "PROJECTS.md entry split"
 assert_contains "$CORE_DIR/PROJECTS.md" "First line. Second line."

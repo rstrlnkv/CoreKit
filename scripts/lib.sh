@@ -24,6 +24,7 @@ canon_dir() {
   done
   c="$(cd -P "$base" 2>/dev/null && pwd)" || { printf '%s\n' "$p"; return 0; }
   [ "$c" = "/" ] && c=""
+  [ -z "$c$rest" ] && c="/"
   printf '%s%s\n' "$c" "$rest"
 }
 
@@ -39,6 +40,20 @@ coredev_get() {
     esac
   done < "$f"
   return 0
+}
+
+# core_ready — exit 0 when $CORE_DIR/.coredev has a line "schema: <n>" (n = digits), else 1.
+# A .coredev that only holds other keys (e.g. app-id-prefix) does not count as a set-up Core.
+core_ready() {
+  local f="${CORE_DIR:-}/.coredev" line
+  [ -n "${CORE_DIR:-}" ] && [ -f "$f" ] || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    case "$line" in
+      "schema: "?*) case "${line#"schema: "}" in *[!0-9]*) ;; *) return 0 ;; esac ;;
+    esac
+  done < "$f"
+  return 1
 }
 
 # coredev_set <key> <value> — writes "key: value" in $CORE_DIR/.coredev: replaces the first
@@ -78,12 +93,50 @@ load_settings() {
   APP_ID_PREFIX="$(coredev_get app-id-prefix)"
 }
 
-# CLI: bash lib.sh get <key> | set <key> <value>
+# --- Helpers that create things in the Core. They honour DRY=1 (print "would create", touch
+# nothing) and print paths relative to $CORE_DIR ("." for the Core itself).
+
+# rel_core <path> — path relative to $CORE_DIR.
+rel_core() {
+  if [ "$1" = "$CORE_DIR" ]; then printf '.'; else printf '%s' "${1#"$CORE_DIR"/}"; fi
+}
+
+# put <template> <dest> [copy] — create dest from template unless it exists. Default mode
+# renders placeholders through the caller's render() function; "copy" copies the file as is.
+put() {
+  local src="$1" dest="$2" mode="${3:-render}"
+  if [ -e "$dest" ]; then echo "skipped $(rel_core "$dest")"; return 0; fi
+  if [ "${DRY:-0}" -eq 1 ]; then echo "would create $(rel_core "$dest")"; return 0; fi
+  mkdir -p "$(dirname "$dest")" || return 1
+  if [ "$mode" = copy ]; then cp "$src" "$dest" || return 1; else render "$src" "$dest" || return 1; fi
+  echo "created $(rel_core "$dest")"
+}
+
+# mkdir_p <dir> — create a directory, announce it only when it is new.
+mkdir_p() {
+  if [ -d "$1" ]; then return 0; fi
+  if [ "${DRY:-0}" -eq 1 ]; then echo "would create $(rel_core "$1")/"; return 0; fi
+  mkdir -p "$1" || return 1
+  echo "created $(rel_core "$1")/"
+}
+
+# git_init <dir> — git init with branch main, unless <dir>/.git exists.
+git_init() {
+  local rel; rel="$(rel_core "$1")"
+  if [ -d "$1/.git" ]; then echo "skipped $rel/.git"; return 0; fi
+  if [ "${DRY:-0}" -eq 1 ]; then echo "would create $rel/.git"; return 0; fi
+  mkdir -p "$1" || return 1
+  git init -q "$1" && git -C "$1" symbolic-ref HEAD refs/heads/main || return 1
+  echo "created $rel/.git"
+}
+
+# CLI: bash lib.sh get <key> | set <key> <value> | ready (exit 0 when core_ready)
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   load_settings
   case "${1:-}" in
     get) [ $# -eq 2 ] || { echo "Usage: lib.sh get <key>" >&2; exit 2; }; coredev_get "$2" ;;
     set) [ $# -eq 3 ] || { echo "Usage: lib.sh set <key> <value>" >&2; exit 2; }; coredev_set "$2" "$3" ;;
-    *) echo "Usage: lib.sh get <key> | set <key> <value>" >&2; exit 2 ;;
+    ready) core_ready ;;
+    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready" >&2; exit 2 ;;
   esac
 fi

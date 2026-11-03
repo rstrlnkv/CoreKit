@@ -82,8 +82,35 @@ assert_eq "$(settings APP_ID_PREFIX)" "\$(touch $SANDBOX/pwned)" "literal value"
 assert_eq "$(bash "$LIB" get app-id-prefix)" "\$(touch $SANDBOX/pwned)" "literal value via CLI"
 assert_no_file "$SANDBOX/pwned"
 
+# canon_dir of the filesystem root
+assert_eq "$(bash -c '. "$1"; canon_dir /' _ "$LIB")" "/" "canon_dir /"
+assert_eq "$(bash -c '. "$1"; canon_dir //' _ "$LIB")" "/" "canon_dir //"
+assert_eq "$(bash -c '. "$1"; canon_dir /nonexistent-zz' _ "$LIB")" "/nonexistent-zz" "canon_dir below /"
+
+# core_ready: true only when .coredev has a "schema: <n>" line
+ready() { CORE_DIR="$1" bash -c '. "$1"; core_ready' _ "$LIB"; }
+RD="$SANDBOX/ready"; mkdir -p "$RD"
+ready "$RD" && fail "ready without .coredev" || pass
+printf 'app-id-prefix: com.x\n' > "$RD/.coredev"
+ready "$RD" && fail "ready with prefix only" || pass
+printf 'schema: x\n' > "$RD/.coredev"
+ready "$RD" && fail "ready with schema: x" || pass
+printf 'schema:\n' > "$RD/.coredev"
+ready "$RD" && fail "ready with empty schema" || pass
+printf 'app-id-prefix: com.x\nschema: 1\n' > "$RD/.coredev"
+ready "$RD" && pass || fail "not ready with schema: 1 on line 2"
+printf 'schema: 12\r\n' > "$RD/.coredev"
+ready "$RD" && pass || fail "not ready with CRLF schema line"
+# CLI form
+CORE_DIR="$RD" bash "$LIB" ready && pass || fail "CLI ready should exit 0"
+printf 'x: y\n' > "$RD/.coredev"
+CORE_DIR="$RD" bash "$LIB" ready && fail "CLI ready should exit 1" || pass
+# the unset CORE_DIR in a sourced shell does not make a bogus path ready
+CORE_DIR= bash -c '. "$1"; core_ready' _ "$LIB" && fail "ready with empty CORE_DIR" || pass
+
 # scaffold uses the plugin option when CORE_DIR is unset
 unset CORE_DIR
+mkdir -p "$SANDBOX/optcore"; CORE_DIR="$SANDBOX/optcore" setup_core
 CLAUDE_PLUGIN_OPTION_CORE_DIR="$SANDBOX/optcore" bash "$SKILL/scripts/scaffold.sh" --name opt-app >/dev/null
 assert_file "$SANDBOX/optcore/opt-app/CLAUDE.md"
 assert_contains "$SANDBOX/optcore/opt-app/CLAUDE.md" "optcore"

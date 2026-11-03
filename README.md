@@ -59,7 +59,7 @@ Say "new project" (or run `/coredev:new-project`) and Claude:
 ### The layout
 ```
 ~/Projects/Core/              one PRIVATE repo with the internal docs of all your projects
-  PROJECTS.md, bin/, hooks/
+  .coredev, PROJECTS.md, standards/, knowledge/
   my-app/CLAUDE.md, docs/, .claude/rules/
   my-app/code/                the code — its own repo, can be public
 ```
@@ -76,8 +76,8 @@ last step in both (with `git revert`, history kept). A Stop hook reminds Claude 
   explicitly with `/coredev:new-project`, or add to `~/.claude/CLAUDE.md`:
   `When I want to start a new project from scratch, use the new-project skill.`
 - Windows is not supported yet (the scripts are bash).
-- Copies of `bin/` and `hooks/` in your docs repo are not updated automatically when the plugin
-  updates.
+- `bin/` and `hooks/` copies that 0.1.x put in your docs repo are left as they are (they are
+  your files); the plugin no longer writes there.
 
 ## Development
 ```bash

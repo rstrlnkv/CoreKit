@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/lib.sh"
-new_sandbox
+new_sandbox; setup_core
 bash "$SKILL/scripts/scaffold.sh" --name gen-app >/dev/null
 C="$CORE_DIR/gen-app/code"; G="$SANDBOX/gen"; mkdir -p "$G/src"
 echo "main" > "$G/src/main.txt"; printf 'node_modules/\n.DS_Store\ndist/\n' > "$G/.gitignore"
