@@ -181,18 +181,18 @@ older Core it only adds what is missing and updates `.coredev` (§15).
 ## 7. Standards (the user's)
 
 ### 7.1 Format (`skills/new-standard/references/template.md`)
-`<Core>/standards/<name>.md`, English, under 120 lines:
+`<Core>/standards/<name>.md`, English, at most 120 lines:
 ```
 ---
 name: <kebab-case>
 description: <one line: what it rules and when an agent needs it>
-applies-to: [<roles that must read it>]
+applies-to: [<roles that must read it>]   engineer tester security verifier localizer designer release
 updated: YYYY-MM-DD
 ---
 # <Title>
 ## Rule            numbered, one rule per line, imperative
 ## Why             one line per rule: the failure it prevents
-## How to check    per rule: a command and the expected output, or "no guard" (a stated risk)
+## How to check    per rule number: `n. <command> → <expected output>` or `n. no guard — <risk>`
 ## Exceptions      or "none"
 ## Sources         what the rules rest on
 ```
@@ -207,9 +207,13 @@ exists, otherwise `<Core>/standards/<name>.md`; none → `Standards: none in Cor
 2. Asks for optional sources (e.g. the owner's old CoreCrew development standard) and reads them.
 3. Sends one research subagent (general-purpose, web) for current best practice; cited in
    `## Sources`.
-4. Shows the draft in the user's language; on "ok" writes the file, runs
+4. Shows the draft in the user's language; on "ok" writes `<Core>/standards/<name>.md` (an
+   existing standard: shows `diff -u` and needs a second "ok" before overwriting), runs
    `scripts/check-standard.sh <file>` (front matter, five sections in order, a check per rule,
-   under 120 lines; exit 0/1 with a list), commits it in Core through `save`.
+   known roles, under 120 lines; exit 0/1 with a list) until it is silent, then commits only
+   that file in Core: `git -C <Core> add standards/<name>.md && git -C <Core> commit -m "Add
+   standard <name>"` (`Update standard <name>` for an existing one). Not through `save`: `save`
+   needs a project. Never pushes.
 5. Never writes into the plugin.
 
 ### 7.4 The owner's first standards (phase 2, in the owner's Core, not in CoreKit)

@@ -24,6 +24,9 @@
   The README says the plugin needs Claude Code 2.1.271 or newer.
 - The project `CLAUDE.md` template names `save` and `undo-step` as plugin tools that Claude
   runs, instead of `Core/bin/`.
+- Added `/coredev:new-standard`: an interview, a research subagent and `scripts/check-standard.sh`
+  help the user write their own standards into `<Core>/standards/`; the plugin ships none.
+  `reference/knowledge.md` defines the knowledge files (`docs/knowledge/`, `<Core>/knowledge/`).
 - Added `docs/migration-0.2.md`: the seven steps for an existing 0.1.x user.
 
 ## 0.1.1 — 2026-11-03

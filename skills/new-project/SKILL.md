@@ -113,7 +113,8 @@ writing pages). In short: `docs/INDEX.md` has one map line per page, pages carry
 front-matter fields, and `wiki-check.sh` must stay green. Whenever a page is added (a feature page
 under `docs/features/`, any other page), add its map line to `docs/INDEX.md` in the same step. A new
 decision is a new file `docs/decisions/NNN-<slug>.md` plus a map line. `docs/knowledge/`,
-`docs/standards/` and `docs/superpowers/` are outside the wiki checks.
+`docs/standards/` and `docs/superpowers/` are outside the wiki checks. The format of
+`docs/knowledge/` is in `${CLAUDE_SKILL_DIR}/../../reference/knowledge.md`.
 
 ## Red flags — stop
 | Thought | Reality |
