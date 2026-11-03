@@ -13,6 +13,14 @@
   copy in the plugin data folder (`sync-tools.sh`); the copy is refreshed on version change, so
   hooks no longer go stale after an update. `install-hooks.sh` fails with exit 1 when its hook
   sources are missing, and no longer copies `blocked-patterns` into `.git/hooks`.
+- The Stop hook ships with the plugin (`hooks/hooks.json`, runs `hooks/stop-remind.sh`) and
+  stays silent outside a Core project. New projects no longer get a `hooks` block in
+  `code/.claude/settings.local.json`; existing projects must remove theirs (migration step 4).
+- `install.sh` and its test are removed: install with `/plugin install coredev@corekit`.
+  The README says the plugin needs Claude Code 2.1.271 or newer.
+- The project `CLAUDE.md` template names `save` and `undo-step` as plugin tools that Claude
+  runs, instead of `Core/bin/`.
+- Added `docs/migration-0.2.md`: the seven steps for an existing 0.1.x user.
 
 ## 0.1.1 — 2026-11-03
 - `save` reinstalls hooks when the code pre-push hook or `blocked-patterns` is missing

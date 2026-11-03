@@ -33,4 +33,27 @@ assert_not_contains "$ROOT/README.md" 'corekit@corekit'
 assert_eq "$(grep -m1 '^## ' "$ROOT/CHANGELOG.md" | cut -c1-9)" '## 0.2.0 ' "CHANGELOG first entry"
 assert_contains "$ROOT/CHANGELOG.md" '## 0.2.0 — '
 
+# hooks.json: plugin Stop hook; no install.sh any more
+assert_file "$ROOT/hooks/hooks.json"
+assert_contains "$ROOT/hooks/hooks.json" '"Stop"'
+assert_contains "$ROOT/hooks/hooks.json" '"timeout"'
+assert_no_file "$ROOT/install.sh"; assert_no_file "$ROOT/tests/test_install.sh"
+assert_not_contains "$ROOT/README.md" 'install.sh'
+assert_contains "$ROOT/README.md" '2.1.271'
+T="$ROOT/skills/new-project/templates"
+assert_not_contains "$T/code/settings.local.json.tmpl" '"hooks"'
+assert_contains "$T/code/settings.local.json.tmpl" '"additionalDirectories"'
+assert_not_contains "$T/CLAUDE.md.tmpl" '/bin/'
+assert_contains "$T/CLAUDE.md.tmpl" 'undo-step'
+assert_contains "$T/CLAUDE.md.tmpl" 'printed at session start'
+
+# migration note: the seven steps of spec section 6
+MG="$ROOT/docs/migration-0.2.md"
+assert_file "$MG"
+assert_contains "$MG" '/plugin install coredev@corekit'
+assert_contains "$MG" 'claude.ai-synced install: see below'
+assert_contains "$MG" 'install-hooks.sh'
+assert_contains "$MG" 'session-rules.md'
+for n in 1 2 3 4 5 6 7; do assert_contains "$MG" "### Step $n"; done
+
 finish

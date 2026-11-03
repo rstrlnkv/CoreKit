@@ -52,7 +52,7 @@ assert_eq "$(scan "$good")" "" "portable lines flagged"
 
 # scripts <repo> — shell scripts on disk (tracked or not): *.sh or a file with a shell shebang
 scripts() {
-  (cd "$1" && find install.sh skills scripts hooks tests -type f 2>/dev/null | while IFS= read -r f; do
+  (cd "$1" && find skills scripts hooks tests -type f 2>/dev/null | while IFS= read -r f; do
     [ "$f" = tests/test_portability.sh ] && continue
     case "$f" in *.sh) ;; *) head -1 "$f" | grep -qE '^#!.*sh' || continue ;; esac
     echo "$f"
@@ -60,10 +60,10 @@ scripts() {
 }
 
 # Self-check: new scripts not yet added to git and names with spaces are scanned too.
-R="$SANDBOX/repo"; mkdir -p "$R/skills"; git -C "$R" init -q
-echo 'echo ok' > "$R/install.sh"; git -C "$R" add install.sh
+R="$SANDBOX/repo"; mkdir -p "$R/skills" "$R/scripts"; git -C "$R" init -q
+echo 'echo ok' > "$R/scripts/tool.sh"; git -C "$R" add scripts/tool.sh
 echo 'mapfile -t x' > "$R/skills/new.sh"; echo 'grep -P x' > "$R/skills/a b.sh"
-assert_eq "$(scripts "$R" | LC_ALL=C sort | tr '\n' ';')" "install.sh;skills/a b.sh;skills/new.sh;" \
+assert_eq "$(scripts "$R" | LC_ALL=C sort | tr '\n' ';')" "scripts/tool.sh;skills/a b.sh;skills/new.sh;" \
   "script list"
 
 # Every shell script in the repo.

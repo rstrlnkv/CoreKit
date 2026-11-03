@@ -13,8 +13,8 @@ In Claude Code:
 Claude Code asks for the three settings below when the plugin is enabled. The plugin depends on
 `feature-dev` from the official `claude-plugins-official` marketplace and installs it with itself.
 
-**Requirements:** macOS or Linux with bash, git, and the GitHub CLI (`gh`, logged in with
-`gh auth login`). Stack tools (Flutter, Xcode, Node, Rust, uv) are checked when you pick a stack.
+**Requirements:** Claude Code 2.1.271 or newer (the plugin settings use `options`), macOS or
+Linux with bash, git, and the GitHub CLI (`gh`, logged in with `gh auth login`). Stack tools (Flutter, Xcode, Node, Rust, uv) are checked when you pick a stack.
 
 ## Commands
 
@@ -41,7 +41,8 @@ marketplaces by default: turn it on in `/plugin` → Marketplaces → corekit �
 or update by hand with `/plugin marketplace update corekit`.
 
 If you used this plugin as `corekit`: the marketplace migrates the old name, but run
-`/plugin install coredev@corekit` once.
+`/plugin install coredev@corekit` once. Upgrading from 0.1.x: follow
+[docs/migration-0.2.md](docs/migration-0.2.md).
 
 ## `new-project`
 
@@ -70,7 +71,7 @@ repo, and a Core pre-push hook that refuses to push unless the GitHub repo is pr
 
 Claude runs the plugin's `save` tool to commit code and docs together as one step, and `undo-step`
 to revert the last step in both (with `git revert`, history kept). Nothing is copied into your
-docs repo. A Stop hook reminds Claude to save.
+docs repo. The plugin's Stop hook reminds Claude to save when a step is left uncommitted.
 
 ## Known limitations
 - Auto-triggering competes with other planning skills (e.g. Superpowers' brainstorming). Start it

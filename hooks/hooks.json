@@ -1,0 +1,16 @@
+{
+  "description": "coredev: remind Claude to save a finished working step",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-remind.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
