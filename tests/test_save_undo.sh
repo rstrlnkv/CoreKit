@@ -66,6 +66,12 @@ sleep 1; echo "hook" > "$C/app.txt"
 (cd "$C" && bash "$SAVE" "Restore hook") >/dev/null 2>&1
 [ -x "$C/.git/hooks/pre-push" ] && pass || fail "save did not restore code pre-push hook"
 assert_contains "$C/.git/hooks/pre-push" "new-project hook"
+# save restores a missing blocked-patterns file (hooks block every commit without it)
+rm -f "$C/.git/hooks/blocked-patterns"
+sleep 1; echo "patterns" > "$C/app.txt"
+(cd "$C" && bash "$SAVE" "Restore patterns") >/dev/null 2>&1
+assert_file "$C/.git/hooks/blocked-patterns"
+assert_eq "$(git -C "$C" log -1 --format=%s)" "Restore patterns" "save failed without blocked-patterns"
 
 # --push pushes both to their remotes
 git init -q --bare "$SANDBOX/code.git"; git -C "$C" remote add origin "$SANDBOX/code.git"
