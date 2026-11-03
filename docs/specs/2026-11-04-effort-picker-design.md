@@ -1,6 +1,6 @@
 ---
 title: effort-picker plugin — design spec
-description: Requirements for effort-picker, a second plugin in the corekit marketplace that picks the effort level for each prompt of the main chat, for code and office work, and asks before any raise to high or above and before any lowering. Read before changing it.
+description: Requirements for effort-picker, a second plugin in the corekit marketplace that picks the effort level for each prompt of the main chat, for code and office work, and asks before any switch to xhigh or max. Read before changing it.
 status: draft
 files: [plugins/effort-picker/, .claude-plugin/marketplace.json, tests/run.sh, README.md, CHANGELOG.md]
 related: [docs/specs/2026-11-03-coredev-design.md]
@@ -30,7 +30,7 @@ Nothing of it is copied: code, classifier rules and texts here are written from 
 | E3 | Written from scratch; only the idea is reused. | The source mod has no license; CoreKit is public under MIT. |
 | E4 | One classifier call per prompt, before the turn's first model request. | The first request must already run at the chosen level. |
 | E5 | Default classifier model Haiku 5.5; Sonnet 5.5 by setting. Haiku stays the default only if it matches the expected level on all nine prompts of §7.2 where Sonnet does; otherwise the default is Sonnet. | Haiku is faster and cheaper; picking one of six answers is a small task. |
-| E6 | Consent rule: the plugin never raises to `high`, `xhigh` or `max` and never lowers without the person's yes, in any mode. Only a raise to `medium` may happen silently, in `auto` mode. | Hard work costs time and tokens, so the person agrees to it; a silent lowering risks missed bugs and wrong answers. |
+| E6 | Consent rule: the plugin never switches to `xhigh` or `max` without the person's yes, in any mode. In `auto` every other switch, up or down, is silent and announced after the fact (§4.5). | `xhigh` and `max` are the long, costly runs, so the person agrees to them; below that, `auto` must stay automatic to be worth having. |
 | E7 | A failed classifier call (timeout, error, unreadable answer) leaves the level as it is; the prompt always goes on. | The plugin must never block work. |
 | E8 | No `.claude-plugin/types/`, logs or personal data in the repo; nothing leaves the person's account but the classifier call through `$.model.complete`. | Same principle as coredev: a universal plugin with nothing personal. |
 
@@ -68,8 +68,8 @@ timeout 10 s.
 - `suggest` (default): when the pick differs from the current level, Claude waits and a question
   asks: "Switch to X" / "Switch, and auto-adjust from now" / "Keep Y". A dismissed question keeps
   the level.
-- `auto`: a raise to `medium` is applied silently; every other change (a raise to `high`,
-  `xhigh`, `max`, or any lowering) asks the same question as `suggest` (E6).
+- `auto`: a switch to `low`, `medium` or `high`, up or down, is applied silently and announced
+  by the line of §4.5; a switch to `xhigh` or `max` asks the same question as `suggest` (E6).
 - `off`: nothing runs.
 - A `keep` answer, or a pick equal to the current level, changes nothing and asks nothing.
 
@@ -139,7 +139,8 @@ anything else as no answer (E7).
 - Parser: each level, `keep`, `Extra high`, junk, missing JSON.
 - Skips: slash command, empty prompt, non-composer origin, subagent request.
 - `suggest`: question asked on a different pick; "Keep" leaves the level; dismiss leaves it.
-- `auto`: low → medium silent; → high, xhigh, max asks; any lowering asks.
+- `auto`: switches among low, medium, high (both ways) silent with the announce line; → xhigh
+  and → max ask; a lowering from xhigh to high is silent.
 - Classifier error and timeout: request goes on unchanged, log line written.
 - Stale pick dropped when a newer prompt arrives.
 - Hold released when the menu moves; `off` clears the hold and the label.
