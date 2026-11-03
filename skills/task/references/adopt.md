@@ -34,7 +34,7 @@ No crew, no tester: only you and the script. Talk to the user in plain words; ne
    a `WARN:` means a hook of the user's own was left in place, so the coredev guard is not
    installed in that repo; say so. A non-zero exit: show its lines and stop (exit 1 means a
    move failed: nothing was deleted, and the lines say where the files are).
-8. **Verify** with `bash "<scripts>/wiki-check.sh" <Core>/<name>`.
+8. **Verify** with `bash "<scripts>/wiki-check.sh" "<Core>/<name>"`.
    Red: say which pages and why; the usual cause is a link or reference in an old page that
    no longer resolves. Pages the script gave new front matter hold `TODO` descriptions and
    `status: draft`: say they still need writing.

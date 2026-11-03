@@ -1,6 +1,11 @@
 # Changelog
 
 ## 0.2.0 — 2026-11-03
+- Hooks read settings from the plugin options. When `core_dir` is not the default and the
+  options are not set (for example under `--plugin-dir`), the hooks stay silent: set
+  `core_dir` in `/plugin` → Installed → coredev → Configure options.
+- The release attribution check matches only trailer lines (`Co-Authored-By:`,
+  `Generated with` at a line start), the same lines `save --no-attribution` drops.
 - The plugin is now `coredev` (the marketplace and repo stay `corekit`). The marketplace
   `renames` map migrates old installs; run `/plugin install coredev@corekit` once.
   Commands are `/coredev:...`.

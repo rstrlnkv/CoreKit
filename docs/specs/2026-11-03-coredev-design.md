@@ -347,7 +347,7 @@ command → output → ✓/✗:
 4. only on the release path: version and changelog follow the user's `versioning` standard;
    none → ask the user;
 5. commit through `save`: code and docs as one step, message in English (what and why);
-6. with `attribution=forbid`: `git log --format=%B <range> | grep -icE 'co-authored-by|generated with'` → `0`;
+6. with `attribution=forbid`: `git log --format=%B <range> | grep -icE '^[[:space:]]*(co-authored-by:|(🤖[[:space:]]*)?generated with)'` → `0`;
 7. `git status --short` clean in `code/` and in the Core paths `save` commits (`lib.sh core-paths
    <project>`: the project folder and the shared files; `task` Start checks the same set).
 One ✗ → stop; the finding goes to engineer; no second cycle. Never tags, never pushes.

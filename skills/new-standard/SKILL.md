@@ -9,7 +9,7 @@ argument-hint: "[topic | knowledge line]"
 
 ## Overview
 A standard is a short file of rules the user wants every agent to follow, kept in their own
-Core at `${user_config.core_dir}/standards/<name>.md`. The plugin ships no standards: this
+Core at `<Core>/standards/<name>.md`. The plugin ships no standards: this
 skill only helps the user write theirs. **Never write into the plugin** (the folder that holds
 this skill, `${CLAUDE_SKILL_DIR}/../..`); the only file this skill creates or changes is the
 standard in Core.

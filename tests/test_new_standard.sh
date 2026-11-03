@@ -105,7 +105,7 @@ assert_contains "$SK" "check-standard.sh"
 assert_contains "$SK" 'git -C "<Core>" add "standards/<name>.md"'
 assert_contains "$SK" 'commit -m "Add standard <name>"'
 assert_contains "$SK" 'commit -m "Update standard <name>"'
-assert_contains "$SK" '${user_config.core_dir}/standards/<name>.md'
+assert_contains "$SK" '<Core>/standards/<name>.md'
 assert_contains "$SK" "lib.sh\" ready"
 assert_contains "$SK" "/coredev:new-project"
 assert_contains "$SK" "general-purpose"

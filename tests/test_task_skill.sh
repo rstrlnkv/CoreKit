@@ -124,7 +124,7 @@ for n in 1 2 3 4 5 6 7; do
   prev="${l:-$prev}"
 done
 for w in 'wiki-check.sh' '--changed' '../docs/' 'git diff --name-only' \
-         "git log --format=%B <range> | grep -icE 'co-authored-by|generated with'" \
+         "git log --format=%B <range> | grep -icE '^[[:space:]]*(co-authored-by:|(🤖[[:space:]]*)?generated with)'" \
          'attribution=forbid' 'skipped (attribution=allow)' 'the attribution value resolved at Start' \
          'bash "<scripts>/save"' 'never tags' 'never pushes' 'Step-Id' \
          'versioning' 'applies-to' 'ask the user' 'git status --short' \

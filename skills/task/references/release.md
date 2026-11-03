@@ -28,7 +28,7 @@ found → ask the user first, then brief engineer with the answer.
    Never run the placeholder.
 2. **Checkers.** Every checker called in this chain (verifier, security, localizer, designer)
    has a clean final report: no open finding. None called (for example a `question` chain) → ✓.
-3. **Wiki.** `bash "<scripts>/wiki-check.sh" <Core>/<project> --changed <files> <pages>`.
+3. **Wiki.** `bash "<scripts>/wiki-check.sh" "<Core>/<project>" --changed <files> <pages>`.
    Silent exit 0 → ✓. Otherwise decide by the Core's schema:
    `CORE_DIR="<Core>" bash "<scripts>/lib.sh" get schema` against
    `CORE_DIR="<Core>" bash "<scripts>/lib.sh" schema`. The Core is
@@ -47,7 +47,7 @@ found → ask the user first, then brief engineer with the answer.
    `--no-attribution`, which drops such lines from the message.
 6. **Attribution.** Use the attribution value resolved at Start (`allow` or `forbid`).
    In the code root, only with attribution=forbid:
-   `git log --format=%B <range> | grep -icE 'co-authored-by|generated with'` (forbid only),
+   `git log --format=%B <range> | grep -icE '^[[:space:]]*(co-authored-by:|(🤖[[:space:]]*)?generated with)'` (forbid only),
    with `<range>` = `<code base>..HEAD`. In `<Core>`, also only with forbid:
    `git -C "<Core>" log --format=%B <Core base>..HEAD -- $(CORE_DIR="<Core>" bash "<scripts>/lib.sh" core-paths <project>)`
    piped to the same grep (the paths `save` commits). Both print `0` → ✓.
