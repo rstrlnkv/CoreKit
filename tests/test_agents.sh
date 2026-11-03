@@ -2,7 +2,6 @@
 # The six coredev agents (spec section 13): frontmatter, sections, tools, reply format, wording.
 source "$(dirname "$0")/lib.sh"
 AG="$ROOT/agents"
-BR="$ROOT/skills/task/references/brief.md"
 ROLES="engineer tester security verifier localizer designer"
 READONLY="security verifier localizer designer"
 
@@ -13,8 +12,8 @@ has() { grep -qiF -- "$2" "$1" && pass || fail "$(basename "$1") lacks: $2"; }
 front() { awk '/^---$/ {n++; next} n==1' "$1"; }
 
 # Exactly six agent files, one per role.
-n="$(find "$AG" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')"
-assert_eq "$n" "6" "number of files in agents/"
+n="$(ls "$AG"/*.md 2>/dev/null | wc -l | tr -d ' ')"
+assert_eq "$n" "6" "number of agents/*.md files"
 for r in $ROLES; do
   f="$AG/$r.md"
   assert_file "$f"
@@ -50,10 +49,16 @@ for r in $ROLES; do
   rd="$(section "$f" "What to read first")"
   a="$(printf '%s\n' "$rd" | grep -n 'CLAUDE.md' | head -1 | cut -d: -f1)"
   b="$(printf '%s\n' "$rd" | grep -n 'docs/INDEX.md' | head -1 | cut -d: -f1)"
+  p="$(printf '%s\n' "$rd" | grep -n 'wiki page' | head -1 | cut -d: -f1)"
   c="$(printf '%s\n' "$rd" | grep -n 'applies-to' | head -1 | cut -d: -f1)"
   k="$(printf '%s\n' "$rd" | grep -n "docs/knowledge/$r.md" | head -1 | cut -d: -f1)"
-  [ -n "$a" ] && [ -n "$b" ] && [ -n "$c" ] && [ -n "$k" ] && [ "$a" -lt "$b" ] && [ "$b" -lt "$c" ] && [ "$c" -lt "$k" ] \
-    && pass || fail "$r.md reading order is not CLAUDE.md, INDEX, standards, knowledge"
+  kc="$(printf '%s\n' "$rd" | grep -n "<Core>/knowledge/$r.md" | head -1 | cut -d: -f1)"
+  [ -n "$a" ] && [ -n "$b" ] && [ -n "$p" ] && [ -n "$c" ] && [ -n "$k" ] && [ -n "$kc" ] \
+    && [ "$a" -lt "$b" ] && [ "$b" -lt "$p" ] && [ "$p" -lt "$c" ] && [ "$c" -lt "$k" ] && [ "$k" -le "$kc" ] \
+    && pass || fail "$r.md reading order is not CLAUDE.md, INDEX, page, standards, project knowledge, Core knowledge"
+  # knowledge of another stack is skipped; a one-stack line is tagged (spec 12.3)
+  sec_has "$f" "What to read first" 'skip lines tagged `[<stack>]` for another stack'
+  sec_has "$f" "How you work" 'Tag a Knowledge line `[<stack>]` when it holds for one stack only'
   # reply format ends with the two lines, in this order
   last2="$(section "$f" "Reply format" | grep -v '^```' | awk 'NF' | tail -2)"
   assert_eq "$(printf '%s\n' "$last2" | sed -n 1p)" 'Standards: <name — the rule applied, quoted | none needed | none in Core>' "$r.md second-to-last reply line"
@@ -65,14 +70,22 @@ for r in $ROLES; do
   sec_has "$f" "How you work" 'by range'
   sec_has "$f" "How you work" 'one Bash call'
   sec_has "$f" "How you work" "user's language"
-  sec_has "$f" "How you work" 'English'
+  sec_has "$f" "How you work" 'keep the reply labels in English'
+  sec_has "$f" "How you work" 'write files in English'
+  sec_has "$f" "How you work" 'By about turn 50'
   sec_has "$f" "How you work" 'what is done and what is left'
+  sec_has "$f" "How you work" 'hard limit is 60 and gives no reply'
   sec_has "$f" "What not to do" 'brief'
   sec_has "$f" "What not to do" 'Open'
+  sec_has "$f" "What not to do" 'path: question'
+  sec_has "$f" "What not to do" 'change no files'
+  sec_has "$f" "What not to do" '`file:line`'
   # forbidden strings
-  for s in '/Users/' '.claude/crew' 'Helm' 'Mafia' 'CoreCrew' 'superpowers' '${CLAUDE_' '../'; do
+  for s in '/Users/' '.claude/crew' 'Helm' 'Mafia' 'CoreCrew' 'superpowers' '${CLAUDE_'; do
     grep -qF -- "$s" "$f" && fail "$r.md contains: $s" || pass
   done
+  # no plugin-relative path; "../docs/<page>.md" (a --changed argument) is the one allowed form
+  sed 's#\.\./docs/#docs/#g' "$f" | grep -qF -- '../' && fail "$r.md contains a ../ path" || pass
 done
 
 # Read-only roles: no Edit/Write, say so, and have a "nothing found" form.
@@ -80,7 +93,8 @@ for r in $READONLY; do
   f="$AG/$r.md"; [ -f "$f" ] || continue
   tl="$(front "$f" | sed -n 's/^tools: //p')"
   case "$tl" in *Edit*|*Write*) fail "$r.md tools include Edit or Write";; *) pass;; esac
-  has "$f" 'never edit files'
+  has "$f" 'never edit project files'
+  has "$f" 'logs to a file are fine'
   has "$f" 'for engineer'
   sec_has "$f" "Reply format" 'nothing found'
 done
@@ -93,6 +107,11 @@ sec_has "$AG/designer.md" "Reply format" 'Not measured'
 E="$AG/engineer.md"
 has "$E" 'only author of changes'
 has "$E" 'wiki'
+has "$E" 'git diff --name-only'
+has "$E" 'git ls-files --others --exclude-standard'
+has "$E" '../docs/<page>.md'
+has "$E" 'where the checker pointed'
+has "$E" 'same check the checker ran'
 has "$E" 'files:'
 has "$E" 'red test first'
 has "$E" 'command and its output'
@@ -119,6 +138,10 @@ has "$V" 'quotation'
 has "$V" 'conditional'
 has "$V" 'wiki-check.sh'
 has "$V" '--changed'
+has "$V" 'git diff --name-only'
+has "$V" 'git ls-files --others --exclude-standard'
+has "$V" '../docs/<page>.md'
+has "$V" '`Knowledge line:` proposals in the reports'
 has "$V" 'the brief gives'
 has "$V" 'dead'
 L="$AG/localizer.md"
@@ -132,10 +155,5 @@ has "$D" 'hit area'
 has "$D" 'states'
 has "$D" 'at most 6 images'
 has "$D" 'Screens'
-
-# The brief passes the plugin file paths agents cannot know.
-assert_contains "$BR" 'wiki-check.sh'
-assert_contains "$BR" 'reference/wiki.md'
-assert_contains "$BR" 'verifier'
 
 finish

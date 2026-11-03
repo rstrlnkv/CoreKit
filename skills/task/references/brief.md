@@ -21,8 +21,8 @@ The first line of every brief, exactly. `<path>` is `fix`, `full`, `question`, `
    `check:` line when this is the final run.
 5. **Plugin paths** (engineer and verifier only) — the absolute paths of the plugin's
    `reference/wiki.md` and `scripts/wiki-check.sh`, which an agent cannot find by itself.
-6. **Budget** (only if `maxTurns` is not honoured) — "stop after about 60 turns and return what
-   is done and what is left".
+6. **Budget** — an agent that hits the hard cap of 60 turns returns no report at all, so say:
+   "You have about 60 turns; by about turn 50 stop and write your reply: what is done, what is left."
 
 ## Never
 

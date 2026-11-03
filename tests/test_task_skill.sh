@@ -169,5 +169,14 @@ assert_contains "$BR" 'Plugin paths'
 assert_contains "$BR" '(engineer and verifier only)'
 assert_contains "$BR" 'reference/wiki.md'
 assert_contains "$BR" 'scripts/wiki-check.sh'
+# Budget is unconditional: a capped agent returns no report, so it stops early on its own.
+assert_contains "$BR" 'You have about 60 turns; by about turn 50 stop and write your reply: what is done, what is left.'
+assert_not_contains "$BR" 'only if'
+# A capped agent gets one SendMessage asking for its report; then the chain stops.
+assert_contains "$SK" 'Report now: what is done, what is left; no more tool calls.'
+assert_contains "$SK" 'SendMessage'
+assert_contains "$SK" 'with no report'
+assert_contains "$SK" 'same pass'
+rule "turn-limit note rule" 'turn-limit note'
 
 finish

@@ -89,8 +89,10 @@ Briefs follow `references/brief.md`. A coredev agent's `subagent_type` is `cored
 ## Rules
 1. One author of changes: engineer. A checker's finding goes back to engineer.
 2. tester runs before security, never on the same place at once.
-3. Budget: each agent has `maxTurns: 60`; at the limit it returns what is done and what is left.
-   If an agent ignores the limit, put a budget sentence in its brief.
+3. Budget: each agent has `maxTurns: 60`, and every brief tells it to reply by about turn 50.
+   An agent that hits the cap returns only a turn-limit note with no report: send it one
+   `SendMessage`: "Report now: what is done, what is left; no more tool calls." If there is still
+   no report, stop the chain and put it in `Open`. The `SendMessage` is part of the same pass.
 4. At most three engineer passes per chain (a checkers' wave counts as one). The third failed
    pass: stop and report. Two fixes on one premise that fail the same check: state the premise
    in one sentence; make no third attempt on it.
