@@ -390,6 +390,20 @@ run_file MultiEdit "$C/docs/a.md";           blocked "MultiEdit docs/a.md" "$C/d
 run_file MultiEdit "$C/src/a.sh";            ok "MultiEdit src/a.sh"
 
 
+# --- <> opens a file for reading AND writing and creates it: it is a write target (it used to pass)
+run_bash 'exec 3<> docs/x.md';               blocked "Bash exec 3<> docs/x.md" "$C/docs/x.md" "$CORE_DIR/p/docs/x.md"
+run_bash 'cat <> docs/rw.md';                blocked "Bash cat <> docs/rw.md" "$C/docs/rw.md" "$CORE_DIR/p/docs/rw.md"
+run_bash 'cat <> src/rw.md';                 ok "Bash cat <> src/rw.md"
+
+# --- if scripts/*.awk is missing, the Bash path fails open (silently); file tools are still judged
+PL="$SANDBOX/plugin-noawk"; mkdir -p "$PL/hooks" "$PL/scripts"
+cp "$HOOKS/guard-code.sh" "$PL/hooks/"; cp "$SCRIPTS/lib.sh" "$PL/scripts/"
+printf '%s' '{"cwd":"'"$C"'","tool_name":"Bash","tool_input":{"command":"echo x > docs/a.md"}}' | bash "$PL/hooks/guard-code.sh" >"$OD/out" 2>"$OD/err"; RC=$?
+assert_eq "$RC" "0" "no awk files: Bash passes"; assert_eq "$(<"$OD/out")$(<"$OD/err")" "" "no awk files: silent"
+printf '%s' '{"cwd":"'"$C"'","tool_name":"Write","tool_input":{"file_path":"'"$C"'/docs/a.md"}}' | bash "$PL/hooks/guard-code.sh" >"$OD/out" 2>"$OD/err"; RC=$?
+assert_eq "$RC" "2" "no awk files: file tools are still judged"
+
+
 bg_wait
 
 finish

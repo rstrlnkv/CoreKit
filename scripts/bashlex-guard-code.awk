@@ -15,6 +15,7 @@ function classify(b) {
 }
 function on_out(w) { emit("W", w, "") }
 function on_in(w) { }   # the file read by "< file" is not written
+function on_subst(w) { }   # a command substitution inside double quotes is not looked into
 function emit(kind, a, b) {
   if (nomore) return
   if (ne >= CAP) { full = 1; return }

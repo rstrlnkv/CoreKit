@@ -6,6 +6,10 @@
 # is one) or that has a .ssh path component. <cd> is 1 when a cd/pushd/popd came before, which makes a
 # relative path unknown (the name is still a secret name, a .ssh folder is not judged). The caller
 # judges the candidates (symlinks, the real ~/.ssh).
+# Also prints "X\tnomore" or "X\tcap" when reading stopped early (a <<"WORD" inside "$(...)", or more than
+# CAP candidates): the caller does not trust the rest and fails closed.
+# Command substitutions inside double quotes ("$(cat .env)", backticks) are lexed as command lines of their
+# own, once the main pass is done (on_subst -> enqueue in bash-lex.awk).
 # Judged: the arguments of the commands in RD, and the word after an input redirect (< file). Not
 # judged: output redirects, commands that do not read (ls, rm, git, echo, ...), quoted text.
 BEGIN {
@@ -15,7 +19,52 @@ BEGIN {
   # the first operand of these is a pattern or a script, not a file
   split("grep egrep fgrep rg ag ack sed awk gawk mawk", P, " "); for (k in P) PAT[P[k]] = 1
   # these copy: the last operand is the destination (so `cp .env.example .env` is not a read of .env)
-  CP["cp"] = 1; CP["scp"] = 1
+  CP["cp"] = 1; CP["scp"] = 1; CP["rsync"] = 1
+  # Options that take a value, per command. The value is a pattern (EO, replaces the pattern operand), a file
+  # of patterns or a script (FO: judged as a file, replaces the pattern operand), a file name glob (GO:
+  # judged, the pattern operand stays), or something else (VO: skipped). Other options take no value.
+  reg(EO, "grep egrep fgrep rg sed", "-e --regexp --expression")
+  reg(EO, "gawk", "-e --source")
+  reg(FO, "grep egrep fgrep rg sed awk gawk mawk", "-f --file")
+  reg(GO, "grep egrep fgrep", "--include")
+  reg(GO, "rg", "-g --glob --iglob --ignore-file")
+  reg(VO, "grep egrep fgrep", "-A -B -C -m -d -D --after-context --before-context --context --max-count --directories --devices --binary-files --exclude --exclude-dir --label --group-separator")
+  reg(VO, "rg", "-t -T -m -A -B -C -M -j -r -E -d --type --type-not --type-add --max-count --context --after-context --before-context --max-columns --threads --encoding --replace --max-depth --sort --sortr --pre --colors")
+  reg(VO, "ag ack", "-A -B -C -m -G -g --depth --max-count --after --before --context")
+  reg(FO, "ag", "-p --path-to-ignore")
+  reg(VO, "sed", "-l --line-length")
+  reg(VO, "awk gawk mawk", "-v -F --assign --field-separator")
+}
+# reg(table, "cmd cmd", "opt opt") — table[cmd, opt] = 1
+function reg(tab, cmds, opts,   nc, no, x, y, cl, ol) {
+  nc = split(cmds, cl, " "); no = split(opts, ol, " ")
+  for (x = 1; x <= nc; x++) for (y = 1; y <= no; y++) tab[cl[x], ol[y]] = 1
+}
+END {
+  if (nomore) print "X\tnomore"
+  else if (capped) print "X\tcap"
+}
+# on_subst(w) — w has a $(...) or backtick substitution from inside double quotes: each body is queued as a
+# command line (an unbalanced $( takes the rest of the word)
+function on_subst(w,   n, p, c, depth, st, q) {
+  n = length(w); p = 1
+  while (p <= n) {
+    c = substr(w, p, 1)
+    if (c == "$" && substr(w, p + 1, 1) == "(") {
+      st = p + 2; depth = 1; p = st
+      while (p <= n && depth > 0) {
+        c = substr(w, p, 1)
+        if (c == "(") depth++
+        else if (c == ")") depth--
+        p++
+      }
+      enqueue(depth == 0 ? substr(w, st, p - 1 - st) : substr(w, st))
+    } else if (c == "`") {
+      q = index(substr(w, p + 1), "`")
+      if (q == 0) { enqueue(substr(w, p + 1)); p = n + 1 }
+      else { enqueue(substr(w, p + 1, q - 1)); p += q + 1 }
+    } else p++
+  }
 }
 function classify(b) {
   if (b == "cd" || b == "pushd" || b == "popd") cdseen = 1
@@ -34,11 +83,11 @@ function cand(a,   l, t, x) {
   if (!(x ~ /^\.env([*?\[{]|$)/ || (x ~ /^\.env\./ && x !~ /^\.env\.(example|sample|template)$/)) && t !~ /(^|\/)\.ssh(\/|$)/) return
   if (a in seen) return
   seen[a] = 1
-  if (ne >= CAP) { full = 1; return }
+  if (ne >= CAP) { full = 1; capped = 1; return }
   ne++
   printf "P\t%s\t%d\n", a, cdseen
 }
-function finalize(   k, a, dd, pat, nm, v, nop, tdir, j, n, ops) {
+function finalize(   k, a, dd, pat, nm, v, nop, tdir, j, n, ops, key) {
   if (cmd == "" || cmd == "?") return
   dd = 0; pat = (cmd in PAT); nop = 0; tdir = ""
   for (k = 1; k <= na && !full; k++) {
@@ -47,11 +96,16 @@ function finalize(   k, a, dd, pat, nm, v, nop, tdir, j, n, ops) {
     if (!dd && substr(a, 1, 1) == "-" && a != "-") {
       if ((cmd in CP) && a == "-t") { tdir = "x"; k++; continue }
       if ((cmd in CP) && a ~ /^--target-directory=/) { tdir = "x"; continue }
-      if (pat && (a == "-e" || a == "--regexp")) { k++; pat = 0; continue }
-      if (pat && (a == "-f" || a == "--file")) { cand(args[k + 1]); k++; continue }
+      if ((cmd, a) in EO) { k++; pat = 0; continue }
+      if ((cmd, a) in FO) { cand(args[k + 1]); k++; if (a == "-f" || a == "--file") pat = 0; continue }
+      if ((cmd, a) in GO) { cand(args[k + 1]); k++; continue }
+      if ((cmd, a) in VO) { k++; continue }
       if (a ~ /^--[A-Za-z][A-Za-z-]*=/) {
         nm = substr(a, 1, index(a, "=") - 1); v = substr(a, index(a, "=") + 1)
-        if (nm == "--regexp") pat = 0
+        if ((cmd, nm) in EO) pat = 0
+        else if ((cmd, nm) in FO) { cand(v); if (nm == "--file") pat = 0 }
+        else if ((cmd, nm) in GO) cand(v)
+        else if ((cmd, nm) in VO) { }
         else if (!(cmd in CP)) cand(v)
       }
       continue

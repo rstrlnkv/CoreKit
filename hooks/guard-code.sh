@@ -25,6 +25,8 @@
 #   that has $ ` * ? [ { is not judged. Quoted text is not a command, heredoc bodies and comments are
 #   skipped. At most 100 targets are looked at. The tokenizer is one linear pass in awk. A command this
 #   hook cannot parse passes (exit 0). The git pre-commit hook stays the last layer.
+#   The tokenizer lives in scripts/bash-lex.awk and scripts/bashlex-guard-code.awk: if they are missing the
+#   Bash path fails open (silently); the file tools are still judged.
 # - Inert outside <Core>/<project>/: a target and a cwd that are not in a Core project pass (exit 0).
 #   No network, no git; only canon_dir, project_of and one grep of the CLAUDE.md public-docs line.
 # - Input it cannot read (not JSON, no cwd, no path or command) passes.
@@ -117,7 +119,7 @@ case "$cmd" in *">"*|*tee*|*touch*|*cp*|*mv*|*mkdir*) ;; *) exit 0 ;; esac
 # bash_targets — stdin: the command (newlines turned into \002 by the caller). Prints "<kind>\t<path>[\t<name>]":
 # W a file written, D a directory made (mkdir), J a destination (cp/mv) that may be a directory: <name> is a source's name.
 bash_targets() {
-  LC_ALL=C awk -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-guard-code.awk"
+  LC_ALL=C awk -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-guard-code.awk" 2>/dev/null
 }
 
 targets="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r' '\002 ' | bash_targets)"

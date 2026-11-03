@@ -8,8 +8,12 @@
 #                  ignore its arguments (it may also note state, e.g. cdseen for cd)
 #   on_out(w)    — w is the target of an output redirect (> >> >| &> >&file)
 #   on_in(w)     — w is the word after an input redirect (< file)
+#   on_subst(w)  — w is a word with a command substitution inside double quotes ("$(...)" or backticks);
+#                  it may call enqueue(text) to have the text lexed as a command line after the main pass
+#                  (guard-secrets does; guard-code does not look into substitutions)
 #   finalize()   — one command is complete: cmd (its name) and args[1..na] (its words) are set
-#   globals it may set: full (stop reading), nomore (stop judging, set here too by <<"WORD" in "$(...)")
+#   globals it may set: full (stop reading); nomore is set here by <<"WORD" inside "$(...)" (reading stops:
+#   a hook that must not fail open there can look at it in its END block)
 # State this file owns: cmd, args, na, wrapped, and the redirect/heredoc flags.
 
 BEGIN {
@@ -53,15 +57,17 @@ function skip_heredocs(   k, j, line, found) {
   }
   hdn = 0
 }
-function endword(   w, qd, b) {
+function endword(   w, qd, b, rw) {
   if (!inword) return
   w = word; qd = hasq
   inword = 0; word = ""; hasq = 0; wl = 0; wbad = 0
+  if (wsub) { wsub = 0; on_subst(w) }
   if (skip_next) { skip_next = 0; return }
   if (want_hd) { want_hd = 0; hdn++; hd[hdn] = w; hds[hdn] = hdstrip; return }
   if (want_redir) {
+    rw = rwredir; rwredir = 0
     if (want_redir == 2 && w ~ /^([0-9]+-?|-)$/) { want_redir = 0; return }
-    want_redir = 0; on_out(w); return
+    want_redir = 0; on_out(w); if (rw) on_in(w); return   # <> reads and writes
   }
   if (want_in) { want_in = 0; on_in(w); return }
   if (cmd == "") {
@@ -79,11 +85,14 @@ function endword(   w, qd, b) {
 function stmt_end() {
   finalize()
   split("", args)
-  cmd = ""; na = 0; wrapped = 0; want_redir = 0; want_in = 0; skip_next = 0; want_hd = 0
+  cmd = ""; na = 0; wrapped = 0; want_redir = 0; want_in = 0; rwredir = 0; skip_next = 0; want_hd = 0
 }
+# enqueue(text) — a command line to lex after the main pass (at most 50)
+function enqueue(t) { if (nq < 50) Q[++nq] = t }
 { buf = (NR == 1 ? "" : buf) $0 }
-END {
-  len = split(buf, C, ""); i = 1
+function lex(text) {
+  len = split(text, C, ""); i = 1
+  inword = 0; word = ""; hasq = 0; wl = 0; wbad = 0; hdn = 0; wsub = 0
   while (i <= len && !full) {
     c = C[i]
     if (c == " " || c == "\t") { endword(); i++; continue }
@@ -108,6 +117,7 @@ END {
       while (j <= len) {
         d = C[j]
         if (d == "\"") break
+        if ((d == "$" && C[j + 1] == "(") || d == "`") wsub = 1
         # a heredoc inside "$(...)": its body (up to the delimiter line) is skipped, so a stray quote
         # in it cannot flip the quoting. <<"WORD" ends this span early: stop judging (fail open).
         if (d == NL && hdn > 0) { app(seg(k, j)); i = j + 1; skip_heredocs(); j = i; k = j; continue }
@@ -164,6 +174,7 @@ END {
         want_hd = 1; continue
       }
       if (C[i + 1] == "(") { i++; continue }
+      if (C[i + 1] == ">") rwredir = 1
       i++
       if (C[i] == "&") { i++; skip_next = 1 } else want_in = 1
       continue
@@ -173,4 +184,8 @@ END {
     app(seg(i, j)); inword = 1; i = j
   }
   endword(); stmt_end()
+}
+END {
+  lex(buf)
+  while (qi < nq && !full && !nomore) { qi++; lex(Q[qi]) }
 }

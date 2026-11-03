@@ -18,18 +18,30 @@
 # Tools and keys: Read, Edit, MultiEdit, Write -> file_path; NotebookEdit -> notebook_path; Grep -> path and
 #   glob (the pattern is a regex, not a path); Glob -> pattern and path; Bash -> command. Any other tool
 #   passes. A glob names a secret when its last component does (**/.env, .env*, .env.*, not **/*), or
-#   when its literal part before the first * ? [ { is ~/.ssh or under it (~/.ssh/**). **/* passes.
+#   when its literal part before the first * ? [ { is ~/.ssh or under it (~/.ssh/**). **/* passes. A glob
+#   that starts with ! is an exclusion and passes. Path and glob are also judged joined as path/glob (Grep
+#   path + glob, Glob path + pattern), so path ~ with glob .ssh/* is blocked; an absolute glob or an
+#   exclusion is not joined.
 #   Grep and Glob only list or search, but the spec lists them, so they are judged like a read.
 # Bash is best effort. The arguments of the file-reading commands cat less more head tail source "." grep
 #   egrep fgrep rg ag sed awk cp scp base64 xxd od strings diff open vim nano code (and some more, see
 #   scripts/bashlex-guard-secrets.awk) and the word after an input redirect (< .env) are judged. grep/rg/sed/
 #   awk skip their pattern or script operand (grep .env README.md is fine). cp and scp judge the sources,
 #   not the destination (cp .env.example .env is fine). Quoted text is not a command, heredoc bodies and
-#   comments are skipped, wrapper words (sudo, env, time) and `$(...)` are looked into (export $(cat .env)).
+#   comments are skipped, wrapper words (sudo, env, time) are skipped, and command substitutions are looked
+#   into, also inside double quotes: export $(cat .env), echo "$(cat .env)", x="`cat .env`" (the body is
+#   lexed again as a command line). `<> .env` (read and write) counts as a read.
+#   grep/rg options that take a value (-A 2, -m 1, -g '*.ts', -t ts, ...) are known, so their value is not
+#   mistaken for the pattern: `grep -A 2 .env .gitignore` and `rg -g '*.ts' .env src` pass; `-e`/`--regexp`
+#   values are patterns; `-f FILE` and `-g GLOB`/`--include` values are judged as files.
 #   The tokenizer is the one linear awk pass of guard-code (scripts/bash-lex.awk). After a cd the name
 #   rule still applies (cd .. && cat .env is blocked) but a relative ~/.ssh is unknown. Not caught: git
 #   (git add .env is not a read; git show HEAD:.env is), output redirects, ls, a recursive grep over a
 #   folder, variables other than a leading $HOME, sh -c "...", scripts, a link with an innocent name.
+#   When the lexer stops early (more than 200 candidates, or <<"WORD" inside "$(...)") the rest of the command
+#   is unknown: if the command text has a secret-looking string (see raw_hit below) the hook fails closed.
+#   The tokenizer lives in scripts/bash-lex.awk and scripts/bashlex-guard-secrets.awk: if they are missing
+#   the Bash path fails open (silently); the file tools are still judged.
 # - Inert outside <Core>/<project>/: cwd missing or not in a Core project -> exit 0 at once (so ~/.ssh is
 #   open when Claude works outside the Core, spec D17). No network, no git.
 #
@@ -92,6 +104,7 @@ under_ssh() {
 # a relative path has no known folder (after a cd): only its name is judged.
 is_secret() {
   local p="$1" unk="${2:-}" h last pre lex globby=0
+  case "$p" in "!"*) return 1 ;; esac   # an exclusion glob
   h='$HOME'; case "$p" in "$h"|"$h"/*) p="$HOME${p#"$h"}" ;; esac
   h='${HOME}'; case "$p" in "$h"|"$h"/*) p="$HOME${p#"$h"}" ;; esac
   [ -n "$p" ] || return 1
@@ -136,14 +149,18 @@ if [ "$tool" = Bash ]; then
   fi
   # Cheap exit: no .env and no .ssh anywhere in the command.
   printf '%s' "$cmd" | LC_ALL=C grep -qiE '\.env|\.ssh' || exit 0
-  targets="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r' '\002 ' | LC_ALL=C awk -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-guard-secrets.awk")"
+  targets="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r' '\002 ' | LC_ALL=C awk -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-guard-secrets.awk" 2>/dev/null)"
   [ -n "$targets" ] || exit 0
   TAB="$(printf '\t')"
+  stopped=""
   while IFS="$TAB" read -r kind a unk; do
+    if [ "$kind" = X ]; then stopped=1; continue; fi
     [ "$kind" = P ] || continue
     u=""; [ "$unk" = 1 ] && u=1
     if is_secret "$a" "$u"; then die "$a"; fi
   done <<< "$targets"
+  # the lexer stopped early: what is left of the command is unknown
+  if [ -n "$stopped" ]; then hit="$(printf '%s' "$cmd" | raw_hit)" && die "$hit"; fi
   exit 0
 fi
 
@@ -181,4 +198,16 @@ for key in $req $opt; do
     done <<< "$vals"
   fi
 done
+# path and glob together: Grep path + glob, Glob path + pattern
+jp=""; jg=""
+case "$tool" in
+  Grep) jp="$(json_str "$in" path)"; jg="$(json_str "$in" glob)" ;;
+  Glob) jp="$(json_str "$in" path)"; jg="$(json_str "$in" pattern)" ;;
+esac
+if [ -n "$jp" ] && [ -n "$jg" ]; then
+  case "$jg" in "!"*|/*|"~"*|'$HOME'*|'${HOME}'*) ;; *)
+    j="${jp%/}/$jg"
+    if is_secret "$j"; then die "$j"; fi ;;
+  esac
+fi
 exit 0
