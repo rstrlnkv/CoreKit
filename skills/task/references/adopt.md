@@ -1,0 +1,36 @@
+# Adopt
+
+`/coredev:task adopt <folder>`: move an existing project into the Core layout
+(`<Core>/<name>/` for internal docs, `<Core>/<name>/code/` for the repo). Start has already
+resolved `<Core>` and checked that it is set up. No crew, no tester: only you and the script.
+Talk to the user in plain words; never run `adopt.sh` before "ok".
+
+1. **Inspect** `<folder>` (resolve it to an absolute path; `~` counts as home). Look at
+   its name, `CLAUDE.md`, `docs/`, `.claude/` and the top level of the repo. Never open `.env`
+   files or `~/.ssh`.
+2. **Plan.** Run `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/adopt.sh" --from "<folder>" --dry-run`
+   (add `--name <n>` when the folder name is not a valid project name: 3-40 lowercase Latin
+   letters, digits and hyphens). A refusal (one line, exit 2) is final: explain it in plain
+   words, say what to do about it, change nothing. Otherwise tell the user in plain words:
+   the name; which files move to `<Core>/<name>/`; that git history stays and one commit
+   "Move internal Claude files to Core" removes them from the repo; that the folder itself is
+   moved to `<Core>/<name>/code`, so the old path stops working; what gets created.
+3. **Public docs.** Ask which docs, if any, stay in the repo for everyone to read (for
+   example `docs/`, or one page). Those paths are not moved and are listed as `public-docs:`.
+4. **Check command.** Detect the likely one from the repo (`package.json` scripts,
+   `Makefile`, `tests/run.sh`, `Cargo.toml`, `go.mod`, `pyproject.toml`, ...). Offer it and
+   let the user confirm or change it. None found: leave it out; `task` asks later.
+5. **Wait for "ok"** after showing the final plan (re-run `--dry-run` with the chosen
+   `--public-docs` and `--check` if the answers changed it).
+6. **Run** `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/adopt.sh" --from "<folder>" [--name <n>] [--public-docs "<paths>"] [--check "<command>"]`.
+   Relay any `warning:` line in plain words. A non-zero exit: show the line and stop.
+7. **Verify** with `bash "${CLAUDE_SKILL_DIR}/../../scripts/wiki-check.sh" <Core>/<name>`.
+   Red: say which pages and why; the usual cause is a link or reference in an old page that
+   no longer resolves. Pages the script gave new front matter hold `TODO` descriptions and
+   `status: draft`: say they still need writing.
+8. **Report** in plain words, with these lines:
+   - `Path: adopt`
+   - what moved (old and new path), the `check:` command or that it is not set yet
+   - the wiki result
+   - `Open Claude Code in: <Core>/<name>/code`, and tell the user to restart Claude Code there,
+     because this session still runs in the old folder, which is gone.

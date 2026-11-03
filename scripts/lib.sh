@@ -115,8 +115,28 @@ rel_core() {
   if [ "$1" = "$CORE_DIR" ]; then printf '.'; else printf '%s' "${1#"$CORE_DIR"/}"; fi
 }
 
+# valid_project_name <name> — exit 0 when it is 3-40 Latin lowercase letters, digits and hyphens,
+# starting with a letter and not ending with a hyphen (the rule for <Core>/<name>/).
+valid_project_name() {
+  LC_ALL=C bash -c '[[ "$1" =~ ^[a-z][a-z0-9-]{1,38}[a-z0-9]$ ]]' _ "$1"
+}
+
+# esc <value> — escape a value for use as a sed replacement with '|' delimiter.
+esc() { printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'; }
+
+# render <template> <dest> — fill the template placeholders. Reads the caller's variables NAME,
+# PURPOSE, P (the project folder in the Core), DATE; CORE_DIR and CORE_NAME come from load_settings.
+render() {
+  sed -e "s|{{NAME}}|$(esc "$NAME")|g" \
+      -e "s|{{PURPOSE}}|$(esc "$PURPOSE")|g" \
+      -e "s|{{PROJECT_DIR}}|$(esc "$P")|g" \
+      -e "s|{{CORE_DIR}}|$(esc "$CORE_DIR")|g" \
+      -e "s|{{CORE_NAME}}|$(esc "$CORE_NAME")|g" \
+      -e "s|{{DATE}}|$DATE|g" "$1" > "$2"
+}
+
 # put <template> <dest> [copy] — create dest from template unless it exists. Default mode
-# renders placeholders through the caller's render() function; "copy" copies the file as is.
+# renders placeholders through render() above; "copy" copies the file as is.
 put() {
   local src="$1" dest="$2" mode="${3:-render}"
   if [ -e "$dest" ]; then echo "skipped $(rel_core "$dest")"; return 0; fi
@@ -142,6 +162,46 @@ git_init() {
   mkdir -p "$1" || return 1
   git init -q "$1" && git -C "$1" symbolic-ref HEAD refs/heads/main || return 1
   echo "created $rel/.git"
+}
+
+# project_docs_manifest — the project's internal files made from templates, one per line:
+# "<template path under the templates dir>|<path in the project folder>", or "mkdir|<dir>".
+project_docs_manifest() {
+  cat <<'EOF'
+CLAUDE.md.tmpl|CLAUDE.md
+docs/INDEX.md.tmpl|docs/INDEX.md
+docs/brief.md.tmpl|docs/brief.md
+docs/architecture.md.tmpl|docs/architecture.md
+docs/decisions/001-stack-and-architecture.md.tmpl|docs/decisions/001-stack-and-architecture.md
+mkdir|docs/features
+mkdir|docs/knowledge
+rules/tests.md.tmpl|.claude/rules/tests.md
+EOF
+}
+
+# put_project_docs <templates dir> <dest dir> — create the manifest's files and folders in dest
+# (existing ones are kept). Rendering uses render() above.
+put_project_docs() {
+  local tpl="$1" dest="$2" a b
+  while IFS='|' read -r a b; do
+    if [ "$a" = mkdir ]; then mkdir_p "$dest/$b" || return 1
+    else put "$tpl/$a" "$dest/$b" || return 1; fi
+  done <<< "$(project_docs_manifest)"
+}
+
+# projects_entry <name> <purpose> — add "- <name> — <purpose> — <name>/code/" to $CORE_DIR/PROJECTS.md
+# unless a line for the name is there. Prints "created|skipped PROJECTS.md entry" ("would create"
+# with DRY=1, nothing written).
+projects_entry() {
+  local line="- $1 — $2 — $1/code/"
+  if [ -f "$CORE_DIR/PROJECTS.md" ] && grep -q "^- $1 " "$CORE_DIR/PROJECTS.md"; then
+    echo "skipped PROJECTS.md entry"
+  elif [ "${DRY:-0}" -eq 1 ]; then
+    echo "would create PROJECTS.md entry"
+  else
+    printf '%s\n' "$line" >> "$CORE_DIR/PROJECTS.md" || return 1
+    echo "created PROJECTS.md entry"
+  fi
 }
 
 # CLI: bash lib.sh get <key> | set <key> <value> | ready (exit 0 when core_ready) | core-dir (absolute path)

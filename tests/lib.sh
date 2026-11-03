@@ -40,7 +40,8 @@ setup_core() { bash "$SCRIPTS/setup-core.sh" "$CORE_DIR" >/dev/null; }
 sync_tools() { bash "$SCRIPTS/sync-tools.sh" "$ROOT" "$COREDEV_TOOLS" >/dev/null; }
 
 # Checksum of all files under a dir, excluding .git internals.
-tree_sum() { (cd "$1" && find . -type f -not -path '*/.git/*' | LC_ALL=C sort | xargs cksum); }
+# (NUL-separated, so names with spaces or non-ASCII characters are summed too.)
+tree_sum() { (cd "$1" && find . -type f -not -path '*/.git/*' -print0 | xargs -0 cksum | LC_ALL=C sort -k3); }
 
 finish() {
   echo "$(basename "$0"): $PASSES passed, $FAILS failed"
