@@ -69,7 +69,7 @@ else
     echo "would $verb .coredev"
   else
     tmp="$F.tmp.$$"
-    { echo "schema: 1"
+    { echo "schema: $COREDEV_SCHEMA"
       if [ -f "$F" ]; then
         # drop an unusable schema line (e.g. "schema: x"); keep everything else
         while IFS= read -r line || [ -n "$line" ]; do

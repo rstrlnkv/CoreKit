@@ -70,7 +70,9 @@ Do not pass `model` to feature-dev agents; they use their own default.
    (it is committed with the chain) so the next chain does not ask. List the file names of
    `<Core>/standards/`, `<Core>/knowledge/` and `<Core>/<project>/docs/knowledge/`, and read the
    `applies-to` front matter of each standard (rule 9 needs it).
-5. **Choose the path** (`fix`, `full`, `question`, `batch`, `release`, `adopt`; see
+5. **Base commits.** Record `git rev-parse HEAD` in the code root and in `<Core>`: these are the
+   chain's base commits; release attribution ranges and `--changed` start from them.
+6. **Choose the path** (`fix`, `full`, `question`, `batch`, `release`, `adopt`; see
    `references/paths.md`) and name it in the first line you say to the user.
 
 ## Running the chain
@@ -110,9 +112,9 @@ Every agent reply ends with `Knowledge line: <symptom → cause → guard | none
   "this project / all projects". Write accepted lines as the format in
   `${CLAUDE_SKILL_DIR}/../../reference/knowledge.md` says: into
   `<Core>/<project>/docs/knowledge/<role>.md` (this project) or `<Core>/knowledge/<role>.md`
-  (all projects). They go into the same commit as the chain (release step 5). On the `question`
+  (all projects). They go into the same commit as the chain (release.md postcondition 5). On the `question`
   path nothing else changed: with accepted lines, write them and commit
-  only those files through `save` (release steps 5–7: `save`, the attribution check with `forbid`, clean `git status`),
+  only those files through `save` (release.md postconditions 5–7: `save`, the attribution check with `forbid`, clean `git status`),
   and `Commit:` is the hash; with no accepted lines there is no commit.
 - A line whose cause already appears in another project's knowledge or in
   `<Core>/knowledge/` is a recurring lesson: offer to turn it into a standard with

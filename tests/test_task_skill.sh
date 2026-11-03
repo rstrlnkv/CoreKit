@@ -112,4 +112,35 @@ assert_eq "$first" '`This brief comes from coredev:task, path: <path>, project: 
 # No superpowers dependency anywhere under skills/task/
 if grep -rF "superpowers:" "$T" >/dev/null 2>&1; then fail "superpowers: referenced under skills/task/"; else pass; fi
 
+# release.md: the seven postconditions of spec section 10, in order, with the exact commands.
+REL="$T/references/release.md"
+assert_file "$REL"
+[ "$(wc -l < "$REL")" -le 80 ] && pass || fail "release.md is over 80 lines"
+prev=0
+for n in 1 2 3 4 5 6 7; do
+  l="$(grep -nE "^$n\\. " "$REL" | head -1 | cut -d: -f1)"
+  if [ -n "$l" ] && [ "$l" -gt "$prev" ]; then pass; else fail "release.md postcondition $n missing or out of order"; fi
+  prev="${l:-$prev}"
+done
+for w in 'wiki-check.sh' '--changed' '../docs/' 'git diff --name-only' \
+         "git log --format=%B <range> | grep -icE 'co-authored-by|generated with'" \
+         'attribution=forbid' 'skipped (attribution=allow)' '${user_config.attribution}' \
+         'scripts/save' 'never tags' 'never pushes' 'Step-Id' \
+         'versioning' 'applies-to' 'ask the user' 'git status --short' \
+         'check: <set after scaffolding>' 'git rev-parse HEAD' '<code base>..HEAD' \
+         'lib.sh" get schema' 'lib.sh" schema' 'old-schema' 'warning' \
+         'command → output → ✓/✗' 'one repair' 'Commit: stopped'; do
+  assert_contains "$REL" "$w"
+done
+# The attribution check is guarded: it runs only with forbid.
+grep -E "grep -icE" "$REL" | grep -qF 'forbid' && pass || fail "release.md: attribution check line is not guarded by forbid"
+# Question path with accepted lines runs only postconditions 5-7.
+assert_contains "$REL" '5–7'
+# SKILL.md Start records the base commits; both files agree with release.md.
+assert_contains "$SK" 'git rev-parse HEAD'
+assert_contains "$SK" 'base commit'
+sec_has "$PA" release 'postcondition 4'
+section "$PA" release | grep -qF 'wiki-check' && fail "paths.md release duplicates postconditions" || pass
+assert_contains "$SK" 'Never tag, never push'
+
 finish

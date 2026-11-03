@@ -120,6 +120,18 @@ assert_eq "$(CORE_DIR="$RD" bash "$LIB" core-dir)" "$RD" "core-dir prints CORE_D
 assert_eq "$(CORE_DIR='${user_config.core_dir}' HOME="$SANDBOX/h" bash "$LIB" core-dir)" "$SANDBOX/h/Projects/Core" "core-dir ignores an unsubstituted placeholder"
 assert_eq "$(CORE_DIR='~/xx' HOME="$SANDBOX/h" bash "$LIB" core-dir)" "$SANDBOX/h/xx" "core-dir expands ~"
 
+# schema: the plugin's layout schema number lives in lib.sh and setup-core.sh writes it
+SCH="$(bash "$LIB" schema)"
+case "$SCH" in ""|*[!0-9]*) fail "lib.sh schema is not a number: '$SCH'" ;; *) pass ;; esac
+assert_eq "$(CORE_DIR="$RD" bash "$LIB" schema)" "$SCH" "schema does not depend on the Core"
+assert_eq "$(bash "$LIB" schema | wc -l | tr -d ' ')" "1" "schema prints one line"
+assert_contains "$LIB" 'COREDEV_SCHEMA='
+assert_contains "$LIB" 'schema) printf'
+SC="$SANDBOX/schemacore"; CORE_DIR="$SC" bash "$SCRIPTS/setup-core.sh" "$SC" >/dev/null
+assert_eq "$(CORE_DIR="$SC" bash "$LIB" get schema)" "$SCH" "setup-core writes the plugin schema"
+assert_contains "$SCRIPTS/setup-core.sh" 'schema: $COREDEV_SCHEMA'
+assert_not_contains "$SCRIPTS/setup-core.sh" 'echo "schema: 1"'
+
 # scaffold uses the plugin option when CORE_DIR is unset
 unset CORE_DIR
 mkdir -p "$SANDBOX/optcore"; CORE_DIR="$SANDBOX/optcore" setup_core

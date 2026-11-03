@@ -3,6 +3,9 @@
 # (lines "key: value"). The settings file is read, never executed.
 # load_settings sets: CORE_DIR, CORE_NAME, ATTRIBUTION, MODEL_PROFILE, APP_ID_PREFIX.
 
+# The Core layout schema this plugin version writes and expects (the one place it is defined).
+COREDEV_SCHEMA=1
+
 # expand_home <path> — a leading ~ or ~/ becomes $HOME.
 expand_home() {
   case "$1" in
@@ -142,6 +145,7 @@ git_init() {
 }
 
 # CLI: bash lib.sh get <key> | set <key> <value> | ready (exit 0 when core_ready) | core-dir (absolute path)
+#      | schema (the plugin's schema number)
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   load_settings
   case "${1:-}" in
@@ -149,6 +153,7 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     set) [ $# -eq 3 ] || { echo "Usage: lib.sh set <key> <value>" >&2; exit 2; }; coredev_set "$2" "$3" ;;
     ready) core_ready ;;
     core-dir) printf '%s\n' "$CORE_DIR" ;;
-    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir" >&2; exit 2 ;;
+    schema) printf '%s\n' "$COREDEV_SCHEMA" ;;
+    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | schema" >&2; exit 2 ;;
   esac
 fi
