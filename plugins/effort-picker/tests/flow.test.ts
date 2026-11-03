@@ -47,7 +47,7 @@ function world(on: On, store: Record<string, unknown> = {}): World {
   mock.store(on, store)
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('prompt.submit', (_, e) => ({ text: e.text, origin: e.origin }))
-  mock.env(on, { HOME: '/home/t' })
+  mock.env(on, { HOME: '/fake-home' })
   on('command.register', (_, e) => ({ value: { command: e.name } }) as never)
   on('ui.status', () => ({ value: undefined }) as never)
   on('ui.invalidate', () => ({ value: undefined }) as never)
@@ -204,7 +204,7 @@ test('classifier error and timeout leave the level and write a log line', async 
   expect(w.asked.length).toBe(0)
   // A test hook that throws is skipped by the engine, so the plugin sees a failed call, not 'boom'.
   expect(w.logs.length).toBe(3)
-  expect(w.logs.every(l => l.startsWith('/home/t/.claude/mods-logs/effort-picker.log\n'))).toBe(true)
+  expect(w.logs.every(l => l.startsWith('/fake-home/.claude/mods-logs/effort-picker.log\n'))).toBe(true)
   expect(w.logs[1]!.includes('api-error')).toBe(true)
   expect(w.logs[2]!.includes('not readable')).toBe(true)
 })
