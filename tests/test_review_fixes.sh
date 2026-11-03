@@ -15,7 +15,7 @@ assert_no_file "$CORE_DIR/app-a/docs/a.md"; assert_file "$CORE_DIR/app-b/docs/b.
 
 # I1: non-ASCII paths, case variants, missing patterns file
 new_sandbox; bash "$S" --name hk-app >/dev/null; C="$CORE_DIR/hk-app/code"
-bash "$SKILL/scripts/install-hooks.sh" "$CORE_DIR/hk-app" >/dev/null
+bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/hk-app" >/dev/null
 blocked() { mkdir -p "$C/$(dirname "$1")"; echo x > "$C/$1"; git -C "$C" add -f -- "$1"
   git -C "$C" commit -q -m t >/dev/null 2>&1; local rc=$?; git -C "$C" reset -q; rm -f "$C/$1"; [ $rc -ne 0 ]; }
 blocked "папка/CLAUDE.md" && pass || fail "non-ASCII path CLAUDE.md allowed"

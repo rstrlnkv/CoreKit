@@ -52,7 +52,7 @@ assert_eq "$(scan "$good")" "" "portable lines flagged"
 
 # scripts <repo> — shell scripts on disk (tracked or not): *.sh or a file with a shell shebang
 scripts() {
-  (cd "$1" && find install.sh skills tests -type f 2>/dev/null | while IFS= read -r f; do
+  (cd "$1" && find install.sh skills scripts hooks tests -type f 2>/dev/null | while IFS= read -r f; do
     [ "$f" = tests/test_portability.sh ] && continue
     case "$f" in *.sh) ;; *) head -1 "$f" | grep -qE '^#!.*sh' || continue ;; esac
     echo "$f"
@@ -72,5 +72,5 @@ scripts "$ROOT" | while IFS= read -r f; do
   [ -z "$hits" ] || echo "$hits"
 done > "$SANDBOX/hits"
 [ -s "$SANDBOX/hits" ] && fail "not portable to macOS bash 3.2 / BSD: $(cat "$SANDBOX/hits")" || pass
-scripts "$ROOT" | grep -qx 'skills/new-project/core-bin/save' && pass || fail "scripts without .sh not scanned"
+scripts "$ROOT" | grep -qx 'scripts/save' && pass || fail "scripts without .sh not scanned"
 finish

@@ -3,11 +3,11 @@ source "$(dirname "$0")/lib.sh"
 new_sandbox
 bash "$SKILL/scripts/scaffold.sh" --name hook-app >/dev/null
 P="$CORE_DIR/hook-app"; C="$P/code"
-assert_exit 0 bash "$SKILL/scripts/install-hooks.sh" "$P"
+assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P"
 assert_file "$C/.git/hooks/pre-commit"; assert_file "$C/.git/hooks/pre-push"
 assert_file "$CORE_DIR/.git/hooks/pre-push"
 # idempotent
-assert_exit 0 bash "$SKILL/scripts/install-hooks.sh" "$P"
+assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P"
 
 try_commit() {  # try_commit <path> ; force-add past .gitignore to test the hook itself
   mkdir -p "$C/$(dirname "$1")"; echo x > "$C/$1"

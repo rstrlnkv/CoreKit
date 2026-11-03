@@ -75,7 +75,7 @@ set `stage: decided`.
 **4. Scaffold.** Generate the app with the stack's command from `references/stacks.md` **in a temp
 dir**, then `bash scripts/merge-generated.sh <tmp>/<folder> <Core>/<name>/code`. Never run a
 generator with `--force`/`--overwrite` in `code/`. Fill the Commands and Stack sections of
-`CLAUDE.md`. `bash scripts/install-hooks.sh <Core>/<name>`. Then from `code/`:
+`CLAUDE.md`. `bash ../../scripts/install-hooks.sh <Core>/<name>`. Then from `code/`:
 `bash <Core>/bin/save "Scaffold <stack> project"`. Set `stage: scaffolded`.
 
 **5. GitHub.** Ask separately before each repo is created, naming it and its visibility:
@@ -107,5 +107,5 @@ generator with `--force`/`--overwrite` in `code/`. Fill the Commands and Stack s
 | Check tools / name | `bash scripts/preflight.sh [--name <name>]` |
 | Create skeleton | `bash scripts/scaffold.sh --name <name> --purpose "<text>" [--dry-run]` |
 | Copy generated app | `bash scripts/merge-generated.sh <generated> <code>` |
-| Protective hooks | `bash scripts/install-hooks.sh <project_dir>` |
+| Protective hooks | `bash ../../scripts/install-hooks.sh <project_dir>` |
 | Save / undo a step | `bash <Core>/bin/save "<msg>" [--push]` · `bash <Core>/bin/undo-step` |

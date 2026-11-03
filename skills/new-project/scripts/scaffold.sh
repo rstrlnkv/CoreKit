@@ -6,7 +6,8 @@
 set -u
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TPL="$SKILL_DIR/templates"
-. "$SKILL_DIR/scripts/config-lib.sh"
+ROOT_DIR="$(cd "$SKILL_DIR/../.." && pwd)"
+. "$ROOT_DIR/scripts/lib.sh"
 load_config
 CORE_NAME="$(basename "$CORE_DIR")"
 NAME=""; PURPOSE="TODO: one or two sentences."; DRY=0
@@ -74,13 +75,13 @@ put "$TPL/core/README.md"   "$CORE_DIR/README.md" copy
 put "$TPL/core/PROJECTS.md" "$CORE_DIR/PROJECTS.md" copy
 
 # Shared commands and hook sources (copied once; never overwritten)
-put "$SKILL_DIR/core-bin/save"           "$CORE_DIR/bin/save" copy
-put "$SKILL_DIR/core-bin/undo-step"      "$CORE_DIR/bin/undo-step" copy
-put "$SKILL_DIR/core-bin/_locate.sh"     "$CORE_DIR/bin/_locate.sh" copy
-put "$SKILL_DIR/core-bin/stop-remind.sh" "$CORE_DIR/bin/stop-remind.sh" copy
-put "$SKILL_DIR/scripts/install-hooks.sh" "$CORE_DIR/bin/install-hooks" copy
+put "$ROOT_DIR/scripts/save"                "$CORE_DIR/bin/save" copy
+put "$ROOT_DIR/scripts/undo-step"           "$CORE_DIR/bin/undo-step" copy
+put "$ROOT_DIR/scripts/_locate.sh"          "$CORE_DIR/bin/_locate.sh" copy
+put "$ROOT_DIR/hooks/stop-remind.sh"        "$CORE_DIR/bin/stop-remind.sh" copy
+put "$ROOT_DIR/scripts/install-hooks.sh"  "$CORE_DIR/bin/install-hooks" copy
 for h in blocked-patterns pre-commit-code pre-push-code pre-push-core; do
-  put "$SKILL_DIR/hooks/$h" "$CORE_DIR/hooks/$h" copy
+  put "$ROOT_DIR/scripts/git-hooks/$h" "$CORE_DIR/hooks/$h" copy
 done
 [ $DRY -eq 1 ] || chmod +x "$CORE_DIR/bin/save" "$CORE_DIR/bin/undo-step" "$CORE_DIR/bin/install-hooks" 2>/dev/null
 

@@ -2,7 +2,10 @@
 # Claude Code Stop hook: reminds Claude to run `save` when the code repo or this
 # project's docs have uncommitted changes. Reminds once per stop (stop_hook_active) and
 # once per set of changes, so it stays quiet while Claude waits for the user's approval.
-. "$(dirname "$0")/_locate.sh"
+# _locate.sh sits next to this file in <Core>/bin and under ../scripts in the plugin.
+D="$(dirname "$0")"
+[ -f "$D/_locate.sh" ] || D="$D/../scripts"
+. "$D/_locate.sh"
 in=$(cat)
 printf '%s' "$in" | grep -qE '"stop_hook_active" *: *true' && exit 0
 cwd=$(printf '%s' "$in" | sed -nE 's/.*"cwd" *: *"([^"]*)".*/\1/p')

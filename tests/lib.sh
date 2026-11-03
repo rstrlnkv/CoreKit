@@ -2,6 +2,8 @@
 FAILS=0; PASSES=0
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SKILL="$ROOT/skills/new-project"
+SCRIPTS="$ROOT/scripts"
+HOOKS="$ROOT/hooks"
 
 pass() { PASSES=$((PASSES + 1)); }
 fail() { FAILS=$((FAILS + 1)); echo "  FAIL: $*"; }

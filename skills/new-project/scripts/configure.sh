@@ -3,7 +3,7 @@
 # Usage: bash configure.sh --show
 #        bash configure.sh [--projects-dir <abs path>] [--core-name <name>] [--app-id-prefix <com.example>]
 set -u
-. "$(dirname "$0")/config-lib.sh"
+. "$(dirname "$0")/../../../scripts/lib.sh"
 load_config
 SHOW=0; CHANGED=0
 die() { echo "$*" >&2; exit 2; }
