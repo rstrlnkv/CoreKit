@@ -32,6 +32,7 @@ scripts/               all machinery, portable bash
   wiki-check.sh        wiki checks
   check-standard.sh    standard file checks
   save, undo-step      one step = code + docs commit / revert
+  bash-lex.awk, bashlex-*.awk   the Bash tokenizer shared by guard-code and guard-secrets, and their parts
   git-hooks/           pre-commit-code, pre-push-code, pre-push-core, blocked-patterns
 tests/                 bash: lib.sh, test_*.sh, run.sh, fixtures/
 evals/                 trigger evals (new-project)

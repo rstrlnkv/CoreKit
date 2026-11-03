@@ -220,6 +220,49 @@ project_of() {
   printf '%s\n' "$first"
 }
 
+# --- Path helpers for the path-judging hooks (guard-code.sh, guard-secrets.sh).
+
+# lc <text> — ASCII lower case (bytes above 127 are left alone, so Cyrillic stays as it is).
+lc() { printf '%s' "$1" | LC_ALL=C tr 'A-Z' 'a-z'; }
+
+# norm_path <absolute path> — "." and ".." and repeated slashes resolved lexically (what is left after
+# canon_dir for a part of the path that does not exist yet).
+norm_path() {
+  local IFS=/ seg out=""
+  set -f
+  for seg in $1; do
+    case "$seg" in ""|.) ;; ..) out="${out%/*}" ;; *) out="$out/$seg" ;; esac
+  done
+  set +f
+  printf '%s' "${out:-/}"
+}
+
+# resolve_abs <path> — sets ABS: the canonical absolute path. A relative path is taken from $cwd (the hook's
+# working directory, set by the caller); the directory part goes through canon_dir; a link as the last
+# part is followed (up to 8 times).
+resolve_abs() {
+  local t="$1" dir base link n=0
+  while :; do
+    case "$t" in "~"|"~/"*) t="$(expand_home "$t")" ;; esac
+    case "$t" in /*) ;; *) t="$cwd/$t" ;; esac
+    while [ "${#t}" -gt 1 ] && [ "${t%/}" != "$t" ]; do t="${t%/}"; done
+    base="${t##*/}"; dir="${t%/*}"; [ -n "$dir" ] || dir="/"
+    case "$base" in
+      ""|.|..) ABS="$(norm_path "$(canon_dir "$t")")"; return 0 ;;
+    esac
+    t="$(norm_path "$(canon_dir "$dir")/$base")"
+    if [ -L "$t" ] && [ "$n" -lt 8 ]; then
+      link="$(readlink "$t")" || break
+      [ -n "$link" ] || break
+      n=$((n + 1))
+      case "$link" in /*) t="$link" ;; *) t="${t%/*}/$link" ;; esac
+      continue
+    fi
+    break
+  done
+  ABS="$t"
+}
+
 # --- Helpers that create things in the Core. They honour DRY=1 (print "would create", touch
 # nothing) and print paths relative to $CORE_DIR ("." for the Core itself).
 
