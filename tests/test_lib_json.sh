@@ -135,4 +135,12 @@ if [ -d "$SANDBOX/cs/A" ]; then
 else
   echo "  note: case-sensitive volume, letter-case test skipped"; pass
 fi
+# a long run of escaped backslashes is scanned in linear time
+bs="$(awk 'BEGIN{for(i=0;i<50000;i++) printf "\\\\"}')"
+start=$SECONDS
+doc="{\"content\":\"${bs}a\\\"b\",\"cwd\":\"/after/bs\"}"
+assert_eq "$(json_str "$doc" cwd)" "/after/bs" "key after a long backslash run"
+[ $((SECONDS - start)) -le 2 ] && pass || fail "json_str quadratic on a backslash run"
+# a raw newline in a value (invalid JSON) survives and does not start an escape
+assert_eq "$(json_str "$(printf '{"cwd":"a\nb"}')" cwd)" "$(printf 'a\nb')" "raw newline kept"
 finish

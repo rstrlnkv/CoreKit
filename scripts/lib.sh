@@ -139,13 +139,13 @@ json_str() {
     function oddbs(s,   l) {
       l = length(s)
       if (l == 0 || substr(s, l, 1) != "\\") return 0
-      match(s, /\\+$/)
-      return RLENGTH % 2
+      if (match(s, /[^\\]\\+$/)) return (RLENGTH - 1) % 2   # anchored on a non-backslash: linear
+      return l % 2
     }
     # print the decoded text t (pieces joined with escaped quotes already appended)
     function emit(t,   m, S, j, c, r, cp, lo) {
-      gsub(/\002/, "\n", t)
       m = split(t, S, "\\")
+      for (j = 1; j <= m; j++) gsub(/\002/, "\n", S[j])   # after split: split() also cuts at newlines
       printf "%s", S[1]
       for (j = 2; j <= m; j++) {
         r = S[j]
