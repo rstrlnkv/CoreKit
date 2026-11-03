@@ -14,7 +14,8 @@ mkrepo() {
   printf '{"local":true}\n' > "$1/.claude/settings.local.json"
   printf 'x\n' > "$1/.claude/worktrees/w/f.txt"
   printf 'echo a\n' > "$1/src/a.sh"
-  git -C "$1" add -A && git -C "$1" commit -q -m "initial"
+  git -C "$1" add -A && git -C "$1" add -f .claude/settings.local.json .claude/worktrees/w/f.txt 2>/dev/null
+  git -C "$1" commit -q -m "initial"
 }
 # state <dir>... — everything a refusal must not change: files, HEAD, status, branches
 state() {
@@ -213,5 +214,120 @@ assert_contains "$P/docs/guide.md" "title: Mine"
 assert_contains "$P/docs/guide.md" "description: Does things."
 assert_eq "$(grep -c '^title:' "$P/docs/guide.md")" "1" "title lines"
 bash "$WC" "$P" >/dev/null 2>&1 && pass || fail "wiki-check (front matter): $(bash "$WC" "$P" 2>&1)"
+
+# =====================================================================================
+# Fix round 1: data safety
+# =====================================================================================
+
+# --- tracked files only: ignored files stay in code/ and never reach the Core or its git
+new_sandbox; setup_core
+F="$SANDBOX/in/ign-app"; mkrepo "$F"
+printf '.claude/secret.json\ndocs/node_modules/\n' > "$F/.gitignore"
+git -C "$F" add -A && git -C "$F" commit -q -m "ignore"
+printf 'SECRET\n' > "$F/.claude/secret.json"
+mkdir -p "$F/docs/node_modules"; echo 'x' > "$F/docs/node_modules/x.js"
+assert_exit 0 bash "$AD" --from "$F" --dry-run
+echo "$OUT" | grep -qF "stays in code (ignored by git):" && pass || fail "plan lacks ignored list: $OUT"
+echo "$OUT" | grep -qF ".claude/secret.json" && pass || fail "plan lacks secret.json: $OUT"
+assert_exit 0 bash "$AD" --from "$F"
+P="$CORE_DIR/ign-app"
+assert_no_file "$P/.claude/secret.json"; assert_no_file "$P/docs/node_modules"
+assert_file "$P/code/.claude/secret.json"; assert_file "$P/code/docs/node_modules/x.js"
+assert_eq "$(cat "$P/code/.claude/secret.json")" "SECRET" "ignored file changed"
+assert_eq "$(git -C "$CORE_DIR" ls-files | grep -c 'secret\|node_modules')" "0" "ignored file in the Core git"
+assert_eq "$(git -C "$CORE_DIR" show --name-only --format= HEAD | grep -c 'secret\|node_modules')" "0" "ignored file in the Adopt commit"
+assert_eq "$(git -C "$P/code" status --porcelain)" "" "code repo dirty"
+
+# --- symlinks among the internal files: refuse
+new_sandbox; setup_core
+F="$SANDBOX/in/link-app"; mkrepo "$F"
+echo "agents" > "$F/AGENTS.md"; rm "$F/CLAUDE.md"; ln -s AGENTS.md "$F/CLAUDE.md"
+git -C "$F" add -A && git -C "$F" commit -q -m "link"
+refuses "symlink: CLAUDE.md -> AGENTS.md; replace it with a file first" --from "$F"
+refuses "symlink: CLAUDE.md -> AGENTS.md; replace it with a file first" --from "$F" --dry-run
+rm "$F/CLAUDE.md"; echo real > "$F/CLAUDE.md"; ln -s ../src/a.sh "$F/docs/lnk.md"
+git -C "$F" add -A && git -C "$F" commit -q -m "link2"
+refuses "symlink: docs/lnk.md -> ../src/a.sh; replace it with a file first" --from "$F"
+
+# --- a --public-docs path that does not exist: refuse
+new_sandbox; setup_core
+F="$SANDBOX/in/nf-app"; mkrepo "$F"
+refuses "not found: docs/nope.md" --from "$F" --public-docs "docs/guide.md,docs/nope.md"
+refuses "not found: nope" --from "$F" --public-docs "nope/" --dry-run
+
+# --- Core inside the folder
+new_sandbox; setup_core
+mkdir -p "$SANDBOX/in"
+git init -q "$SANDBOX/Projects" && git -C "$SANDBOX/Projects" symbolic-ref HEAD refs/heads/main
+echo 'Core/' > "$SANDBOX/Projects/.gitignore"; echo x > "$SANDBOX/Projects/p.txt"
+git -C "$SANDBOX/Projects" add -A && git -C "$SANDBOX/Projects" commit -q -m i
+refuses "Core is inside the folder" --from "$SANDBOX/Projects" --name projects-x
+
+# --- git identity unknown: refuse (repo needs a commit; Core needs a commit)
+new_sandbox; setup_core
+F="$SANDBOX/in/id-app"; mkrepo "$F"
+G="$SANDBOX/in/id-bare"; mkdir -p "$G"; git init -q "$G"; git -C "$G" symbolic-ref HEAD refs/heads/main
+echo c > "$G/main.sh"; git -C "$G" add -A && git -C "$G" commit -q -m i
+git -C "$G" config user.name Local; git -C "$G" config user.email local@example.com
+mkdir -p "$SANDBOX/h"
+SAVE_HOME="$HOME"
+export HOME="$SANDBOX/h" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.useConfigOnly GIT_CONFIG_VALUE_0=true
+SAVE_ID="$GIT_AUTHOR_NAME $GIT_AUTHOR_EMAIL $GIT_COMMITTER_NAME $GIT_COMMITTER_EMAIL"
+unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
+refuses "git does not know your name and email (git config --global user.name / user.email)" --from "$F"
+refuses "git does not know your name and email (git config --global user.name / user.email)" --from "$G"
+export HOME="$SAVE_HOME" GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com
+unset GIT_CONFIG_NOSYSTEM GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+
+# --- different disk: refuse (df stub reports another mount point for the Core)
+new_sandbox; setup_core
+F="$SANDBOX/in/disk-app"; mkrepo "$F"
+mkdir -p "$SANDBOX/stub"
+cat > "$SANDBOX/stub/df" <<'STUB'
+#!/bin/sh
+case "$*" in
+  */Projects/Core*) printf 'Filesystem 512-blocks Used Available Capacity Mounted on\n/dev/fake 100 1 99 1%% /Volumes/Other Disk\n' ;;
+  *) exec /bin/df "$@" ;;
+esac
+STUB
+chmod +x "$SANDBOX/stub/df"
+SAVE_PATH="$PATH"; PATH="$SANDBOX/stub:$PATH"
+refuses "different disk: move the folder next to Core first" --from "$F"
+refuses "different disk: move the folder next to Core first" --from "$F" --dry-run
+PATH="$SAVE_PATH"
+assert_exit 0 bash "$AD" --from "$F" --dry-run
+
+# --- a failing final mv: nothing is deleted or moved away; the output says where things are
+new_sandbox; setup_core
+F="$SANDBOX/in/mv-app"; mkrepo "$F"
+mkdir -p "$SANDBOX/stub"
+cat > "$SANDBOX/stub/mv" <<'STUB'
+#!/bin/sh
+if [ "$1" = "$FAIL_MV_SRC" ]; then echo "mv: stub failure" >&2; exit 1; fi
+exec /bin/mv "$@"
+STUB
+chmod +x "$SANDBOX/stub/mv"
+SAVE_PATH="$PATH"; PATH="$SANDBOX/stub:$PATH"; export FAIL_MV_SRC="$F"
+OUT="$(bash "$AD" --from "$F" 2>&1)"; rc=$?
+PATH="$SAVE_PATH"; unset FAIL_MV_SRC
+assert_eq "$rc" "1" "mv failure exit"
+echo "$OUT" | grep -qF "$F" && pass || fail "message lacks the folder: $OUT"
+echo "$OUT" | grep -qF "$CORE_DIR/mv-app" && pass || fail "message lacks the staged copy: $OUT"
+assert_file "$F/src/a.sh"; assert_file "$F/.claude/settings.local.json"; assert_dir "$F/.git"
+assert_eq "$(git -C "$F" log -1 --format=%s)" "Move internal Claude files to Core" "repo commit kept"
+assert_file "$CORE_DIR/mv-app/CLAUDE.md"; assert_file "$CORE_DIR/mv-app/docs/guide.md"
+assert_file "$CORE_DIR/mv-app/.claude/settings.json"
+ls -A "$CORE_DIR" | grep -q '^\.adopt' && fail "temp dir left in Core" || pass
+git -C "$F" cat-file -e HEAD~1:CLAUDE.md 2>/dev/null && pass || fail "history lost"
+
+# --- a linked worktree under .claude/worktrees still works after the move
+new_sandbox; setup_core
+F="$SANDBOX/in/wt-app"; mkrepo "$F"
+echo '.claude/worktrees/w1/' >> "$F/.git/info/exclude"
+git -C "$F" worktree add -q "$F/.claude/worktrees/w1" -b w1
+assert_exit 0 bash "$AD" --from "$F"
+P="$CORE_DIR/wt-app"
+git -C "$P/code/.claude/worktrees/w1" status >/dev/null 2>&1 && pass || fail "worktree broken after adopt: $(git -C "$P/code/.claude/worktrees/w1" status 2>&1)"
+echo "$OUT" | grep -q '^warning:' && fail "worktree warning: $OUT" || pass
 
 finish

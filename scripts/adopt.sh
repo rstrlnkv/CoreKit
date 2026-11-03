@@ -8,15 +8,20 @@
 # Refusals (exit 2, one line on stderr, nothing changed; all checked before any change):
 #   not a git repo | uncommitted changes | already inside Core | Core is inside the folder
 #   invalid project name '<n>' (use --name) | target exists: <path> | Core is not set up
+#   not found: <path>                  a --public-docs path that is not in the repo
+#   symlink: <path> -> <target>; replace it with a file first   (a tracked file to be copied)
+#   different disk: move the folder next to Core first          (the move must be a rename)
 #   git does not know your name and email (...)
+# Only files git tracks are copied and removed; ignored files stay in <Core>/<n>/code untouched.
+# Exit 1 (nothing deleted; the message says where the files are): a failed mv after the commit.
 # Steps: copy CLAUDE.md, docs/ and .claude/ (not settings.local.json, not worktrees/, not
 # --public-docs paths) into a temp folder in the Core; add the wiki map and the pages the
 # new-project templates have that are missing, the check: line and public-docs: line; give
 # copied pages that lack wiki front matter the missing fields. Then one commit in the repo
 # "Move internal Claude files to Core" (git rm of the copied files; skipped when there are none;
 # if it fails, the files come back and nothing else was touched). Then the temp folder becomes
-# <Core>/<name>/, the repo folder is moved with mv to <Core>/<name>/code, git hook shims are
-# installed, PROJECTS.md gets its line, and the Core gets one commit "Adopt <name>".
+# <Core>/<name>/, the repo folder is moved with mv to <Core>/<name>/code, linked worktrees under
+# .claude/worktrees are repaired, git hook shims are installed, PROJECTS.md gets its line, and the Core gets one commit "Adopt <name>".
 # --dry-run prints the plan and changes nothing. The last line is "open: <Core>/<name>/code".
 set -u
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -88,27 +93,41 @@ kind() {
   esac
 }
 
-COPY=""; PUBKEEP=""; STAY=""; NCOPY=0; NPUB=0; NSTAY=0
-CAND="$(cd "$FROM" && for t in CLAUDE.md docs .claude; do
-  { [ -e "$t" ] || [ -L "$t" ]; } && find "$t" \( -type f -o -type l \)
-done | LC_ALL=C sort)"
+# A --public-docs path must exist in the repo.
+while IFS= read -r t; do
+  [ -n "$t" ] || continue
+  { [ -e "$FROM/$t" ] || [ -L "$FROM/$t" ]; } || refuse "not found: $t"
+done <<< "$PUB_LIST"
+
+# Only files git tracks are copied and removed; ignored and untracked files stay in code/ as
+# they are (so nothing private ends up in the Core's git).
+TRACKED="$(git -C "$FROM" -c core.quotepath=false ls-files -- CLAUDE.md docs .claude)"
+COPY=""; PUBKEEP=""; NCOPY=0; NPUB=0; NSTAY=0
+REMOVE=()
 while IFS= read -r f; do
   [ -n "$f" ] || continue
   case "$(kind "$f")" in
     copy) COPY="$COPY$f
-"; NCOPY=$((NCOPY + 1)) ;;
+"; NCOPY=$((NCOPY + 1)); REMOVE[${#REMOVE[@]}]="$f" ;;
     public) PUBKEEP="$PUBKEEP$f
 "; NPUB=$((NPUB + 1)) ;;
-    stay) STAY="$STAY$f
-"; NSTAY=$((NSTAY + 1)) ;;
+    stay) NSTAY=$((NSTAY + 1)) ;;
   esac
-done <<< "$CAND"
-# What the repo commit removes: tracked files among the copied ones.
-REMOVE=()
+done <<< "$TRACKED"
+
+# Symlinks cannot be moved faithfully: refuse if a file that would be copied is one.
 while IFS= read -r f; do
   [ -n "$f" ] || continue
-  [ "$(kind "$f")" = copy ] && REMOVE[${#REMOVE[@]}]="$f"
-done <<< "$(git -C "$FROM" -c core.quotepath=false ls-files -- CLAUDE.md docs .claude)"
+  [ "$(kind "$f")" = copy ] || continue
+  refuse "symlink: $f -> $(readlink "$FROM/$f"); replace it with a file first"
+done <<< "$(git -C "$FROM" -c core.quotepath=false ls-files -s -- CLAUDE.md docs .claude \
+  | awk -F'\t' '$1 ~ /^120000 / { print substr($0, index($0, "\t") + 1) }')"
+
+# The move must be a rename: the folder (and its parent) and the Core must share a file system.
+mount_of() { df -P "$1" 2>/dev/null | sed -n '2s/^[^ ]* *[0-9]* *[0-9]* *[0-9]* *[0-9]*% *//p'; }
+M_CORE="$(mount_of "$CORE_DIR")"
+{ [ "$(mount_of "$FROM")" = "$M_CORE" ] && [ "$(mount_of "$(dirname "$FROM")")" = "$M_CORE" ]; } \
+  || refuse "different disk: move the folder next to Core first"
 
 # Git needs an identity for the commits: refuse now rather than half way.
 ident_ok() { git -C "$1" var GIT_AUTHOR_IDENT >/dev/null 2>&1 && git -C "$1" var GIT_COMMITTER_IDENT >/dev/null 2>&1; }
@@ -134,8 +153,12 @@ if [ "$DRY" -eq 1 ]; then
   show "copy to $P/:" "$COPY"
   [ "${#REMOVE[@]}" -gt 0 ] && echo "remove from the repo in one commit \"Move internal Claude files to Core\": ${#REMOVE[@]} file(s) (the copied ones that git tracks)"
   [ "${#REMOVE[@]}" -gt 0 ] || echo "no repo commit: git tracks none of the copied files"
-  show "stay in the repo (public docs):" "$PUBKEEP"
-  [ "$NSTAY" -eq 0 ] || echo "stay in the repo (local settings and worktrees): $NSTAY file(s)"
+  show "stays in code (public docs):" "$PUBKEEP"
+  IGN="$(cd "$FROM" && for t in CLAUDE.md docs .claude; do
+    { [ -e "$t" ] || [ -L "$t" ]; } && find "$t" -path .claude/worktrees -prune -o \( -type f -o -type l \) -print
+  done | LC_ALL=C sort | LC_ALL=C comm -23 - <(printf '%s\n' "$TRACKED" | LC_ALL=C sort))"
+  show "stays in code (ignored by git):" "$IGN"
+  [ "$NSTAY" -eq 0 ] || echo "stays in code (local settings and worktrees): $NSTAY tracked file(s)"
   CRE=""
   while IFS='|' read -r a b; do
     [ "$a" != mkdir ] || { [ -d "$FROM/$b" ] || CRE="$CRE$b/
@@ -152,9 +175,13 @@ if [ "$DRY" -eq 1 ]; then
 fi
 
 # --- Real run. Stage everything in a temp folder inside the Core (same disk), so a failure
-# before the repo commit leaves nothing but a folder we remove ourselves.
+# before the repo commit leaves nothing but a folder we remove ourselves. After the repo commit the
+# staged copy holds the only copy of the internal files: from then on nothing is ever deleted
+# (the trap only removes the temp folder while it is empty).
+COMMITTED=0
 TMP="$(mktemp -d "$CORE_DIR/.adopt.XXXXXX")" || { echo "adopt: cannot create a temp folder in $CORE_DIR" >&2; exit 1; }
-trap 'rm -rf "$TMP"' EXIT
+cleanup() { if [ "$COMMITTED" -eq 0 ]; then rm -rf "$TMP"; else rmdir "$TMP" 2>/dev/null; fi; }
+trap cleanup EXIT
 STAGE="$TMP/p"
 mkdir "$STAGE" || exit 1
 DATE="$(date +%Y-%m-%d)"
@@ -237,7 +264,6 @@ while IFS= read -r pg; do
 done <<< "$(printf '%s\n' "$W" | sed -n 's/^wiki-check: \(.*\): not in INDEX\.md$/\1/p')"
 
 # The repo commit. If it fails the files come back; nothing else was touched.
-COMMITTED=0
 if [ "${#REMOVE[@]}" -gt 0 ]; then
   if ! { git -C "$FROM" rm -q -- "${REMOVE[@]}" && git -C "$FROM" commit -q -m "Move internal Claude files to Core"; } >/dev/null 2>&1; then
     git -C "$FROM" reset -q -- "${REMOVE[@]}" >/dev/null 2>&1
@@ -246,15 +272,18 @@ if [ "${#REMOVE[@]}" -gt 0 ]; then
   fi
   COMMITTED=1
 fi
-undo_commit() {
-  [ "$COMMITTED" -eq 0 ] || git -C "$FROM" reset -q --hard HEAD~1 >/dev/null 2>&1
-}
-
-# The move.
-mv "$STAGE" "$P" || { undo_commit; echo "adopt: could not create $P (nothing was changed)" >&2; exit 1; }
+# The move (a rename: same file system, checked above). If it fails nothing is deleted or moved
+# back; the output says where everything is.
+if ! mv "$STAGE" "$P"; then
+  echo "adopt: could not create $P. Your project is still at $FROM." >&2
+  [ "$COMMITTED" -eq 0 ] || echo "adopt: the internal files are in $STAGE and the repo has the commit 'Move internal Claude files to Core' (to undo it: git -C \"$FROM\" revert HEAD)." >&2
+  exit 1
+fi
 if ! mv "$FROM" "$P/code"; then
-  mv "$P" "$STAGE"; undo_commit
-  echo "adopt: could not move $FROM to $P/code (nothing was changed)" >&2; exit 1
+  echo "adopt: could not move $FROM to $P/code. Nothing was deleted." >&2
+  echo "adopt: your project is still at $FROM; the internal files are copied to $P." >&2
+  [ "$COMMITTED" -eq 0 ] || echo "adopt: the repo has the commit 'Move internal Claude files to Core' (to undo it: git -C \"$FROM\" revert HEAD)." >&2
+  exit 1
 fi
 
 # From here the project is in place; problems are reported, not undone.
@@ -264,6 +293,16 @@ else echo "no repo commit: git tracks none of the copied files"; fi
 [ -z "$CREATED" ] || { echo "created:"; printf '%s\n' "$CREATED" | sed 's/^/  /'; }
 echo "old: $FROM"
 echo "new: $P/code"
+# Linked worktrees under .claude/worktrees moved with the repo: point them and the repo at each other.
+WT=()
+for w in "$P/code/.claude/worktrees"/*; do
+  [ -f "$w/.git" ] && WT[${#WT[@]}]="$w"
+done
+if [ -d "$P/code/.git/worktrees" ]; then
+  if [ "${#WT[@]}" -gt 0 ]; then git -C "$P/code" worktree repair "${WT[@]}" >/dev/null 2>&1
+  else git -C "$P/code" worktree repair >/dev/null 2>&1; fi \
+    || echo "warning: could not repair git worktrees after the move; run: git -C \"$P/code\" worktree repair <worktree folder>" >&2
+fi
 if ! CORE_DIR="$CORE_DIR" bash "$ROOT_DIR/scripts/install-hooks.sh" "$P"; then
   echo "warning: git hooks were not installed; run: CORE_DIR=\"$CORE_DIR\" bash \"$ROOT_DIR/scripts/install-hooks.sh\" \"$P\"" >&2
 fi
