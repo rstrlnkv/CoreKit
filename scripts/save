@@ -9,9 +9,9 @@ for a in "$@"; do case "$a" in --push) PUSH=1 ;; *) MSG="$a" ;; esac; done
 [ -n "$MSG" ] || { echo 'Usage: save "<message>" [--push]' >&2; exit 2; }
 locate || exit 1
 
-# Make sure protective hooks are in place.
+# Make sure protective hook shims are in place.
 if [ ! -x "$MAIN/.git/hooks/pre-commit" ] || [ ! -x "$MAIN/.git/hooks/pre-push" ] || \
-   [ ! -r "$MAIN/.git/hooks/blocked-patterns" ] || [ ! -x "$CORE/.git/hooks/pre-push" ]; then
+   [ ! -x "$CORE/.git/hooks/pre-push" ]; then
   CORE_DIR="$CORE" bash "$(dirname "$0")/install-hooks.sh" "$PROJECT" >/dev/null || exit 1
 fi
 

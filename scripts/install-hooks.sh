@@ -1,28 +1,55 @@
 #!/usr/bin/env bash
-# Installs new-project git hooks into <project_dir>/code and the Core repo.
-# Usage: bash install-hooks.sh <project_dir>    Env: CORE_DIR (default: parent of project_dir)
+# Installs coredev git hook shims into <project_dir>/code and the Core repo. A shim is a tiny
+# script that runs the hook body kept in the tools folder (see sync-tools.sh), so hooks stay
+# current after plugin updates.
+# Usage: bash install-hooks.sh <project_dir> [--tools <dir>]
+# Env:   CORE_DIR (default: parent of project_dir)
+#        COREDEV_TOOLS (default: ${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/coredev-corekit}/tools)
 set -u
-# Hook sources: git-hooks/ next to this script (plugin); the Core copy in <Core>/bin uses
-# <Core>/hooks/ instead.
-SRC="$(cd "$(dirname "$0")" && pwd)/git-hooks"
-[ -d "$SRC" ] || SRC="$(cd "$(dirname "$0")/.." && pwd)/hooks"
-P="${1:?usage: install-hooks.sh <project_dir>}"
+P=""; TOOLS="${COREDEV_TOOLS:-${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/coredev-corekit}/tools}"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --tools) [ $# -ge 2 ] || { echo "usage: install-hooks.sh <project_dir> [--tools <dir>]" >&2; exit 2; }
+             TOOLS="$2"; shift 2 ;;
+    *) P="$1"; shift ;;
+  esac
+done
+[ -n "$P" ] || { echo "usage: install-hooks.sh <project_dir> [--tools <dir>]" >&2; exit 2; }
+case "$TOOLS" in /*) ;; *) TOOLS="$PWD/$TOOLS" ;; esac
+TOOLS="${TOOLS%/}"
 CORE_DIR="${CORE_DIR:-$(dirname "$P")}"
-MARK="new-project hook"
+MARK="# coredev hook shim"
+OLD_MARK="new-project hook"
 
-install_one() {  # install_one <src> <dest>
-  local src="$1" dest="$2"
-  if [ -e "$dest" ] && ! grep -q "$MARK" "$dest"; then
-    echo "WARN: $dest exists and is not a new-project hook; left unchanged" >&2; return
+# This script's own git-hooks/ folder must be complete: an incomplete copy cannot be trusted.
+SRC="$(cd "$(dirname "$0")" && pwd)/git-hooks"
+for f in pre-commit-code pre-push-code pre-push-core blocked-patterns; do
+  [ -f "$SRC/$f" ] || { echo "coredev: hook source $SRC/$f is missing; hooks not installed." >&2; exit 1; }
+done
+
+install_shim() {  # install_shim <name in tools/git-hooks> <dest hook path>
+  local name="$1" dest="$2" target="$TOOLS/git-hooks/$1"
+  if [ -e "$dest" ] && ! grep -qF -e "$MARK" -e "$OLD_MARK" "$dest"; then
+    echo "WARN: $dest exists and is not a coredev hook; left unchanged" >&2; return 0
   fi
-  mkdir -p "$(dirname "$dest")"; cp "$src" "$dest"; chmod +x "$dest"
+  mkdir -p "$(dirname "$dest")" || return 1
+  # Single-quote the paths inside the shim (a ' in a path is written as '\'').
+  local qt qd
+  qt=$(printf '%s' "$target" | sed "s/'/'\\\\''/g"); qd=$(printf '%s' "$dest" | sed "s/'/'\\\\''/g")
+  {
+    echo '#!/bin/sh'
+    echo "$MARK"
+    echo "T='$qt'"
+    echo "H='$qd'"
+    echo '[ -f "$T" ] || { echo "coredev: $T is missing. Start Claude Code once with coredev enabled, or remove this hook: rm \"$H\"" >&2; exit 1; }'
+    echo 'exec bash "$T" "$@"'
+  } > "$dest.tmp.$$" && chmod +x "$dest.tmp.$$" && mv "$dest.tmp.$$" "$dest"
 }
 
 [ -d "$P/code/.git" ] || { echo "No git repo at $P/code" >&2; exit 1; }
 [ -d "$CORE_DIR/.git" ] || { echo "No git repo at $CORE_DIR" >&2; exit 1; }
 H="$P/code/.git/hooks"
-cp "$SRC/blocked-patterns" "$H/blocked-patterns"
-install_one "$SRC/pre-commit-code" "$H/pre-commit"
-install_one "$SRC/pre-push-code"   "$H/pre-push"
-install_one "$SRC/pre-push-core"   "$CORE_DIR/.git/hooks/pre-push"
+install_shim pre-commit-code "$H/pre-commit" || exit 1
+install_shim pre-push-code   "$H/pre-push" || exit 1
+install_shim pre-push-core   "$CORE_DIR/.git/hooks/pre-push" || exit 1
 echo "hooks installed"

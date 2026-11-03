@@ -26,12 +26,18 @@ new_sandbox() {
   SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/np-test.XXXXXX")"
   SANDBOX="$(cd -P "$SANDBOX" && pwd)"   # physical path: scripts print canonical paths
   export CORE_DIR="$SANDBOX/Projects/Core"
+  export CLAUDE_PLUGIN_DATA="$SANDBOX/plugin-data"   # never the real ~/.claude
+  export COREDEV_TOOLS="$CLAUDE_PLUGIN_DATA/tools"
   export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com
   export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com
 }
 
 # setup_core — creates the Core skeleton in $CORE_DIR (what scaffold.sh requires).
 setup_core() { bash "$SCRIPTS/setup-core.sh" "$CORE_DIR" >/dev/null; }
+
+# sync_tools — copies the plugin's scripts into $COREDEV_TOOLS (what session-start does),
+# so git hook shims installed in the sandbox have something to run.
+sync_tools() { bash "$SCRIPTS/sync-tools.sh" "$ROOT" "$COREDEV_TOOLS" >/dev/null; }
 
 # Checksum of all files under a dir, excluding .git internals.
 tree_sum() { (cd "$1" && find . -type f -not -path '*/.git/*' | LC_ALL=C sort | xargs cksum); }

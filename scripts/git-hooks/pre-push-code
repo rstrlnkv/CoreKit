@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# new-project hook: re-checks pushed commits (catches commits made with --no-verify).
+# coredev git hook: re-checks pushed commits (catches commits made with --no-verify).
 PATTERNS="$(dirname "$0")/blocked-patterns"
 if [ ! -r "$PATTERNS" ]; then
-  echo "Blocked: $PATTERNS is missing, so internal files can't be checked. Reinstall hooks (save does it)." >&2
+  echo "Blocked: $PATTERNS is missing, so internal files can't be checked. Start Claude Code once with coredev enabled to refresh the tools." >&2
   exit 1
 fi
 remote="$1"; zero=0000000000000000000000000000000000000000

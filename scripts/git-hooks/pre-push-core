@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# new-project hook: allows pushing the Core repo only to a PRIVATE GitHub repository.
+# coredev git hook: allows pushing the Core repo only to a PRIVATE GitHub repository.
 url="$2"
 repo=$(printf '%s' "$url" | sed -nE 's#^(https://|git@|ssh://git@)github\.com[:/]([^/]+/[^/]+)$#\2#p' | sed 's/\.git$//')
 if [ -z "$repo" ]; then

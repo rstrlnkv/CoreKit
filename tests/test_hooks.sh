@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/lib.sh"
-new_sandbox; setup_core
+new_sandbox; setup_core; sync_tools
 bash "$SKILL/scripts/scaffold.sh" --name hook-app >/dev/null
 P="$CORE_DIR/hook-app"; C="$P/code"
 assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P"
 assert_file "$C/.git/hooks/pre-commit"; assert_file "$C/.git/hooks/pre-push"
 assert_file "$CORE_DIR/.git/hooks/pre-push"
+# the three hooks are shims that run the tools copy; blocked-patterns stays out of .git/hooks
+for h in "$C/.git/hooks/pre-commit" "$C/.git/hooks/pre-push" "$CORE_DIR/.git/hooks/pre-push"; do
+  assert_contains "$h" "# coredev hook shim"; [ -x "$h" ] && pass || fail "not executable: $h"
+done
+assert_contains "$C/.git/hooks/pre-commit" "$COREDEV_TOOLS/git-hooks/pre-commit-code"
+assert_contains "$C/.git/hooks/pre-push" "$COREDEV_TOOLS/git-hooks/pre-push-code"
+assert_contains "$CORE_DIR/.git/hooks/pre-push" "$COREDEV_TOOLS/git-hooks/pre-push-core"
+assert_no_file "$C/.git/hooks/blocked-patterns"
 # idempotent
 assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P"
 
@@ -41,4 +49,42 @@ GH_STUB=true  PATH="$STUB:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2
 GH_STUB=false PATH="$STUB:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && fail "public Core push allowed" || pass
 PATH="/usr/bin:/bin" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && fail "push allowed without gh" || pass
 GH_STUB=true PATH="$STUB:$PATH" bash "$H" origin "git@github.com:someone/Core.git" </dev/null >/dev/null 2>&1 && pass || fail "ssh url not parsed"
+
+# --- shim edge cases
+# tools file missing: the commit fails and the message names the fix and the shim
+mv "$COREDEV_TOOLS/git-hooks/pre-commit-code" "$SANDBOX/pcc"
+echo x > "$C/ok.txt"; git -C "$C" add ok.txt
+OUT=$(git -C "$C" commit -m t 2>&1); rc=$?
+[ $rc -ne 0 ] && pass || fail "commit allowed with tools file missing"
+echo "$OUT" | grep -q 'is missing' && pass || fail "no 'is missing' message: $OUT"
+echo "$OUT" | grep -q 'Start Claude Code once with coredev enabled' && pass || fail "no fix hint: $OUT"
+echo "$OUT" | grep -qF "rm \"$C/.git/hooks/pre-commit\"" && pass || fail "no rm hint: $OUT"
+mv "$SANDBOX/pcc" "$COREDEV_TOOLS/git-hooks/pre-commit-code"; git -C "$C" reset -q; rm -f "$C/ok.txt"
+
+# an old 0.1.x hook (marker "new-project hook") is replaced by a shim
+printf '#!/bin/sh\n# new-project hook: OLDBODY\nexit 0\n' > "$C/.git/hooks/pre-commit"
+assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P"
+assert_contains "$C/.git/hooks/pre-commit" "# coredev hook shim"
+assert_not_contains "$C/.git/hooks/pre-commit" "OLDBODY"
+
+# a foreign hook is left alone and warned about
+printf '#!/bin/sh\n# mine\nexit 0\n' > "$C/.git/hooks/pre-push"
+assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P"
+echo "$OUT" | grep -q 'WARN' && echo "$OUT" | grep -q 'left unchanged' && pass || fail "no WARN for foreign hook: $OUT"
+assert_contains "$C/.git/hooks/pre-push" "# mine"; assert_not_contains "$C/.git/hooks/pre-push" "coredev hook shim"
+
+# --tools overrides the default; a tools dir with a space works
+T2="$SANDBOX/my tools"; bash "$SCRIPTS/sync-tools.sh" "$ROOT" "$T2" >/dev/null
+rm -f "$C/.git/hooks/pre-push"
+assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P" --tools "$T2"
+assert_contains "$C/.git/hooks/pre-push" "$T2/git-hooks/pre-push-code"
+echo x > "$C/CLAUDE.md"; git -C "$C" add -f CLAUDE.md
+git -C "$C" commit -q -m t >/dev/null 2>&1 && fail "commit allowed with tools in a path with a space" || pass
+git -C "$C" reset -q; rm -f "$C/CLAUDE.md"
+
+# missing hook sources: plain message, exit 1
+BROKEN="$SANDBOX/broken"; mkdir -p "$BROKEN"; cp "$SCRIPTS/install-hooks.sh" "$BROKEN/"
+assert_exit 1 bash "$BROKEN/install-hooks.sh" "$P"
+echo "$OUT" | grep -q 'hooks installed' && fail "claimed success without sources" || pass
+echo "$OUT" | grep -qi 'missing\|not found' && pass || fail "no plain message: $OUT"
 finish

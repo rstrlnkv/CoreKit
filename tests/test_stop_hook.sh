@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/lib.sh"
-new_sandbox; setup_core
+new_sandbox; setup_core; sync_tools
 bash "$SKILL/scripts/scaffold.sh" --name stop-app >/dev/null
 P="$CORE_DIR/stop-app"; C="$P/code"; H="$HOOKS/stop-remind.sh"
 assert_file "$H"

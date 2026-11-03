@@ -3,7 +3,7 @@
 source "$(dirname "$0")/lib.sh"
 
 # C1: undo-step must only touch the current project's steps
-new_sandbox; setup_core; S="$SKILL/scripts/scaffold.sh"
+new_sandbox; setup_core; sync_tools; S="$SKILL/scripts/scaffold.sh"
 bash "$S" --name app-a >/dev/null; bash "$S" --name app-b >/dev/null
 SAVE="$SCRIPTS/save"; UNDO="$SCRIPTS/undo-step"
 (cd "$CORE_DIR/app-a/code" && bash "$SAVE" init) >/dev/null 2>&1
@@ -14,7 +14,7 @@ echo b1 > "$CORE_DIR/app-b/docs/b.md"; (cd "$CORE_DIR/app-b/code" && bash "$SAVE
 assert_no_file "$CORE_DIR/app-a/docs/a.md"; assert_file "$CORE_DIR/app-b/docs/b.md"
 
 # I1: non-ASCII paths, case variants, missing patterns file
-new_sandbox; setup_core; bash "$S" --name hk-app >/dev/null; C="$CORE_DIR/hk-app/code"
+new_sandbox; setup_core; sync_tools; bash "$S" --name hk-app >/dev/null; C="$CORE_DIR/hk-app/code"
 bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/hk-app" >/dev/null
 blocked() { mkdir -p "$C/$(dirname "$1")"; echo x > "$C/$1"; git -C "$C" add -f -- "$1"
   git -C "$C" commit -q -m t >/dev/null 2>&1; local rc=$?; git -C "$C" reset -q; rm -f "$C/$1"; [ $rc -ne 0 ]; }
@@ -22,12 +22,12 @@ blocked "папка/CLAUDE.md" && pass || fail "non-ASCII path CLAUDE.md allowed
 blocked "é/.env" && pass || fail "non-ASCII .env allowed"
 blocked "Claude.md" && pass || fail "Claude.md allowed"
 blocked ".ENV" && pass || fail ".ENV allowed"
-mv "$C/.git/hooks/blocked-patterns" "$SANDBOX/bp"
+mv "$COREDEV_TOOLS/git-hooks/blocked-patterns" "$SANDBOX/bp"
 blocked "src/ok.txt" && pass || fail "missing patterns file must fail closed"
-mv "$SANDBOX/bp" "$C/.git/hooks/blocked-patterns"
+mv "$SANDBOX/bp" "$COREDEV_TOOLS/git-hooks/blocked-patterns"
 
 # I2: undo from a worktree reverts the worktree commit
-new_sandbox; setup_core; bash "$S" --name wt-app >/dev/null; C="$CORE_DIR/wt-app/code"
+new_sandbox; setup_core; sync_tools; bash "$S" --name wt-app >/dev/null; C="$CORE_DIR/wt-app/code"
 (cd "$C" && bash "$SCRIPTS/save" init) >/dev/null 2>&1
 git -C "$C" worktree add -q .claude/worktrees/w -b w 2>/dev/null; W="$C/.claude/worktrees/w"
 echo w > "$W/w.txt"; (cd "$W" && bash "$SCRIPTS/save" "wt step") >/dev/null 2>&1
@@ -35,7 +35,7 @@ echo w > "$W/w.txt"; (cd "$W" && bash "$SCRIPTS/save" "wt step") >/dev/null 2>&1
 assert_no_file "$W/w.txt"
 
 # I3: a conflict leaves neither repo half-undone
-new_sandbox; setup_core; bash "$S" --name cf-app >/dev/null; P="$CORE_DIR/cf-app"; C="$P/code"
+new_sandbox; setup_core; sync_tools; bash "$S" --name cf-app >/dev/null; P="$CORE_DIR/cf-app"; C="$P/code"
 (cd "$C" && bash "$SCRIPTS/save" init) >/dev/null 2>&1
 echo one > "$C/x.txt"; echo one > "$P/docs/f.md"; (cd "$C" && bash "$SCRIPTS/save" X) >/dev/null 2>&1
 X=$(git -C "$C" log -1 --format=%B | sed -n 's/^Step-Id: //p')
@@ -48,6 +48,7 @@ assert_eq "$(git -C "$CORE_DIR" status --porcelain -- cf-app)" "" "docs left dir
 
 # I4: paths with spaces
 SANDBOX="$(mktemp -d)"; export CORE_DIR="$SANDBOX/my projects/Core"
+export CLAUDE_PLUGIN_DATA="$SANDBOX/plugin data"; export COREDEV_TOOLS="$CLAUDE_PLUGIN_DATA/tools"; sync_tools; setup_core
 bash "$S" --name sp-app >/dev/null; C="$CORE_DIR/sp-app/code"
 (cd "$C" && bash "$SCRIPTS/save" init) >/dev/null 2>&1
 echo s > "$C/s.txt"; (cd "$C" && bash "$SCRIPTS/save" s) >/dev/null 2>&1

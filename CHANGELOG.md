@@ -9,6 +9,10 @@
 - The plugin depends on `feature-dev` from `claude-plugins-official`; the marketplace allows
   that cross-marketplace dependency.
 - Added `tests/test_manifest.sh`.
+- Git hooks installed in repos are small shims that run the plugin's scripts from a stable
+  copy in the plugin data folder (`sync-tools.sh`); the copy is refreshed on version change, so
+  hooks no longer go stale after an update. `install-hooks.sh` fails with exit 1 when its hook
+  sources are missing, and no longer copies `blocked-patterns` into `.git/hooks`.
 
 ## 0.1.1 — 2026-11-03
 - `save` reinstalls hooks when the code pre-push hook or `blocked-patterns` is missing
