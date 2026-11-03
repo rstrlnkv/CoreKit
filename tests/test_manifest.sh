@@ -24,6 +24,8 @@ assert_contains "$M" '"name": "coredev"'
 assert_contains "$M" '"renames"'
 assert_contains "$M" '"corekit": "coredev"'
 assert_not_contains "$M" 'allowCrossMarketplaceDependenciesOn'
+assert_contains "$M" '"name": "effort-picker"'
+assert_contains "$M" '"source": "./plugins/effort-picker"'
 
 # README and CHANGELOG
 assert_contains "$ROOT/README.md" '/plugin install coredev@corekit'

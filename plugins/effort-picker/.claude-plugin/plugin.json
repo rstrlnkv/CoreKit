@@ -1,0 +1,27 @@
+{
+  "name": "effort-picker",
+  "version": "0.1.0",
+  "description": "Picks the effort level each prompt needs, for code and office work, and asks before any switch to xhigh or max.",
+  "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
+  "homepage": "https://github.com/rstrlnkv/CoreKit",
+  "repository": "https://github.com/rstrlnkv/CoreKit",
+  "license": "MIT",
+  "keywords": ["effort", "cost", "workflow"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "mode": {
+      "type": "string",
+      "title": "Mode",
+      "description": "suggest: ask before every change of level. auto: change by itself, but ask before xhigh and max. off: do nothing.",
+      "options": ["suggest", "auto", "off"],
+      "default": "suggest"
+    },
+    "classifier": {
+      "type": "string",
+      "title": "Classifier model",
+      "description": "The model that reads each prompt and picks the level: sonnet (more accurate) or haiku (faster, cheaper).",
+      "options": ["haiku", "sonnet"],
+      "default": "sonnet"
+    }
+  }
+}

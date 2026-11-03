@@ -7,6 +7,11 @@
       "name": "coredev",
       "source": "./",
       "description": "Start projects from an interview and run tasks with a crew of agents; standards and lessons live in your private Core repo."
+    },
+    {
+      "name": "effort-picker",
+      "source": "./plugins/effort-picker",
+      "description": "Picks the effort level each prompt needs, for code and office work, and asks before any switch to xhigh or max."
     }
   ],
   "renames": {

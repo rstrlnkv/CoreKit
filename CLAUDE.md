@@ -36,6 +36,8 @@ scripts/               all machinery, portable bash
   git-hooks/           pre-commit-code, pre-push-code, pre-push-core, blocked-patterns
 tests/                 bash: lib.sh, test_*.sh, run.sh, fixtures/
 evals/                 trigger evals (new-project)
+plugins/effort-picker/ a second plugin (TypeScript hooks module); spec docs/specs/2026-11-04-effort-picker-design.md;
+                       own CHANGELOG; tests: `claude plugin test plugins/effort-picker` (run by tests/test_effort_picker.sh)
 CHANGELOG.md, README.md
 ```
 No top-level `bin/` (claude.ai and Cowork refuse plugins that have one). Spec section 4.1 is the
