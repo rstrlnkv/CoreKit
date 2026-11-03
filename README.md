@@ -38,7 +38,8 @@ In Claude Code:
 /plugin install corekit@corekit
 ```
 Or manually: `git clone https://github.com/rstrlnkv/CoreKit && bash CoreKit/install.sh`
-(copies the skill to `~/.claude/skills/`; then it runs as `/new-project`).
+(copies the skill to `~/.claude/skills/`; then it runs as `/new-project`). It never replaces a
+same-named skill it did not install; add `--force` to replace it anyway.
 
 On first run the skill asks where to keep projects (default `~/Projects`), the name of the private
 docs repo (default `Core`) and your app id prefix (e.g. `com.yourname`), and saves them to
