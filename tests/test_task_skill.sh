@@ -94,7 +94,8 @@ sec_has "$PA" question 'save'
 sec_has "$PA" question 'Commit: none — no files changed'
 section "$PA" question | grep -qF 'No release, no commit' && fail "question section contradicts SKILL.md" || pass
 sec_has "$PA" question 'accepted'
-assert_contains "$SK" 'only those files through `save`'
+assert_contains "$SK" 'was clean at Start'
+assert_contains "$SK" '`save` commits only the chain'"'"'s files'
 assert_contains "$RP" 'none — no files changed'
 # full and batch point at the wave; the large-plan stop runs the first task whole.
 sec_has "$PA" full "checkers' wave"
@@ -142,5 +143,25 @@ assert_contains "$SK" 'base commit'
 sec_has "$PA" release 'postcondition 4'
 section "$PA" release | grep -qF 'wiki-check' && fail "paths.md release duplicates postconditions" || pass
 assert_contains "$SK" 'Never tag, never push'
+
+# Fix round 1: scoped Core checks, explicit changed-file lists, no repair after the commit.
+assert_contains "$REL" 'git -C <Core> status --short -- <project>'
+assert_contains "$REL" 'git -C <Core> log --format=%B <Core base>..HEAD -- <project>'
+assert_contains "$REL" "{ git diff --name-only <code base>; git ls-files --others --exclude-standard; }"
+assert_contains "$REL" "{ git -C <Core> diff --name-only <Core base> -- <project>/docs; git -C <Core> ls-files --others --exclude-standard -- <project>/docs; }"
+assert_contains "$REL" '`<project>/docs/` prefix'
+assert_contains "$REL" "git log -1 --format='%h %s'"
+assert_contains "$REL" 'final tester'
+assert_contains "$REL" '`<version>`'
+assert_contains "$REL" 'no repair'
+assert_contains "$REL" 'rerun from postcondition 1'
+assert_contains "$REL" 'save` failed'
+grep -qE 'git status --short$|git status --short`' "$REL" && pass || fail "release.md: code root keeps plain git status --short"
+# Start stops on an unclean tree; paths.md release matches the version order.
+assert_contains "$SK" 'uncommitted changes'
+assert_contains "$SK" 'git status --short'
+sec_has "$PA" release 'one engineer call'
+sec_has "$PA" release '<version>'
+assert_contains "$PA" 'was clean at Start'
 
 finish

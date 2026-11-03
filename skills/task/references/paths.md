@@ -43,7 +43,8 @@ A question about the code or the project; no files change.
   an input can reach; and so on).
 - Proof is a `file:line` for every claim. An answer with no `file:line` goes back once.
 - No files change, so no release. Only if the user accepts knowledge lines from the reply: write
-  them and commit only those files through `save` (release.md postconditions 5–7); then `Commit:` is the
+  them and commit through `save`; the tree was clean at Start, so `save` commits only the chain's
+  files (release.md postconditions 5–7); then `Commit:` is the
   hash. With no accepted lines there is no commit: `Commit: none — no files changed`.
 
 ## batch
@@ -74,8 +75,10 @@ place. A finding that engineer cannot repair goes to `Open`.
 ## release
 `/coredev:task release <version>`: the release procedure with a version and a changelog entry.
 Read `${CLAUDE_SKILL_DIR}/references/release.md` and follow it in full: every postcondition,
-and postcondition 4 (version and changelog) applies on this path. Nothing is tagged or pushed. No agents are
-needed unless a check fails; then the finding goes to engineer as one repair.
+and postcondition 4 (version and changelog) applies on this path. Before postcondition 1 there
+is one engineer call: it writes `<version>` and the changelog entry per the versioning standard
+(ask the user first when there is none); more engineer calls only if a check fails. Nothing is
+tagged or pushed.
 
 ## adopt
 `/coredev:task adopt <folder>`: bring an existing project into the Core layout.
