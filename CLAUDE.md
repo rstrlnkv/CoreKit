@@ -40,7 +40,8 @@ calling GitHub.
 - **Portable bash:** scripts must run on macOS bash 3.2 with BSD utilities. Do not use
   `sed -i`, `mapfile`/`readarray`, `${x,,}`/`${x^^}`, `grep -P`, `declare -A`, `local -n`.
   Write to a temp file and `mv` instead of in-place edits. No `jq`: parse JSON with
-  `grep`/`sed`. Quote paths; they may contain spaces.
+  `grep`/`sed`. Quote paths; they may contain spaces. tests/test_portability.sh enforces
+  this; add a pattern there when you find a new non-portable construct.
 - **Never overwrite or delete user files** in scripts; scaffold is idempotent and prints
   `created`/`skipped`.
 - **Releases:** bump `version` in .claude-plugin/plugin.json and add an entry to
