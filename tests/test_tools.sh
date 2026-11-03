@@ -22,6 +22,17 @@ assert_exit 0 bash "$SYNC" "$ROOT" "$T"
 assert_eq "$OUT" "tools current 0.2.0" "second sync output"
 assert_file "$T/marker"
 
+# a damaged copy is healed: same VERSION, but a file is gone -> updated and restored
+for f in git-hooks/blocked-patterns git-hooks/pre-push-core _locate.sh lib.sh install-hooks.sh undo-step; do
+  rm -f "$T/$f"
+  assert_exit 0 bash "$SYNC" "$ROOT" "$T"
+  assert_eq "$OUT" "tools updated 0.2.0" "sync after deleting $f"
+  assert_file "$T/$f"
+done
+assert_exit 0 bash "$SYNC" "$ROOT" "$T"
+assert_eq "$OUT" "tools current 0.2.0" "intact copy is current again"
+echo marker > "$T/marker"
+
 # a different VERSION triggers an update that replaces the folder
 echo 0.1.0 > "$T/VERSION"
 assert_exit 0 bash "$SYNC" "$ROOT" "$T"

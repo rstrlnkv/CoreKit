@@ -78,9 +78,27 @@ T2="$SANDBOX/my tools"; bash "$SCRIPTS/sync-tools.sh" "$ROOT" "$T2" >/dev/null
 rm -f "$C/.git/hooks/pre-push"
 assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P" --tools "$T2"
 assert_contains "$C/.git/hooks/pre-push" "$T2/git-hooks/pre-push-code"
-echo x > "$C/CLAUDE.md"; git -C "$C" add -f CLAUDE.md
-git -C "$C" commit -q -m t >/dev/null 2>&1 && fail "commit allowed with tools in a path with a space" || pass
-git -C "$C" reset -q; rm -f "$C/CLAUDE.md"
+# (CLAUDE.md is already tracked by the --no-verify test above, so use a fresh blocked file)
+echo secret > "$C/.env.local"; git -C "$C" add -f .env.local
+OUT=$(git -C "$C" commit -m t 2>&1) && fail "commit allowed with tools in a path with a space" || pass
+echo "$OUT" | grep -q 'Commit blocked' && pass || fail "shim with a spaced tools path did not run the hook body: $OUT"
+git -C "$C" reset -q; rm -f "$C/.env.local"
+echo ok > "$C/clean.txt"; git -C "$C" add clean.txt
+git -C "$C" commit -q -m clean >/dev/null 2>&1 && pass || fail "clean commit blocked with tools in a path with a space"
+
+# install-hooks run from the plugin syncs the tools first: empty tools dir, then a clean commit works
+new_sandbox; setup_core
+bash "$SKILL/scripts/scaffold.sh" --name fresh-app >/dev/null
+C="$CORE_DIR/fresh-app/code"
+assert_no_file "$COREDEV_TOOLS"
+assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/fresh-app"
+assert_file "$COREDEV_TOOLS/VERSION"; assert_file "$COREDEV_TOOLS/git-hooks/blocked-patterns"
+echo ok > "$C/clean.txt"; git -C "$C" add clean.txt
+git -C "$C" commit -q -m clean >/dev/null 2>&1 && pass || fail "first commit blocked on a fresh machine"
+# run from the tools copy, install-hooks does not sync (no plugin.json next to it)
+echo 0.0.0 > "$COREDEV_TOOLS/VERSION"
+assert_exit 0 bash "$COREDEV_TOOLS/install-hooks.sh" "$CORE_DIR/fresh-app"
+assert_eq "$(cat "$COREDEV_TOOLS/VERSION")" "0.0.0" "install-hooks from the tools copy must not sync"
 
 # missing hook sources: plain message, exit 1
 BROKEN="$SANDBOX/broken"; mkdir -p "$BROKEN"; cp "$SCRIPTS/install-hooks.sh" "$BROKEN/"

@@ -21,6 +21,15 @@ CORE_DIR="${CORE_DIR:-$(dirname "$P")}"
 MARK="# coredev hook shim"
 OLD_MARK="new-project hook"
 
+# Run from the plugin (plugin.json is one level up): bring the tools copy up to date first, so
+# the shims have something to run. From the tools copy itself (save's reinstall) there is no
+# plugin.json and this is skipped.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$HERE/../.claude-plugin/plugin.json" ] && [ -f "$HERE/sync-tools.sh" ]; then
+  bash "$HERE/sync-tools.sh" "$(cd "$HERE/.." && pwd)" "$TOOLS" >/dev/null || \
+    { echo "coredev: could not update the tools in $TOOLS; hooks not installed." >&2; exit 1; }
+fi
+
 # This script's own git-hooks/ folder must be complete: an incomplete copy cannot be trusted.
 SRC="$(cd "$(dirname "$0")" && pwd)/git-hooks"
 for f in pre-commit-code pre-push-code pre-push-core blocked-patterns; do

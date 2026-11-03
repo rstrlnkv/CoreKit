@@ -18,9 +18,21 @@ for f in save undo-step _locate.sh lib.sh install-hooks.sh; do
 done
 [ -d "$S/git-hooks" ] || { echo "coredev: $S/git-hooks not found; tools not updated." >&2; exit 1; }
 
-# Current: same version and the key files are all there.
-if [ -f "$T/VERSION" ] && [ "$(cat "$T/VERSION")" = "$VER" ] && [ -f "$T/save" ] && \
-   [ -f "$T/git-hooks/pre-commit-code" ]; then
+# Current: same version and every file we would copy is there (a damaged copy is rebuilt).
+complete=1
+[ -f "$T/VERSION" ] && [ "$(cat "$T/VERSION")" = "$VER" ] || complete=0
+if [ $complete -eq 1 ]; then
+  for f in save undo-step _locate.sh lib.sh install-hooks.sh; do
+    [ -f "$T/$f" ] || { complete=0; break; }
+  done
+fi
+if [ $complete -eq 1 ]; then
+  for f in "$S"/git-hooks/*; do
+    [ -f "$f" ] || continue
+    [ -f "$T/git-hooks/$(basename "$f")" ] || { complete=0; break; }
+  done
+fi
+if [ $complete -eq 1 ]; then
   echo "tools current $VER"; exit 0
 fi
 
