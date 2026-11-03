@@ -16,16 +16,16 @@ dirty=""
 STATE="$(git -C "$CODE" rev-parse --absolute-git-dir)/new-project-stop-remind"
 [ -z "$dirty" ] && { rm -f "$STATE"; exit 0; }
 
-# untracked <repo> [paths] — checksums of untracked files, so their edits count as changes
-untracked() {
+# changes <repo> [paths] — status, staged and unstaged diffs (work without commits) and
+# checksums of untracked files (-z: no quoting of non-ASCII names; xargs: one cksum per batch)
+changes() {
   local repo="$1"; shift
-  (cd "$repo" && git ls-files --others --exclude-standard -- "$@" | while IFS= read -r f; do
-    cksum "$f"; done)
+  git -C "$repo" status --porcelain -- "$@"
+  git -C "$repo" diff -- "$@"; git -C "$repo" diff --cached -- "$@"
+  (cd "$repo" && git ls-files -z --others --exclude-standard -- "$@" | xargs -0 cksum 2>/dev/null)
 }
 # shellcheck disable=SC2086
-sum=$({ git -C "$CODE" status --porcelain; git -C "$CODE" diff HEAD 2>/dev/null; untracked "$CODE"
-        git -C "$CORE" status --porcelain -- $CORE_PATHS; git -C "$CORE" diff HEAD -- $CORE_PATHS 2>/dev/null
-        untracked "$CORE" $CORE_PATHS; } | cksum)
+sum=$({ changes "$CODE"; changes "$CORE" $CORE_PATHS; } | cksum)
 [ "$(cat "$STATE" 2>/dev/null)" = "$sum" ] && exit 0
 echo "$sum" > "$STATE"
 echo "Uncommitted changes in $dirty. If this working step is finished, run: bash \"$CORE/bin/save\" \"<short English message>\". If you are waiting for the user's answer or approval, do not save; just end your turn." >&2

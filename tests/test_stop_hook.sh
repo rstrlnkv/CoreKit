@@ -30,4 +30,19 @@ assert_eq "$(git -C "$C" status --porcelain)" "?? new.txt" "hook left files in t
 input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "dirty docs should block"
 # outside a project -> 0 (never block unrelated sessions)
 input "$SANDBOX" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "outside project should pass"
+
+# untracked file with a non-ASCII name: edits are noticed, no cksum errors reach Claude
+(cd "$C" && bash "$CORE_DIR/bin/save" "s2") >/dev/null 2>&1
+echo a > "$C/заметки.txt"
+OUT=$(input "$C" false | bash "$H" 2>&1); assert_eq "$?" "2" "non-ASCII file: first reminder"
+assert_eq "$(echo "$OUT" | grep -c 'No such file')" "0" "cksum error in reminder: $OUT"
+echo b >> "$C/заметки.txt"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "edit of non-ASCII untracked file missed"
+
+# repo with no commits yet (right after scaffold): edits to a staged file are noticed
+bash "$SKILL/scripts/scaffold.sh" --name fresh-app >/dev/null; F="$CORE_DIR/fresh-app/code"
+echo 1 > "$F/a.txt"; git -C "$F" add a.txt; echo 2 >> "$F/a.txt"
+input "$F" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "no-commit repo: first reminder"
+echo 3 >> "$F/a.txt"
+input "$F" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "no-commit repo: edit of staged file missed"
 finish
