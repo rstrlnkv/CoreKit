@@ -12,8 +12,8 @@ plugin) and docs/specs/2026-11-02-new-project-design.md (the `new-project` skill
 ## Layout
 ```
 .claude-plugin/
-  plugin.json          name "coredev", version lives here, userConfig, dependencies
-  marketplace.json     marketplace "corekit"; plugin "coredev"; renames; cross-marketplace allowance
+  plugin.json          name "coredev", version lives here, userConfig
+  marketplace.json     marketplace "corekit"; plugin "coredev"; renames
 skills/
   new-project/         as today; uses scripts/setup-core.sh; wiki templates
   task/                SKILL.md; references/: paths.md, brief.md, report.md, release.md, adopt.md
