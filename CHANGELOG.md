@@ -15,7 +15,8 @@
 - Added `tests/test_manifest.sh`.
 - Git hooks installed in repos are small shims that run the plugin's scripts from a stable
   copy in the plugin data folder (`sync-tools.sh`); the copy is refreshed on version change, so
-  hooks no longer go stale after an update. `install-hooks.sh` fails with exit 1 when its hook
+  hooks no longer go stale after an update. The copy is also refreshed when the scripts' content
+  changes without a version bump, and a folder that is not a coredev tools copy is never replaced. `install-hooks.sh` fails with exit 1 when its hook
   sources are missing, and no longer copies `blocked-patterns` into `.git/hooks`.
 - The Stop hook ships with the plugin (`hooks/hooks.json`, runs `hooks/stop-remind.sh`) and
   stays silent outside a Core project. New projects no longer get a `hooks` block in

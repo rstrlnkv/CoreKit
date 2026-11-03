@@ -3,6 +3,10 @@
 # plugin updates (the versioned plugin folder does not). Git hook shims run this copy.
 # Usage: bash sync-tools.sh <plugin_root> <tools_dir>
 # Prints "tools updated <version>" or "tools current <version>".
+# <tools_dir>/VERSION holds the plugin version (line 1) and one checksum of the copied files (line 2).
+# The copy is current when both match the plugin and the copy itself still has that checksum; a
+# VERSION with only the version (older syncs) counts as stale. A non-empty <tools_dir> without a
+# VERSION file, or a <tools_dir> that is not a folder, is not ours: exit 2, nothing is touched.
 set -u
 ROOT="${1:?usage: sync-tools.sh <plugin_root> <tools_dir>}"
 T="${2:?usage: sync-tools.sh <plugin_root> <tools_dir>}"
@@ -18,22 +22,32 @@ for f in save undo-step _locate.sh lib.sh install-hooks.sh; do
 done
 [ -d "$S/git-hooks" ] || { echo "coredev: $S/git-hooks not found; tools not updated." >&2; exit 1; }
 
-# Current: same version and every file we would copy is there (a damaged copy is rebuilt).
-complete=1
-[ -f "$T/VERSION" ] && [ "$(cat "$T/VERSION")" = "$VER" ] || complete=0
-if [ $complete -eq 1 ]; then
-  for f in save undo-step _locate.sh lib.sh install-hooks.sh; do
-    [ -f "$T/$f" ] || { complete=0; break; }
-  done
-fi
-if [ $complete -eq 1 ]; then
-  for f in "$S"/git-hooks/*; do
-    [ -f "$f" ] || continue
-    [ -f "$T/git-hooks/$(basename "$f")" ] || { complete=0; break; }
-  done
-fi
-if [ $complete -eq 1 ]; then
+# The files we copy, relative to the scripts folder (names have no spaces).
+FILES="save undo-step _locate.sh lib.sh install-hooks.sh"
+for f in "$S"/git-hooks/*; do
+  [ -f "$f" ] && FILES="$FILES git-hooks/$(basename "$f")"
+done
+# sum_of <dir> — one checksum over those files in <dir> (a missing file changes it too).
+sum_of() {
+  # shellcheck disable=SC2086
+  (cd "$1" 2>/dev/null && cksum $FILES 2>/dev/null) | cksum | awk '{ print $1 " " $2 }'
+}
+SUM="$(sum_of "$S")"
+
+# Current: same version, same content, and the copy is intact (a damaged or edited copy is rebuilt).
+if [ -f "$T/VERSION" ] && [ "$(sed -n 1p "$T/VERSION")" = "$VER" ] && [ "$(sed -n 2p "$T/VERSION")" = "$SUM" ] \
+   && [ "$(sum_of "$T")" = "$SUM" ]; then
   echo "tools current $VER"; exit 0
+fi
+
+# Never replace a folder that is not ours.
+if { [ -e "$T" ] || [ -L "$T" ]; } && [ ! -d "$T" ]; then
+  echo "coredev: $T is not a folder, so it is not a coredev tools folder; it was not replaced. Move it away, then start Claude Code again." >&2
+  exit 2
+fi
+if [ -d "$T" ] && [ ! -f "$T/VERSION" ] && [ -n "$(ls -A "$T" 2>/dev/null)" ]; then
+  echo "coredev: $T is not a coredev tools folder (it has files but no VERSION); it was not replaced. Move it away, then start Claude Code again." >&2
+  exit 2
 fi
 
 # Copy into a temp dir next to the target, then swap it in, so a half copy never stays.
@@ -51,7 +65,7 @@ done
 # Executable regardless of how the plugin cache stored the modes.
 chmod +x "$NEW/save" "$NEW/undo-step" "$NEW/install-hooks.sh" "$NEW"/git-hooks/* 2>/dev/null
 chmod -x "$NEW/git-hooks/blocked-patterns" 2>/dev/null
-printf '%s\n' "$VER" > "$NEW/VERSION"
+printf '%s\n%s\n' "$VER" "$(sum_of "$NEW")" > "$NEW/VERSION"
 if [ -e "$T" ]; then mv "$T" "$OLD" || { rm -rf "$NEW"; exit 1; }; fi
 if ! mv "$NEW" "$T"; then
   [ -e "$OLD" ] && mv "$OLD" "$T"

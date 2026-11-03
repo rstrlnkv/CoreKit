@@ -94,10 +94,12 @@ No symlinks or copies into project trees, no `@`-imports. Skills reach plugin fi
 ```
 ~/.claude/plugins/data/coredev-corekit/
   tools/               stable copies of scripts/save, undo-step, lib.sh, git-hooks/*
-  tools/VERSION        plugin version the copies came from
+  tools/VERSION        plugin version the copies came from, and a checksum of their content
   state/               markers (e.g. "Core-missing hint shown once")
 ```
-`session-start.sh` refreshes `tools/` when `VERSION` differs from the plugin's. Git hooks
+`session-start.sh` refreshes `tools/` when the version or the content checksum in `VERSION`
+differs from the plugin's (or the copy was edited). It never replaces a non-empty `tools/` that has
+no `VERSION` (not ours): it reports it and leaves it. Git hooks
 installed in repos are two-line shims that run `tools/git-hooks/<name>`; if that file is missing
 they block with a message that names the fix ("start Claude Code once with coredev enabled") and
 how to remove the shim.
