@@ -406,7 +406,7 @@ run_bash 'grep -n \"<<\" f.sh'; ok "Bash \"<<\" as a string"
 
 # --- if scripts/*.awk is missing, the Bash path fails open (silently); file tools are still judged
 PL="$SANDBOX/plugin-noawk"; mkdir -p "$PL/hooks" "$PL/scripts"
-cp "$HOOKS/guard-code.sh" "$PL/hooks/"; cp "$SCRIPTS/lib.sh" "$PL/scripts/"
+cp "$HOOKS/guard-code.sh" "$PL/hooks/"; cp "$SCRIPTS/lib.sh" "$PL/scripts/"; cp "$HOOKS/messages.sh" "$PL/hooks/"
 printf '%s' '{"cwd":"'"$C"'","tool_name":"Bash","tool_input":{"command":"echo x > docs/a.md"}}' | bash "$PL/hooks/guard-code.sh" >"$OD/out" 2>"$OD/err"; RC=$?
 assert_eq "$RC" "0" "no awk files: Bash passes"; assert_eq "$(<"$OD/out")$(<"$OD/err")" "" "no awk files: silent"
 printf '%s' '{"cwd":"'"$C"'","tool_name":"Write","tool_input":{"file_path":"'"$C"'/docs/a.md"}}' | bash "$PL/hooks/guard-code.sh" >"$OD/out" 2>"$OD/err"; RC=$?

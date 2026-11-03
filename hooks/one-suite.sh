@@ -21,6 +21,7 @@
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
+. "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 
 # Inert outside the Core.
 cwd="$(json_str "$in" cwd)"
@@ -113,5 +114,5 @@ while :; do
   sleep 2
 done
 what="$(printf '%s' "${running:-a run that is starting}" | tr -d '\n\r' | cut -c1-120)"
-echo "one-suite: a test run is still in progress after ${limit} s of waiting (${what}) — run the same command again: this hook waits for it. If it is a watcher you started, stop it first." >&2
+printf '%s\n' "$(msg one_suite_wait "$limit" "$what")" >&2
 exit 2
