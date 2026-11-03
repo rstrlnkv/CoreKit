@@ -73,7 +73,8 @@ Do not pass `model` to feature-dev agents; they use their own default.
 5. **Clean tree.** Run `git status --short` in the code root and
    `git -C <Core> status --short -- <project> knowledge`. If either has uncommitted changes, tell the
    user and stop. `save` does `git add -A`; the tree must be clean so it commits only this
-   chain's work.
+   chain's work. On `question` check this only before writing accepted knowledge lines; `adopt`
+   skips it (adopt.md has its own checks).
 6. **Base commits.** Record `git rev-parse HEAD` in the code root and in `<Core>`: these are the
    chain's base commits; release attribution ranges and `--changed` start from them.
 7. **Choose the path** (`fix`, `full`, `question`, `batch`, `release`, `adopt`; see

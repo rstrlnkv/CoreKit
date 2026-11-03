@@ -54,8 +54,8 @@ found → ask the user first, then brief engineer with the answer.
    written). Both empty → ✓.
 
 ## When a line is ✗
-- ✗ at 1–4: stop; the finding goes to engineer as one repair, tester confirms, then
-  rerun from postcondition 1. There is no second release cycle: still ✗ → `Commit: stopped — <why>`.
+- ✗ at 1–4: stop; the finding goes to engineer as one repair, tester confirms (on the release path: no tester; the rerun of 1 is the
+  confirmation), then rerun from postcondition 1. There is no second release cycle: still ✗ → `Commit: stopped — <why>`.
 - ✗ at 5 (`save` failed): stop; `Commit: stopped — <why>` with the output.
 - ✗ at 6 or 7: the commit exists, so no repair. Report `Commit: <hash and message>` and put
   the ✗ (the postcondition and its output) in `Open`. Do not rewrite the commit.
