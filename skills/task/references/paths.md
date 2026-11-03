@@ -4,8 +4,8 @@ Choose one path per call and name it in your first line to the user. When the ta
 fit one path, say so and pick the closest; never mix two chains in one call. Briefs follow
 `brief.md`; the final report follows `report.md`. Everywhere below, `check:` is the line in
 `<Core>/<project>/CLAUDE.md`; a line that still reads `check: <set after scaffolding>` means
-unset (or missing): ask the user once, before the first tester call that needs it (every path
-except `question`), and write the confirmed command into the `check:` line of that `CLAUDE.md`
+unset (or missing): ask the user once, before the first tester call that needs it (on `release`, before
+postcondition 1; every path except `question`), and write the confirmed command into the `check:` line of that `CLAUDE.md`
 so the next chain does not ask.
 
 ## fix
@@ -28,7 +28,7 @@ A new capability or a behaviour change.
    in plain words (what will change for the user, in how many tasks and which modules). Wait
    for "ok". Without feature-dev stop here and name the install command.
 2. If the plan has more than 5 tasks or touches more than 3 modules: run only its first task
-   as the whole chain (steps 3–7: architect to release, committed), then stop with the diff,
+   as the whole chain (steps 3–6: architect to release, committed), then stop with the diff,
    the risk and an estimate, and wait for the user's go.
 3. `feature-dev:code-architect`: the design for the plan.
 4. engineer, then tester (touched modules only).

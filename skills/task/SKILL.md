@@ -65,8 +65,8 @@ Do not pass `model` to feature-dev agents; they use their own default.
    via code-explorer. Other paths go on.
 4. **Read** `<Core>/<project>/CLAUDE.md` and its `check: <command>` line. A line that still reads
    `check: <set after scaffolding>`, or no line at all, means unset. Do not ask yet: ask the user
-   once for the command, before the first tester call that needs it (every path except
-   `question`), and write the confirmed command into the `check:` line of that `CLAUDE.md`
+   once for the command, before the first tester call that needs it (on `release`, before
+   postcondition 1; every path except `question`), and write the confirmed command into the `check:` line of that `CLAUDE.md`
    (it is committed with the chain) so the next chain does not ask. List the file names of
    `<Core>/standards/`, `<Core>/knowledge/` and `<Core>/<project>/docs/knowledge/`, and read the
    `applies-to` front matter of each standard (rule 9 needs it).
@@ -105,7 +105,7 @@ Briefs follow `references/brief.md`. A coredev agent's `subagent_type` is `cored
 
 ## Knowledge
 Every agent reply ends with `Knowledge line: <symptom → cause → guard | none>`. Collect them.
-- None: go to release.
+- None: go to release (a `question` chain that changed no files has no release; see Finish).
 - Some: show them in plain words, one by one. For each the user answers ok / no, and, if ok,
   "this project / all projects". Write accepted lines as the format in
   `${CLAUDE_SKILL_DIR}/../../reference/knowledge.md` says: into
