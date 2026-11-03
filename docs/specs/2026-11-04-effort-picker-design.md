@@ -2,7 +2,7 @@
 title: effort-picker plugin — design spec
 description: Requirements for effort-picker, a second plugin in the corekit marketplace that picks the effort level for each prompt of the main chat, for code and office work, and asks before any switch to xhigh or max. Read before changing it.
 status: draft
-files: [plugins/effort-picker/, .claude-plugin/marketplace.json, tests/run.sh, README.md, CHANGELOG.md]
+files: [plugins/effort-picker/, .claude-plugin/marketplace.json, tests/test_effort_picker.sh, tests/test_manifest.sh, README.md]
 related: [docs/specs/2026-11-03-coredev-design.md]
 updated: 2026-11-04
 ---
@@ -42,9 +42,11 @@ plugins/effort-picker/
   hooks/hooks.json             { "modules": ["./register.tsx"] }
   hooks/register.tsx           hooks: session.start, prompt.submit, turn.step, command.run, ui.press, ui.render
   hooks/classifier.ts          the classifier prompt (§6) and the answer parser; no `$` calls
+  hooks/policy.ts              the consent rule (E6) and the UI texts; no `$` calls
   types/index.d.ts             $.state contract: band, override
   tests/*.test.ts              run by `claude plugin test plugins/effort-picker`
   README.md                    what it does, install, settings, cost, the menu caveat (§4.5)
+  CHANGELOG.md                 the plugin's own; the root CHANGELOG is coredev's
 ```
 `.claude-plugin/marketplace.json` gets a second entry: `"name": "effort-picker"`,
 `"source": "./plugins/effort-picker"`. coredev's entry (`"source": "./"`) stays; its installed copy
@@ -174,7 +176,7 @@ Not part of `tests/run.sh` (it needs the network).
 
 ## 8. Release
 - `plugins/effort-picker/.claude-plugin/plugin.json` version `0.1.0`, `"license": "MIT"`.
-- CHANGELOG entry and an install line in the root README, per the repo rules.
+- An entry in `plugins/effort-picker/CHANGELOG.md` and an install line in the root README.
 - coredev's version is not bumped: coredev does not change.
 
 ## 9. Out of scope
