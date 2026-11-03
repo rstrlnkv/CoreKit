@@ -46,7 +46,7 @@ bash tests/run.sh          # all tests; no network, prints ALL TESTS PASSED
 bash tests/test_hooks.sh   # one file
 claude plugin validate .   # plugin and marketplace manifests
 ```
-Tests run in a temp sandbox via `new_sandbox` (sets `CORE_DIR`, `NEW_PROJECT_CONFIG`);
+Tests run in a temp sandbox via `new_sandbox` (sets `CORE_DIR`);
 they never touch the real `~/Projects/Core` or `~/.config`. Stub `gh` on `PATH` instead of
 calling GitHub.
 

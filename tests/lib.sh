@@ -25,7 +25,6 @@ assert_exit() {
 new_sandbox() {
   SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/np-test.XXXXXX")"
   export CORE_DIR="$SANDBOX/Projects/Core"
-  export NEW_PROJECT_CONFIG="$SANDBOX/config"
   export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com
   export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com
 }

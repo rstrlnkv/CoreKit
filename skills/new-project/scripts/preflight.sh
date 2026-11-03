@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Checks tools and paths before creating a project.
-# Usage: bash preflight.sh [--name <name>]   Env: CORE_DIR overrides the configured location
+# Usage: bash preflight.sh [--name <name>]   Env: CORE_DIR overrides the plugin option core_dir
 # Prints "OK|WARN|FAIL <check> [hint]" lines; exits 1 if any FAIL.
 . "$(dirname "$0")/../../../scripts/lib.sh"
-load_config
+load_settings
 NAME=""; [ "${1:-}" = "--name" ] && NAME="${2:-}"
 rc=0
 ok()   { echo "OK $*"; }

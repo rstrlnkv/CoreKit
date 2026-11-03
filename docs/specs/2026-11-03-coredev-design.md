@@ -135,7 +135,7 @@ Installed → coredev → Configure options.
 
 Hooks read them as `CLAUDE_PLUGIN_OPTION_<KEY>`; skills and agents as `${user_config.<key>}`.
 Scripts get values as arguments from the skill. `APP_ID_PREFIX` stays a `new-project` question,
-saved in a settings block of `<Core>/README.md` (per user, rarely needed).
+saved in `<Core>/.coredev` as `app-id-prefix:` (per user, rarely needed).
 
 To verify in phase 1: `~` expansion in a `directory` default; that a CLI install (which does not
 prompt) falls back to the defaults; behaviour for a plugin synced from claude.ai.

@@ -11,7 +11,8 @@ decisions → scaffold → GitHub → build check. **Core principle:** internal 
 docs/, .claude/) live in a private docs repo and physically never sit inside the code repo,
 so a public code repo cannot leak them.
 
-All scripts below are relative to this skill's base directory. Run them with `bash`.
+Scripts live in this skill's `scripts/` and in the plugin's `scripts/`. Run them with `bash` and
+pass the Core location: `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/scripts/<script>"`.
 
 ## Language
 - Talk to the user in their language (from their Claude settings or instructions; otherwise the
@@ -20,8 +21,11 @@ All scripts below are relative to this skill's base directory. Run them with `ba
   After writing a document, show a 2–4 line summary of it in chat in the user's language.
 
 ## Settings
-`bash scripts/configure.sh --show` prints the user's settings. Below, `<Core>` means its
-`CORE_DIR`, `<CoreName>` its `CORE_NAME`, `<prefix>` its `APP_ID_PREFIX`.
+Claude Code asks for the plugin options when the plugin is enabled. Below, `<Core>` means
+`${user_config.core_dir}` (scripts expand a leading `~`), `<CoreName>` its last path component,
+`<prefix>` the app id prefix stored in `<Core>/.coredev`:
+`CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" get app-id-prefix`
+(empty until the user has given one).
 
 ## Layout (do not improvise another one)
 ```
@@ -37,7 +41,7 @@ already has a brief, read it and resume at the next stage instead of starting ov
 
 | stage | next step |
 |-------|-----------|
-| (none) | 0 Setup and preflight, 1 Interview, 2 Name |
+| (none) | 0 Preflight, 1 Interview, 2 Name |
 | interviewed | 3 Analysis |
 | decided | 4 Scaffold |
 | scaffolded | 5 GitHub, 6 Verify |
@@ -50,19 +54,20 @@ A stage advances only when its step really succeeded. If a generator, build or `
 cannot run (tool missing, error), stop at the current stage, explain in plain words what to
 install or fix, and give the exact command; do not mark the stage done.
 
-**0. Setup and preflight.** If `configure.sh --show` says `configured=no`, ask (one
-AskUserQuestion call, defaults recommended): where to keep projects (`~/Projects`), the name of
-the private docs repo (`Core`), the app id prefix (`com.<their-name>`, never invent it). Save with
-`bash scripts/configure.sh --projects-dir <abs path> --core-name <name> --app-id-prefix <prefix>`.
-Then `bash scripts/preflight.sh`. Explain any FAIL in plain words with the fix; WARN about
+**0. Preflight.** `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/scripts/preflight.sh"`.
+The app id prefix is asked only when the chosen stack uses `<org>` in `references/stacks.md`
+(known after stage 3) and `<prefix>` is empty: ask for it (`com.<their-name>`, never invent it)
+and save it with
+`CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" set app-id-prefix <prefix>`.
+Explain any FAIL in plain words with the fix; WARN about
 non-Latin paths means Android/Flutter builds may break — say so. Stop on FAIL.
 
 **1. Interview.** Follow `references/interview.md`: 2–3 questions per AskUserQuestion call.
 Never ask the user to pick a stack.
 
 **2. Name.** Propose a name (Latin, lowercase, hyphens, 3–40 chars) and a one-sentence purpose
-in English. App ids use `<prefix>` from the settings. Get approval. `bash scripts/preflight.sh --name <name>` — stop if taken. Then
-`bash scripts/scaffold.sh --name <name> --purpose "<purpose>"` creates the folders, both git
+in English. App ids use `<prefix>` from the settings. Get approval. `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/scripts/preflight.sh" --name <name>` — stop if taken. Then
+`CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/scripts/scaffold.sh" --name <name> --purpose "<purpose>"` creates the folders, both git
 repos and the docs skeleton. Fill `docs/brief.md` with the answers (English), set
 `stage: interviewed`.
 
@@ -73,9 +78,9 @@ Get approval for each part. Write `docs/architecture.md` and
 set `stage: decided`.
 
 **4. Scaffold.** Generate the app with the stack's command from `references/stacks.md` **in a temp
-dir**, then `bash scripts/merge-generated.sh <tmp>/<folder> <Core>/<name>/code`. Never run a
+dir**, then `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/scripts/merge-generated.sh" <tmp>/<folder> <Core>/<name>/code`. Never run a
 generator with `--force`/`--overwrite` in `code/`. Fill the Commands and Stack sections of
-`CLAUDE.md`. `bash ../../scripts/install-hooks.sh <Core>/<name>`. Then from `code/`:
+`CLAUDE.md`. `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/install-hooks.sh" <Core>/<name>`. Then from `code/`:
 `bash <Core>/bin/save "Scaffold <stack> project"`. Set `stage: scaffolded`.
 
 **5. GitHub.** Ask separately before each repo is created, naming it and its visibility:
@@ -101,11 +106,12 @@ generator with `--force`/`--overwrite` in `code/`. Fill the Commands and Stack s
 | "Faster to use --force in code/" | It deletes `.claude/` and `.gitignore`. Generate in a temp dir. |
 
 ## Quick reference
+Every `…` below stands for `CORE_DIR="${user_config.core_dir}"`.
 | Need | Command |
 |------|---------|
-| Settings | `bash scripts/configure.sh --show` |
-| Check tools / name | `bash scripts/preflight.sh [--name <name>]` |
-| Create skeleton | `bash scripts/scaffold.sh --name <name> --purpose "<text>" [--dry-run]` |
-| Copy generated app | `bash scripts/merge-generated.sh <generated> <code>` |
-| Protective hooks | `bash ../../scripts/install-hooks.sh <project_dir>` |
+| App id prefix | `… bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" get\|set app-id-prefix [<prefix>]` |
+| Check tools / name | `… bash "${CLAUDE_SKILL_DIR}/scripts/preflight.sh" [--name <name>]` |
+| Create skeleton | `… bash "${CLAUDE_SKILL_DIR}/scripts/scaffold.sh" --name <name> --purpose "<text>" [--dry-run]` |
+| Copy generated app | `… bash "${CLAUDE_SKILL_DIR}/scripts/merge-generated.sh" <generated> <code>` |
+| Protective hooks | `… bash "${CLAUDE_SKILL_DIR}/../../scripts/install-hooks.sh" <project_dir>` |
 | Save / undo a step | `bash <Core>/bin/save "<msg>" [--push]` · `bash <Core>/bin/undo-step` |
