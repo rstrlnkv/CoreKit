@@ -8,9 +8,14 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 DEST="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
 FORCE=0; [ "${1:-}" = "--force" ] && FORCE=1
 mkdir -p "$DEST"
+if [ "$(cd -P "$DEST" && pwd)" = "$(cd -P "$HERE/skills" && pwd)" ]; then
+  echo "$DEST is this repo's own skills folder; nothing to install." >&2; exit 1
+fi
 
-# owned <src> <dest> — dest has the marker, or is a pre-marker (0.1.0) copy with the same layout
+# owned <src> <dest> — dest has the marker, or is a pre-marker (0.1.0) copy with the same
+# layout; a symlink (e.g. to a dev checkout) is never ours
 owned() {
+  [ -L "$2" ] && return 1
   [ -f "$2/.corekit" ] && return 0
   [ -f "$2/SKILL.md" ] || return 1
   for d in "$1"/*/; do [ -d "$2/$(basename "$d")" ] || return 1; done
@@ -19,7 +24,7 @@ owned() {
 rc=0
 for s in "$HERE"/skills/*/; do
   s="${s%/}"; name=$(basename "$s")
-  if [ -e "$DEST/$name" ] && [ $FORCE -eq 0 ] && ! owned "$s" "$DEST/$name"; then
+  if { [ -e "$DEST/$name" ] || [ -L "$DEST/$name" ]; } && [ $FORCE -eq 0 ] && ! owned "$s" "$DEST/$name"; then
     echo "skipped $name: $DEST/$name was not installed by CoreKit; move it away or rerun with --force" >&2
     rc=1; continue
   fi
