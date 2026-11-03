@@ -125,7 +125,7 @@ Old git hooks (not coredev shims): $P/code/.git/hooks/pre-commit. Replace them w
 Сохранить завершённый шаг: bash \"$COREDEV_TOOLS/save\" \"<message>\"; отменить последний шаг: bash \"$COREDEV_TOOLS/undo-step\"
 Стандарты: a, b
 Правила сессии ($CORE_DIR/session-rules.md):
-Заметка о структуре: структура этого Core — версия нет, плагину нужна 1. Обновите её (добавится только недостающее): bash \"$ROOT/scripts/setup-core.sh\" \"$CORE_DIR\"
+Заметка о структуре: структура этого Core — версия не указана, плагину нужна 1. Обновите её (добавится только недостающее): bash \"$ROOT/scripts/setup-core.sh\" \"$CORE_DIR\"
 Найдены старые git-хуки, не от coredev: $P/code/.git/hooks/pre-commit. Замените их командой: bash \"$ROOT/scripts/install-hooks.sh\" \"$P\""
   case "$OUT" in *"):"$'\n'"rule one"$'\n'"rule two"$'\n'*) pass ;; *) fail "session rules text not printed verbatim [$v]: $OUT" ;; esac
 done

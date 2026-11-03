@@ -45,7 +45,7 @@ _msg_text() {
     en:session_rules) MSG_T='Session rules (@1):' ;;
     ru:session_rules) MSG_T='Правила сессии (@1):' ;;
     en:schema_none) MSG_T='none' ;;
-    ru:schema_none) MSG_T='нет' ;;
+    ru:schema_none) MSG_T='не указана' ;;
     en:run_starting) MSG_T='a run that is starting' ;;
     ru:run_starting) MSG_T='тест, который запускается' ;;
     en:layout_note) MSG_T='Layout note: this Core has layout schema @1, the plugin expects @2. Bring it up to date (adds only what is missing): bash "@3" "@4"' ;;
