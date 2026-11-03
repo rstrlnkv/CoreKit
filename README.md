@@ -113,6 +113,17 @@ Claude runs the plugin's `save` tool to commit code and docs together as one ste
 to revert the last step in both (with `git revert`, history kept). Nothing is copied into your
 docs repo. The plugin's Stop hook reminds Claude to save when a step is left uncommitted.
 
+## `effort-picker` (a second plugin)
+
+The `corekit` marketplace also holds `effort-picker`: before Claude starts on a prompt it picks the
+effort level the work needs, for code and office work alike, and offers the switch (or makes it,
+in auto mode, always asking before Extra high and Max). It needs Claude Code 2.1.287 or newer and
+does not depend on `coredev`:
+```
+/plugin install effort-picker@corekit
+```
+Details: plugins/effort-picker/README.md.
+
 ## Known limitations
 - Auto-triggering competes with other planning skills (e.g. Superpowers' brainstorming). Start it
   explicitly with `/coredev:new-project`, or add to `~/.claude/CLAUDE.md`:
