@@ -96,7 +96,8 @@ Briefs follow `references/brief.md`. A coredev agent's `subagent_type` is `cored
 4. At most three engineer passes per chain (a checkers' wave counts as one). The third failed
    pass: stop and report. Two fixes on one premise that fail the same check: state the premise
    in one sentence; make no third attempt on it.
-5. Dispatch in the foreground, always. A wave is several Agent calls in one message.
+5. Dispatch in the foreground, always: pass `run_in_background: false` on every Agent call. A
+   wave is several Agent calls in one message.
 6. Every Agent call passes `subagent_type`: `coredev:<role>` for coredev roles, the full name for
    feature-dev agents. Coredev calls also pass `model` from the table above.
    Do not pass `model` to feature-dev agents.

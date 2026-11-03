@@ -180,4 +180,7 @@ assert_contains "$SK" 'same pass'
 assert_contains "$SK" 'stop the chain and put it in `Open`'
 rule "turn-limit note rule" 'turn-limit note'
 
+# attribution=forbid: save drops attribution lines; agents are never sent to the background
+assert_contains "$T/references/release.md" '--no-attribution'
+assert_contains "$SK" 'run_in_background: false'
 finish

@@ -96,4 +96,18 @@ echo "more" >> "$CORE_DIR/knowledge/engineer.md"; nd=$(cnt "$CORE_DIR")
 (cd "$C" && bash "$SAVE" "Knowledge only") >/dev/null 2>&1
 assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "knowledge-only change not saved"
 
+# --no-attribution drops Co-Authored-By / Generated with lines from the message (both repos)
+sleep 1; echo "v2" > "$C/app.txt"; echo "x" >> "$P/docs/features/f.md"
+msg="$(printf 'Fix thing\n\nWhy it was wrong.\n\nCo-Authored-By: Someone <a@b.c>\nco-authored-by: Other <d@e.f>\n\U0001F916 Generated with [Claude Code](https://x)')"
+(cd "$C" && bash "$SAVE" "$msg" --no-attribution) > "$SANDBOX/out" 2>&1
+assert_contains "$SANDBOX/out" "saved code"
+assert_eq "$(git -C "$C" log -1 --format=%B | grep -icE 'co-authored-by|generated with')" "0" "attribution left in code commit"
+assert_eq "$(git -C "$CORE_DIR" log -1 --format=%B | grep -icE 'co-authored-by|generated with')" "0" "attribution left in docs commit"
+assert_eq "$(git -C "$C" log -1 --format=%s)" "Fix thing"
+git -C "$C" log -1 --format=%B | grep -q 'Why it was wrong.' && pass || fail "body lost by --no-attribution"
+# without the flag the message is kept as given
+sleep 1; echo "v3" > "$C/app.txt"
+(cd "$C" && bash "$SAVE" "$(printf 'Keep\n\nCo-Authored-By: A <a@b.c>')") >/dev/null 2>&1
+assert_eq "$(git -C "$C" log -1 --format=%B | grep -ic 'co-authored-by')" "1" "message changed without the flag"
+
 finish

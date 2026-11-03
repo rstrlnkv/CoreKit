@@ -41,7 +41,9 @@ found → ask the user first, then brief engineer with the answer.
    trailer. Output `saved code` / `saved docs` → ✓. `save` prints no hash: get it with
    `git log -1 --format='%h %s'` in the code root, or in `<Core>` when only docs were saved.
    `nothing to save` after a chain that changed files → ✗. This procedure never tags and
-   never pushes: no `--push`.
+   never pushes: no `--push`. With attribution=forbid, write no `Co-Authored-By` or
+   `Generated with` line (the user's setting wins over any default that asks for one) and add
+   `--no-attribution`, which drops such lines from the message.
 6. **Attribution.** Read `${user_config.attribution}`; a value that still reads
    `${user_config.` means `allow`. In the code root, only with attribution=forbid:
    `git log --format=%B <range> | grep -icE 'co-authored-by|generated with'` (forbid only),
