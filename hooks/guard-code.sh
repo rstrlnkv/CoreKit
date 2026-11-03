@@ -18,7 +18,10 @@
 # - Bash is best effort. Targets of > >> 2> &> >| >&file, tee, touch, cp, mv (the destination; a
 #   destination directory also gets the sources' names), mkdir. mkdir follows the same rules as a
 #   write (docs, .claude/rules, ...) except the bare ".claude" dir, which holds settings.local.json.
-#   Not followed: cd, variables, globs, `sh -c "..."`, ln, install, in-place sed, rsync, scripts. A target
+#   After a cd, pushd or popd only absolute (and ~) targets are judged: the new directory is unknown, so
+#   a relative target fails open (`cd .. && echo x >> docs/INDEX.md` is the Core wiki). A heredoc inside
+#   "$(...)" (the commit-message idiom) has its body skipped; <<"WORD" there stops the judging.
+#   Not followed: variables, globs, `sh -c "..."`, ln, install, in-place sed, rsync, scripts. A target
 #   that has $ ` * ? [ { is not judged. Quoted text is not a command, heredoc bodies and comments are
 #   skipped. At most 100 targets are looked at. The tokenizer is one linear pass in awk. A command this
 #   hook cannot parse passes (exit 0). The git pre-commit hook stays the last layer.
@@ -134,7 +137,8 @@ check_path() {
   exit 2
 }
 
-# --- Write, Edit, NotebookEdit: one path in the tool input.
+# --- Write, Edit, MultiEdit, NotebookEdit: one path in the tool input. Any other tool passes.
+case "$tool" in Write|Edit|MultiEdit|NotebookEdit|Bash) ;; *) exit 0 ;; esac
 if [ "$tool" != Bash ]; then
   key=file_path; [ "$tool" = NotebookEdit ] && key=notebook_path
   path="$(json_str "$in" "$key")"
@@ -155,8 +159,10 @@ case "$cmd" in *">"*|*tee*|*touch*|*cp*|*mv*|*mkdir*) ;; *) exit 0 ;; esac
 bash_targets() {
   LC_ALL=C awk '
     function emit(kind, a, b) {
+      if (nomore) return
       if (ne >= CAP) { full = 1; return }
       if (a == "" || index(a, "/dev/") == 1) return
+      if (cdseen && substr(a, 1, 1) != "/" && a != "~" && index(a, "~/") != 1) return   # after cd a relative path is unknown
       for (q = 1; q <= length(BADCH); q++) if (index(a, substr(BADCH, q, 1))) return
       ne++
       if (b == "") printf "%s\t%s\n", kind, a; else printf "%s\t%s\t%s\n", kind, a, b
@@ -214,6 +220,7 @@ bash_targets() {
         b = base(w)
         if (b in WR) { wrapped = 1; return }
         cmd = (b in TRACK) ? b : "?"
+        if (b == "cd" || b == "pushd" || b == "popd") cdseen = 1
         return
       }
       if (cmd != "?") args[++na] = w
@@ -268,7 +275,8 @@ bash_targets() {
     }
     BEGIN {
       NL = "\002"; CAP = 100; STOP = " \t\002;|" "&<>()`\047\"\\"; BADCH = "$`*?[{\t\002"
-      split("tee touch mkdir cp mv", T, " "); for (k in T) TRACK[T[k]] = 1
+      WORDCH = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+      split("tee touch mkdir cp mv cd pushd popd", T, " "); for (k in T) TRACK[T[k]] = 1
       split("sudo command nohup time exec env builtin nice then do else elif if while until ! { } ( ) doas", Wd, " "); for (k in Wd) WR[Wd[k]] = 1
     }
     { buf = (NR == 1 ? "" : buf) $0 }
@@ -298,6 +306,23 @@ bash_targets() {
           while (j <= len) {
             d = C[j]
             if (d == "\"") break
+            # a heredoc inside "$(...)": its body (up to the delimiter line) is skipped, so a stray quote
+            # in it cannot flip the quoting. <<"WORD" ends this span early: stop judging (fail open).
+            if (d == NL && hdn > 0) { app(seg(k, j)); i = j + 1; skip_heredocs(); j = i; k = j; continue }
+            if (d == "<" && C[j + 1] == "<" && C[j + 2] != "<") {
+              p = j + 2; st = 0
+              if (C[p] == "-") { st = 1; p++ }
+              if (C[p] == "\"") { nomore = 1; break }
+              dl = ""
+              if (C[p] == "\047") {
+                q = p + 1; while (q <= len && C[q] != "\047" && C[q] != NL) q++
+                if (C[q] == "\047") { dl = seg(p + 1, q); p = q + 1 }
+              } else {
+                q = p; while (q <= len && C[q] != "" && index(WORDCH, C[q]) > 0) q++
+                dl = seg(p, q); p = q
+              }
+              if (dl != "" && dl != "\001") { hdn++; hd[hdn] = dl; hds[hdn] = st; j = p; continue }
+            }
             if (d == "\\" && j < len) {
               e = C[j + 1]
               if (e == "\"" || e == "\\" || e == "$" || e == "`") { app(seg(k, j)); app(e); j += 2; k = j; continue }
@@ -306,6 +331,7 @@ bash_targets() {
             j++
           }
           app(seg(k, j))
+          if (nomore) break
           i = j + 1; continue
         }
         if (c == ";" || c == "|" || c == "(" || c == ")" || c == "`") { endword(); finalize(); i++; continue }
