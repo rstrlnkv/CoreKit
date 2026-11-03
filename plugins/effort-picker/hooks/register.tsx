@@ -1,3 +1,4 @@
+import { atom, read, update } from 'claude-code'
 import type { ConfigRow, EngineInterface, Register } from 'claude-code'
 
 import type { Band, Level } from '../types'
@@ -5,11 +6,13 @@ import { buildPrompt, parseAnswer, toLevel } from './classifier'
 import { decide, type Lang, type Mode, texts, uiLang } from './policy'
 
 const PLUGIN = 'effort-picker'
-const BAND = { plugin: 'effort-picker', key: 'band' } as const
-const OVERRIDE = { plugin: 'effort-picker', key: 'override' } as const
+const band = atom({ plugin: 'effort-picker', key: 'band' } as const, null)
+const override = atom({ plugin: 'effort-picker', key: 'override' } as const, null)
 const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5' } as const
 const MODES: readonly Mode[] = ['suggest', 'auto', 'off']
 const LOG_KEEP = 20_000
+const BAND_MS = 15_000
+const ACCENT = '#d97757'
 
 // Module variables start over on a reload; what must outlive one is in $.state or $.store.
 // Bumped on every prompt, so a pick for an older prompt is dropped.
@@ -22,6 +25,9 @@ let turnLevel: Level | null = null
 // A level the config menu could not take: put on every main-chat request until the menu moves.
 // `base` is the menu's level when the hold began.
 let hold: { level: Level; base: string } | null = null
+// The level the last main-chat request ran at, and the language of the last prompt.
+let seen: Level | '' = ''
+let lastLang: Lang = 'en'
 
 async function log($: EngineInterface, what: string, err: unknown) {
   try {
@@ -55,7 +61,7 @@ export async function applyLevel($: EngineInterface, level: Level, base: string)
       const r = await $.config.set({ key: row.key, value: option })
       if (!r.deny) {
         hold = null
-        await $.state.set(OVERRIDE, null)
+        await update($, override, () => null)
         return
       }
       await log($, 'config.set', r.deny)
@@ -64,12 +70,16 @@ export async function applyLevel($: EngineInterface, level: Level, base: string)
     await log($, 'config', err)
   }
   hold = { level, base }
-  await $.state.set(OVERRIDE, level)
+  await update($, override, () => level)
 }
 
 async function announce($: EngineInterface, level: Level, from: Level | '', why: string, lang: Lang) {
-  const band: Band = { id: nextBand++, level, from, why, lang }
-  await $.state.set(BAND, band)
+  const b: Band = { id: nextBand++, level, from, why, lang }
+  await update($, band, () => b)
+  void (async () => {
+    await $.clock.sleep(BAND_MS)
+    await update($, band, cur => (cur && cur.id === b.id ? null : cur))
+  })().catch(err => log($, 'band', err))
 }
 
 async function classify($: EngineInterface, text: string, now: Level | '', model: string) {
@@ -146,7 +156,8 @@ export const register: Register = (on, options) => {
     if (!text || text.startsWith('/')) return next(e)
     gen += 1
     turnLevel = null
-    held = { text, gen, lang: uiLang(text) }
+    lastLang = uiLang(text)
+    held = { text, gen, lang: lastLang }
     return next(e)
   }).catch(($, e, next) => next(e))
 
@@ -157,7 +168,7 @@ export const register: Register = (on, options) => {
     if (hold && asked !== hold.base) {
       hold = null
       turnLevel = null
-      await $.state.set(OVERRIDE, null)
+      await update($, override, () => null)
     }
     if (held && e.index === 0) {
       const h = held
@@ -169,7 +180,74 @@ export const register: Register = (on, options) => {
       }
     }
     const want = turnLevel ?? hold?.level ?? null
+    seen = want ?? (toLevel(asked) || seen)
     if (!want || want === asked) return yield* next(e)
     return yield* next({ ...e, effort: want })
+  })
+
+  on('session.start', async ($, e, next) => {
+    await $.command.register({
+      name: 'effort-picker',
+      description: 'Effort picker: show the real effort level, or set the mode (auto, suggest, off, on)',
+      argumentHint: '[auto|suggest|off|on]',
+    })
+    return next(e)
+  })
+
+  on('command.run', { command: 'effort-picker' }, async ($, e) => {
+    const arg = e.args.trim().toLowerCase()
+    if (arg === 'auto' || arg === 'suggest') {
+      await $.store.set('mode', arg)
+      await $.store.set('lastMode', arg)
+      return { text: `Effort picker: ${arg}. ${arg === 'auto' ? 'Levels change by themselves; xhigh and max still ask first.' : 'Every change of level asks first.'}` }
+    }
+    if (arg === 'off') {
+      await $.store.set('mode', 'off')
+      hold = null
+      turnLevel = null
+      await update($, override, () => null)
+      await update($, band, () => null)
+      return { text: 'Effort picker is off. /effort-picker on turns it back on.' }
+    }
+    if (arg === 'on') {
+      const last = await $.store.get('lastMode')
+      const mode: Mode = last === 'auto' || last === 'suggest' ? last : options.mode === 'auto' ? 'auto' : 'suggest'
+      await $.store.set('mode', mode)
+      return { text: `Effort picker is on: ${mode}.` }
+    }
+    const mode = await currentMode($, options)
+    const level = hold?.level ?? seen
+    return {
+      text: [
+        `Effort picker: ${mode}.`,
+        `This chat runs at: ${level ? texts('en').levelName(level) : 'unknown yet'}${hold ? ' (held by the plugin; the menu still shows your own setting)' : ''}.`,
+        'Type /effort-picker auto, suggest, off or on.',
+      ].join('\n'),
+    }
+  })
+
+  // The app's menu shows the person's own setting; the footer slot beside it names a held level.
+  on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
+    const level = await read($, override)
+    if (!level) return next(e)
+    const label = texts(lastLang).label(level)
+    if (e.surface === 'desktop' || e.surface === 'vscode') {
+      const { Text } = $.ui.resolve(e)
+      return <Text color={ACCENT}>{label}</Text>
+    }
+    return next({ ...e, props: { ...e.props, modes: [...e.props.modes, label] } })
+  })
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const b = await read($, band)
+    if (!b || e.props.hasSurvey) return next(e)
+    const rest = await next(e)
+    const { Box, Text } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="column">
+        {rest}
+        <Text wrap="truncate-end">{`✓ ${texts(b.lang).applied(b.level, b.from, b.why)}`}</Text>
+      </Box>
+    )
   })
 }
