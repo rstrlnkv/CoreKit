@@ -24,7 +24,8 @@ reads `CLAUDE.md`, then the map, then the one page its task needs. A user standa
 
 - Refer to another page as `docs/<page>.md § <exact heading>`. The heading is the `## ` line
   text, written exactly. It runs to the end of the line or to the closing backtick, so put the
-  reference in backticks when prose follows it.
+  reference in backticks when prose follows it. One trailing `.` `,` `;` `:` or `)` is
+  forgiven when the exact text is not a heading.
 - Links are Markdown links relative to the file that holds them. A link with `#anchor` is
   checked for the file only.
 - "See above", "this document" and "as mentioned" are defects. Name the page and heading.
@@ -57,6 +58,7 @@ reads `CLAUDE.md`, then the map, then the one page its task needs. A user standa
 | `missing front matter field <f>` | a required field is absent or empty |
 | `not in INDEX.md` / `INDEX.md links missing page` | map and disk disagree |
 | `broken link` / `broken reference § <heading>` | the target file or heading does not exist |
+| `unclosed front matter` | the opening `---` has no closing `---` |
 | `duplicate heading` | the same `##` heading twice in one page |
 | `page over 8 KB without ## headings` | add headings or split the page |
 | `drift: <code path> changed, page not updated` | `--changed` lists a code file that a page's `files:` names, and the page is not among the changed files |

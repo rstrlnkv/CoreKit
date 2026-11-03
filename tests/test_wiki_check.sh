@@ -16,7 +16,9 @@ check() {
 assert_exit 0 bash "$W" "$FX/wiki-good"
 assert_eq "$OUT" "" "good wiki prints nothing"
 assert_exit 0 bash "$W" "$FX/wiki-good/"        # trailing slash
-(cd "$FX/wiki-good/docs" && assert_exit 0 bash "$W" ..)   # relative path, other cwd
+cd "$FX/wiki-good/docs" || exit 1       # relative project path from another cwd
+assert_exit 0 bash "$W" ..
+cd "$ROOT" || exit 1
 
 # One broken fixture per check.
 check wiki-bad-1 "wiki-check: features/login.md: missing front matter field status
@@ -28,6 +30,8 @@ wiki-check: architecture.md: broken reference § No such heading (no such headin
 wiki-check: architecture.md: broken reference § Flow (no such page docs/features/gone.md)"
 check wiki-bad-4 "wiki-check: architecture.md: duplicate heading Components"
 check wiki-bad-5 "wiki-check: features/login.md: page over 8 KB without ## headings"
+
+check wiki-bad-7 "wiki-check: features/login.md: unclosed front matter"
 
 # Problem prefixes, exactly as the verifier and release read them.
 assert_exit 1 bash "$W" "$FX/wiki-bad-3"
@@ -74,6 +78,26 @@ wiki-check: architecture.md: broken reference § Overview (no such heading in do
 wiki-check: architecture.md: broken reference § Storage, sync — what and why (no such heading in docs/architecture.md)
 wiki-check: architecture.md: broken reference § Storage, sync — what and why (no such heading in docs/architecture.md)
 wiki-check: architecture.md: broken reference § The (no such heading in docs/architecture.md)" "renamed headings"   # shown up to the first backtick
+
+# A reference at the end of a sentence: one trailing . , ; : ) is forgiven; exact text wins.
+cp -R "$FX/wiki-good" "$SANDBOX/punct"
+printf '\nSee docs/architecture.md § Components.\n(see docs/architecture.md § Storage)\nSee docs/architecture.md § Storage;\n' >> "$SANDBOX/punct/CLAUDE.md"
+assert_exit 0 bash "$W" "$SANDBOX/punct"
+assert_eq "$OUT" "" "trailing punctuation"
+printf 'See docs/architecture.md § Nowhere.\n' >> "$SANDBOX/punct/CLAUDE.md"
+assert_exit 1 bash "$W" "$SANDBOX/punct"
+assert_eq "$OUT" "wiki-check: ../CLAUDE.md: broken reference § Nowhere. (no such heading in docs/architecture.md)" "still broken"
+# A heading that itself ends in a period matches exactly.
+cp -R "$FX/wiki-good" "$SANDBOX/period"
+printf '\n## Done.\n' >> "$SANDBOX/period/docs/architecture.md"
+printf 'See docs/architecture.md § Done.\n' >> "$SANDBOX/period/CLAUDE.md"
+assert_exit 0 bash "$W" "$SANDBOX/period"
+
+# Fail closed: a broken awk is an error (exit 2), never green.
+mkdir "$SANDBOX/stub"
+printf '#!/bin/sh\necho boom\nexit 2\n' > "$SANDBOX/stub/awk"; chmod +x "$SANDBOX/stub/awk"
+assert_exit 2 env PATH="$SANDBOX/stub:$PATH" bash "$W" "$FX/wiki-good"
+assert_contains <(printf '%s' "$OUT") "wiki-check: internal error"
 
 # A project path with spaces, copied from the fixture.
 cp -R "$FX/wiki-good" "$SANDBOX/my project"

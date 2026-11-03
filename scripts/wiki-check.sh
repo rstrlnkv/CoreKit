@@ -13,6 +13,7 @@
 #   INDEX.md links missing page <target>       a map link to a page that does not exist
 #   broken link <target>                       a Markdown link whose file does not exist
 #   broken reference § <heading> (...)         "docs/<page>.md § <heading>" with no such page/heading
+#   unclosed front matter                      opening --- without a closing ---
 #   duplicate heading <h>                      the same "## " heading twice in one page
 #   page over 8 KB without ## headings
 #   drift: <code path> changed, page not updated      (only with --changed)
@@ -20,7 +21,8 @@
 # Links and references are read in docs/ pages, INDEX.md and CLAUDE.md, outside code fences;
 # links ignore other schemes (http:, mailto:...) and pure "#anchor"; "page.md#anchor" checks
 # the file only. A reference heading is the rest of the line, or the text up to the first
-# backtick (so wrap a reference in backticks when prose follows it).
+# backtick (so wrap a reference in backticks when prose follows it); if the exact text is not a
+# heading, one trailing . , ; : or ) is dropped and it is tried again ("... § Components.").
 #
 # --changed paths: code files as code-relative paths (what "git diff --name-only" prints in
 # code/). A changed wiki page is passed as "../docs/<page>.md" (the unambiguous form) or as
@@ -28,7 +30,7 @@
 # top-level docs/ folder of code/ cannot be told apart from a wiki page; it is taken as a page.
 # A page's files: entries match a changed path exactly, or by prefix when the entry ends in "/".
 #
-# Exit: 0 green, 1 problems found, 2 usage error. Portable bash 3.2 + BSD awk.
+# Exit: 0 green, 1 problems found, 2 usage or internal error (e.g. awk failed: never "green"). Portable bash 3.2 + BSD awk.
 
 set -u
 
@@ -108,6 +110,9 @@ function unpct(s,   out, i, h, v) {
   }
   return out s
 }
+
+# One trailing sentence mark removed ("... § Components." at the end of a sentence).
+function stripp(s) { sub(/[.,;:)]$/, "", s); return trim(s) }
 
 function additem(v) {
   v = trim(v)
@@ -194,7 +199,8 @@ function scanrefs(s,   p, before, after, last, start, j, page, a, b, c, shown, p
     pf = proj "/" norm(page)
     if (!exists(pf)) { report(rel, "broken reference § " shown " (no such page " page ")"); continue }
     loadheads(pf)
-    if (!((pf SUBSEP a) in heads) && !((pf SUBSEP b) in heads))
+    if (!((pf SUBSEP a) in heads) && !((pf SUBSEP b) in heads) \
+        && !((pf SUBSEP stripp(a)) in heads) && !((pf SUBSEP stripp(b)) in heads))
       report(rel, "broken reference § " shown " (no such heading in " page ")")
   }
 }
@@ -231,6 +237,7 @@ BEGIN {
 }
 
 END {
+  if (infm) report(rel, "unclosed front matter")
   if (mode == "page") {
     nreq = split("title description status files related updated", req, " ")
     for (i = 1; i <= nreq; i++) {
@@ -264,15 +271,22 @@ run_awk() {
   WC_CHANGED="$T/changed" WC_PAGES="$T/pages" awk -f "$T/check.awk" "$3"
 }
 
+# A failing awk must not read as "green": remember it in $T/failed and exit 2 below.
+run_checked() { run_awk "$@" || echo "$2" >> "$T/failed"; }
+
 OUT="$(
-  if [ -f "$DOCS/INDEX.md" ]; then run_awk index INDEX.md "$DOCS/INDEX.md" docs
+  if [ -f "$DOCS/INDEX.md" ]; then run_checked index INDEX.md "$DOCS/INDEX.md" docs
   else echo "wiki-check: INDEX.md: missing"; fi
   while IFS= read -r page; do
     d="$(dirname "$page")"; if [ "$d" = . ]; then d=docs; else d="docs/$d"; fi
-    run_awk page "$page" "$DOCS/$page" "$d"
+    run_checked page "$page" "$DOCS/$page" "$d"
   done < "$T/pages"
-  if [ -f "$PROJ/CLAUDE.md" ]; then run_awk claude ../CLAUDE.md "$PROJ/CLAUDE.md" ""; fi
+  if [ -f "$PROJ/CLAUDE.md" ]; then run_checked claude ../CLAUDE.md "$PROJ/CLAUDE.md" ""; fi
 )"
 
+if [ -s "$T/failed" ]; then
+  echo "wiki-check: internal error: awk failed on: $(tr '\n' ' ' < "$T/failed")" >&2
+  exit 2
+fi
 if [ -n "$OUT" ]; then printf '%s\n' "$OUT"; exit 1; fi
 exit 0
