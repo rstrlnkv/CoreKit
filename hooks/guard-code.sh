@@ -315,7 +315,7 @@ bash_targets() {
               if (C[p] == "\"") { nomore = 1; break }
               dl = ""
               if (C[p] == "\047") {
-                q = p + 1; while (q <= len && C[q] != "\047" && C[q] != NL) q++
+                q = p + 1; while (q <= len && C[q] != "\047" && C[q] != NL && C[q] != "\"") q++
                 if (C[q] == "\047") { dl = seg(p + 1, q); p = q + 1 }
               } else {
                 q = p; while (q <= len && C[q] != "" && index(WORDCH, C[q]) > 0) q++

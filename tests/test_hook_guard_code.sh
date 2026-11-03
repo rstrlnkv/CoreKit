@@ -179,6 +179,7 @@ blocked "Bash command after a commit heredoc is judged again" "$C/docs/b.md" "$C
 run_bash 'git commit -m \"$(cat <<-EOF\n\tit\"s > docs/a.md\n\tEOF\n)\"'; ok "Bash commit heredoc <<- in \"\$(...)\""
 run_bash 'git commit -m \"$(cat <<\"EOF\"\nx\" > docs/a.md\nEOF\n)\"'; ok "Bash commit heredoc with a double-quoted delimiter fails open"
 # a heredoc body that is not closed, and one closed on the last line, are not parsed as commands
+run_bash 'grep -n \"<<'"'"'\" f.sh && echo '"'"'ok'"'"' \"> docs/y\"'; ok "Bash a <<' inside a double-quoted grep pattern does not flip the quoting"
 run_bash 'cat <<EOF\necho x > docs/a.md'; ok "Bash unterminated heredoc body"
 run_bash 'cat <<EOF > notes\nx\nEOF\ncp a docs/b'; blocked "Bash command after a closed heredoc is judged" "$C/docs/b" "$CORE_DIR/p/docs/b"
 
