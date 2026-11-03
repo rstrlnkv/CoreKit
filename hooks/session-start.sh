@@ -60,7 +60,7 @@ fi
 # Layout notes: .coredev has no schema line, or an older schema than this plugin writes.
 sv="$(coredev_get schema | tr -d '[:space:]')"
 case "$sv" in
-  ""|*[!0-9]*) old=1; shown="none" ;;
+  ""|*[!0-9]*) old=1; shown="$(msg schema_none)" ;;
   *) shown="$sv"; if [ $((10#$sv)) -lt "$COREDEV_SCHEMA" ]; then old=1; else old=0; fi ;;
 esac
 if [ "$old" -eq 1 ]; then

@@ -113,6 +113,6 @@ while :; do
   [ $((now - start)) -ge "$limit" ] && break
   sleep 2
 done
-what="$(printf '%s' "${running:-a run that is starting}" | tr -d '\n\r' | cut -c1-120)"
+what="$(printf '%s' "${running:-$(msg run_starting)}" | tr -d '\n\r' | cut -c1-120)"
 printf '%s\n' "$(msg one_suite_wait "$limit" "$what")" >&2
 exit 2

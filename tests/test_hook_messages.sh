@@ -31,7 +31,7 @@ for k in $used; do (. "$M"; msg_has "$k" en) && pass || fail "hook uses key $k t
 for k in $(. "$M" 2>/dev/null; echo $MSG_KEYS); do
   printf '%s\n' "$used" | grep -qx "$k" && pass || fail "key $k is not used by any hook"
 done
-assert_contains "$M" "one column"   # the header says how to add a language
+assert_contains "$M" "add one more branch with its texts to each key below"   # the header says how to add a language
 
 # --- msg: language choice and verbatim arguments.
 text() { # text <lang-variant> <key> [args]
@@ -122,11 +122,11 @@ Layout note: this Core has layout schema none, the plugin expects 1. Bring it up
 Old git hooks (not coredev shims): $P/code/.git/hooks/pre-commit. Replace them with: bash \"$ROOT/scripts/install-hooks.sh\" \"$P\"" \
 "coredev: вы в проекте Core \"$PN\" (Core: $CORE_DIR)
 Индекс документации проекта: $P/docs/INDEX.md
-Сохранить законченный шаг: bash \"$COREDEV_TOOLS/save\" \"<message>\"; отменить последний шаг: bash \"$COREDEV_TOOLS/undo-step\"
+Сохранить завершённый шаг: bash \"$COREDEV_TOOLS/save\" \"<message>\"; отменить последний шаг: bash \"$COREDEV_TOOLS/undo-step\"
 Стандарты: a, b
 Правила сессии ($CORE_DIR/session-rules.md):
-Заметка о структуре: у этого Core схема none, а плагин ждёт 1. Обновите её (добавляется только недостающее): bash \"$ROOT/scripts/setup-core.sh\" \"$CORE_DIR\"
-Старые git-хуки (не шимы coredev): $P/code/.git/hooks/pre-commit. Замените их командой: bash \"$ROOT/scripts/install-hooks.sh\" \"$P\""
+Заметка о структуре: структура этого Core — версия нет, плагину нужна 1. Обновите её (добавится только недостающее): bash \"$ROOT/scripts/setup-core.sh\" \"$CORE_DIR\"
+Найдены старые git-хуки, не от coredev: $P/code/.git/hooks/pre-commit. Замените их командой: bash \"$ROOT/scripts/install-hooks.sh\" \"$P\""
   case "$OUT" in *"):"$'\n'"rule one"$'\n'"rule two"$'\n'*) pass ;; *) fail "session rules text not printed verbatim [$v]: $OUT" ;; esac
 done
 rm -f "$CORE_DIR/standards/a.md" "$CORE_DIR/standards/b.md"
@@ -194,10 +194,18 @@ for v in "${VARIANTS[@]}"; do
 "one-suite: a test run is still in progress after 0 s of waiting (" \
 "one-suite: тесты всё ещё идут после ожидания 0 с ("
   case "$(cat "$SANDBOX/err")" in *"$FAKE"*) pass ;; *) fail "one-suite [$v]: the running command is not named" ;; esac
-  case "$v" in ru) check "$v" "one-suite tail" "$(cat "$SANDBOX/err")" "" "запустите ту же команду ещё раз: хук дождётся." ;;
+  case "$v" in ru) check "$v" "one-suite tail" "$(cat "$SANDBOX/err")" "" "запустите ту же команду ещё раз: хук дождётся. Если это процесс, который сам перезапускает тесты при изменении файлов, сначала остановите его." ;;
     *) check "$v" "one-suite tail" "$(cat "$SANDBOX/err")" "run the same command again: this hook waits for it." "" ;; esac
 done
 kill "$dummy" 2>/dev/null; dummy=""
+# nothing is running but another call holds a fresh turn: the refusal names "a run that is starting"
+mkdir -p "$SANDBOX/turn2"; date +%s > "$SANDBOX/turn2/at"
+for v in en ru; do
+  printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"swift test","description":"run"}}' "$C" \
+    | ONE_SUITE_TURN="$SANDBOX/turn2" ONE_SUITE_GRACE=1000 vrun "$v" bash "$H" >"$SANDBOX/out" 2>"$SANDBOX/err"
+  assert_eq "$?" "2" "one-suite starting-run exit [$v]"
+  check "$v" "one-suite starting" "$(cat "$SANDBOX/err")" "(a run that is starting)" "(тест, который запускается)"
+done
 
 # --- stop-remind: the reminder on stderr, exit 2; the dirty-part words follow the language
 H="$HOOKS/stop-remind.sh"
@@ -213,7 +221,7 @@ for v in "${VARIANTS[@]}"; do
   assert_eq "$RC" "2" "stop-remind exit [$v]"; assert_eq "$(cat "$SANDBOX/out")" "" "stop-remind: stdout empty [$v]"
   check "$v" "stop-remind" "$(cat "$SANDBOX/err")" \
 "Uncommitted changes in code. If this working step is finished, run: bash \"$SCRIPTS/save\" \"<short English message>\". If you are waiting for the user's answer or approval, do not save; just end your turn." \
-"Есть незакоммиченные изменения: код. Если этот рабочий шаг закончен, выполните: bash \"$SCRIPTS/save\" \"<short English message>\". Если вы ждёте ответа или одобрения пользователя, не сохраняйте, просто завершите ход."
+"Есть несохранённые изменения: код. Если этот рабочий шаг закончен, выполните: bash \"$SCRIPTS/save\" \"<short English message>\". Если вы ждёте ответа или одобрения пользователя, не сохраняйте, просто закончите ответ."
 done
 (cd "$SC" && bash "$SCRIPTS/save" "s") >/dev/null 2>&1
 echo y >> "$SP/docs/brief.md"

@@ -11,14 +11,14 @@
 # In a text, @1 @2 ... stand for the arguments. They are inserted as plain text (never as a printf
 # format, never re-scanned), so a path with %, spaces, quotes or Cyrillic prints verbatim.
 #
-# To add a language: add one column to this table, namely the branch "<lang>:<key>)" next to the "en:" and "ru:" ones in
-# _msg_text for every key (a key without it falls back to en), and the language name to the
-# ui_language options in .claude-plugin/plugin.json. Nothing else changes.
+# To add a language, add one more branch with its texts to each key below (a "<lang>:<key>)" line next to the
+# "en:" and "ru:" ones; a key without it falls back to en), and add the language to the ui_language
+# options in .claude-plugin/plugin.json. Nothing else changes.
 #
 # Portable bash 3.2: no associative arrays, no case-change expansions.
 
 MSG_KEYS="sync_failed hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
-session_rules layout_note old_hooks guard_code_blocked guard_code_public secrets_blocked secrets_ask
+session_rules schema_none run_starting layout_note old_hooks guard_code_blocked guard_code_public secrets_blocked secrets_ask
 one_suite_wait dirty_code dirty_docs dirty_both stop_remind"
 
 # _msg_text <lang> <key> — sets MSG_T to the text, or to nothing when there is none. Keep the keys and
@@ -37,17 +37,21 @@ _msg_text() {
     en:docs_index) MSG_T='Project docs index: @1' ;;
     ru:docs_index) MSG_T='Индекс документации проекта: @1' ;;
     en:save_hint) MSG_T='Save a finished step: bash "@1" "<message>"@2; undo the last step: bash "@3"' ;;
-    ru:save_hint) MSG_T='Сохранить законченный шаг: bash "@1" "<message>"@2; отменить последний шаг: bash "@3"' ;;
+    ru:save_hint) MSG_T='Сохранить завершённый шаг: bash "@1" "<message>"@2; отменить последний шаг: bash "@3"' ;;
     en:standards) MSG_T='Standards: @1' ;;
     ru:standards) MSG_T='Стандарты: @1' ;;
     en:standards_none) MSG_T='none' ;;
     ru:standards_none) MSG_T='нет' ;;
     en:session_rules) MSG_T='Session rules (@1):' ;;
     ru:session_rules) MSG_T='Правила сессии (@1):' ;;
+    en:schema_none) MSG_T='none' ;;
+    ru:schema_none) MSG_T='нет' ;;
+    en:run_starting) MSG_T='a run that is starting' ;;
+    ru:run_starting) MSG_T='тест, который запускается' ;;
     en:layout_note) MSG_T='Layout note: this Core has layout schema @1, the plugin expects @2. Bring it up to date (adds only what is missing): bash "@3" "@4"' ;;
-    ru:layout_note) MSG_T='Заметка о структуре: у этого Core схема @1, а плагин ждёт @2. Обновите её (добавляется только недостающее): bash "@3" "@4"' ;;
+    ru:layout_note) MSG_T='Заметка о структуре: структура этого Core — версия @1, плагину нужна @2. Обновите её (добавится только недостающее): bash "@3" "@4"' ;;
     en:old_hooks) MSG_T='Old git hooks (not coredev shims): @1. Replace them with: bash "@2" "@3"' ;;
-    ru:old_hooks) MSG_T='Старые git-хуки (не шимы coredev): @1. Замените их командой: bash "@2" "@3"' ;;
+    ru:old_hooks) MSG_T='Найдены старые git-хуки, не от coredev: @1. Замените их командой: bash "@2" "@3"' ;;
     en:guard_code_blocked) MSG_T='coredev: @1 is an internal file and must not live in code/. Write it to @2 instead.' ;;
     ru:guard_code_blocked) MSG_T='coredev: @1 — внутренний файл, ему не место в code/. Запишите его в @2.' ;;
     en:guard_code_public) MSG_T='Docs meant to stay public in code/: list them on a "public-docs: <paths>" line in @1.' ;;
@@ -57,7 +61,7 @@ _msg_text() {
     en:secrets_ask) MSG_T='Ask the user to check the value themselves, or use .env.example.' ;;
     ru:secrets_ask) MSG_T='Попросите пользователя проверить значение самому или используйте .env.example.' ;;
     en:one_suite_wait) MSG_T='one-suite: a test run is still in progress after @1 s of waiting (@2) — run the same command again: this hook waits for it. If it is a watcher you started, stop it first.' ;;
-    ru:one_suite_wait) MSG_T='one-suite: тесты всё ещё идут после ожидания @1 с (@2) — запустите ту же команду ещё раз: хук дождётся. Если это watcher, который вы запустили, сначала остановите его.' ;;
+    ru:one_suite_wait) MSG_T='one-suite: тесты всё ещё идут после ожидания @1 с (@2) — запустите ту же команду ещё раз: хук дождётся. Если это процесс, который сам перезапускает тесты при изменении файлов, сначала остановите его.' ;;
     en:dirty_code) MSG_T='code' ;;
     ru:dirty_code) MSG_T='код' ;;
     en:dirty_docs) MSG_T='docs' ;;
@@ -65,7 +69,7 @@ _msg_text() {
     en:dirty_both) MSG_T='code and docs' ;;
     ru:dirty_both) MSG_T='код и документация' ;;
     en:stop_remind) MSG_T='Uncommitted changes in @1. If this working step is finished, run: bash "@2" "<short English message>"@3. If you are waiting for the user'"'"'s answer or approval, do not save; just end your turn.' ;;
-    ru:stop_remind) MSG_T='Есть незакоммиченные изменения: @1. Если этот рабочий шаг закончен, выполните: bash "@2" "<short English message>"@3. Если вы ждёте ответа или одобрения пользователя, не сохраняйте, просто завершите ход.' ;;
+    ru:stop_remind) MSG_T='Есть несохранённые изменения: @1. Если этот рабочий шаг закончен, выполните: bash "@2" "<short English message>"@3. Если вы ждёте ответа или одобрения пользователя, не сохраняйте, просто закончите ответ.' ;;
   esac
 }
 
