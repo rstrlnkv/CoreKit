@@ -50,12 +50,27 @@ local dir="$1"
 EOF
 assert_eq "$(scan "$good")" "" "portable lines flagged"
 
-# Every shell script in the repo: *.sh or a file with a shell shebang.
-cd "$ROOT" || exit 1
-for f in install.sh $(git ls-files skills tests); do
-  [ "$f" = tests/test_portability.sh ] && continue
-  case "$f" in *.sh) ;; *) head -1 "$f" | grep -qE '^#!.*sh' || continue ;; esac
-  hits="$(scan "$f")"
-  [ -z "$hits" ] && pass || fail "not portable to macOS bash 3.2 / BSD: $hits"
-done
+# scripts <repo> — shell scripts on disk (tracked or not): *.sh or a file with a shell shebang
+scripts() {
+  (cd "$1" && find install.sh skills tests -type f 2>/dev/null | while IFS= read -r f; do
+    [ "$f" = tests/test_portability.sh ] && continue
+    case "$f" in *.sh) ;; *) head -1 "$f" | grep -qE '^#!.*sh' || continue ;; esac
+    echo "$f"
+  done)
+}
+
+# Self-check: new scripts not yet added to git and names with spaces are scanned too.
+R="$SANDBOX/repo"; mkdir -p "$R/skills"; git -C "$R" init -q
+echo 'echo ok' > "$R/install.sh"; git -C "$R" add install.sh
+echo 'mapfile -t x' > "$R/skills/new.sh"; echo 'grep -P x' > "$R/skills/a b.sh"
+assert_eq "$(scripts "$R" | LC_ALL=C sort | tr '\n' ';')" "install.sh;skills/a b.sh;skills/new.sh;" \
+  "script list"
+
+# Every shell script in the repo.
+scripts "$ROOT" | while IFS= read -r f; do
+  hits="$(scan "$ROOT/$f")"
+  [ -z "$hits" ] || echo "$hits"
+done > "$SANDBOX/hits"
+[ -s "$SANDBOX/hits" ] && fail "not portable to macOS bash 3.2 / BSD: $(cat "$SANDBOX/hits")" || pass
+scripts "$ROOT" | grep -qx 'skills/new-project/core-bin/save' && pass || fail "scripts without .sh not scanned"
 finish
