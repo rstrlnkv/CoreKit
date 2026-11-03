@@ -45,16 +45,19 @@ sp='[[:space:]]'; stop='[^[:space:];&|]'
 pre="(^|[;&|(])$sp*(([A-Za-z_][A-Za-z0-9_]*=$stop*|then|do|else|time|exec|command|nohup|sudo|env|nice|xcrun|caffeinate|(uv|poetry|pipenv)$sp+run|bundle$sp+exec)$sp+)*($stop*/)?"
 end="($sp|[;&|)]|\$)"
 runners="swift$sp+test$end"
-runners="$runners|xcodebuild[^;&|]*$sp+test$end"
+runners="$runners|xcodebuild[^;&|]*$sp+test(-without-building)?$end"
 runners="$runners|npm$sp+(run$sp+)?test([:_-]$stop*)?$end"
 runners="$runners|npx($sp+-$stop+)*$sp+(test|vitest)$end"
 runners="$runners|vitest$sp+run$end"
-runners="$runners|gradlew[^;&|]*[[:space:]:][a-zA-Z]*[tT]est"
+# gradlew: a task word counts: test, testX or fooTest (connectedAndroidTest), with an optional :project: path.
+# compileTestKotlin does not, and neither does a task that follows -x / --exclude-task (cut out below).
+runners="$runners|gradlew[^;&|]*$sp(:?[A-Za-z0-9_-]+:)*(test[A-Za-z0-9]*|[a-z][A-Za-z0-9]*Test)$end"
 runners="$runners|(python[0-9.]*$sp+-m$sp+)?pytest$end"
 runners="$runners|cargo($sp+[+-]$stop*)*$sp+test$end"
 runners="$runners|flutter$sp+test$end"
 runners="$runners|go$sp+test$end"
 script="(^|[;&|(])$sp*(([A-Za-z_][A-Za-z0-9_]*=$stop*|time|exec|nohup|sudo)$sp+)*((ba|z)?sh($sp+-[a-z]+)*$sp+)?$stop*tests?\\.sh$end"
+bare="$(printf '%s' "$bare" | LC_ALL=C sed -E "s/$sp(-x|--exclude-task)($sp+|=)$stop+//g")"
 printf '%s' "$bare" | LC_ALL=C grep -qE "${pre}(${runners})|${script}" || exit 0
 command -v pgrep >/dev/null 2>&1 || exit 0
 
@@ -62,28 +65,53 @@ command -v pgrep >/dev/null 2>&1 || exit 0
 # `pgrep -f`), so this hook's own tests do not depend on what happens to be running on the machine.
 # Every alternative is anchored on a command word, so an editor or `grep` with the name of a runner
 # as an argument does not count; the hook's own command line matches nothing here.
-default_procs='(^|/)swift[- ]test( |$)|(^|/)xctest( |$)|(^|/)xcodebuild( .*)? test( |$)|node_modules/(\.bin/vitest|vitest/dist/)|(^|/)vitest run( |$)|(^|/)gradlew( .*)? ([^ ]*[:-])?[tT]est[^ ]*( |$)|Gradle Test Executor|(^|/)pytest( |$)|(^|/)py\.test( |$)|-m pytest( |$)|(^|/)cargo( \+[^ ]+)? test( |$)|(^|/)flutter test( |$)|flutter_tools\.snapshot test( |$)|(^|/)go test( |$)|/go-build[0-9]+/.*\.test( |$)|(^|/)(ba|z)?sh( -[a-z]+)* [^ ]*tests?\.sh( |$)'
+default_procs='(^|/)swift[- ]test( |$)|(^|/)xctest( |$)|(^|/)xcodebuild( .*)? test(-without-building)?( |$)|node_modules/(\.bin/vitest|vitest/dist/)|(^|/)vitest run( |$)|(^|/)gradlew( .*)? ([^ ]*:)?(test[A-Za-z0-9]*|[a-z][A-Za-z0-9]*Test)( |$)|Gradle Test Executor|(^|/)pytest( |$)|(^|/)py\.test( |$)|-m pytest( |$)|(^|/)cargo( \+[^ ]+)? test( |$)|(^|/)flutter test( |$)|flutter_tools\.snapshot test( |$)|(^|/)go test( |$)|/go-build[0-9]+/.*\.test( |$)|(^|/)(ba|z)?sh( -[a-z]+)* [^ ]*tests?\.sh( |$)'
 procs="${ONE_SUITE_PROCS:-$default_procs}"
 
 # The turn: a directory only one waiter can make. A run that was let through takes a moment to
 # appear among the processes, and without the turn every waiter would see "nothing running" in that
 # moment and start together. A turn older than its grace belongs to a run that has started or never
-# will, and the next waiter takes it.
+# will, and the next waiter takes it. If the turn can be neither made nor cleared (its folder is
+# missing or read-only, a stale turn belongs to someone else) waiting cannot help: the call is let
+# through. Every other path through the loop below reaches the limit check and the sleep.
 turn="${ONE_SUITE_TURN:-${TMPDIR:-/tmp}/coredev-one-suite.turn}"
 grace="${ONE_SUITE_GRACE:-10}"; limit="${ONE_SUITE_WAIT:-480}"
 case "$grace" in ''|*[!0-9]*) grace=10 ;; esac
 case "$limit" in ''|*[!0-9]*) limit=480 ;; esac
-start="$(date +%s)"; running=""
+
+# running_line — the first other process (pid and command line) that matches $procs. A gradlew run
+# whose test task follows -x / --exclude-task is dropped: a regular expression cannot say "not after -x".
+running_line() {
+  local line rest
+  pgrep -fl "$procs" 2>/dev/null | while IFS= read -r line; do
+    [ "${line%% *}" = "$$" ] && continue
+    rest="${line#* }"
+    case "$rest" in
+      *gradlew*)
+        rest="$(printf '%s' "$rest" | LC_ALL=C sed -E 's/[[:space:]](-x|--exclude-task)([[:space:]]+|=)[^[:space:]]+//g')"
+        printf '%s' "$rest" | LC_ALL=C grep -qE -- "$procs" || continue ;;
+    esac
+    printf '%s\n' "$line"
+  done | head -1
+}
+
+start="$(date +%s)"; running=""; tdir="$(dirname "$turn")"
 while :; do
-  running="$(pgrep -f "$procs" 2>/dev/null | command grep -vx "$$" | head -3 | tr '\n' ' ')"
+  running="$(running_line)"
   now="$(date +%s)"
   if [ -z "$running" ]; then
     if mkdir "$turn" 2>/dev/null; then echo "$now" > "$turn/at"; exit 0; fi
+    [ -d "$tdir" ] && [ -w "$tdir" ] || exit 0
     at="$(cat "$turn/at" 2>/dev/null)"; case "$at" in ''|*[!0-9]*) at=0 ;; esac
-    [ $((now - at)) -ge "$grace" ] && { rm -rf "$turn"; continue; }
+    if [ $((now - at)) -ge "$grace" ]; then
+      rm -rf "$turn" 2>/dev/null
+      [ -e "$turn" ] && exit 0
+      continue
+    fi
   fi
   [ $((now - start)) -ge "$limit" ] && break
   sleep 2
 done
-echo "one-suite: a test run is still in progress after ${limit} s of waiting (pid ${running:-starting}) — run the same command again: this hook waits for it, do not poll it yourself" >&2
+what="$(printf '%s' "${running:-a run that is starting}" | tr -d '\n\r' | cut -c1-120)"
+echo "one-suite: a test run is still in progress after ${limit} s of waiting (${what}) — run the same command again: this hook waits for it. If it is a watcher you started, stop it first." >&2
 exit 2
