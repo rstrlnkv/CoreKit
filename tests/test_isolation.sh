@@ -13,7 +13,9 @@ assert_eq "$(git config --global --list | grep -c '^user\.')" "0" "global git id
 # the default excludes file (from XDG/HOME) is not the developer's: settings.local.json is not ignored
 mkdir -p "$SANDBOX/r/.claude"; git init -q "$SANDBOX/r"; : > "$SANDBOX/r/.claude/settings.local.json"
 git -C "$SANDBOX/r" check-ignore -q .claude/settings.local.json && fail "settings.local.json ignored by a global excludes file" || pass
-# a global setting lands in the sandbox file, not in the real one
+# a global setting lands in the sandbox file, not in the real one (never write unless isolated)
+[ "$GIT_CONFIG_GLOBAL" = "$SANDBOX/gitconfig" ] && [ "$HOME" != "$REAL_HOME" ] \
+  || { fail "sandbox not isolated; skipping the global write"; finish; exit 1; }
 git config --global test.isolation yes
 assert_contains "$SANDBOX/gitconfig" "isolation = yes"
 finish
