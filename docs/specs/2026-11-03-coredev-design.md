@@ -140,6 +140,10 @@ Found in phase 1 (live check, Claude Code 2.1.316, `claude -p --plugin-dir`, unc
 `${user_config.*}` placeholders stay literal in skill text (`${CLAUDE_SKILL_DIR}` is
 substituted), and hooks get no `CLAUDE_PLUGIN_OPTION_*`. Scripts therefore treat a value that
 still contains the literal `${user_config.` as unset (`load_settings`: option, then default).
+Skills single-quote the placeholder in shell commands (`CORE_DIR='${user_config.core_dir}' bash …`):
+a double-quoted literal is a "bad substitution" in bash and zsh. Files a skill opens with Read get
+nothing substituted, so `task` notes the resolved values (plugin folder, attribution, model
+profile) once at Start and its reference files use `<plugin>`, `<scripts>` and those values.
 The data folder id under `--plugin-dir` is `coredev-inline` (installed from the marketplace:
 `coredev-corekit`). A plugin with a hard dependency does not load when the dependency comes from
 claude.ai sync (`feature-dev@synced`): "unmet dependency" (D3).

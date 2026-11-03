@@ -125,8 +125,8 @@ for n in 1 2 3 4 5 6 7; do
 done
 for w in 'wiki-check.sh' '--changed' '../docs/' 'git diff --name-only' \
          "git log --format=%B <range> | grep -icE 'co-authored-by|generated with'" \
-         'attribution=forbid' 'skipped (attribution=allow)' '${user_config.attribution}' \
-         'scripts/save' 'never tags' 'never pushes' 'Step-Id' \
+         'attribution=forbid' 'skipped (attribution=allow)' 'the attribution value resolved at Start' \
+         'bash "<scripts>/save"' 'never tags' 'never pushes' 'Step-Id' \
          'versioning' 'applies-to' 'ask the user' 'git status --short' \
          'check: <set after scaffolding>' 'git rev-parse HEAD' '<code base>..HEAD' \
          'lib.sh" get schema' 'lib.sh" schema' 'old-schema' 'warning' \
@@ -183,4 +183,19 @@ rule "turn-limit note rule" 'turn-limit note'
 # attribution=forbid: save drops attribution lines; agents are never sent to the background
 assert_contains "$T/references/release.md" '--no-attribution'
 assert_contains "$SK" 'run_in_background: false'
+
+# Reference files are opened with Read, which substitutes nothing: no ${...} placeholders there.
+# Start notes the resolved values once (plugin folder, attribution, model profile).
+for f in "$T"/references/*.md; do
+  if grep -qF '${' "$f"; then fail "$(basename "$f") holds a \${...} placeholder: $(grep -nF '${' "$f" | head -2 | tr '\n' ' ')"; else pass; fi
+done
+sec_has "$SK" Start 'cd "${CLAUDE_SKILL_DIR}/../.." && pwd'
+sec_has "$SK" Start '`<scripts>` is `<plugin>/scripts`'
+sec_has "$SK" Start 'opened with Read'
+sec_has "$SK" Start 'attribution: `${user_config.attribution}`'
+sec_has "$SK" Start 'model profile: `${user_config.model_profile}`'
+assert_contains "$REL" '<scripts>/save'
+assert_contains "$REL" '<scripts>/wiki-check.sh'
+assert_contains "$T/references/adopt.md" '<scripts>/adopt.sh'
+assert_contains "$BR" '<plugin>/reference/wiki.md'
 finish

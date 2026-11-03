@@ -2,13 +2,14 @@
 
 `/coredev:task adopt <folder>`: move an existing project into the Core layout
 (`<Core>/<name>/` for internal docs, `<Core>/<name>/code/` for the repo). Start has already
-resolved `<Core>` and checked that it is set up. No crew, no tester: only you and the script.
-Talk to the user in plain words; never run `adopt.sh` before "ok".
+resolved `<Core>`, checked that it is set up, and noted `<scripts>` (the plugin scripts folder).
+No crew, no tester: only you and the script. Talk to the user in plain words; never run
+`adopt.sh` before "ok".
 
 1. **Inspect** `<folder>` (resolve it to an absolute path; `~` counts as home). Look at
    its name, `CLAUDE.md`, `docs/`, `.claude/` and the top level of the repo. Never open `.env`
    files or `~/.ssh`.
-2. **Plan.** Run `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/adopt.sh" --from "<folder>" --dry-run`
+2. **Plan.** Run `CORE_DIR="<Core>" bash "<scripts>/adopt.sh" --from "<folder>" --dry-run`
    (add `--name <n>` when the folder name is not a valid project name: 3-40 lowercase Latin
    letters, digits and hyphens). A refusal (one line, exit 2) is final: explain it in plain
    words, say what to do about it, change nothing. Otherwise tell the user in plain words:
@@ -26,12 +27,12 @@ Talk to the user in plain words; never run `adopt.sh` before "ok".
    let the user confirm or change it. None found: leave it out; `task` asks later.
 6. **Wait for "ok"** after showing the final plan (re-run `--dry-run` with the chosen
    `--public-docs` and `--check` if the answers changed it).
-7. **Run** `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/adopt.sh" --from "<folder>" [--name <n>] [--public-docs "<paths>"] [--check "<command>"] --purpose "<text>"`.
+7. **Run** `CORE_DIR="<Core>" bash "<scripts>/adopt.sh" --from "<folder>" [--name <n>] [--public-docs "<paths>"] [--check "<command>"] --purpose "<text>"`.
    Relay every `warning:` line and every `WARN:` line (from the hook install) in plain words:
    a `WARN:` means a hook of the user's own was left in place, so the coredev guard is not
    installed in that repo; say so. A non-zero exit: show its lines and stop (exit 1 means a
    move failed: nothing was deleted, and the lines say where the files are).
-8. **Verify** with `bash "${CLAUDE_SKILL_DIR}/../../scripts/wiki-check.sh" <Core>/<name>`.
+8. **Verify** with `bash "<scripts>/wiki-check.sh" <Core>/<name>`.
    Red: say which pages and why; the usual cause is a link or reference in an old page that
    no longer resolves. Pages the script gave new front matter hold `TODO` descriptions and
    `status: draft`: say they still need writing.

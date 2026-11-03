@@ -23,14 +23,16 @@ The standard on disk is **English**, and so are the commit message and file name
 is written, summarize it in 2–4 lines in the user's language.
 
 ## Start
-Check that the Core is set up:
-`CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" ready`
+The Core setting is `${user_config.core_dir}`.
+A value that still reads literally `${user_config.` means the plugin is unconfigured: treat it as
+unset; the script below then uses the default `~/Projects/Core`. First resolve `<Core>` to an absolute path and use that path in
+every command and file write below (the setting may start with `~`):
+`CORE_DIR='${user_config.core_dir}' bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" core-dir`
+
+Then check that the Core is set up:
+`CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" ready`
 (exit 0 = set up). If it fails, say in plain words that the Core does not exist yet and that
 `/coredev:new-project` sets it up (one time); stop. Do not set it up from here.
-
-Then resolve `<Core>` to an absolute path and use that path in every command and file write
-below (the setting may start with `~`):
-`CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" core-dir`
 
 The argument is a topic ("versioning"), a knowledge line (contains `→`: `symptom → cause →
 guard`, see `${CLAUDE_SKILL_DIR}/../../reference/knowledge.md`), or empty (ask what the standard

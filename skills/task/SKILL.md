@@ -42,14 +42,22 @@ Do not pass `model` to feature-dev agents; they use their own default.
 | security, verifier, localizer, designer | sonnet | sonnet | opus |
 
 ## Start
+First note three resolved values and use them in every later step. The reference files are
+opened with Read, which substitutes nothing, so they say `<plugin>`, `<scripts>` and "the
+attribution value resolved at Start" instead of placeholders:
+- `<plugin>`: the absolute path printed by `cd "${CLAUDE_SKILL_DIR}/../.." && pwd`.
+  `<scripts>` is `<plugin>/scripts`.
+- attribution: `${user_config.attribution}`; a value that still reads `${user_config.` means `allow`.
+- model profile: `${user_config.model_profile}`; a value that still reads `${user_config.` means `balanced`.
+
 1. **Core.** Resolve `<Core>` first, to an absolute path (the setting may start with `~`), show it
    to the user and use it everywhere:
-   `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" core-dir`.
+   `CORE_DIR='${user_config.core_dir}' bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" core-dir`.
    Then check set-up:
-   `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" ready`
+   `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" ready`
    (exit 0 = set up). If not, say in plain words that a one-time setup is needed and list what it
    creates (a git repo `<Core>` with `standards/`, `knowledge/`, `.coredev`, `PROJECTS.md`); on
-   "ok" run `CORE_DIR="${user_config.core_dir}" bash "${CLAUDE_SKILL_DIR}/../../scripts/setup-core.sh" "${user_config.core_dir}"`.
+   "ok" run `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/setup-core.sh" "<Core>"`.
    If the user declines setup, stop; change nothing.
 2. **Project.** The working directory must be inside `<Core>/<project>/`. The `<project>` is
    the first path component under `<Core>`. If the directory is inside
@@ -110,7 +118,7 @@ Briefs follow `references/brief.md`. A coredev agent's `subagent_type` is `cored
 10. Extra tasks in one brief are not done; they come back in `Open`.
 11. Wiki rules are `${CLAUDE_SKILL_DIR}/../../reference/wiki.md`: engineer keeps the wiki,
     verifier runs `wiki-check.sh`. You do not edit wiki pages yourself.
-12. Never tag, never push. With `${user_config.attribution}` = `forbid`, no commit message gets a
+12. Never tag, never push. With the attribution value resolved at Start = `forbid`, no commit message gets a
     `Co-Authored-By` or `Generated with` line.
 
 ## Knowledge
