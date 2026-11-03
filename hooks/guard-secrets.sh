@@ -61,6 +61,7 @@
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
+. "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 
 tool="$(json_str "$in" tool_name)"
 case "$tool" in Read|Edit|MultiEdit|Write|NotebookEdit|Grep|Glob|Bash) ;; *) exit 0 ;; esac
@@ -70,7 +71,7 @@ load_settings
 project_of "$cwd" >/dev/null || exit 0
 
 die() {
-  printf 'coredev: reading secrets is blocked (%s)\nAsk the user to check the value themselves, or use .env.example.\n' "$1" >&2
+  printf '%s\n%s\n' "$(msg secrets_blocked "$1")" "$(msg secrets_ask)" >&2
   exit 2
 }
 

@@ -13,21 +13,24 @@ in=""; [ -t 0 ] || in="$(cat)"
 # 1. Tools: quiet unless it failed.
 # A failure is reported below: on stdout inside a project, on stderr elsewhere (no context noise).
 syncerr=""
-msg="$(bash "$ROOT/scripts/sync-tools.sh" "$ROOT" "$DATA/tools" 2>&1)" \
-  || syncerr="coredev: tools not refreshed: $(printf '%s' "$msg" | head -1)"
+syncout="$(bash "$ROOT/scripts/sync-tools.sh" "$ROOT" "$DATA/tools" 2>&1)" || syncerr=1
 
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
+. "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 load_settings
 cwd="$(json_str "$in" cwd)"
 [ -n "$cwd" ] || cwd="$PWD"
 proj="$(project_of "$cwd")"
-[ -z "$syncerr" ] || { if [ -n "$proj" ]; then echo "$syncerr"; else echo "$syncerr" >&2; fi; }
+if [ -n "$syncerr" ]; then
+  syncerr="$(msg sync_failed "$(printf '%s' "$syncout" | head -1)")"
+  if [ -n "$proj" ]; then printf '%s\n' "$syncerr"; else printf '%s\n' "$syncerr" >&2; fi
+fi
 
 # 2. No Core yet, session elsewhere: the hint, once per machine.
 if ! core_ready && [ -z "$proj" ]; then
   if [ ! -e "$DATA/state/core-hint-shown" ]; then
-    if [ -d "$CORE_DIR" ]; then what="Core at $CORE_DIR is not set up"; else what="Core not found at $CORE_DIR"; fi
-    echo "coredev: $what — /coredev:new-project or /coredev:task adopt <folder> will set it up"
+    if [ -d "$CORE_DIR" ]; then printf '%s\n' "$(msg hint_not_set_up "$CORE_DIR")"
+    else printf '%s\n' "$(msg hint_not_found "$CORE_DIR")"; fi
     { mkdir -p "$DATA/state" && : > "$DATA/state/core-hint-shown"; } 2>/dev/null
   fi
   exit 0
@@ -37,19 +40,19 @@ fi
 
 # 3. Inside a project.
 P="$CORE_DIR/$proj"; T="$DATA/tools"
-echo "coredev: you are in the Core project \"$proj\" (Core: $CORE_DIR)"
-echo "Project docs index: $P/docs/INDEX.md"
+printf '%s\n' "$(msg project_header "$proj" "$CORE_DIR")"
+printf '%s\n' "$(msg docs_index "$P/docs/INDEX.md")"
 noattr=""; [ "$ATTRIBUTION" = forbid ] && noattr=" --no-attribution"
-echo "Save a finished step: bash \"$T/save\" \"<message>\"$noattr; undo the last step: bash \"$T/undo-step\""
+printf '%s\n' "$(msg save_hint "$T/save" "$noattr" "$T/undo-step")"
 names=""
 for f in "$CORE_DIR"/standards/*.md; do
   [ -f "$f" ] || continue
   b="$(basename "$f" .md)"; [ "$b" = README ] && continue
   names="${names:+$names, }$b"
 done
-echo "Standards: ${names:-none}"
+printf '%s\n' "$(msg standards "${names:-$(msg standards_none)}")"
 if [ -f "$CORE_DIR/session-rules.md" ]; then
-  echo "Session rules ($CORE_DIR/session-rules.md):"
+  printf '%s\n' "$(msg session_rules "$CORE_DIR/session-rules.md")"
   cat "$CORE_DIR/session-rules.md"
   [ -z "$(tail -c 1 "$CORE_DIR/session-rules.md")" ] || echo   # no final newline: end the line
 fi
@@ -57,11 +60,11 @@ fi
 # Layout notes: .coredev has no schema line, or an older schema than this plugin writes.
 sv="$(coredev_get schema | tr -d '[:space:]')"
 case "$sv" in
-  ""|*[!0-9]*) old=1; shown="none" ;;
+  ""|*[!0-9]*) old=1; shown="$(msg schema_none)" ;;
   *) shown="$sv"; if [ $((10#$sv)) -lt "$COREDEV_SCHEMA" ]; then old=1; else old=0; fi ;;
 esac
 if [ "$old" -eq 1 ]; then
-  echo "Layout note: this Core has layout schema $shown, the plugin expects $COREDEV_SCHEMA. Bring it up to date (adds only what is missing): bash \"$ROOT/scripts/setup-core.sh\" \"$CORE_DIR\""
+  printf '%s\n' "$(msg layout_note "$shown" "$COREDEV_SCHEMA" "$ROOT/scripts/setup-core.sh" "$CORE_DIR")"
 fi
 
 # Old git hooks from before the plugin ("new-project hook"). A shim, or a hook of the user's own, is left alone.
@@ -72,6 +75,6 @@ for h in "$P/code/.git/hooks/pre-commit" "$P/code/.git/hooks/pre-push" "$CORE_DI
   grep -qF "new-project hook" "$h" && stale="${stale:+$stale, }$h"
 done
 if [ -n "$stale" ]; then
-  echo "Old git hooks (not coredev shims): $stale. Replace them with: bash \"$ROOT/scripts/install-hooks.sh\" \"$P\""
+  printf '%s\n' "$(msg old_hooks "$stale" "$ROOT/scripts/install-hooks.sh" "$P")"
 fi
 exit 0

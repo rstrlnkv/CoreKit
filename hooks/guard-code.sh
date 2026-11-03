@@ -34,6 +34,7 @@
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
+. "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 
 tool="$(json_str "$in" tool_name)"
 cwd="$(json_str "$in" cwd)"
@@ -95,10 +96,8 @@ check_path() {
     */claude.md) tgt="${tgt%/*}/CLAUDE.md" ;;
     */claude.local.md) tgt="${tgt%/*}/CLAUDE.local.md" ;;
   esac
-  printf 'coredev: %s is an internal file and must not live in code/. Write it to %s instead.\n' \
-    "$CORE_DIR/$proj/code/${rest:5}" "$CORE_DIR/$proj/$tgt" >&2
-  printf 'Docs meant to stay public in code/: list them on a "public-docs: <paths>" line in %s.\n' \
-    "$CORE_DIR/$proj/CLAUDE.md" >&2
+  printf '%s\n' "$(msg guard_code_blocked "$CORE_DIR/$proj/code/${rest:5}" "$CORE_DIR/$proj/$tgt")" >&2
+  printf '%s\n' "$(msg guard_code_public "$CORE_DIR/$proj/CLAUDE.md")" >&2
   exit 2
 }
 

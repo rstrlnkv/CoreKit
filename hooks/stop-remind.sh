@@ -9,6 +9,7 @@ D="$(dirname "$0")"
 [ -f "$D/_locate.sh" ] || D="$D/../scripts"
 . "$D/_locate.sh"
 . "$D/lib.sh" 2>/dev/null || exit 0   # json_str, load_settings, project_of; next to _locate.sh
+. "$(dirname "$0")/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 SAVE="$(cd "$D" && pwd)/save"
 in=$(cat)
 printf '%s' "$in" | tr -d '\r\n' | grep -qE '"stop_hook_active"[[:space:]]*:[[:space:]]*true' && exit 0
@@ -21,7 +22,9 @@ locate 2>/dev/null || exit 0
 dirty=""
 [ -n "$(git -C "$CODE" status --porcelain)" ] && dirty="code"
 # shellcheck disable=SC2086
-[ -n "$(git -C "$CORE" status --porcelain -- $CORE_PATHS)" ] && dirty="${dirty:+$dirty and }docs"
+if [ -n "$(git -C "$CORE" status --porcelain -- $CORE_PATHS)" ]; then
+  if [ -n "$dirty" ]; then dirty="both"; else dirty="docs"; fi
+fi
 STATE="$(git -C "$CODE" rev-parse --absolute-git-dir)/new-project-stop-remind"
 [ -z "$dirty" ] && { rm -f "$STATE"; exit 0; }
 
@@ -38,5 +41,10 @@ sum=$({ changes "$CODE"; changes "$CORE" $CORE_PATHS; } | cksum)
 [ "$(cat "$STATE" 2>/dev/null)" = "$sum" ] && exit 0
 echo "$sum" > "$STATE"
 noattr=""; [ "$ATTRIBUTION" = forbid ] && noattr=" --no-attribution"
-echo "Uncommitted changes in $dirty. If this working step is finished, run: bash \"$SAVE\" \"<short English message>\"$noattr. If you are waiting for the user's answer or approval, do not save; just end your turn." >&2
+case "$dirty" in
+  code) what="$(msg dirty_code)" ;;
+  docs) what="$(msg dirty_docs)" ;;
+  *) what="$(msg dirty_both)" ;;
+esac
+printf '%s\n' "$(msg stop_remind "$what" "$SAVE" "$noattr")" >&2
 exit 2

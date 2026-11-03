@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 — 2026-11-04
+- New plugin setting `ui_language` (`en` default, `ru`): the language of every message the
+  hooks show. All hook texts live in one table, `hooks/messages.sh`; a new language is one more
+  column there. Commands, paths and file names in the messages stay as they are.
+
 ## 0.2.0 — 2026-11-03
 - Hooks read settings from the plugin options. When `core_dir` is not the default and the
   options are not set (for example under `--plugin-dir`), the hooks stay silent: set
