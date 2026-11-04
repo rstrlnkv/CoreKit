@@ -112,7 +112,7 @@ test/check command, run in `<Projects>/<name>`; hooks and the verifier read it).
 (`cd <Projects>/<name> && claude`); how to check it themselves; what may break.
 
 **7. Offer a plan.** Offer a v1 plan with `superpowers:writing-plans`, saved to
-`../docs/superpowers/plans/`. Do not write app features in this skill.
+`<Core>/<name>/docs/superpowers/plans/`. Do not write app features in this skill.
 
 ## Wiki
 The docs are a wiki; the rules are in `${CLAUDE_SKILL_DIR}/../../reference/wiki.md` (read it before

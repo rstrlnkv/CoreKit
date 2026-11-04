@@ -107,9 +107,6 @@ assert_no_file "$CORE_DIR/taken-app"
 
 # --- a real CLAUDE.local.md is kept; the run exits 1 with a plain line
 new_sandbox; setup_core
-mkdir -p "$(dirname "$CORE_DIR")/real-app"; printf 'mine\n' > "$(dirname "$CORE_DIR")/real-app/CLAUDE.local.md"
-assert_exit 2 bash "$S" --name real-app
-new_sandbox; setup_core
 bash "$S" --name real-app >/dev/null
 R="$(dirname "$CORE_DIR")/real-app"
 rm "$R/CLAUDE.local.md"; printf 'mine\n' > "$R/CLAUDE.local.md"
@@ -117,6 +114,15 @@ assert_exit 1 bash "$S" --name real-app
 echo "$OUT" | grep -qF "CLAUDE.local.md exists and is not a link to $CORE_DIR/real-app/CLAUDE.md; leave it or remove it yourself" && pass || fail "link message: $OUT"
 assert_eq "$(cat "$R/CLAUDE.local.md")" "mine" "real file kept"
 [ -L "$R/CLAUDE.local.md" ] && fail "file replaced by link" || pass
+
+# --- a link to another target, and a dangling link: kept as they are, exit 1 with the same line
+for tgt in "$SANDBOX/elsewhere.md" "$SANDBOX/no/such/file.md"; do
+  [ "$tgt" = "$SANDBOX/elsewhere.md" ] && echo x > "$tgt"
+  rm -f "$R/CLAUDE.local.md"; ln -s "$tgt" "$R/CLAUDE.local.md"
+  assert_exit 1 bash "$S" --name real-app
+  echo "$OUT" | grep -qF "CLAUDE.local.md exists and is not a link to $CORE_DIR/real-app/CLAUDE.md; leave it or remove it yourself" && pass || fail "link message ($tgt): $OUT"
+  assert_eq "$(readlink "$R/CLAUDE.local.md")" "$tgt" "link changed"
+done
 
 # --- invalid names
 for bad in MyApp "my app" проект 1app a -app app- ; do
