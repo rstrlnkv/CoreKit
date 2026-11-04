@@ -36,6 +36,8 @@
 #   src` and `rsync -av --exclude .env src/ host:/` pass; `-e`/`--regexp` values are patterns; `-f FILE`,
 #   `-g GLOB`/`--include` and `--exclude-from FILE` values are judged as files. A cluster is read letter by
 #   letter: the first value-taking letter takes what follows it (-A2n) or, at the end, the next word (-rnA 2).
+#   The command line handed to bash -c, sh -c, zsh -c and eval is judged like any other (bash -c "cat .env").
+#   Not judged: interpreters (python -c, node -e), find -exec, git show REV:.env, dd, curl @file.
 #   Quotes and backslashes inside a name are removed by the lexer (.e'n'v is .env). A glob word that starts
 #   with a dot and can match .env or .env.<x> (.e*, .en?, .[e]nv, .{e,x}nv), or a component that can match
 #   .ssh (~/.s*/id_rsa), is judged as that name; a glob that starts with * ? [ does not match a dot in the shell

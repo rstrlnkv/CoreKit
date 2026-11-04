@@ -85,6 +85,26 @@ ln -s "$S2/elsewhere/Core" "$S2/Projects/Core"
   echo "$PASSES $FAILS" > "$S2/count" )
 read -r p f < "$S2/count"; PASSES=$((PASSES + p)); FAILS=$((FAILS + f))
 
+# 9. a command line handed to another shell is judged too: bash -c, sh -c, zsh -c, eval
+sec_blocked 'bash -c "cat .env"'
+sec_blocked "sh -c 'cat .env'"
+sec_blocked 'zsh -c "head -n 2 .env"'
+sec_blocked 'bash -lc "cat .env"'
+sec_blocked 'sudo bash -c "cat ~/.ssh/id_rsa"'
+sec_blocked 'bash -c "echo hi; cat .env"'
+sec_blocked 'eval "cat .env"'
+sec_blocked 'eval cat .env'
+sec_ok 'bash -c "echo hello"'
+sec_ok 'bash -c "cat .env.example"'
+sec_ok 'bash scripts/run.sh .env'
+sec_ok 'bash -c "grep .env README.md"'
+sec_ok 'eval "$(ssh-agent -s)"'
+code 'bash -c "echo hi > CLAUDE.md"'; assert_eq "$RC" "2" "bash -c writes CLAUDE.md"
+code "sh -c 'touch docs/a.md'"; assert_eq "$RC" "2" "sh -c touches docs/a.md"
+code 'eval "tee AGENTS.md"'; assert_eq "$RC" "2" "eval tee AGENTS.md"
+code 'bash -c "echo hi > src/a.ts"'; assert_eq "$RC" "0" "bash -c writes src/a.ts passes"
+code 'bash -c "ls docs"'; assert_eq "$RC" "0" "bash -c ls docs passes"
+
 # 8. << as a shift is not a heredoc
 export ONE_SUITE_PROCS="onesuite-fake-run-$$" ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0 ONE_SUITE_TURN="$SANDBOX/turn"
 bash -c "exec -a onesuite-fake-run-$$ sleep 120" >/dev/null 2>&1 & dummy=$!; disown "$dummy" 2>/dev/null

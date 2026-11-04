@@ -14,7 +14,8 @@
 #   finalize()   — one command is complete: cmd (its name) and args[1..na] (its words) are set
 #   globals it may set: full (stop reading); nomore is set here by <<"WORD" inside "$(...)" (reading stops:
 #   a hook that must not fail open there can look at it in its END block)
-# State this file owns: cmd, args, na, wrapped, and the redirect/heredoc flags.
+# A shell run with -c (bash -c "...", sh -c, zsh -c, ...) and eval hand their command line to enqueue() too.
+# State this file owns: cmd, args, na, wrapped, shk/sargs/nsa (shell -c and eval), and the redirect/heredoc flags.
 
 BEGIN {
   NL = "\002"; STOP = " \t\002;|" "&<>()`\047\"\\"
@@ -94,10 +95,28 @@ function endword(   w, qd, b, rw, x) {
     if (wdur) { wdur = 0; return }   # timeout's duration
     b = base(w)
     if (b in WR) { wrapped = 1; wname = b; wdur = (b == "timeout" || b == "gtimeout"); return }
+    shk = (b == "bash" || b == "sh" || b == "zsh" || b == "dash" || b == "ksh") ? 1 : (b == "eval" ? 2 : 0)
     cmd = classify(b)
     return
   }
   if (cmd != "?") args[++na] = w
+  else if (shk && nsa < 64) sargs[++nsa] = w
+}
+# shell_inner — the command was a shell (bash -c "..." and its kin) or eval: the command line it is handed
+# is queued and lexed like any other, so `bash -c "cat .env"` is judged as `cat .env`.
+function shell_inner(   k, a, t) {
+  if (shk == 2) {
+    for (k = 1; k <= nsa; k++) t = t (k > 1 ? " " : "") sargs[k]
+    if (t != "") enqueue(t)
+    return
+  }
+  for (k = 1; k <= nsa; k++) {
+    a = sargs[k]
+    if (a == "--") return
+    if (a == "-o" || a == "+o") { k++; continue }          # -o pipefail: the option has a value
+    if (a ~ /^-[A-Za-z]*c[A-Za-z]*$/) { if (k < nsa) enqueue(sargs[k + 1]); return }
+    if (substr(a, 1, 1) != "-") return                      # a script file: not a command line
+  }
 }
 # wrapper_opt(w) — w is an option of the wrapper wname: when its first value-taking letter ends the word
 # (-u, -E -u, --user), the next word is the value
@@ -113,8 +132,10 @@ function wrapper_opt(w,   n, p, l) {
 # stmt_end — a command ends (; | & ( ) ` or a newline): the hook-specific finalize() judges it, then the
 # state is cleared.
 function stmt_end() {
+  if (shk) shell_inner()
   finalize()
-  split("", args)
+  split("", args); split("", sargs)
+  shk = 0; nsa = 0
   cmd = ""; na = 0; wrapped = 0; wname = ""; wskip = 0; wdur = 0; want_redir = 0; want_in = 0; rwredir = 0; skip_next = 0; want_hd = 0
 }
 # enqueue(text) — a command line to lex after the main pass (at most 50)
