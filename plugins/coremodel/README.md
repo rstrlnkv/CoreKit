@@ -39,10 +39,12 @@ The texts are in Russian for a Russian prompt and in English otherwise.
 ## The pane
 
 `/coremodel panel` opens the CoreModel pane beside the chat (above the prompt in a narrow
-terminal). It shows the mode as three buttons, the level the chat really runs at and the menu's
-own model and level, the last pick and why, and this session's counts. **Release** lets go of what
-it holds. The model and level buttons hold your pick at once, Fable, Extra high and Max included:
-your own pick is your yes. A model button pressed mid-chat first shows the cost question.
+terminal). On top is the model and level the chat really runs at, with the menu's own choice
+under it while the plugin holds something. The model and level buttons, the current ones
+highlighted, hold your pick at once, Fable, Extra high and Max included: your own pick is your
+yes. A model button pressed mid-chat first shows the cost question. **Back to the menu's choice**
+lets go of what the plugin holds. Below are the mode buttons (Suggest, Auto, Off) with a line on
+what the chosen mode does, the last pick and why, and this session's counts as short bars.
 
 ## Your menus do not move
 

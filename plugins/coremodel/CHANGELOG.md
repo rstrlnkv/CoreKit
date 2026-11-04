@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1 — 2026-11-04
+
+- The pane is redrawn. On top is what the chat runs at ("Opus · High"), with "held by CoreModel"
+  and the menu's own choice under it; the current model and level are highlighted buttons; **Back
+  to the menu's choice** (was Release) lets go of a hold. The mode buttons read Suggest / Auto /
+  Off (in Russian after a Russian prompt), with one line on what the mode does. The last pick shows
+  its why on its own line; this session's counts show as short bars.
+
 ## 0.4.0 — 2026-11-04
 
 - Renamed from `coreeffort` to `coremodel` (brand CoreModel). The command is `/coremodel`, the log

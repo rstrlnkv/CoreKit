@@ -72,6 +72,31 @@ const NAMES: Record<Lang, Record<Level, string>> = {
   ru: { low: 'Низкое', medium: 'Среднее', high: 'Высокое', xhigh: 'Очень высокое', max: 'Максимальное' },
 }
 
+const MODE_NAMES: Record<Lang, Record<Mode, string>> = {
+  en: { suggest: 'Suggest', auto: 'Auto', off: 'Off' },
+  ru: { suggest: 'Подсказывать', auto: 'Сам', off: 'Выкл' },
+}
+
+// One line under the mode buttons: what the chosen mode does.
+const MODE_HINTS: Record<Lang, Record<Mode, string>> = {
+  en: {
+    suggest: 'Asks before every switch',
+    auto: 'Switches by itself, asks before Fable, Extra high, Max and a model change mid-chat',
+    off: 'Changes nothing',
+  },
+  ru: {
+    suggest: 'Спрашивает перед каждой сменой',
+    auto: 'Меняет сам, спрашивает перед Fable, Очень высоким, Максимальным и сменой модели посреди чата',
+    off: 'Ничего не меняет',
+  },
+}
+
+// auto with pickModel off: effort only.
+const AUTO_EFFORT_HINT: Record<Lang, string> = {
+  en: 'Changes the level by itself, asks before Extra high and Max',
+  ru: 'Меняет уровень сам, спрашивает перед Очень высоким и Максимальным',
+}
+
 // The footer slot fits about 14 cells.
 const SHORT: Record<Level, string> = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'XHigh', max: 'Max' }
 
@@ -108,17 +133,22 @@ export function texts(lang: Lang) {
       now ? (ru ? `Оставить «${n(now)}»` : `Keep ${n(now)}`) : ru ? 'Оставить как есть' : 'Keep it as it is',
     applied,
     mark: markLevel,
-    runsAt: (l: Level | '') =>
-      ru ? `Чат работает на: ${l ? n(l) : 'пока неизвестно'}` : `Chat runs at: ${l ? n(l) : 'unknown yet'}`,
     inMenu: (l: Level | '') => (ru ? `в меню: ${l ? n(l) : '?'} (ваше)` : `in the menu: ${l ? n(l) : '?'} (yours)`),
     modeQuestion: (mode: Mode, l: Level | '') =>
       ru
         ? `CoreModel: ${mode}. Чат работает на: ${l ? n(l) : 'пока неизвестно'}. Какой режим?`
         : `CoreModel: ${mode}. Chat runs at: ${l ? n(l) : 'unknown yet'}. Which mode?`,
+    now: ru ? 'Сейчас' : 'Now',
+    nowPair: (m: ModelKey | '', l: Level | '') =>
+      [m ? MODELS[m].name : '', l ? n(l) : ''].filter(Boolean).join(' · ') || (ru ? 'пока неизвестно' : 'unknown yet'),
+    heldBy: ru ? 'держит CoreModel' : 'held by CoreModel',
+    mode: ru ? 'Режим' : 'Mode',
+    modeName: (m: Mode) => MODE_NAMES[lang][m],
+    modeHint: (m: Mode, pickModel: boolean) => (m === 'auto' && !pickModel ? AUTO_EFFORT_HINT[lang] : MODE_HINTS[lang][m]),
     lastPick: ru ? 'Последний выбор' : 'Last pick',
     session: ru ? 'За сессию' : 'This session',
-    kept: ru ? 'Оставлено как есть' : 'Kept as it was',
-    release: ru ? 'Снять' : 'Release',
+    kept: (k: number) => (ru ? `Уровень не меняли: ${k}` : `Left as it was: ${k}`),
+    release: ru ? 'Вернуть как в меню' : "Back to the menu's choice",
     noPicks: ru ? 'Пока нет выборов.' : 'No picks yet.',
     label: (l: Level) => `${ru ? 'Усилие' : 'Effort'} ${SHORT[l]}`,
     // The pair (spec §7). With no model part each falls back to the effort-only text above.
@@ -137,7 +167,6 @@ export function texts(lang: Lang) {
       m && l ? (ru ? `Вернуть ${MODELS[m].name} · ${n(l)}` : `Back to ${MODELS[m].name} · ${n(l)}`) : m ? (ru ? `Вернуть ${MODELS[m].name}` : `Back to ${MODELS[m].name}`) : l ? back(l) : '',
     pairLabel: (m: ModelKey | null, l: Level | null) => (m && l ? `${MODELS[m].name} · ${SHORT[l]}` : m ? MODELS[m].name : l ? `${ru ? 'Усилие' : 'Effort'} ${SHORT[l]}` : ''),
     pairSuffix: (m: ModelKey | null, l: Level | null) => [m ? MODELS[m].name : '', l ? n(l) : ''].filter(Boolean).join(' · '),
-    runsAtPair: (m: ModelKey, l: Level | '') => `${ru ? 'Чат работает на: ' : 'Chat runs at: '}${MODELS[m].name}${l ? ` · ${n(l)}` : ''}`,
     inMenuPair: (m: ModelKey | '', l: Level | '') => {
       const what = [m ? MODELS[m].name : '?', l ? n(l) : ''].filter(Boolean).join(' · ')
       return ru ? `в меню: ${what} (ваше)` : `in the menu: ${what} (yours)`

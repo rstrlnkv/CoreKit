@@ -428,35 +428,92 @@ export const register: Register = (on, options) => {
     const act = (what: string, f: () => Promise<unknown>) => () => {
       f().catch(err => log($, what, err))
     }
+    const nowLevel = held ?? seen
+    const nowModel = heldModel ?? toModel(seenModel)
+    const menuLevel = toLevel(asked)
+    const menu = heldModel ? t.inMenuPair(toModel(seenModel), menuLevel) : menuLevel ? t.inMenu(menuLevel) : ''
+    const modelCounts = pickOn && s?.models ? LADDER.filter(m => s.models![m] > 0) : []
+    const levelCounts = s ? LEVELS.filter(l => s.picks[l] > 0) : []
+    // Ten cells for the most picked entry of its group; every counted entry gets at least one.
+    const bar = (k: number, most: number) => '▇'.repeat(Math.max(1, Math.round((k / Math.max(1, most)) * 10)))
+    const mostModel = Math.max(0, ...modelCounts.map(m => s?.models?.[m] ?? 0))
+    const mostLevel = Math.max(0, ...levelCounts.map(l => s?.picks[l] ?? 0))
+    const row = (key: string, n: number, most: number, name: string) => (
+      <Box key={key} gap="sm">
+        <Text color="suggestion">{bar(n, most)}</Text>
+        <Text>{`${name} ${n}`}</Text>
+      </Box>
+    )
     return (
-      <Box flexDirection="column">
-        <Box key="modes" flexWrap="wrap">
-          {MODES.map(m => (
-            <Button key={`mode-${m}`} label={m === mode ? `● ${m}` : m} onPress={act('mode', () => setMode($, options, m))} />
+      <Box flexDirection="column" gap="md">
+        <Box key="now" flexDirection="column">
+          <Text dimColor>{t.now}</Text>
+          <Text bold>{t.nowPair(pickOn ? nowModel : '', nowLevel)}</Text>
+          {held || heldModel ? <Text dimColor>{menu ? `${t.heldBy} · ${menu}` : t.heldBy}</Text> : null}
+          {[...unavailable].map(m => (
+            <Text key={`unavailable-${m}`} color="warning">{t.unavailable(m)}</Text>
           ))}
+          <Box key="models" flexWrap="wrap" marginTop="sm">
+            {(pickOn ? allowed : []).map(m => (
+              <Button
+                key={`model-${m}`}
+                label={MODELS[m].name}
+                variant={m === nowModel ? 'primary' : undefined}
+                onPress={act('model', () => paneModel($, m))}
+              />
+            ))}
+          </Box>
+          <Box key="levels" flexWrap="wrap">
+            {LEVELS.map(l => (
+              <Button
+                key={`level-${l}`}
+                label={t.levelName(l)}
+                variant={l === nowLevel ? 'primary' : undefined}
+                onPress={act('level', () => paneChoice($, l))}
+              />
+            ))}
+          </Box>
+          {held || heldModel ? (
+            <Box key="release-row">
+              <Button key="release" label={t.release} dimColor onPress={act('release', () => paneChoice($, null))} />
+            </Box>
+          ) : null}
         </Box>
-        <Text bold>{heldModel ? t.runsAtPair(heldModel, held ?? seen) : t.runsAt(held ?? seen)}</Text>
-        {heldModel ? <Text dimColor>{t.inMenuPair(toModel(seenModel), toLevel(asked))}</Text> : held && toLevel(asked) ? <Text dimColor>{t.inMenu(toLevel(asked))}</Text> : null}
-        <Text dimColor>{t.lastPick}</Text>
-        <Text>{s?.last ? `${s.last.model ? `${MODELS[s.last.model].name} · ` : ''}${t.levelName(s.last.level)} · ${s.last.why}` : t.noPicks}</Text>
-        {s ? <Text dimColor>{t.session}</Text> : null}
-        {pickOn && s?.models ? LADDER.filter(m => s.models![m] > 0).map(m => <Text>{`${MODELS[m].name} ${s.models![m]}`}</Text>) : null}
-        {s ? LEVELS.filter(l => s.picks[l] > 0).map(l => <Text>{`${t.levelName(l)} ${s.picks[l]}`}</Text>) : null}
-        {s && s.kept > 0 ? <Text>{`${t.kept} ${s.kept}`}</Text> : null}
-        {[...unavailable].map(m => (
-          <Text color="yellow">{t.unavailable(m)}</Text>
-        ))}
-        <Box key="models" flexWrap="wrap">
-          {(pickOn ? allowed : []).map(m => (
-            <Button key={`model-${m}`} label={m === heldModel ? `● ${MODELS[m].name}` : MODELS[m].name} onPress={act('model', () => paneModel($, m))} />
-          ))}
+        <Box key="mode" flexDirection="column">
+          <Text dimColor>{t.mode}</Text>
+          <Box key="modes" flexWrap="wrap">
+            {MODES.map(m => (
+              <Button
+                key={`mode-${m}`}
+                label={t.modeName(m)}
+                variant={m === mode ? 'primary' : undefined}
+                onPress={act('mode', () => setMode($, options, m))}
+              />
+            ))}
+          </Box>
+          <Text dimColor>{t.modeHint(mode, pickOn)}</Text>
         </Box>
-        <Box key="levels" flexWrap="wrap">
-          {held || heldModel ? <Button key="release" label={t.release} onPress={act('release', () => paneChoice($, null))} /> : null}
-          {LEVELS.map(l => (
-            <Button key={`level-${l}`} label={t.levelName(l)} onPress={act('level', () => paneChoice($, l))} />
-          ))}
+        <Box key="last" flexDirection="column">
+          {s?.last ? (
+            <>
+              <Text dimColor>{`${t.lastPick} · ${t.nowPair(pickOn && s.last.model ? s.last.model : '', s.last.level)}`}</Text>
+              {s.last.why ? <Text>{s.last.why}</Text> : null}
+            </>
+          ) : (
+            <>
+              <Text dimColor>{t.lastPick}</Text>
+              <Text>{t.noPicks}</Text>
+            </>
+          )}
         </Box>
+        {modelCounts.length > 0 || levelCounts.length > 0 || (s && s.kept > 0) ? (
+          <Box key="session" flexDirection="column">
+            <Text dimColor>{t.session}</Text>
+            {modelCounts.map(m => row(`count-${m}`, s?.models?.[m] ?? 0, mostModel, MODELS[m].name))}
+            {levelCounts.map(l => row(`count-${l}`, s?.picks[l] ?? 0, mostLevel, t.levelName(l)))}
+            {s && s.kept > 0 ? <Text dimColor>{t.kept(s.kept)}</Text> : null}
+          </Box>
+        ) : null}
       </Box>
     )
   })

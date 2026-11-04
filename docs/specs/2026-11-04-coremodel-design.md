@@ -134,11 +134,18 @@ Everything of CoreEffort §4.7 stays, showing the pair; texts follow the prompt'
    model, or the effort when the model did not change.
 3. **Footer label:** "Opus · High"; one part when only one is held.
 4. **Working line:** "Thinking… · Opus · Высокое" while anything is held.
-5. **Pane "CoreModel"** (`/coremodel panel`): mode buttons; "Чат работает на: Opus · Высокое" and
-   "в меню: Sonnet · Среднее (ваше)" while held; last pick with why; counts this session per model
-   and per level, and "Оставлено как есть"; a row of model buttons (only `models`) and a row of
-   level buttons, both wrapping; Release. A model button pressed mid-chat first asks the cost
-   question of §5 (Esc cancels); a level button holds at once. The "not available" line of §4.5.
+5. **Pane "CoreModel"** (`/coremodel panel`), since 0.4.1 in sections spaced apart, top to bottom:
+   - **Сейчас:** what the chat runs at, bold ("Opus · Высокое"; the level alone with `pickModel`
+     off); "держит CoreModel · в меню: Sonnet · Среднее (ваше)" while anything is held (without
+     the menu part until a request shows the menu); the "not available" line of §4.5; a row of
+     model buttons (only `models`) and a row of level buttons, both wrapping, the current model and
+     level highlighted (`variant: 'primary'`); while anything is held, a quiet button "Вернуть как
+     в меню" (Release). A model button pressed mid-chat first asks the cost question of §5 (Esc
+     cancels); a level button holds at once.
+   - **Режим:** buttons Подсказывать / Сам / Выкл, the current one highlighted, and one line on
+     what it does.
+   - **Последний выбор:** "Последний выбор · Opus · Высокое", the why on the next line.
+   - **За сессию:** a short bar and a count per model and per level, then "Уровень не меняли: n".
 
 ## 8. Layout
 
