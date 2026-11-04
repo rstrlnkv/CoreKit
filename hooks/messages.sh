@@ -52,10 +52,10 @@ _msg_text() {
     ru:layout_note) MSG_T='Заметка о структуре: структура этого Core — версия @1, плагину нужна @2. Обновите её (добавится только недостающее): bash "@3" "@4"' ;;
     en:old_hooks) MSG_T='Old git hooks from an older version: @1. Replace them with: bash "@2" "@3"' ;;
     ru:old_hooks) MSG_T='Найдены старые git-хуки от прошлой версии: @1. Замените их командой: bash "@2" "@3"' ;;
-    en:guard_code_blocked) MSG_T='corecrew: @1 is an internal file and must not live in code/. Write it to @2 instead.' ;;
-    ru:guard_code_blocked) MSG_T='corecrew: @1 — внутренний файл, ему не место в code/. Запишите его в @2.' ;;
-    en:guard_code_public) MSG_T='Docs meant to stay public in code/: list them on a "public-docs: <paths>" line in @1.' ;;
-    ru:guard_code_public) MSG_T='Документы, которые должны остаться в code/ публичными, перечислите в строке "public-docs: <paths>" в @1.' ;;
+    en:guard_code_blocked) MSG_T='corecrew: @1 is an internal file and must not live in the code folder. Write it to @2 instead.' ;;
+    ru:guard_code_blocked) MSG_T='corecrew: @1 — внутренний файл, ему не место в папке кода. Запишите его в @2.' ;;
+    en:guard_code_public) MSG_T='Docs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in @1.' ;;
+    ru:guard_code_public) MSG_T='Документы, которые должны остаться публичными в папке кода, перечислите в строке "public-docs: <paths>" в @1.' ;;
     en:secrets_blocked) MSG_T='corecrew: reading secrets is blocked (@1)' ;;
     ru:secrets_blocked) MSG_T='corecrew: чтение секретов заблокировано (@1)' ;;
     en:secrets_ask) MSG_T='Ask the user to check the value themselves, or use .env.example.' ;;

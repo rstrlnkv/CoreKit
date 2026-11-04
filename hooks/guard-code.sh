@@ -2,14 +2,16 @@
 # Claude Code PreToolUse hook on Write|Edit|NotebookEdit (and Bash, best effort): a project's
 # internal files must not live in its code repo. It blocks writes of
 #   CLAUDE.md (and CLAUDE.local.md), AGENTS.md (the cross-tool agent instructions), docs/**, .claude/**
-# under <Core>/<project>/code/**, with exit 2 and a message naming the right place:
-#   corecrew: <path> is an internal file and must not live in code/. Write it to <Core>/<project>/<relative path> instead.
-#   Docs meant to stay public in code/: list them on a "public-docs: <paths>" line in <Core>/<project>/CLAUDE.md.
+# under the project's code folder (<Projects>/<Name>/**, or <Core>/<project>/code/** in the old layout),
+# with exit 2 and a message naming the right place:
+#   corecrew: <path> is an internal file and must not live in the code folder. Write it to <Core>/<project>/<relative path> instead.
+#   Docs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in <Core>/<project>/CLAUDE.md.
 # (spec section 14, item 3). Nothing is ever printed to stdout.
 #
 # Rules, all compared on the canonical path (".." and symlinks resolved, letter case as on disk
 # for the part that exists, then folded to lower case for the comparison, ASCII only):
-# - The code root is <Core>/<p>/code/, or a worktree root <Core>/<p>/code/.claude/worktrees/<w>/;
+# - The code root is <Projects>/<Name>/ (code_dir_of; the CLAUDE.local.md symlink there resolves into the
+#   Core and so passes), or <Core>/<p>/code/ in the old layout, or a worktree root <code root>/.claude/worktrees/<w>/;
 #   inside a worktree the path relative to the worktree root is what counts.
 # - Blocked: docs and docs/** and .claude/** at the root, and CLAUDE.md / CLAUDE.local.md / AGENTS.md at
 #   ANY depth (the same as scripts/git-hooks/blocked-patterns, so the hook and the commit check agree).
@@ -60,14 +62,16 @@ is_public() {
 # check_path <path> [dir] — exits 2 with the message when the path is an internal file under a
 # project's code root; returns 0 otherwise. Mode "dir" (mkdir) lets the bare .claude through.
 check_path() {
-  local mode="${2:-write}" proj rest rest_l sub sub_l w n tgt
+  local mode="${2:-write}" proj root rc=0 abs_l root_l sub sub_l shown w n tgt
   resolve_abs "$1"
   proj="$(project_of "$ABS")" || return 0
-  rest="${ABS#"$CORE_DIR/$proj/"}"
-  [ "$rest" != "$ABS" ] || return 0
-  rest_l="$(lc "$rest")"
-  case "$rest_l" in code/?*) ;; *) return 0 ;; esac
-  sub="${rest:5}"; sub_l="${rest_l:5}"
+  # the code root: <Projects>/<Name> (new layout) or <Core>/<p>/code (old); more than one candidate passes
+  root="$(code_dir_of "$proj" 2>/dev/null)" || rc=$?
+  case "$rc" in 0) root="$(canon_dir "$root")" ;; 1) root="$CORE_DIR/$proj/code" ;; *) return 0 ;; esac
+  abs_l="$(lc "$ABS")"; root_l="$(lc "$root")"
+  case "$abs_l" in "$root_l"/?*) ;; *) return 0 ;; esac
+  sub="${ABS:$((${#root} + 1))}"; sub_l="${abs_l:$((${#root} + 1))}"
+  shown="$root/$sub"
   # a worktree: the path relative to its root counts (repeatedly, a worktree may hold a .claude/worktrees)
   while :; do
     case "$sub_l" in
@@ -99,7 +103,7 @@ check_path() {
     agents.md) tgt="AGENTS.md" ;;
     */agents.md) tgt="${tgt%/*}/AGENTS.md" ;;
   esac
-  printf '%s\n' "$(msg guard_code_blocked "$CORE_DIR/$proj/code/${rest:5}" "$CORE_DIR/$proj/$tgt")" >&2
+  printf '%s\n' "$(msg guard_code_blocked "$shown" "$CORE_DIR/$proj/$tgt")" >&2
   printf '%s\n' "$(msg guard_code_public "$CORE_DIR/$proj/CLAUDE.md")" >&2
   exit 2
 }

@@ -43,8 +43,8 @@ run_bash() { run_json "$(printf '{"session_id":"s","cwd":"%s","hook_event_name":
 # The second line points at public-docs: in the project's CLAUDE.md (<Core>/<p>, the part of the shown
 # path before its first /code/).
 msg() {
-  printf 'corecrew: %s is an internal file and must not live in code/. Write it to %s instead.\n' "$1" "$2"
-  printf 'Docs meant to stay public in code/: list them on a "public-docs: <paths>" line in %s.' "${1%%/code/*}/CLAUDE.md"
+  printf 'corecrew: %s is an internal file and must not live in the code folder. Write it to %s instead.\n' "$1" "$2"
+  printf 'Docs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in %s.' "${1%%/code/*}/CLAUDE.md"
 }
 # ok <label> — exit 0, silent
 ok() { assert_eq "$RC" "0" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_eq "$ERR" "" "$1: stderr"; }
@@ -431,6 +431,33 @@ assert_eq "$RC" "0" "no awk files: Bash passes"; assert_eq "$(<"$OD/out")$(<"$OD
 printf '%s' '{"cwd":"'"$C"'","tool_name":"Write","tool_input":{"file_path":"'"$C"'/docs/a.md"}}' | bash "$PL/hooks/guard-code.sh" >"$OD/out" 2>"$OD/err"; RC=$?
 assert_eq "$RC" "2" "no awk files: file tools are still judged"
 
+
+# --- new layout: the code lives in <Projects>/<Name>, the private CLAUDE.md in the Core
+sec_new_layout() {
+  local PR="$SANDBOX/Projects" N="$SANDBOX/Projects/Foo" W
+  mkdir -p "$N/src" "$N/.claude" "$CORE_DIR/foo/docs" "$PR/Brain"
+  echo '# foo' > "$CORE_DIR/foo/CLAUDE.md"; : > "$PR/Brain/CLAUDE.md"
+  ln -s "$CORE_DIR/foo/CLAUDE.md" "$N/CLAUDE.local.md"
+  local nmsg
+  nmsg() { printf 'corecrew: %s is an internal file and must not live in the code folder. Write it to %s instead.\nDocs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in %s.' "$1" "$2" "$CORE_DIR/foo/CLAUDE.md"; }
+  run_file Write "$N/CLAUDE.md" "$N"; assert_eq "$RC" "2" "new: Write CLAUDE.md"; assert_eq "$ERR" "$(nmsg "$N/CLAUDE.md" "$CORE_DIR/foo/CLAUDE.md")" "new: message"
+  run_file Write "$N/docs/x.md" "$N"; assert_eq "$RC" "2" "new: Write docs/x.md"
+  run_file Write "$N/.claude/worktrees/w/docs/x.md" "$N"; assert_eq "$RC" "2" "new: worktree docs/x.md"
+  run_file Write "$N/.claude/settings.local.json" "$N"; ok "new: settings.local.json"
+  run_file Write "$N/src/a.sh" "$N"; ok "new: src/a.sh"
+  run_file Edit "$N/CLAUDE.local.md" "$N"; ok "new: Edit through the CLAUDE.local.md symlink"
+  run_file Write "$(printf '%s' "$N" | tr 'F' 'f')/docs/x.md" "$N"; assert_eq "$RC" "2" "new: other letter case"
+  run_file Write "$PR/Brain/CLAUDE.md" "$PR/Brain"; ok "new: a folder that is not a project"
+  run_bash 'echo x > docs/a.md' "$N"; assert_eq "$RC" "2" "new: Bash echo x > docs/a.md"
+  run_bash 'echo x > src/a.md' "$N"; ok "new: Bash src/a.md"
+  printf 'public-docs: docs/\n' >> "$CORE_DIR/foo/CLAUDE.md"
+  run_file Write "$N/docs/x.md" "$N"; ok "new: public-docs"
+  run_file Write "$N/CLAUDE.md" "$N"; assert_eq "$RC" "2" "new: public-docs does not free CLAUDE.md"
+  # Russian text has no code/
+  CLAUDE_PLUGIN_OPTION_UI_LANGUAGE=ru run_file Write "$N/CLAUDE.md" "$N"
+  case "$ERR" in *"code/"*) fail "new: ru message names code/" ;; *) pass "new: ru message has no code/" ;; esac
+}
+bg sec_new_layout
 
 bg_wait
 

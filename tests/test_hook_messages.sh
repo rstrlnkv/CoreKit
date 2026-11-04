@@ -159,10 +159,10 @@ for v in "${VARIANTS[@]}"; do
   pl "$C/docs/plan.md" | vrun "$v" bash "$H" >"$SANDBOX/out" 2>"$SANDBOX/err"; RC=$?
   assert_eq "$RC" "2" "guard-code exit [$v]"; assert_eq "$(cat "$SANDBOX/out")" "" "guard-code: stdout empty [$v]"
   check "$v" "guard-code" "$(cat "$SANDBOX/err")" \
-"corecrew: $C/docs/plan.md is an internal file and must not live in code/. Write it to $CORE_DIR/$PN2/docs/plan.md instead.
-Docs meant to stay public in code/: list them on a \"public-docs: <paths>\" line in $CORE_DIR/$PN2/CLAUDE.md." \
-"corecrew: $C/docs/plan.md — внутренний файл, ему не место в code/. Запишите его в $CORE_DIR/$PN2/docs/plan.md.
-Документы, которые должны остаться в code/ публичными, перечислите в строке \"public-docs: <paths>\" в $CORE_DIR/$PN2/CLAUDE.md."
+"corecrew: $C/docs/plan.md is an internal file and must not live in the code folder. Write it to $CORE_DIR/$PN2/docs/plan.md instead.
+Docs meant to stay public in the code folder: list them on a \"public-docs: <paths>\" line in $CORE_DIR/$PN2/CLAUDE.md." \
+"corecrew: $C/docs/plan.md — внутренний файл, ему не место в папке кода. Запишите его в $CORE_DIR/$PN2/docs/plan.md.
+Документы, которые должны остаться публичными в папке кода, перечислите в строке \"public-docs: <paths>\" в $CORE_DIR/$PN2/CLAUDE.md."
 done
 
 # --- guard-secrets
