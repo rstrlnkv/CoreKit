@@ -158,6 +158,14 @@ rm "$NC/CLAUDE.local.md"; ln -s "$CORE_DIR/gone/CLAUDE.md" "$NC/CLAUDE.local.md"
 run_rc "$NC"; assert_eq "$(readlink "$NC/CLAUDE.local.md")" "$CORE_DIR/gone/CLAUDE.md" "dangling link untouched"
 echo "$OUT" | grep -qF "ln -s \"$NP/CLAUDE.md\"" && pass || fail "dangling link: fix missing: $OUT"
 rm "$NC/CLAUDE.local.md"
+# nothing there but the link cannot be made (a read-only folder): not "exists and is not a link"
+chmod a-w "$NC"
+run_rc "$NC"; chmod u+w "$NC"
+assert_eq "$RC" "0" "read-only folder: exit"
+[ -e "$NC/CLAUDE.local.md" ] || [ -L "$NC/CLAUDE.local.md" ] && fail "read-only folder: a link was made" || pass
+echo "$OUT" | grep -qF "exists and is not a link" && fail "read-only folder: claims a file exists: $OUT" || pass
+echo "$OUT" | grep -qF "corecrew: could not create $NC/CLAUDE.local.md, so the private CLAUDE.md is not loaded. Run: ln -s \"$NP/CLAUDE.md\" \"$NC/CLAUDE.local.md\"" \
+  && pass || fail "read-only folder: could-not-create line missing: $OUT"
 # the old layout: its line, no link
 run_rc "$C"
 echo "$OUT" | grep -qF "corecrew: this project still lives in $C; run /corecrew:task adopt $C to move it to $PR/sess-app" && pass || fail "old layout line missing: $OUT"

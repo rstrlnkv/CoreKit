@@ -76,8 +76,10 @@ if [ -n "$code" ]; then
   else
     if lout="$(link_local_claude "$code" "$P" 2>/dev/null)"; then
       case "$lout" in created*) printf '%s\n' "$(msg local_link_created "$P/CLAUDE.md")" ;; esac
-    else
+    elif [ -e "$code/CLAUDE.local.md" ] || [ -L "$code/CLAUDE.local.md" ]; then
       printf '%s\n' "$(msg local_link_wrong "$code/CLAUDE.local.md" "$P/CLAUDE.md")"
+    else   # nothing there, yet ln failed (for example a read-only folder)
+      printf '%s\n' "$(msg local_link_failed "$code/CLAUDE.local.md" "$P/CLAUDE.md")"
     fi
   fi
 fi

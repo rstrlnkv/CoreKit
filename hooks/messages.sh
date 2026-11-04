@@ -19,7 +19,7 @@
 
 MSG_KEYS="sync_failed hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
 session_rules schema_none run_starting layout_note old_hooks guard_code_blocked guard_code_public secrets_blocked secrets_ask
-local_link_created local_link_wrong old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind"
+local_link_created local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind"
 
 # _msg_text <lang> <key> — sets MSG_T to the text, or to nothing when there is none. Keep the keys and
 # the en:/ru: branches in step with MSG_KEYS.
@@ -64,6 +64,8 @@ _msg_text() {
     ru:local_link_created) MSG_T='corecrew: CLAUDE.local.md связан с @1; перезапустите сессию, чтобы он загрузился' ;;
     en:local_link_wrong) MSG_T='corecrew: @1 exists and is not a link to @2, so the private CLAUDE.md is not loaded. Move that file away, then run: ln -s "@2" "@1"' ;;
     ru:local_link_wrong) MSG_T='corecrew: @1 уже существует и не ведёт на @2, поэтому приватный CLAUDE.md не загружается. Уберите этот файл и выполните: ln -s "@2" "@1"' ;;
+    en:local_link_failed) MSG_T='corecrew: could not create @1, so the private CLAUDE.md is not loaded. Run: ln -s "@2" "@1"' ;;
+    ru:local_link_failed) MSG_T='corecrew: не удалось создать @1, поэтому приватный CLAUDE.md не загружается. Выполните: ln -s "@2" "@1"' ;;
     en:old_layout) MSG_T='corecrew: this project still lives in @1; run /corecrew:task adopt @2 to move it to @3' ;;
     ru:old_layout) MSG_T='corecrew: этот проект всё ещё лежит в @1; выполните /corecrew:task adopt @2, чтобы перенести его в @3' ;;
     en:one_suite_wait) MSG_T='one-suite: a test run is still in progress after @1 s of waiting (@2) — run the same command again: this hook waits for it. If it is a watcher you started, stop it first.' ;;
