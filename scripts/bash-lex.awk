@@ -19,8 +19,21 @@
 BEGIN {
   NL = "\002"; STOP = " \t\002;|" "&<>()`\047\"\\"
   WORDCH = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
-  split("sudo command nohup time exec env builtin nice then do else elif if while until ! { } ( ) doas", Wd, " "); for (k in Wd) WR[Wd[k]] = 1
+  split("sudo command nohup time exec env builtin nice then do else elif if while until ! { } ( ) doas timeout gtimeout stdbuf setsid caffeinate ionice unbuffer", Wd, " "); for (k in Wd) WR[Wd[k]] = 1
+  # Options of a wrapper that take a value (the next word): `timeout 5 cat .env` and `sudo -u root cat .env`
+  # run cat, so the value must not be read as the command. A value written in the same word (-n5, --user=x) needs nothing.
+  wopt("sudo", "-u -g -h -p -C -D -R -T -U -r -t -c --user --group --host --prompt --close-from --chdir --chroot --command-timeout --other-user --role --type")
+  wopt("doas", "-u -C")
+  wopt("env", "-u -C -S --unset --chdir --split-string")
+  wopt("nice", "-n --adjustment")
+  wopt("timeout", "-s -k --signal --kill-after"); wopt("gtimeout", "-s -k --signal --kill-after")
+  wopt("stdbuf", "-i -o -e --input --output --error")
+  wopt("ionice", "-c -n -p -P -u --class --classdata --pid --pgid --uid")
+  wopt("time", "-f -o --format --output")
+  wopt("exec", "-a")
+  wopt("caffeinate", "-t -w")
 }
+function wopt(w, opts,   n, l, x) { n = split(opts, l, " "); for (x = 1; x <= n; x++) WOPT[w, l[x]] = 1 }
 # seg(a, b) — the characters a..b-1 joined; "\001" when that is longer than 4096 bytes (BWK awk
 # substr() on a long string is slow, so the text is split into characters once and read from C[])
 function seg(a, b,   r, x) {
@@ -75,21 +88,34 @@ function endword(   w, qd, b, rw, x) {
   }
   if (want_in) { want_in = 0; on_in(w); return }
   if (cmd == "") {
+    if (wskip) { wskip = 0; return }   # the value of a wrapper option
     if (!qd && w ~ /^[A-Za-z_][A-Za-z0-9_]*=/) return
-    if (wrapped && substr(w, 1, 1) == "-") return
+    if (wrapped && substr(w, 1, 1) == "-") { wrapper_opt(w); return }
+    if (wdur) { wdur = 0; return }   # timeout's duration
     b = base(w)
-    if (b in WR) { wrapped = 1; return }
+    if (b in WR) { wrapped = 1; wname = b; wdur = (b == "timeout" || b == "gtimeout"); return }
     cmd = classify(b)
     return
   }
   if (cmd != "?") args[++na] = w
+}
+# wrapper_opt(w) — w is an option of the wrapper wname: when its first value-taking letter ends the word
+# (-u, -E -u, --user), the next word is the value
+function wrapper_opt(w,   n, p, l) {
+  if (w == "--") return
+  if (substr(w, 2, 1) == "-") { if ((wname, w) in WOPT) wskip = 1; return }
+  n = length(w)
+  for (p = 2; p <= n; p++) {
+    l = "-" substr(w, p, 1)
+    if ((wname, l) in WOPT) { if (p == n) wskip = 1; return }
+  }
 }
 # stmt_end — a command ends (; | & ( ) ` or a newline): the hook-specific finalize() judges it, then the
 # state is cleared.
 function stmt_end() {
   finalize()
   split("", args)
-  cmd = ""; na = 0; wrapped = 0; want_redir = 0; want_in = 0; rwredir = 0; skip_next = 0; want_hd = 0
+  cmd = ""; na = 0; wrapped = 0; wname = ""; wskip = 0; wdur = 0; want_redir = 0; want_in = 0; rwredir = 0; skip_next = 0; want_hd = 0
 }
 # enqueue(text) — a command line to lex after the main pass (at most 50)
 function enqueue(t) { if (nq < 50) Q[++nq] = t }

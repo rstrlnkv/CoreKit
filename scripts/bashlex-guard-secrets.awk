@@ -77,20 +77,78 @@ function classify(b) {
 }
 function on_out(w) { }   # a file written is not a file read
 function on_in(w) { cand(w) }
-function cand(a,   l, t, x) {
+# glob_re(g) — the glob g (as bash reads it: * ? [..] {a,b}) as an anchored regular expression
+function glob_re(g,   n, p, c, r, depth, bal, q, cl) {
+  n = length(g); depth = 0; bal = 1
+  for (p = 1; p <= n; p++) { c = substr(g, p, 1); if (c == "{") depth++; else if (c == "}") { depth--; if (depth < 0) bal = 0 } }
+  if (depth != 0) bal = 0
+  r = "^"; depth = 0
+  for (p = 1; p <= n; p++) {
+    c = substr(g, p, 1)
+    if (c == "*") r = r ".*"
+    else if (c == "?") r = r "."
+    else if (c == "[") {
+      q = p + 1
+      if (substr(g, q, 1) == "!" || substr(g, q, 1) == "^") q++
+      if (substr(g, q, 1) == "]") q++
+      while (q <= n && substr(g, q, 1) != "]") q++
+      if (q > n) r = r "\\["
+      else {
+        cl = substr(g, p + 1, q - p - 1)
+        if (substr(cl, 1, 1) == "!") cl = "^" substr(cl, 2)
+        r = r "[" cl "]"; p = q
+      }
+    }
+    else if (c == "{" && bal) { r = r "("; depth++ }
+    else if (c == "}" && bal) { r = r ")"; depth-- }
+    else if (c == "," && bal && depth > 0) r = r "|"
+    else if (index(".+()|^$\\{}", c)) r = r "\\" c
+    else r = r c
+  }
+  return r "$"
+}
+# glob_hits(comp, want) — the component has a glob character, starts with a dot or a { (a leading * ? [ does
+# not match a dot in bash), has a letter or digit in it (so .* and .??* pass), and can match the name want
+# (or, for want = ".env", one of the names .env.local, .env.production, ...)
+function glob_hits(comp, want,   re, k, ns, smp) {
+  if (comp !~ /[*?\[{]/ || comp !~ /^[.{]/ || comp !~ /[a-z0-9]/) return 0
+  re = glob_re(comp)
+  if (want == ".ssh") return (".ssh" ~ re)
+  ns = split(".env .env.local .env.production .env.development .env.test .env.staging", smp, " ")
+  for (k = 1; k <= ns; k++) if (smp[k] ~ re) return 1
+  return 0
+}
+# cand(a) — a word to judge. Prints "P\t<word as typed>\t<cd>\t<word to judge>": the last form is the same word, or
+# with a glob component that can match .ssh or a secret name replaced by that name (~/.s*/id_rsa -> ~/.ssh/id_rsa).
+function cand(a,   l, t, x, nc, comp, k, j, hit, norm, rest) {
   if (nomore || full || a == "") return
   if (index(a, "\t") || index(a, "\002")) return
   l = tolower(a)
-  if (index(l, ".env") == 0 && index(l, ".ssh") == 0) return
   t = l
   while (length(t) > 1 && substr(t, length(t), 1) == "/") t = substr(t, 1, length(t) - 1)
   x = t; sub(/.*\//, "", x)
-  if (!(x ~ /^\.env([*?\[{]|$)/ || (x ~ /^\.env\./ && x !~ /^\.env\.(example|sample|template)$/)) && t !~ /(^|\/)\.ssh(\/|$)/) return
+  norm = a
+  if (!(x ~ /^\.env([*?\[{]|$)/ || (x ~ /^\.env\./ && x !~ /^\.env\.(example|sample|template)$/)) && t !~ /(^|\/)\.ssh(\/|$)/) {
+    if (t !~ /[*?\[{]/) return
+    # a glob: judge each component
+    nc = split(t, comp, "/"); rest = ""; hit = 0
+    for (k = nc; k >= 1; k--) {
+      if (glob_hits(comp[k], k == nc ? ".env" : ".ssh")) {
+        if (k == nc) { hit = 1; comp[k] = ".env" }
+        else { hit = 1; comp[k] = ".ssh" }
+      }
+    }
+    if (!hit) return
+    # rebuild from the lower-case parts (letter case is folded by the caller anyway)
+    norm = comp[1]
+    for (k = 2; k <= nc; k++) norm = norm "/" comp[k]
+    if (substr(a, 1, 1) == "~" && substr(norm, 1, 1) != "~") norm = "~" substr(norm, 2)
+  }
   if (a in seen) return
   seen[a] = 1
   if (ne >= CAP) { full = 1; capped = 1; return }
   ne++
-  printf "P\t%s\t%d\n", a, cdseen
+  printf "P\t%s\t%d\t%s\n", a, cdseen, norm
 }
 # short_opt(a) — a is a short option word (-x, or a cluster such as -rnA). When one of its letters takes a value, sets
 # sk (E F G V, or T for cp -t), sl (the letter as "-x") and sv (the value attached after it, "" when the value is the
@@ -115,6 +173,11 @@ function finalize(   k, a, dd, pat, nm, v, nop, tdir, j, n, ops, key) {
     a = args[k]
     if (!dd && a == "--") { dd = 1; continue }
     if (!dd && substr(a, 1, 1) == "-" && a != "-") {
+      # zip: -x and -i are followed by a list of patterns up to the next option
+      if (cmd == "zip" && (a == "-x" || a == "-i" || a == "--exclude" || a == "--include")) {
+        while (k < na && substr(args[k + 1], 1, 1) != "-") k++
+        continue
+      }
       if (cmd == "cp" && a ~ /^--target-directory=/) { tdir = "x"; continue }
       if (a ~ /^-[A-Za-z0-9]/ && short_opt(a)) {
         v = sv

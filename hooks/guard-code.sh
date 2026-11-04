@@ -15,7 +15,8 @@
 #   inside a worktree the path relative to the worktree root is what counts.
 # - Blocked: docs and docs/** and .claude/** at the root, and CLAUDE.md / CLAUDE.local.md / AGENTS.md at
 #   ANY depth (the same as scripts/git-hooks/blocked-patterns, so the hook and the commit check agree).
-# - Allowed: .claude/settings.local.json, .claude/worktrees/** (the worktree dirs themselves), and the
+# - Allowed: .claude/settings.local.json, .claude/worktrees/** (the worktree dirs themselves: mkdir, an
+#   existing directory or a trailing slash; a file written directly under .claude/worktrees/ is blocked), and the
 #   paths on a "public-docs: <paths>" line of <Core>/<p>/CLAUDE.md (space or comma separated, relative
 #   to the code root; a directory entry covers everything under it; a glob is not expanded), except
 #   docs/superpowers/** (git ignores it and the pre-commit hook blocks it, so it is always private).
@@ -25,6 +26,9 @@
 #   After a cd, pushd or popd only absolute (and ~) targets are judged: the new directory is unknown, so
 #   a relative target fails open (`cd .. && echo x >> docs/INDEX.md` is the Core wiki). A heredoc inside
 #   "$(...)" (the commit-message idiom) has its body skipped; <<"WORD" there stops the judging.
+#   Wrapper options with a value are skipped (timeout 5 tee, sudo -u x touch, nice -n 5). Documented limits:
+#   relative targets after cd, xargs, find -exec, bash -c "...", and the guard being inert outside a project
+#   cwd (spec D17).
 #   Not followed: variables, globs, `sh -c "..."`, ln, install, in-place sed, rsync, scripts. A target
 #   that has $ ` * ? [ { is not judged. Quoted text is not a command, heredoc bodies and comments are
 #   skipped. At most 100 targets are looked at. The tokenizer is one linear pass in awk. A command this
@@ -85,7 +89,11 @@ check_path() {
         w="${sub_l#.claude/worktrees/}"; w="${w%%/*}"
         n=$((18 + ${#w} + 1))   # ".claude/worktrees/" is 18 bytes
         sub="${sub:$n}"; sub_l="${sub_l:$n}" ;;
-      .claude/worktrees|.claude/worktrees/*) return 0 ;;
+      # the worktrees folder and a worktree folder themselves (mkdir, an existing dir, a trailing slash);
+      # a file written directly there is not one and falls through to the .claude/* rule
+      .claude/worktrees|.claude/worktrees/?*)
+        if [ "$mode" = dir ] || [ -d "$ABS" ] || [ "${1%/}" != "$1" ]; then return 0; fi
+        break ;;
       *) break ;;
     esac
   done

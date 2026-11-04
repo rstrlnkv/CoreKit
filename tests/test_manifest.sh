@@ -120,7 +120,8 @@ for n in 1 2 3 4 5 6 7; do assert_contains "$MG" "### Step $n"; done
 M3="$ROOT/docs/migration-0.3.md"
 assert_file "$M3"
 assert_contains "$M3" '/plugin install corecrew@corekit'
-assert_contains "$M3" '/plugin install coreeffort@corekit'
+assert_contains "$M3" '/plugin install coremodel@corekit'
+assert_not_contains "$M3" '/coreeffort'
 assert_contains "$M3" 'install-hooks.sh'
 assert_contains "$M3" 'corecrew-corekit'
 assert_contains "$ROOT/README.md" 'docs/migration-0.3.md'
