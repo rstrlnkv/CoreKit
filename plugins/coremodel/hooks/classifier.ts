@@ -94,16 +94,39 @@ function cleanWhy(raw: string): string {
     .replace(/[.。…]+$/, '')
 }
 
+/** The first `{…}` of the text that parses as JSON; braces inside a string do not count. */
+function firstObject(text: string): { level?: unknown; model?: unknown; why?: unknown } | null {
+  for (let from = text.indexOf('{'); from !== -1; from = text.indexOf('{', from + 1)) {
+    let depth = 0
+    let inString = false
+    for (let i = from; i < text.length; i += 1) {
+      const c = text[i]!
+      if (inString) {
+        if (c === '\\') i += 1
+        else if (c === '"') inString = false
+      } else if (c === '"') inString = true
+      else if (c === '{') depth += 1
+      else if (c === '}') {
+        depth -= 1
+        if (depth === 0) {
+          try {
+            const v = JSON.parse(text.slice(from, i + 1)) as unknown
+            if (v && typeof v === 'object') return v as { level?: unknown; model?: unknown; why?: unknown }
+          } catch {
+            // Not JSON: try the next brace.
+          }
+          break
+        }
+      }
+    }
+  }
+  return null
+}
+
 /** The first JSON object of the model's answer as a pick; null when there is none or its level is unknown. */
 export function parseAnswer(text: string): Pick | null {
-  const m = /\{[\s\S]*?\}/.exec(text)
-  if (!m) return null
-  let j: { level?: unknown; model?: unknown; why?: unknown }
-  try {
-    j = JSON.parse(m[0]) as typeof j
-  } catch {
-    return null
-  }
+  const j = firstObject(text)
+  if (!j) return null
   const why = typeof j.why === 'string' ? cleanWhy(j.why) : ''
   // Only a bare model word counts here: a key the ladder names.
   const word = typeof j.model === 'string' ? j.model.trim().toLowerCase() : ''

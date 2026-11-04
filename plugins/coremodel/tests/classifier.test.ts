@@ -85,3 +85,14 @@ test('parseAnswer reads the model', () => {
 test('the template asks for a model from the ladder', () => {
   for (const w of ['haiku', 'sonnet', 'opus', 'fable', '"model"']) expect(TEMPLATE.includes(w)).toBe(true)
 })
+
+test('a why with a closing brace in it is still readable', () => {
+  const p = parseAnswer('Sure: {"level":"high","model":"opus","why":"fix the } in config"} done {x}')
+  expect(p?.level).toBe('high')
+  expect(p?.model).toBe('opus')
+  expect(p?.why).toBe('fix the } in config')
+})
+
+test('a brace inside an earlier text does not hide the answer', () => {
+  expect(parseAnswer('I think {maybe} this: {"level":"low","why":"x"}')?.level).toBe('low')
+})
