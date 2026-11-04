@@ -36,7 +36,9 @@ cmd="$(json_str "$in" command)"
 # Only command words count. A heredoc's body is cut at its `<<`; a new line (or CR) separates
 # commands like `;` does; then quoted text (a commit message, a `python -c` body: 'x' or "x", with \"
 # inside double quotes) is cut. A command that merely mentions a runner is no run.
-bare="$(printf '%s' "${cmd%%<<*}" | LC_ALL=C tr '\n\r\t' ';; ' \
+# A << that is a shift ($((1<<3)), (( x << 2 )), <<3) is no heredoc: it is taken out before the cut.
+noshift="$(printf '%s' "$cmd" | LC_ALL=C sed -E 's/\(\([^()]*\)\)//g; s/<<[[:space:]]*[0-9]/ 0/g')"
+bare="$(printf '%s' "${noshift%%<<*}" | LC_ALL=C tr '\n\r\t' ';; ' \
   | LC_ALL=C sed -E "s/('[^']*'|\"([^\"\\\\]|\\\\.)*\")//g")"
 
 # A runner is a command word: after a separator, optionally behind env assignments and wrappers

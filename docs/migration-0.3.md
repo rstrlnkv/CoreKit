@@ -1,7 +1,7 @@
 # Migrating to corecrew 0.3
 
 For a user of `coredev` 0.2.x. The plugin is now called `corecrew` (brand CoreCrew), and the
-second plugin `effort-picker` is now `coreeffort` (CoreEffort). The marketplace and the
+second plugin `effort-picker` is now `coremodel` (CoreModel; it was called `coreeffort` for a short time). The marketplace and the
 repository stay `corekit`. If you come from 0.1.x (`corekit`), do
 [migration-0.2.md](migration-0.2.md) first.
 `<Core>` is your Core folder (default `~/Projects/Core`). It needs no change: `<Core>/.coredev`
@@ -16,7 +16,7 @@ In Claude Code:
 ```
 If you used `effort-picker`:
 ```
-/plugin install coreeffort@corekit
+/plugin install coremodel@corekit
 ```
 The marketplace maps the old names to the new ones, but a git-hosted marketplace still needs
 this one explicit install. Then check in a terminal:
@@ -33,7 +33,7 @@ claude plugin uninstall effort-picker@corekit
 
 Settings belong to a plugin name, so the new plugins start with the defaults.
 `/plugin` → Installed → corecrew → Configure options: `core_dir`, `attribution`,
-`model_profile`, `ui_language`. For coreeffort: `mode`, `classifier`.
+`model_profile`, `ui_language`. For coremodel: `mode`, `classifier`.
 
 ### Step 3. Re-install the git hooks
 
@@ -49,7 +49,7 @@ After every project is done, you can delete `~/.claude/plugins/data/coredev-core
 ### Step 4. Use the new names
 
 Commands are `/corecrew:new-project`, `/corecrew:task`, `/corecrew:new-standard`; agents are
-`corecrew:<role>`; the effort command is `/coreeffort`. Update any of your own notes or
+`corecrew:<role>`; the model and effort command is `/coremodel`. Update any of your own notes or
 `~/.claude/CLAUDE.md` lines that name `coredev` or `effort-picker`.
 
 ### Step 5. Restart Claude Code

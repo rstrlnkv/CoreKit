@@ -1,7 +1,7 @@
 ---
 title: coredev plugin — design spec
 description: Requirements for renaming the corekit plugin to coredev and adding plugin settings, task (with release and adopt), new-standard, six agents, wiki and knowledge rules, and plugin hooks. Read before changing any of them.
-status: draft
+status: draft (implemented; see the status note below)
 files: [.claude-plugin/plugin.json, .claude-plugin/marketplace.json, skills/, agents/, hooks/, reference/, scripts/, tests/]
 related: [docs/specs/2026-11-02-new-project-design.md]
 updated: 2026-11-03
@@ -10,6 +10,12 @@ updated: 2026-11-03
 # `coredev` plugin — design spec
 
 Layout superseded by docs/specs/2026-11-04-project-layout-design.md
+
+> **Status note (2026-11-05).** This spec is implemented (corecrew 0.5.x); the `draft` status below is
+> historical. Now true where the text differs: the plugin is called `corecrew`, the second plugin is
+> `coremodel` (docs/specs/2026-11-04-coremodel-design.md); the code lives beside the Core (layout
+> spec). Section 9.4 rule 3: each agent has `maxTurns: 60` in `agents/*.md`; what the agent returns at
+> that limit is up to the model and the harness, the plugin does not enforce "returns what is done".
 
 ## 1. Goal
 

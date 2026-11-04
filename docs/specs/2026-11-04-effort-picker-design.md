@@ -1,7 +1,7 @@
 ---
 title: effort-picker plugin — design spec
 description: Requirements for effort-picker, a second plugin in the corekit marketplace that picks the effort level for each prompt of the main chat, for code and office work, and asks before any switch to xhigh or max. Read before changing it.
-status: accepted
+status: superseded by docs/specs/2026-11-04-coremodel-design.md
 files: [plugins/effort-picker/, .claude-plugin/marketplace.json, tests/test_effort_picker.sh, tests/test_manifest.sh, README.md]
 related: [docs/specs/2026-11-03-coredev-design.md]
 updated: 2026-11-04

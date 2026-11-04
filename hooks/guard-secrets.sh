@@ -36,6 +36,13 @@
 #   src` and `rsync -av --exclude .env src/ host:/` pass; `-e`/`--regexp` values are patterns; `-f FILE`,
 #   `-g GLOB`/`--include` and `--exclude-from FILE` values are judged as files. A cluster is read letter by
 #   letter: the first value-taking letter takes what follows it (-A2n) or, at the end, the next word (-rnA 2).
+#   Quotes and backslashes inside a name are removed by the lexer (.e'n'v is .env). A glob word that starts
+#   with a dot and can match .env or .env.<x> (.e*, .en?, .[e]nv, .{e,x}nv), or a component that can match
+#   .ssh (~/.s*/id_rsa), is judged as that name; a glob that starts with * ? [ does not match a dot in the shell
+#   and passes, and so do .* and .??* (no letter in them). Wrapper options that take a value are skipped
+#   (timeout 5, nice -n 5, sudo -u root, env -u X, stdbuf -o0). zip -x/-i patterns are not files.
+#   Documented limits, not redesigned: a relative target after cd, xargs, find -exec, bash -c "...", and the
+#   guard being inert outside a project cwd (spec D17).
 #   The tokenizer is the one linear awk pass of guard-code (scripts/bash-lex.awk). After a cd the name
 #   rule still applies (cd .. && cat .env is blocked) but a relative ~/.ssh is unknown. Not caught: git
 #   (git add .env is not a read; git show HEAD:.env is), output redirects, ls, a recursive grep over a
@@ -152,8 +159,9 @@ if [ "$tool" = Bash ]; then
     hit="$(printf '%s' "$in" | raw_hit)" && die "$hit"
     exit 0
   fi
-  # Cheap exit: no .env and no .ssh anywhere in the command.
-  printf '%s' "$cmd" | LC_ALL=C grep -qiE '\.env|\.ssh' || exit 0
+  # Cheap exit: a secret path has a dot in it (.env, .ssh; quotes or a backslash in the name are
+  # removed by the lexer, so the raw text is not searched for ".env"). Everything else is lexed.
+  case "$cmd" in *.*) ;; *) exit 0 ;; esac
   [ -r "$SELF/scripts/bash-lex.awk" ] && [ -r "$SELF/scripts/bashlex-guard-secrets.awk" ] || exit 0
   targets="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r' '\002 ' | LC_ALL=C awk -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-guard-secrets.awk" 2>/dev/null)"
   # awk itself failed: the command is unknown, so a secret-looking string in it is refused
@@ -161,11 +169,12 @@ if [ "$tool" = Bash ]; then
   [ -n "$targets" ] || exit 0
   TAB="$(printf '\t')"
   stopped=""
-  while IFS="$TAB" read -r kind a unk; do
+  while IFS="$TAB" read -r kind a unk judged; do
     if [ "$kind" = X ]; then stopped=1; continue; fi
     [ "$kind" = P ] || continue
     u=""; [ "$unk" = 1 ] && u=1
-    if is_secret "$a" "$u"; then die "$a"; fi
+    # $judged is the word with a glob component that can match .ssh or .env made literal
+    if is_secret "${judged:-$a}" "$u"; then die "$a"; fi
   done <<< "$targets"
   # the lexer stopped early: what is left of the command is unknown
   if [ -n "$stopped" ]; then hit="$(printf '%s' "$cmd" | raw_hit)" && die "$hit"; fi

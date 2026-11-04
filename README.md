@@ -72,6 +72,8 @@ If you come from 0.1.x (`corekit`), follow [docs/migration-0.2.md](docs/migratio
 |---|---|
 | `/corecrew:new-project` | Interview, stack and architecture analysis, project skeleton (below) |
 | `/corecrew:task <task>` | Runs a task through the crew of agents |
+| `/corecrew:task release <version>` | Prepares a release: version, changelog and the other release postconditions |
+| `/corecrew:task adopt <folder>` | Brings an existing project into the Core layout |
 | `/corecrew:new-standard` | Writes a new standard into your Core |
 
 ## Settings
@@ -115,6 +117,9 @@ refuses to push unless the GitHub repo is private. Projects made by 0.4 and olde
 in `<Core>/<name>/code/`: in such a project `/corecrew:task` stops and asks you to run
 `/corecrew:task adopt <Core>/<name>/code` first, which moves it to the new layout.
 
+Rules for every session can go into `<Core>/session-rules.md` (optional, yours): when that file
+exists, session start prints it into the conversation.
+
 Claude runs the plugin's `save` tool to commit code and docs together as one step, and `undo-step`
 to revert the last step in both (with `git revert`, history kept). Nothing is copied into your
 docs repo. The plugin's Stop hook reminds Claude to save when a step is left uncommitted.
@@ -152,9 +157,9 @@ Details: plugins/coreopinion/README.md.
 
 ## Development
 ```bash
-bash tests/run.sh        # 200+ checks, no network
+bash tests/run.sh        # all tests, no network, prints ALL TESTS PASSED
 ```
-Design spec: `docs/specs/` · implementation plan: `docs/plans/` · trigger evals: `evals/`.
+Design spec: `docs/specs/` · implementation plan: `docs/plans/` · scenario evals for `new-project`: `evals/evals.json` (two prompts with the expected result; they are run by hand, not by `tests/run.sh`).
 
 ## License
 MIT — see [LICENSE](LICENSE).

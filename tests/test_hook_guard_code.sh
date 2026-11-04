@@ -76,12 +76,13 @@ run_file Write "$CORE_DIR/p/docs/a.md";          ok "Core project docs/a.md"
 run_file Write "$CORE_DIR/p/CLAUDE.md";          ok "Core project CLAUDE.md"
 run_file Write "$CORE_DIR/p/.claude/rules/x.md"; ok "Core project .claude/rules"
 run_file Write "$CORE_DIR/README.md";            ok "Core root file"
-run_file Write "$C/.claude/worktrees/w";         ok "the worktree dir itself"
+QW="$CORE_DIR/q/code"; mkdir -p "$QW/.claude/worktrees/w9/.claude/worktrees/v"   # a Write to a path that is not an existing dir is a file
+run_file Write "$QW/.claude/worktrees/w9";       ok "the worktree dir itself (it exists)"
 run_file Write "$C/.claude/worktrees/w2/";       ok "another worktree dir, trailing slash"
-run_file Write "$C/.claude/worktrees";           ok "worktrees dir"
+run_file Write "$QW/.claude/worktrees";          ok "worktrees dir (it exists)"
 run_file Write "$C/.claude/worktrees/w/src/a.sh";ok "worktree ordinary code"
 run_file Write "$C/.claude/worktrees/w/.claude/settings.local.json"; ok "worktree settings.local.json"
-run_file Write "$C/.claude/worktrees/w/.claude/worktrees/v"; ok "worktree inside a worktree"
+run_file Write "$QW/.claude/worktrees/w9/.claude/worktrees/v"; ok "worktree inside a worktree"
 
 # --- nested CLAUDE.md: blocked at any depth, like the git pre-commit hook; CLAUDE.local.md too
 run_file Write "$C/src/CLAUDE.md";           blocked "nested CLAUDE.md" "$C/src/CLAUDE.md" "$CORE_DIR/p/src/CLAUDE.md"

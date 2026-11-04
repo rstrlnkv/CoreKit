@@ -6,6 +6,12 @@
 # The Core layout schema this plugin version writes and expects (the one place it is defined).
 COREDEV_SCHEMA=2
 
+# HOME unset (a stripped environment): the account's home folder, so ~ and ~/.ssh still mean something.
+if [ -z "${HOME:-}" ]; then
+  HOME="$(eval 'printf %s ~' 2>/dev/null)"
+  case "$HOME" in /*) ;; *) HOME="" ;; esac
+fi
+
 # expand_home <path> — a leading ~ or ~/ becomes $HOME.
 expand_home() {
   case "$1" in
@@ -101,9 +107,13 @@ load_settings() {
   local c o a m
   c="$(opt_value "${CORE_DIR:-}")"; o="$(opt_value "${CLAUDE_PLUGIN_OPTION_CORE_DIR:-}")"
   a="$(opt_value "${CLAUDE_PLUGIN_OPTION_ATTRIBUTION:-}")"; m="$(opt_value "${CLAUDE_PLUGIN_OPTION_MODEL_PROFILE:-}")"
-  CORE_DIR="$(canon_dir "${c:-${o:-$HOME/Projects/Core}}")"
+  local raw; raw="$(expand_home "${c:-${o:-$HOME/Projects/Core}}")"
+  while [ "${#raw}" -gt 1 ] && [ "${raw%/}" != "$raw" ]; do raw="${raw%/}"; done
+  CORE_DIR="$(canon_dir "$raw")"
   CORE_NAME="$(basename "$CORE_DIR")"
-  PROJECTS_DIR="$(dirname "$CORE_DIR")"
+  # beside the Core as typed: a core_dir that is a symlink keeps the code folders next to the link,
+  # not next to its target
+  PROJECTS_DIR="$(canon_dir "$(dirname "$raw")")"
   ATTRIBUTION="${a:-allow}"
   MODEL_PROFILE="${m:-balanced}"
   APP_ID_PREFIX="$(coredev_get app-id-prefix)"
