@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 — 2026-11-04
+- Plugin lists show the names as CoreCrew and CoreEffort (`displayName` in the manifests),
+  not "Corecrew" and "Coreeffort". Commands keep their lowercase names.
+
 ## 0.3.0 — 2026-11-04
 - The plugin is now `corecrew` (brand CoreCrew); the marketplace and repo stay `corekit`.
   Commands are `/corecrew:...`, agents `corecrew:<role>`, hook messages start with `corecrew:`.

@@ -6,7 +6,7 @@ M="$ROOT/.claude-plugin/marketplace.json"
 
 # plugin.json
 assert_contains "$P" '"name": "corecrew"'
-assert_contains "$P" '"version": "0.3.0"'
+assert_contains "$P" '"version": "0.3.1"'
 assert_contains "$P" '"userConfig"'
 for key in core_dir attribution model_profile ui_language; do assert_contains "$P" "\"$key\""; done
 assert_contains "$P" '"type": "directory"'
@@ -27,6 +27,10 @@ assert_not_contains "$P" '"marketplace": "claude-plugins-official"'
 # marketplace.json
 assert_contains "$M" '"name": "corekit"'
 assert_contains "$M" '"name": "corecrew"'
+assert_contains "$M" '"displayName": "CoreCrew"'
+assert_contains "$M" '"displayName": "CoreEffort"'
+assert_contains "$P" '"displayName": "CoreCrew"'
+assert_contains "$ROOT/plugins/coreeffort/.claude-plugin/plugin.json" '"displayName": "CoreEffort"'
 assert_contains "$M" '"renames"'
 assert_contains "$M" '"corekit": "corecrew"'
 assert_contains "$M" '"coredev": "corecrew"'
@@ -39,7 +43,7 @@ assert_contains "$M" '"source": "./plugins/coreeffort"'
 assert_contains "$ROOT/README.md" '/plugin install corecrew@corekit'
 assert_not_contains "$ROOT/README.md" '/corekit:'
 assert_not_contains "$ROOT/README.md" 'corekit@corekit'
-assert_eq "$(grep -m1 '^## ' "$ROOT/CHANGELOG.md" | cut -c1-9)" '## 0.3.0 ' "CHANGELOG first entry"
+assert_eq "$(grep -m1 '^## ' "$ROOT/CHANGELOG.md" | cut -c1-9)" '## 0.3.1 ' "CHANGELOG first entry"
 assert_contains "$ROOT/CHANGELOG.md" '## 0.3.0 — 2026-11-04'
 assert_contains "$ROOT/CHANGELOG.md" '## 0.2.1 — 2026-11-04'
 assert_contains "$ROOT/CHANGELOG.md" '## 0.2.0 — '

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 — 2026-11-04
+
+- Plugin lists show the name as CoreEffort (`displayName`), not "Coreeffort".
+
 ## 0.2.0 — 2026-11-04
 
 - Renamed from `effort-picker` to `coreeffort` (brand CoreEffort). The command is `/coreeffort`,
