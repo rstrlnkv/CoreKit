@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 — 2026-11-04
+
+- A CoreEffort pane: `/coreeffort panel`. Mode buttons, the real level and the menu's level, the
+  last pick and why, this session's counts, Release, and level buttons that hold a level at once.
+- After a silent switch in auto, the line above the prompt has a "Back to …" button (key `1`).
+- Each switch leaves a ↑ or ↓ mark in the chat.
+- While a level is held, the working line names it.
+- `/coreeffort` with no argument asks which mode to use.
+
 ## 0.2.1 — 2026-11-04
 
 - Plugin lists show the name as CoreEffort (`displayName`), not "Coreeffort".

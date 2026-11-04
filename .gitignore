@@ -3,3 +3,4 @@
 .env.*
 .superpowers/
 plugins/coreeffort/.claude-plugin/types/
+plugins/coreeffort/tsconfig.json

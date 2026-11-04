@@ -13,10 +13,21 @@ Approvals such as "yes", "go on" or "да, давай" keep the level as it is.
 - **suggest** (the default): when the pick differs from your level, Claude waits and asks:
   "Switch to High", "Switch, and auto-adjust from now", or "Keep Medium".
 - **auto**: switches among Low, Medium and High by itself, up or down, and says so in a line
-  above the prompt. **It always asks before Extra high or Max**: those are the long, costly runs.
+  above the prompt, with a **Back to …** button (or the key `1`) that undoes the switch.
+  **It always asks before Extra high or Max**: those are the long, costly runs.
 - **off**: does nothing.
 
+Every switch also leaves a mark in the chat, such as "↑ Effort: High (was Medium) · why", and
+while the plugin holds a level the working line names it ("Thinking… · High").
+
 The texts are in Russian for a Russian prompt and in English otherwise.
+
+## The pane
+
+`/coreeffort panel` opens the CoreEffort pane beside the chat (above the prompt in a narrow
+terminal). It shows the mode as three buttons, the level the chat really runs at and the menu's
+own level, the last pick and why, and this session's counts. **Release** lets go of a held level;
+the level buttons hold a level at once, Extra high and Max included: your own pick is your yes.
 
 ## The effort menu does not move
 
@@ -28,7 +39,9 @@ session, and the plugin lets go of its level.
 
 ## Commands
 
-- `/coreeffort` shows the mode and the real level.
+- `/coreeffort` asks which mode to use, showing the current mode and the real level; Esc changes
+  nothing.
+- `/coreeffort panel` opens the pane.
 - `/coreeffort auto`, `/coreeffort suggest` set the mode for every session.
 - `/coreeffort off` and `/coreeffort on` turn it off and back on.
 
