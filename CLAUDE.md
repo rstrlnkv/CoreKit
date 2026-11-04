@@ -36,8 +36,8 @@ scripts/               all machinery, portable bash
   git-hooks/           pre-commit-code, pre-push-code, pre-push-core, blocked-patterns
 tests/                 bash: lib.sh, test_*.sh, run.sh, fixtures/
 evals/                 trigger evals (new-project)
-plugins/coreeffort/    a second plugin (TypeScript hooks module); spec docs/specs/2026-11-04-effort-picker-design.md;
-                       own CHANGELOG; tests: `claude plugin test plugins/coreeffort` (run by tests/test_coreeffort.sh)
+plugins/coremodel/    a second plugin (TypeScript hooks module); spec docs/specs/2026-11-04-effort-picker-design.md;
+                       own CHANGELOG; tests: `claude plugin test plugins/coremodel` (run by tests/test_coremodel.sh)
 plugins/coreopinion/   a third plugin: skill second-opinion (GPT via `codex exec --sandbox read-only`);
                        own README and CHANGELOG; tests: tests/test_coreopinion.sh
 CHANGELOG.md, README.md

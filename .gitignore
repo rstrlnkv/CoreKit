@@ -2,5 +2,5 @@
 .env
 .env.*
 .superpowers/
-plugins/coreeffort/.claude-plugin/types/
-plugins/coreeffort/tsconfig.json
+plugins/coremodel/.claude-plugin/types/
+plugins/coremodel/tsconfig.json

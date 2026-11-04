@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { Level } from '../types'
-import { decide, texts, uiLang } from '../hooks/policy'
+import { decide, decideModel, effortOptions, modelOptions, texts, uiLang } from '../hooks/policy'
 
 const pick = (level: Level | 'keep') => ({ level, why: '' })
 
@@ -42,9 +42,9 @@ test('uiLang is ru when most letters are Cyrillic', () => {
 })
 
 test('texts name the level in each language', () => {
-  expect(texts('ru').switchTo('high')).not.toBe(texts('en').switchTo('high'))
-  expect(texts('en').switchTo('high').includes('High')).toBe(true)
-  expect(texts('ru').switchTo('high').includes('Высокое')).toBe(true)
+  expect(texts('en').levelOption('high', true)).toBe('High (recommended)')
+  expect(texts('ru').levelOption('high', true)).toBe('Высокое (советую)')
+  expect(texts('ru').keepModel('sonnet')).toBe('Оставить Sonnet')
   const line = texts('en').applied('high', 'medium', 'auth bug')
   for (const w of ['High', 'Medium', 'auth bug']) expect(line.includes(w)).toBe(true)
   expect(texts('en').label('xhigh')).toBe('Effort XHigh')
@@ -67,4 +67,32 @@ test('mark points up or down by level and says it in the prompt language', () =>
 test('the mode question ends as a question', () => {
   expect(texts('en').modeQuestion('auto', 'high').endsWith('?')).toBe(true)
   expect(texts('ru').modeQuestion('auto', '').endsWith('?')).toBe(true)
+})
+
+test('decideModel follows the spec rules', () => {
+  const base = { mode: 'auto' as const, pickModel: true, isFirst: true, now: 'sonnet' as const, pick: 'opus' as const, allowed: ['haiku', 'sonnet', 'opus', 'fable'] as const }
+  expect(decideModel(base)).toBe('apply')
+  expect(decideModel({ ...base, mode: 'suggest' })).toBe('ask')
+  expect(decideModel({ ...base, pick: 'fable' })).toBe('ask')
+  expect(decideModel({ ...base, isFirst: false })).toBe('ask')
+  expect(decideModel({ ...base, isFirst: false, pick: 'haiku' })).toBe('none')
+  expect(decideModel({ ...base, isFirst: false, now: '' })).toBe('none')
+  expect(decideModel({ ...base, pick: '' })).toBe('none')
+  expect(decideModel({ ...base, pick: 'sonnet' })).toBe('none')
+  expect(decideModel({ ...base, pickModel: false })).toBe('none')
+  expect(decideModel({ ...base, allowed: ['sonnet'] })).toBe('none')
+  expect(decideModel({ ...base, mode: 'off' })).toBe('none')
+})
+
+test('options put the pick first, then the current, then the nearest', () => {
+  expect(modelOptions('opus', 'sonnet', ['haiku', 'sonnet', 'opus', 'fable'])).toEqual(['opus', 'sonnet', 'fable', 'haiku'])
+  expect(modelOptions('opus', '', ['sonnet', 'opus'])).toEqual(['opus', 'sonnet'])
+  expect(effortOptions('high', 'medium')).toEqual(['high', 'medium', 'xhigh', 'low'])
+  expect(effortOptions('low', '')).toEqual(['low', 'medium', 'high', 'xhigh'])
+})
+
+test('the model question names the cost in the prompt language', () => {
+  expect(texts('ru').modelQuestion('opus', 50, 100_000, false, '')).toContain('Чат перечитается заново: ≈ 100 тыс. токенов, как ~50')
+  expect(texts('en').modelQuestion('opus', null, undefined, false, '')).toContain('which costs tokens')
+  expect(texts('en').modelQuestion('opus', null, undefined, true, 'many files')).toContain('Opus')
 })

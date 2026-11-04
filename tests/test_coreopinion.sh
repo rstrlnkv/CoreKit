@@ -13,10 +13,10 @@ assert_contains "$PJ" '"name": "coreopinion"'
 assert_contains "$PJ" '"displayName": "CoreOpinion"'
 assert_contains "$PJ" '"version": "0.1.1"'
 assert_contains "$PJ" '"license": "MIT"'
-# author, homepage and repository: the same lines as coreeffort's (the handle stays out of tests)
-CE="$ROOT/plugins/coreeffort/.claude-plugin/plugin.json"
+# author, homepage and repository: the same lines as coremodel's (the handle stays out of tests)
+CE="$ROOT/plugins/coremodel/.claude-plugin/plugin.json"
 for key in author homepage repository; do
-  assert_eq "$(grep "\"$key\":" "$PJ")" "$(grep "\"$key\":" "$CE")" "$key like coreeffort"
+  assert_eq "$(grep "\"$key\":" "$PJ")" "$(grep "\"$key\":" "$CE")" "$key like coremodel"
 done
 assert_contains "$PJ" '"description": '
 # well-formed JSON (test-only use of python3; plugin code never uses it)
@@ -32,7 +32,7 @@ assert_contains "$M" '"name": "coreopinion"'
 assert_contains "$M" '"displayName": "CoreOpinion"'
 assert_contains "$M" '"source": "./plugins/coreopinion"'
 desc="$(grep -m1 '"description"' "$M")"
-for p in corecrew coreeffort coreopinion; do
+for p in corecrew coremodel coreopinion; do
   case "$desc" in *"$p"*) pass ;; *) fail "marketplace description does not name $p" ;; esac
 done
 

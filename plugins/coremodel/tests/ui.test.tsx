@@ -4,8 +4,8 @@ import type { On } from 'claude-code'
 import { start, step, submit, world, type Eng, type World } from './world'
 
 const SURFACES = ['terminal', 'desktop'] as const
-const ABOVE = { plugin: 'coreeffort', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 80, scroll: { offset: 0, bodyRows: 6 }, view: {} } } as const
-const MODE = { plugin: 'coreeffort', component: 'SessionMode', props: { modes: ['default'] } } as const
+const ABOVE = { plugin: 'coremodel', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 80, scroll: { offset: 0, bodyRows: 6 }, view: {} } } as const
+const MODE = { plugin: 'coremodel', component: 'SessionMode', props: { modes: ['default'] } } as const
 
 // The engine's own footer: what draws when the plugin leaves the slot alone.
 function engineFooter(on: On) {
@@ -88,22 +88,22 @@ test('a new session start clears the footer label and the line', { options: { mo
 })
 
 async function run($: Eng, args: string) {
-  const r = await $.command.run({ command: 'coreeffort', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } } as never)
+  const r = await $.command.run({ command: 'coremodel', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } } as never)
   return (r as { text?: string }).text ?? ''
 }
 
-test('/coreeffort reports the mode and the level the chat runs at', async ($, on) => {
+test('/coremodel reports the mode and the level the chat runs at', async ($, on) => {
   const w = world(on)
   engineFooter(on)
   w.row = null
-  w.reply = 'Switch to High'
+  w.reply = 'High (recommended)'
   await start($)
   expect(await run($, '')).toContain('suggest')
   await switchTo($, w, 'high', 'medium')
   expect(await run($, '')).toContain('High')
 })
 
-test('/coreeffort auto, suggest, off and on store the mode over the setting', async ($, on) => {
+test('/coremodel auto, suggest, off and on store the mode over the setting', async ($, on) => {
   const w = world(on)
   engineFooter(on)
   await start($)
@@ -185,7 +185,7 @@ test('no undo after an agreed switch', async ($, on) => {
   const w = world(on)
   engineFooter(on)
   w.row = null
-  w.reply = 'Switch to High'
+  w.reply = 'High (recommended)'
   await start($)
   await switchTo($, w, 'high', 'medium')
   expect(await undoButton($)).toBe(undefined)
@@ -203,8 +203,8 @@ test('undo after the menu moved does nothing', { options: { mode: 'auto' } }, as
   expect(w.efforts.at(-1)).toBe('low')
 })
 
-function placed(id: string, plugin = 'coreeffort') {
-  return { plugin: 'coreeffort', component: 'Placed', props: { id, plugin } } as const
+function placed(id: string, plugin = 'coremodel') {
+  return { plugin: 'coremodel', component: 'Placed', props: { id, plugin } } as const
 }
 
 test('each applied switch places one mark', { options: { mode: 'auto' } }, async ($, on) => {
@@ -255,10 +255,10 @@ test('mark ids stay unique across a session restart', { options: { mode: 'auto' 
 })
 
 const PANE = {
-  plugin: 'coreeffort',
+  plugin: 'coremodel',
   component: 'Pane',
-  requestId: 'coreeffort',
-  props: { title: 'CoreEffort', isFocused: false, bodyColumns: 40, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
+  requestId: 'coremodel',
+  props: { title: 'CoreModel', isFocused: false, bodyColumns: 40, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
 } as const
 
 async function pane($: Eng, surface: 'terminal' | 'desktop' = 'desktop') {
@@ -278,11 +278,11 @@ async function pressPane($: Eng, key: string) {
   await ui.unmount()
 }
 
-test('/coreeffort panel opens the pane', async ($, on) => {
+test('/coremodel panel opens the pane', async ($, on) => {
   const w = world(on)
   await start($)
   await run($, 'panel')
-  expect(w.opened).toEqual([{ id: 'coreeffort', title: 'CoreEffort' }])
+  expect(w.opened).toEqual([{ id: 'coremodel', title: 'CoreModel' }])
 })
 
 test('the pane shows mode, level, last pick and counts', { options: { mode: 'auto' } }, async ($, on) => {
@@ -385,7 +385,7 @@ test('the pane counts kept prompts', async ($, on) => {
   expect(await has($, /High · auth bug/)).toBe(true)
 })
 
-const SPIN = { plugin: 'coreeffort', component: 'Spinner', props: { word: 'Thinking', message: null, suffix: '…', mode: 'thinking' } } as const
+const SPIN = { plugin: 'coremodel', component: 'Spinner', props: { word: 'Thinking', message: null, suffix: '…', mode: 'thinking' } } as const
 
 async function spinner($: Eng, surface: 'terminal' | 'desktop') {
   const ui = await $.ui.mount({ ...SPIN, surface })
@@ -410,13 +410,13 @@ test('the working line names a held level', { options: { mode: 'auto' } }, async
   for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking…')
 })
 
-test('/coreeffort with no argument asks for the mode', async ($, on) => {
+test('/coremodel with no argument asks for the mode', async ($, on) => {
   const w = world(on)
   w.reply = 'auto'
   await start($)
   const text = await run($, '')
   expect(w.asked.at(-1)).toEqual(['auto', 'suggest', 'off'])
-  expect(text).toContain('CoreEffort: auto.')
+  expect(text).toContain('CoreModel: auto.')
   await switchTo($, w, 'high', 'medium')
   expect(w.asked.length).toBe(1)
 })
@@ -427,7 +427,7 @@ test('a dismissed mode question changes nothing', async ($, on) => {
   await start($)
   const text = await run($, '')
   expect(w.asked.length).toBe(1)
-  expect(text).toContain('CoreEffort: suggest.')
+  expect(text).toContain('CoreModel: suggest.')
   w.reply = 'Keep Medium'
   await switchTo($, w, 'high', 'medium')
   expect(w.asked.length).toBe(2)
@@ -520,4 +520,160 @@ test('an undo button drawn before off does nothing when pressed after', { option
   await ui.unmount()
   await step($, 'medium', 1)
   expect(w.efforts.at(-1)).toBe('low')
+})
+
+// CoreModel: the pair in the interface (spec §7).
+async function switchPair($: Eng, w: World, model: string, level: string, why = 'auth bug') {
+  w.answer = `{"level":"${level}","model":"${model}","why":"${why}"}`
+  await submit($, 'fix the login')
+  await step($, 'medium')
+}
+
+test('switch line names both parts', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ ...ABOVE, surface })
+    expect((await ui.find({ type: 'Text', text: /Opus · High \(was Sonnet · Medium\) · auth bug/ })) !== undefined).toBe(true)
+    await ui.unmount()
+  }
+})
+
+test('undo restores both parts the silent switch changed', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  expect(String((await undoButton($))?.props.label)).toMatch(/Back to Sonnet · Medium/)
+  await pressUndo($)
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
+  expect(w.efforts.at(-1)).toBe('medium')
+})
+
+test('mark arrow follows the model', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  on('ui.render', { component: 'Placed' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>engine</Text>
+  })
+  w.row = null
+  await start($)
+  await switchPair($, w, 'haiku', 'high')
+  const ui = await $.ui.mount({ ...placed('mark-1'), surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /^↓ Haiku · High \(was Sonnet · Medium\)/ })) !== undefined).toBe(true)
+  await ui.unmount()
+})
+
+test('footer shows the pair', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ ...MODE, surface })
+    expect((await ui.find({ type: 'Text', text: /Opus · High/ })) !== undefined).toBe(true)
+    await ui.unmount()
+  }
+})
+
+test('working line names the pair', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  on('ui.render', { component: 'Spinner' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    const p = e.props as { word: string; suffix: string }
+    return <Text>{p.word + p.suffix}</Text>
+  })
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking… · Opus · High')
+})
+
+test('pane model buttons only for allowed models', { options: { models: 'sonnet,opus' } }, async ($, on) => {
+  world(on)
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await pane($, surface)
+    expect((await ui.find({ type: 'Button', key: 'model-opus' })) !== undefined).toBe(true)
+    expect((await ui.find({ type: 'Button', key: 'model-sonnet' })) !== undefined).toBe(true)
+    expect(await ui.find({ type: 'Button', key: 'model-haiku' })).toBe(undefined)
+    expect((await ui.find({ type: 'Box', key: 'models' }))?.props.flexWrap).toBe('wrap')
+    await ui.unmount()
+  }
+})
+
+test('pane model press on an empty chat holds at once', async ($, on) => {
+  const w = world(on)
+  await start($)
+  await pressPane($, 'model-opus')
+  await step($, 'medium')
+  expect(w.asked.length).toBe(0)
+  expect(w.models).toEqual(['claude-opus-5-5'])
+})
+
+test('pane model press mid-chat asks the cost', async ($, on) => {
+  const w = world(on)
+  w.lastReply = 'an earlier answer'
+  w.tokens = 100_000
+  await start($)
+  await step($, 'medium')
+  w.reply = 'Switch to Opus'
+  await pressPane($, 'model-opus')
+  expect(w.questions[0]).toContain('~50')
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+})
+
+test('pane counts per model', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  expect(await has($, /^Opus 1$/)).toBe(true)
+  expect(await has($, /Chat runs at: Opus · High/)).toBe(true)
+  expect(await has($, /in the menu: Sonnet · Medium/)).toBe(true)
+  expect(await has($, /Opus · High · auth bug/)).toBe(true)
+})
+
+// CoreModel: a model the account cannot use (spec §4.5).
+test('an unavailable model is dropped for the session', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'medium')
+  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+  await $.classic.StopFailure({ error: 'model_not_found', error_details: 'model: claude-opus-5-5' } as never)
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
+  expect(w.logs.some(l => l.includes('Opus'))).toBe(true)
+  expect(await has($, /Opus is not available/)).toBe(true)
+  await switchPair($, w, 'opus', 'medium')
+  expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
+})
+
+test('other failures leave the model alone', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'medium')
+  await $.classic.StopFailure({ error: 'rate_limit' } as never)
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+})
+
+test('with pickModel off the pane shows no model buttons or model counts', { options: { mode: 'auto', pickModel: 'off' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  const ui = await pane($)
+  expect(await ui.find({ type: 'Button', key: 'model-opus' })).toBe(undefined)
+  expect(await ui.find({ type: 'Text', text: /^Opus 1$/ })).toBe(undefined)
+  await ui.unmount()
 })
