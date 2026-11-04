@@ -28,6 +28,8 @@ let held: { text: string; gen: number; lang: Lang } | null = null
 let hold: { level: Level; base: string } | null = null
 // The level the last main-chat request ran at, and the language of the last prompt.
 let seen: Level | '' = ''
+// The menu's own effort as the last main-chat request carried it.
+let asked = ''
 let lastLang: Lang = 'en'
 
 async function log($: EngineInterface, what: string, err: unknown) {
@@ -134,7 +136,10 @@ async function runPick($: EngineInterface, options: { mode?: unknown; classifier
   }
   if (h.gen !== gen) return
   const action = decide(mode, now, pick)
-  if (action === 'none' || pick.level === 'keep') return
+  const named = pick.level === 'keep' ? null : pick.level
+  await count($, s => (named ? { ...s, picks: { ...s.picks, [named]: s.picks[named] + 1 }, last: { level: named, why: pick.why } } : s))
+  const kept = () => count($, s => ({ ...s, kept: s.kept + 1 }))
+  if (action === 'none' || pick.level === 'keep') return kept()
   const level = pick.level
   // A silent switch can be undone: back to the menu's own level, or to the level held before.
   const undo: Band['undo'] = action === 'apply' && now ? (now === toLevel(base) ? 'release' : now) : null
@@ -145,11 +150,11 @@ async function runPick($: EngineInterface, options: { mode?: unknown; classifier
       answer = await $.ui.ask(t.question(level, pick.why), { options: [go, t.switchAndAuto, t.keep(now)], header: 'Effort' })
     } catch {
       // A dismissed question keeps the level.
-      return
+      return kept()
     }
     if (h.gen !== gen) return
     if (answer === t.switchAndAuto) await $.store.set('mode', 'auto')
-    else if (answer !== go) return
+    else if (answer !== go) return kept()
   }
   await applyLevel($, level, base)
   await announce($, level, now, pick.why, h.lang, undo)
@@ -159,6 +164,30 @@ async function runPick($: EngineInterface, options: { mode?: unknown; classifier
     await log($, 'mark', err)
   }
 }
+
+/** Sets the mode as `/coreeffort <mode>` does; returns the reply. */
+export async function setMode($: EngineInterface, options: { mode?: unknown }, arg: Mode | 'on'): Promise<string> {
+  let text: string
+  if (arg === 'auto' || arg === 'suggest') {
+    await $.store.set('mode', arg)
+    await $.store.set('lastMode', arg)
+    text = `CoreEffort: ${arg}. ${arg === 'auto' ? 'Levels change by themselves; xhigh and max still ask first.' : 'Every change of level asks first.'}`
+  } else if (arg === 'off') {
+    await $.store.set('mode', 'off')
+    await releaseHold($)
+    await update($, band, () => null)
+    text = 'CoreEffort is off. /coreeffort on turns it back on.'
+  } else {
+    const last = await $.store.get('lastMode')
+    const mode: Mode = last === 'auto' || last === 'suggest' ? last : options.mode === 'auto' ? 'auto' : 'suggest'
+    await $.store.set('mode', mode)
+    text = `CoreEffort is on: ${mode}.`
+  }
+  $.ui.invalidate('ui.render')
+  return text
+}
+
+const LEVELS: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
 export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
@@ -174,7 +203,9 @@ export const register: Register = (on, options) => {
   // Every main-chat request: release a hold the menu moved past, run a waiting pick, put the level on.
   on('turn.step', async function* ($, e, next) {
     if (e.agentId !== undefined || typeof e.effort !== 'string') return yield* next(e)
-    const asked = e.effort
+    asked = e.effort
+    // A level picked in the pane before any request learns the menu's level here.
+    if (hold && hold.base === '') hold = { ...hold, base: asked }
     if (hold && asked !== hold.base) await releaseHold($)
     if (held && e.index === 0) {
       const h = held
@@ -186,7 +217,9 @@ export const register: Register = (on, options) => {
       }
     }
     const want = hold?.level ?? null
+    const was = seen
     seen = want ?? (toLevel(asked) || seen)
+    if (seen !== was) $.ui.invalidate('ui.render')
     if (!want || want === asked) return yield* next(e)
     return yield* next({ ...e, effort: want })
   })
@@ -198,30 +231,18 @@ export const register: Register = (on, options) => {
     await update($, band, () => null)
     await $.command.register({
       name: 'coreeffort',
-      description: 'CoreEffort: show the real effort level, or set the mode (auto, suggest, off, on)',
-      argumentHint: '[auto|suggest|off|on]',
+      description: 'CoreEffort: show the real effort level, set the mode (auto, suggest, off, on), or open the pane (panel)',
+      argumentHint: '[auto|suggest|off|on|panel]',
     })
     return next(e)
   })
 
   on('command.run', { command: 'coreeffort' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
-    if (arg === 'auto' || arg === 'suggest') {
-      await $.store.set('mode', arg)
-      await $.store.set('lastMode', arg)
-      return { text: `CoreEffort: ${arg}. ${arg === 'auto' ? 'Levels change by themselves; xhigh and max still ask first.' : 'Every change of level asks first.'}` }
-    }
-    if (arg === 'off') {
-      await $.store.set('mode', 'off')
-      await releaseHold($)
-      await update($, band, () => null)
-      return { text: 'CoreEffort is off. /coreeffort on turns it back on.' }
-    }
-    if (arg === 'on') {
-      const last = await $.store.get('lastMode')
-      const mode: Mode = last === 'auto' || last === 'suggest' ? last : options.mode === 'auto' ? 'auto' : 'suggest'
-      await $.store.set('mode', mode)
-      return { text: `CoreEffort is on: ${mode}.` }
+    if (arg === 'auto' || arg === 'suggest' || arg === 'off' || arg === 'on') return { text: await setMode($, options, arg) }
+    if (arg === 'panel') {
+      const r = await $.ui.open({ id: PLUGIN, title: 'CoreEffort' })
+      return { text: r.isPlaced ? 'CoreEffort pane is open.' : `CoreEffort pane is waiting: ${r.reason}` }
     }
     const mode = await currentMode($, options)
     const level = hold?.level ?? seen
@@ -229,7 +250,7 @@ export const register: Register = (on, options) => {
       text: [
         `CoreEffort: ${mode}.`,
         `This chat runs at: ${level ? texts('en').levelName(level) : 'unknown yet'}${hold ? ' (held by the plugin; the menu still shows your own setting)' : ''}.`,
-        'Type /coreeffort auto, suggest, off or on.',
+        'Type /coreeffort auto, suggest, off, on or panel.',
       ].join('\n'),
     }
   })
@@ -239,6 +260,39 @@ export const register: Register = (on, options) => {
     const level = await read($, override)
     if (!level) return next(e)
     return next({ ...e, props: { ...e.props, modes: [...e.props.modes, texts(lastLang).label(level)] } })
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PLUGIN }, async ($, e) => {
+    const { Box, Button, Text } = $.ui.resolve(e)
+    const t = texts(lastLang)
+    const mode = await currentMode($, options)
+    const held = await read($, override)
+    const s = await read($, stats)
+    const act = (what: string, f: () => Promise<unknown>) => () => {
+      f().catch(err => log($, what, err))
+    }
+    return (
+      <Box flexDirection="column">
+        <Box>
+          {MODES.map(m => (
+            <Button key={`mode-${m}`} label={m === mode ? `● ${m}` : m} onPress={act('mode', () => setMode($, options, m))} />
+          ))}
+        </Box>
+        <Text bold>{t.runsAt(held ?? seen)}</Text>
+        {held ? <Text dimColor>{t.inMenu(toLevel(asked))}</Text> : null}
+        <Text dimColor>{t.lastPick}</Text>
+        <Text>{s?.last ? `${t.levelName(s.last.level)} · ${s.last.why}` : t.noPicks}</Text>
+        {s ? <Text dimColor>{t.session}</Text> : null}
+        {s ? LEVELS.filter(l => s.picks[l] > 0).map(l => <Text>{`${t.levelName(l)} ${s.picks[l]}`}</Text>) : null}
+        {s && s.kept > 0 ? <Text>{`${t.kept} ${s.kept}`}</Text> : null}
+        <Box>
+          {held ? <Button key="release" label={t.release} onPress={act('release', () => releaseHold($))} /> : null}
+          {LEVELS.map(l => (
+            <Button key={`level-${l}`} label={t.levelName(l)} onPress={act('level', () => applyLevel($, l, asked))} />
+          ))}
+        </Box>
+      </Box>
+    )
   })
 
   on('ui.render', { component: 'Placed' }, async ($, e, next) => {

@@ -253,3 +253,134 @@ test('mark ids stay unique across a session restart', { options: { mode: 'auto' 
   expect((await ui.find({ type: 'Text', text: /Effort: High/ })) !== undefined).toBe(true)
   await ui.unmount()
 })
+
+const PANE = {
+  plugin: 'coreeffort',
+  component: 'Pane',
+  requestId: 'coreeffort',
+  props: { title: 'CoreEffort', isFocused: false, bodyColumns: 40, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
+} as const
+
+async function pane($: Eng, surface: 'terminal' | 'desktop' = 'desktop') {
+  return $.ui.mount({ ...PANE, surface })
+}
+
+async function has($: Eng, text: RegExp, surface: 'terminal' | 'desktop' = 'desktop') {
+  const ui = await pane($, surface)
+  const found = await ui.find({ type: 'Text', text })
+  await ui.unmount()
+  return found !== undefined
+}
+
+async function pressPane($: Eng, key: string) {
+  const ui = await pane($)
+  await ui.press({ key })
+  await ui.unmount()
+}
+
+test('/coreeffort panel opens the pane', async ($, on) => {
+  const w = world(on)
+  await start($)
+  await run($, 'panel')
+  expect(w.opened).toEqual([{ id: 'coreeffort', title: 'CoreEffort' }])
+})
+
+test('the pane shows mode, level, last pick and counts', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  for (const surface of SURFACES) {
+    expect(await has($, /Chat runs at: High/, surface)).toBe(true)
+    expect(await has($, /in the menu: Medium/, surface)).toBe(true)
+    expect(await has($, /High · auth bug/, surface)).toBe(true)
+    expect(await has($, /^High 1$/, surface)).toBe(true)
+    const ui = await pane($, surface)
+    expect(String((await ui.find({ type: 'Button', key: 'mode-auto' }))?.props.label)).toBe('● auto')
+    await ui.unmount()
+  }
+})
+
+test('a mode button in the pane sets the mode', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await pressPane($, 'mode-off')
+  await switchTo($, w, 'high', 'medium')
+  expect(w.model.length).toBe(0)
+  const ui = await pane($)
+  expect(String((await ui.find({ type: 'Button', key: 'mode-off' }))?.props.label)).toBe('● off')
+  await ui.unmount()
+})
+
+test('a level picked in the pane holds at once, xhigh included', async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await step($, 'medium')
+  await pressPane($, 'level-xhigh')
+  await step($, 'medium', 1)
+  expect(w.asked.length).toBe(0)
+  expect(w.efforts.at(-1)).toBe('xhigh')
+  expect(w.placed).toEqual([])
+})
+
+test('a pane pick before any request survives the first request', async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await pressPane($, 'level-high')
+  await step($, 'medium')
+  await step($, 'medium', 1)
+  expect(w.efforts).toEqual(['high', 'high'])
+  await step($, 'low', 2)
+  expect(w.efforts.at(-1)).toBe('low')
+})
+
+test('Release in the pane drops the hold', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await pressPane($, 'release')
+  await step($, 'medium', 1)
+  expect(w.efforts.at(-1)).toBe('medium')
+  const ui = await pane($)
+  expect(await ui.find({ type: 'Button', key: 'release' })).toBe(undefined)
+  await ui.unmount()
+})
+
+test('off from the pane clears the band and its undo', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await pressPane($, 'mode-off')
+  const ui = await $.ui.mount({ ...ABOVE, surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /engine/ })) !== undefined).toBe(true)
+  expect(await ui.find({ type: 'Button', key: 'undo' })).toBe(undefined)
+  await ui.unmount()
+  await step($, 'medium', 1)
+  expect(w.efforts.at(-1)).toBe('medium')
+})
+
+test('a fresh pane says there are no picks yet', async ($, on) => {
+  const w = world(on)
+  w.answer = new Error('down')
+  await start($)
+  await submit($, 'почини авторизацию')
+  await step($, 'medium')
+  expect(await has($, /Пока нет выборов/)).toBe(true)
+})
+
+test('the pane counts kept prompts', async ($, on) => {
+  const w = world(on)
+  w.row = null
+  w.reply = 'Keep Medium'
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await switchTo($, w, 'keep', 'medium', 'ok')
+  expect(await has($, /^High 1$/)).toBe(true)
+  expect(await has($, /Kept as it was 2/)).toBe(true)
+  expect(await has($, /High · auth bug/)).toBe(true)
+})
