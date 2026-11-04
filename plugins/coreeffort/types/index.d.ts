@@ -11,6 +11,8 @@ export type Band = {
   why: string
   /** The language of the prompt the band answers. */
   lang: 'ru' | 'en'
+  /** What the undo button does: hold this level, drop the hold, or no button (null). */
+  undo: Level | 'release' | null
 }
 
 declare module 'claude-code' {

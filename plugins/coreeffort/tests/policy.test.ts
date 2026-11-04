@@ -50,3 +50,8 @@ test('texts name the level in each language', () => {
   expect(texts('en').label('xhigh')).toBe('Effort XHigh')
   expect(texts('ru').label('high')).toBe('Усилие High')
 })
+
+test('back names the level to go back to', () => {
+  expect(texts('en').back('low').includes('Low')).toBe(true)
+  expect(texts('ru').back('low').includes('Низкое')).toBe(true)
+})

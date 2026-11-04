@@ -42,6 +42,7 @@ export function texts(lang: Lang) {
         : `This looks like a ${n(l)} effort task${why ? `: ${why}` : ''}. Switch before Claude starts?`,
     switchTo: (l: Level) => (ru ? `Переключить на «${n(l)}»` : `Switch to ${n(l)}`),
     switchAndAuto: ru ? 'Переключить и дальше сам' : 'Switch, and auto-adjust from now',
+    back: (l: Level) => (ru ? `Вернуть «${n(l)}»` : `Back to ${n(l)}`),
     keep: (now: Level | '') =>
       now ? (ru ? `Оставить «${n(now)}»` : `Keep ${n(now)}`) : ru ? 'Оставить как есть' : 'Keep it as it is',
     applied: (l: Level, from: Level | '', why: string) =>

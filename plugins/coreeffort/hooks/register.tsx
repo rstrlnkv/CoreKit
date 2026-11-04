@@ -51,8 +51,14 @@ export async function applyLevel($: EngineInterface, level: Level, base: string)
   await update($, override, () => level)
 }
 
-async function announce($: EngineInterface, level: Level, from: Level | '', why: string, lang: Lang) {
-  const b: Band = { id: nextBand++, level, from, why, lang }
+/** Lets go of a held level: the chat runs at the menu's level again. */
+export async function releaseHold($: EngineInterface): Promise<void> {
+  hold = null
+  await update($, override, () => null)
+}
+
+async function announce($: EngineInterface, level: Level, from: Level | '', why: string, lang: Lang, undo: Band['undo']) {
+  const b: Band = { id: nextBand++, level, from, why, lang, undo }
   await update($, band, () => b)
   void (async () => {
     await $.clock.sleep(BAND_MS)
@@ -110,6 +116,8 @@ async function runPick($: EngineInterface, options: { mode?: unknown; classifier
   const action = decide(mode, now, pick)
   if (action === 'none' || pick.level === 'keep') return
   const level = pick.level
+  // A silent switch can be undone: back to the menu's own level, or to the level held before.
+  const undo: Band['undo'] = action === 'apply' && now ? (now === toLevel(base) ? 'release' : now) : null
   if (action === 'ask') {
     const go = t.switchTo(level)
     let answer = ''
@@ -124,7 +132,7 @@ async function runPick($: EngineInterface, options: { mode?: unknown; classifier
     else if (answer !== go) return
   }
   await applyLevel($, level, base)
-  await announce($, level, now, pick.why, h.lang)
+  await announce($, level, now, pick.why, h.lang, undo)
 }
 
 export const register: Register = (on, options) => {
@@ -142,10 +150,7 @@ export const register: Register = (on, options) => {
   on('turn.step', async function* ($, e, next) {
     if (e.agentId !== undefined || typeof e.effort !== 'string') return yield* next(e)
     const asked = e.effort
-    if (hold && asked !== hold.base) {
-      hold = null
-        await update($, override, () => null)
-    }
+    if (hold && asked !== hold.base) await releaseHold($)
     if (held && e.index === 0) {
       const h = held
       held = null
@@ -163,9 +168,8 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     // A new session, or a reload of this module, starts with no held level: drop what $.state kept.
-    hold = null
     held = null
-    await update($, override, () => null)
+    await releaseHold($)
     await update($, band, () => null)
     await $.command.register({
       name: 'coreeffort',
@@ -184,8 +188,7 @@ export const register: Register = (on, options) => {
     }
     if (arg === 'off') {
       await $.store.set('mode', 'off')
-      hold = null
-        await update($, override, () => null)
+      await releaseHold($)
       await update($, band, () => null)
       return { text: 'CoreEffort is off. /coreeffort on turns it back on.' }
     }
@@ -217,11 +220,24 @@ export const register: Register = (on, options) => {
     const b = await read($, band)
     if (!b || e.props.hasSurvey) return next(e)
     const rest = await next(e)
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
+    const t = texts(b.lang)
+    const undo = b.undo
+    const onUndo = async () => {
+      // An old band, or a hold the menu already took back: the person's own choice stands.
+      const cur = await read($, band)
+      if (!cur || cur.id !== b.id || !hold || !undo) return
+      if (undo === 'release') await releaseHold($)
+      else await applyLevel($, undo, hold.base)
+      await update($, band, () => null)
+    }
     return (
       <Box flexDirection="column">
         {rest}
-        <Text wrap="truncate-end">{`✓ ${texts(b.lang).applied(b.level, b.from, b.why)}`}</Text>
+        <Box>
+          <Text wrap="truncate-end">{`✓ ${t.applied(b.level, b.from, b.why)} `}</Text>
+          {undo ? <Button key="undo" hotkey="1" label={t.back(undo === 'release' ? (b.from || b.level) : undo)} onPress={() => onUndo().catch(err => log($, 'undo', err))} /> : null}
+        </Box>
       </Box>
     )
   })

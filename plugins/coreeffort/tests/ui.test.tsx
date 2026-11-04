@@ -136,3 +136,69 @@ test('off clears a held level and its label', { options: { mode: 'auto' } }, asy
   expect(await ui.find({ type: 'Text', text: /Effort High/ })).toBe(undefined)
   await ui.unmount()
 })
+
+async function undoButton($: Eng, surface: 'terminal' | 'desktop' = 'desktop') {
+  const ui = await $.ui.mount({ ...ABOVE, surface })
+  const b = await ui.find({ type: 'Button', key: 'undo' })
+  await ui.unmount()
+  return b
+}
+
+async function pressUndo($: Eng) {
+  const ui = await $.ui.mount({ ...ABOVE, surface: 'desktop' })
+  await ui.press({ key: 'undo' })
+  await ui.unmount()
+}
+
+test('an auto switch shows an undo button that releases the hold', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  for (const surface of SURFACES) {
+    const b = await undoButton($, surface)
+    expect(String(b?.props.label ?? '')).toMatch(/Back to Medium/)
+  }
+  await pressUndo($)
+  await step($, 'medium', 1)
+  expect(w.efforts.at(-1)).toBe('medium')
+  const ui = await $.ui.mount({ ...ABOVE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /Effort:/ })).toBe(undefined)
+  await ui.unmount()
+})
+
+test('undo holds the previous held level', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await switchTo($, w, 'low', 'medium', 'rename a variable')
+  expect(w.efforts.at(-1)).toBe('low')
+  await pressUndo($)
+  await step($, 'medium', 1)
+  expect(w.efforts.at(-1)).toBe('high')
+})
+
+test('no undo after an agreed switch', async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  w.reply = 'Switch to High'
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  expect(await undoButton($)).toBe(undefined)
+})
+
+test('undo after the menu moved does nothing', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await step($, 'low', 1)
+  await pressUndo($)
+  await step($, 'low', 2)
+  expect(w.efforts.at(-1)).toBe('low')
+})
