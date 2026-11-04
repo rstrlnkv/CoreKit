@@ -39,13 +39,25 @@ The texts are in Russian for a Russian prompt and in English otherwise.
 
 ## The pane
 
-`/coremodel panel` opens the CoreModel pane beside the chat (above the prompt in a narrow
-terminal). On top is the model and level the chat really runs at, with the menu's own choice
-under it while the plugin holds something. The model and level buttons, the current ones
-highlighted, hold your pick at once, Fable, Extra high and Max included: your own pick is your
-yes. A model button pressed mid-chat first shows the cost question. **Back to the menu's choice**
-lets go of what the plugin holds. Below are the mode buttons (Suggest, Auto, Off) with a line on
-what the chosen mode does, the last pick and why, and this session's counts as short bars.
+Open it without typing anything into the chat: press the **CoreModel** button in the footer
+under the prompt (the slot where the mode labels sit, on the terminal and the desktop app); press
+it again to close the pane. Nothing is sent to the model, so a running turn is not interrupted.
+`/coremodel panel` opens it too. The pane sits beside the chat (above the prompt in a narrow
+terminal); its keys and the close mark are the engine's own (Esc, ctrl+x x). There is no
+shortcut of the plugin's own: the hooks API gives a plugin no keys of its own.
+
+From top to bottom, the pane shows:
+
+- **Now in the chat**: the model and level the chat really runs at, and, while the plugin holds
+  something, "held by CoreModel" with the menu's own choice.
+- **Model** and **Level** buttons, the current ones highlighted. A press holds your pick at
+  once, Fable, Extra high and Max included: your own pick is your yes. A model pressed mid-chat
+  first shows the cost question. **Back to the menu's choice** lets go of what the plugin holds.
+- **Mode**: Suggest, Auto, Off, with a line on what the chosen mode does.
+- **Last pick**: the pair, whether it was applied or you kept what you had, and the reason.
+- **This session**: how often each model and level was picked, and how many prompts were left alone.
+
+Button rows wrap, so nothing is hidden in a narrow pane.
 
 ## Your menus do not move
 
@@ -65,7 +77,7 @@ the log once per session; that model is simply never picked.
 
 - `/coremodel` asks which mode to use, showing the current mode and the real level; Esc changes
   nothing.
-- `/coremodel panel` opens the pane.
+- `/coremodel panel` opens the pane (the footer button does the same without a chat command).
 - `/coremodel auto`, `/coremodel suggest` set the mode for every session.
 - `/coremodel off` and `/coremodel on` turn it off and back on.
 

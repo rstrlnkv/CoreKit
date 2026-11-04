@@ -506,16 +506,6 @@ export const register: Register = (on, options) => {
     const menu = heldModel ? t.inMenuPair(toModel(seenModel), menuLevel) : menuLevel ? t.inMenu(menuLevel) : ''
     const modelCounts = pickOn && s?.models ? LADDER.filter(m => s.models![m] > 0) : []
     const levelCounts = s ? LEVELS.filter(l => s.picks[l] > 0) : []
-    // Ten cells for the most picked entry of its group; every counted entry gets at least one.
-    const bar = (k: number, most: number) => '▇'.repeat(Math.max(1, Math.round((k / Math.max(1, most)) * 10)))
-    const mostModel = Math.max(0, ...modelCounts.map(m => s?.models?.[m] ?? 0))
-    const mostLevel = Math.max(0, ...levelCounts.map(l => s?.picks[l] ?? 0))
-    const row = (key: string, n: number, most: number, name: string) => (
-      <Box key={key} gap="sm">
-        <Text color="suggestion">{bar(n, most)}</Text>
-        <Text>{`${name} ${n}`}</Text>
-      </Box>
-    )
     return (
       <Box flexDirection="column" gap="md">
         <Box key="now" flexDirection="column">
@@ -528,7 +518,10 @@ export const register: Register = (on, options) => {
           {[...unavailable].map(m => (
             <Text key={`unavailable-${m}`} color="warning">{t.unavailable(m)}</Text>
           ))}
-          <Box key="models" flexWrap="wrap" marginTop="sm">
+        </Box>
+        <Box key="choose" flexDirection="column">
+          {pickOn && allowed.length ? <Text dimColor>{t.paneModel}</Text> : null}
+          <Box key="models" flexWrap="wrap">
             {(pickOn ? allowed : []).map(m => (
               <Button
                 key={`model-${m}`}
@@ -538,6 +531,7 @@ export const register: Register = (on, options) => {
               />
             ))}
           </Box>
+          <Text dimColor>{t.paneLevel}</Text>
           <Box key="levels" flexWrap="wrap">
             {LEVELS.map(l => (
               <Button
@@ -569,23 +563,21 @@ export const register: Register = (on, options) => {
           <Text dimColor>{t.modeHint(mode, pickOn)}</Text>
         </Box>
         <Box key="last" flexDirection="column">
+          <Text dimColor>{t.lastPick}</Text>
           {s?.last ? (
             <>
-              <Text dimColor>{`${t.lastPick} · ${t.nowPair(pickOn && s.last.model ? s.last.model : '', s.last.level)}${s.last.declined ? ` · ${t.notApplied}` : ''}`}</Text>
+              <Text bold>{`${t.nowPair(pickOn && s.last.model ? s.last.model : '', s.last.level)} · ${s.last.declined ? t.notApplied : t.pickApplied}`}</Text>
               {s.last.why ? <Text>{s.last.why}</Text> : null}
             </>
           ) : (
-            <>
-              <Text dimColor>{t.lastPick}</Text>
-              <Text>{t.noPicks}</Text>
-            </>
+            <Text>{t.noPicks}</Text>
           )}
         </Box>
         {modelCounts.length > 0 || levelCounts.length > 0 || (s && s.kept > 0) ? (
           <Box key="session" flexDirection="column">
             <Text dimColor>{t.session}</Text>
-            {modelCounts.map(m => row(`count-${m}`, s?.models?.[m] ?? 0, mostModel, MODELS[m].name))}
-            {levelCounts.map(l => row(`count-${l}`, s?.picks[l] ?? 0, mostLevel, t.levelName(l)))}
+            {modelCounts.length ? <Text key="count-models">{modelCounts.map(m => `${MODELS[m].name} ${s?.models?.[m] ?? 0}`).join(' · ')}</Text> : null}
+            {levelCounts.length ? <Text key="count-levels">{levelCounts.map(l => `${t.levelName(l)} ${s?.picks[l] ?? 0}`).join(' · ')}</Text> : null}
             {s && s.kept > 0 ? <Text dimColor>{t.kept(s.kept)}</Text> : null}
           </Box>
         ) : null}
