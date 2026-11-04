@@ -96,7 +96,7 @@ test('/coremodel reports the mode and the level the chat runs at', async ($, on)
   const w = world(on)
   engineFooter(on)
   w.row = null
-  w.reply = 'Switch to High'
+  w.reply = 'High (recommended)'
   await start($)
   expect(await run($, '')).toContain('suggest')
   await switchTo($, w, 'high', 'medium')
@@ -185,7 +185,7 @@ test('no undo after an agreed switch', async ($, on) => {
   const w = world(on)
   engineFooter(on)
   w.row = null
-  w.reply = 'Switch to High'
+  w.reply = 'High (recommended)'
   await start($)
   await switchTo($, w, 'high', 'medium')
   expect(await undoButton($)).toBe(undefined)

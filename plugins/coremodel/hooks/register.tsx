@@ -3,7 +3,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Band, Level, Stats } from '../types'
 import { buildPrompt, parseAnswer, type Pick, toLevel } from './classifier'
-import { decide, type Lang, type Mode, texts, uiLang } from './policy'
+import { MODELS, type ModelKey, parseModels, switchCost, toModel } from './models'
+import { decide, decideModel, effortOptions, type Lang, type Mode, modelOptions, texts, uiLang } from './policy'
 
 const PLUGIN = 'coremodel'
 const band = atom({ plugin: 'coremodel', key: 'band' } as const, null)
@@ -11,7 +12,7 @@ const override = atom({ plugin: 'coremodel', key: 'override' } as const, null)
 const marks = atom({ plugin: 'coremodel', key: 'marks' } as const, {})
 const stats = atom({ plugin: 'coremodel', key: 'stats' } as const, null)
 const NO_STATS: Stats = { picks: { low: 0, medium: 0, high: 0, xhigh: 0, max: 0 }, kept: 0, last: null, marks: 0 }
-const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5' } as const
+const CLASSIFIERS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5' } as const
 const MODES: readonly Mode[] = ['suggest', 'auto', 'off']
 const LOG_KEEP = 20_000
 const BAND_MS = 15_000
@@ -26,6 +27,8 @@ let held: { text: string; gen: number; lang: Lang } | null = null
 // this chat only: the app's own effort setting is never written. `base` is the menu's level when
 // the hold began.
 let hold: { level: Level; base: string } | null = null
+// The chosen model, held the same way; `base` is the request's own model when the hold began.
+let modelHold: { key: ModelKey; base: string } | null = null
 // The level the last main-chat request ran at, and the language of the last prompt.
 let seen: Level | '' = ''
 // The menu's own effort as the last main-chat request carried it.
@@ -79,6 +82,20 @@ async function placeMark($: EngineInterface, level: Level, from: Level | '', why
   await $.ui.place({ id })
 }
 
+/** Switches to `key` by holding it on this chat's requests (spec §4.4, M7). */
+export async function applyModel(_$: EngineInterface, key: ModelKey, base: string): Promise<void> {
+  modelHold = { key, base }
+}
+
+/** The chat's size as the last response read it; undefined when Claude Code does not say. */
+async function chatTokens($: EngineInterface): Promise<number | undefined> {
+  try {
+    return (await $.session.usage()).context.tokens
+  } catch {
+    return undefined
+  }
+}
+
 async function announce($: EngineInterface, level: Level, from: Level | '', why: string, lang: Lang, undo: Band['undo']) {
   const b: Band = { id: nextBand++, level, from, why, lang, undo }
   await update($, band, () => b)
@@ -112,7 +129,15 @@ async function classify($: EngineInterface, text: string, now: Level | '', model
 }
 
 /** The pick for one prompt, then the switch, the question, or nothing. */
-async function runPick($: EngineInterface, options: { mode?: unknown; classifier?: unknown }, h: NonNullable<typeof held>, now: Level | '', base: string) {
+async function runPick(
+  $: EngineInterface,
+  options: { mode?: unknown; classifier?: unknown; models?: unknown; pickModel?: unknown },
+  h: NonNullable<typeof held>,
+  now: Level | '',
+  base: string,
+  nowModel: ModelKey | '',
+  baseModel: string,
+) {
   const mode = await currentMode($, options)
   if (mode === 'off') return
   const t = texts(h.lang)
@@ -123,7 +148,7 @@ async function runPick($: EngineInterface, options: { mode?: unknown; classifier
   }
   let pick: Pick
   try {
-    pick = await classify($, h.text, now, options.classifier === 'haiku' ? MODELS.haiku : MODELS.sonnet)
+    pick = await classify($, h.text, now, options.classifier === 'haiku' ? CLASSIFIERS.haiku : CLASSIFIERS.sonnet)
   } catch (err) {
     await log($, 'classify', err)
     return
@@ -135,32 +160,59 @@ async function runPick($: EngineInterface, options: { mode?: unknown; classifier
     }
   }
   // The person may have turned the plugin off while the classifier ran.
-  if (h.gen !== gen || (await currentMode($, options)) === 'off') return
-  const action = decide(mode, now, pick)
+  const stale = async () => h.gen !== gen || (await currentMode($, options)) === 'off'
+  if (await stale()) return
   const named = pick.level === 'keep' ? null : pick.level
   await count($, s => (named ? { ...s, picks: { ...s.picks, [named]: s.picks[named] + 1 }, last: { level: named, why: pick.why } } : s))
   const kept = () => count($, s => ({ ...s, kept: s.kept + 1 }))
-  if (action === 'none' || pick.level === 'keep') return kept()
+  if (pick.level === 'keep') return kept()
   const level = pick.level
-  // A silent switch can be undone: back to the menu's own level, or to the level held before.
-  const undo: Band['undo'] = action === 'apply' && now ? (now === toLevel(base) ? 'release' : now) : null
-  if (action === 'ask') {
-    const go = t.switchTo(level)
-    let answer = ''
+
+  // The model first (spec §4.3): it decides what the chat costs from here on.
+  const allowed = parseModels(options.models)
+  const isFirst = !(await $.session.messages()).some(m => m.role === 'assistant')
+  const mAction = decideModel({ mode, pickModel: options.pickModel !== 'off', isFirst, now: nowModel, pick: pick.model, allowed })
+  let modelTo: ModelKey | null = mAction === 'apply' && pick.model ? pick.model : null
+  if (mAction === 'ask' && pick.model) {
+    const to = pick.model
+    const tokens = isFirst ? undefined : await chatTokens($)
+    const opts = modelOptions(to, nowModel, allowed)
+    const labels = opts.map(m => (m === nowModel ? t.keepModel(m) : t.modelOption(m, m === to)))
     try {
-      answer = await $.ui.ask(t.question(level, pick.why), { options: [go, t.switchAndAuto, t.keep(now)], header: 'Effort' })
+      const answer = await $.ui.ask(t.modelQuestion(to, switchCost(tokens, nowModel, to), tokens, isFirst, pick.why), { options: labels, header: t.modelHeader })
+      const chosen = opts[labels.indexOf(answer)]
+      if (chosen && chosen !== nowModel) modelTo = chosen
+    } catch {
+      // A dismissed question keeps the model; the effort is still asked.
+    }
+    if (await stale()) return
+  }
+
+  // Then the effort.
+  const action = decide(mode, now, pick)
+  let levelTo: Level | null = action === 'apply' ? level : null
+  if (action === 'ask') {
+    const opts = effortOptions(level, now)
+    const labels = opts.map(l => (l === now ? t.keep(now) : t.levelOption(l, l === level)))
+    try {
+      const answer = await $.ui.ask(t.question(level, pick.why), { options: labels, header: t.effortHeader })
+      const chosen = opts[labels.indexOf(answer)]
+      if (chosen && chosen !== now) levelTo = chosen
     } catch {
       // A dismissed question keeps the level.
-      return kept()
     }
-    if (h.gen !== gen || (await currentMode($, options)) === 'off') return
-    if (answer === t.switchAndAuto) await $.store.set('mode', 'auto')
-    else if (answer !== go) return kept()
+    if (await stale()) return
   }
-  await applyLevel($, level, base)
-  await announce($, level, now, pick.why, h.lang, undo)
+
+  if (!modelTo && !levelTo) return kept()
+  if (modelTo) await applyModel($, modelTo, baseModel)
+  if (!levelTo) return
+  // A silent switch can be undone: back to the menu's own level, or to the level held before.
+  const undo: Band['undo'] = action === 'apply' && now ? (now === toLevel(base) ? 'release' : now) : null
+  await applyLevel($, levelTo, base)
+  await announce($, levelTo, now, pick.why, h.lang, undo)
   try {
-    await placeMark($, level, now, pick.why, h.lang)
+    await placeMark($, levelTo, now, pick.why, h.lang)
   } catch (err) {
     await log($, 'mark', err)
   }
@@ -223,7 +275,7 @@ export const register: Register = (on, options) => {
       const h = held
       held = null
       try {
-        await runPick($, options, h, hold?.level ?? toLevel(asked), asked)
+        await runPick($, options, h, hold?.level ?? toLevel(asked), asked, modelHold?.key ?? toModel(e.model), e.model)
       } catch (err) {
         await log($, 'pick', err)
       }
@@ -232,8 +284,9 @@ export const register: Register = (on, options) => {
     const was = seen
     seen = want ?? (toLevel(asked) || seen)
     if (seen !== was) $.ui.invalidate('ui.render')
-    if (!want || want === asked) return yield* next(e)
-    return yield* next({ ...e, effort: want })
+    const model = modelHold ? MODELS[modelHold.key].id : e.model
+    if ((!want || want === asked) && model === e.model) return yield* next(e)
+    return yield* next({ ...e, effort: want ?? e.effort, model })
   })
 
   on('session.start', async ($, e, next) => {

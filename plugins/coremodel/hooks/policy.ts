@@ -1,6 +1,7 @@
 // The consent rule and the words the person reads. No calls on `$` here.
 import type { Level } from '../types'
 import type { Pick } from './classifier'
+import { LADDER, MODELS, type ModelKey, stronger } from './models'
 
 export type Mode = 'suggest' | 'auto' | 'off'
 export type Lang = 'ru' | 'en'
@@ -25,6 +26,41 @@ export function uiLang(text: string): Lang {
 
 const ORDER: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
+/** What to do with the model part of a pick (spec §4.2, M4, M6). */
+export function decideModel(i: {
+  mode: Mode
+  pickModel: boolean
+  isFirst: boolean
+  now: ModelKey | ''
+  pick: ModelKey | ''
+  allowed: readonly ModelKey[]
+}): 'none' | 'apply' | 'ask' {
+  if (i.mode === 'off' || !i.pickModel || !i.pick || !i.allowed.includes(i.pick) || i.pick === i.now) return 'none'
+  // Mid-chat a switch re-reads the whole chat: only a stronger model, and only with a question.
+  if (!i.isFirst && !stronger(i.pick, i.now)) return 'none'
+  if (i.mode === 'suggest' || i.pick === 'fable' || !i.isFirst) return 'ask'
+  return 'apply'
+}
+
+/** The pick, then the current, then the nearest others by distance (cheaper first on a tie); at most four. */
+function nearest<T>(order: readonly T[], pick: T, now: T | '', allowed: readonly T[]): T[] {
+  const out: T[] = [pick]
+  if (now !== '' && now !== pick && allowed.includes(now as T)) out.push(now as T)
+  const at = order.indexOf(pick)
+  const rest = allowed
+    .filter(x => !out.includes(x))
+    .sort((a, b) => Math.abs(order.indexOf(a) - at) - Math.abs(order.indexOf(b) - at) || order.indexOf(a) - order.indexOf(b))
+  return [...out, ...rest].slice(0, 4)
+}
+
+export function modelOptions(pick: ModelKey, now: ModelKey | '', allowed: readonly ModelKey[]): ModelKey[] {
+  return nearest(LADDER, pick, now, allowed)
+}
+
+export function effortOptions(pick: Level, now: Level | ''): Level[] {
+  return nearest(ORDER, pick, now, ORDER)
+}
+
 const NAMES: Record<Lang, Record<Level, string>> = {
   en: { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' },
   ru: { low: 'Низкое', medium: 'Среднее', high: 'Высокое', xhigh: 'Очень высокое', max: 'Максимальное' },
@@ -42,8 +78,20 @@ export function texts(lang: Lang) {
       ru
         ? `Похоже, задаче нужно усилие «${n(l)}»${why ? `: ${why}` : ''}. Переключить, пока Claude не начал?`
         : `This looks like a ${n(l)} effort task${why ? `: ${why}` : ''}. Switch before Claude starts?`,
-    switchTo: (l: Level) => (ru ? `Переключить на «${n(l)}»` : `Switch to ${n(l)}`),
-    switchAndAuto: ru ? 'Переключить и дальше сам' : 'Switch, and auto-adjust from now',
+    effortHeader: ru ? 'Усилие' : 'Effort',
+    levelOption: (l: Level, recommended: boolean) => `${n(l)}${recommended ? (ru ? ' (советую)' : ' (recommended)') : ''}`,
+    modelHeader: ru ? 'Модель' : 'Model',
+    modelOption: (m: ModelKey, recommended: boolean) => `${MODELS[m].name}${recommended ? (ru ? ' (советую)' : ' (recommended)') : ''}`,
+    keepModel: (m: ModelKey) => (ru ? `Оставить ${MODELS[m].name}` : `Keep ${MODELS[m].name}`),
+    modelQuestion: (to: ModelKey, cost: number | null, tokens: number | undefined, isFirst: boolean, why: string) => {
+      const name = MODELS[to].name
+      if (isFirst) return ru ? `Похоже, это работа для ${name}${why ? `: ${why}` : ''}. Сменить модель?` : `This looks like work for ${name}${why ? `: ${why}` : ''}. Switch the model?`
+      if (cost === null || !tokens) return ru ? `Перейти на ${name}? Чат перечитается заново, это стоит токенов.` : `Switch to ${name}? The chat is read again, which costs tokens.`
+      const k = Math.max(1, Math.round(tokens / 1000))
+      return ru
+        ? `Перейти на ${name}? Чат перечитается заново: ≈ ${k} тыс. токенов, как ~${cost} обычных ответов. Дальше ответы снова дешёвые.`
+        : `Switch to ${name}? The chat is read again: ≈ ${k}k tokens, like ~${cost} ordinary replies. Replies are cheap again after that.`
+    },
     back: (l: Level) => (ru ? `Вернуть «${n(l)}»` : `Back to ${n(l)}`),
     keep: (now: Level | '') =>
       now ? (ru ? `Оставить «${n(now)}»` : `Keep ${n(now)}`) : ru ? 'Оставить как есть' : 'Keep it as it is',

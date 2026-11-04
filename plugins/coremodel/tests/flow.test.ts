@@ -24,17 +24,17 @@ test('a subagent request is untouched', async ($, on) => {
 
 test('suggest asks and Switch applies', async ($, on) => {
   const w = world(on)
-  w.reply = 'Switch to High'
+  w.reply = 'High (recommended)'
   await start($)
   await submit($, 'fix the login, it throws 500')
   await step($, 'medium')
-  expect(w.asked).toEqual([['Switch to High', 'Switch, and auto-adjust from now', 'Keep Medium']])
+  expect(w.asked).toEqual([['High (recommended)', 'Keep Medium', 'Extra high', 'Low']])
   expect(w.efforts).toEqual(['high'])
 })
 
 test('the app setting is never written: the level is held in the chat', async ($, on) => {
   const w = world(on)
-  w.reply = 'Switch to High'
+  w.reply = 'High (recommended)'
   await start($)
   await submit($, 'fix the login')
   await step($, 'medium')
@@ -46,7 +46,7 @@ test('the app setting is never written: the level is held in the chat', async ($
 test('a turn with no new prompt keeps the held level only until the menu moves', async ($, on) => {
   const w = world(on)
   w.answer = '{"level":"xhigh","why":"w"}'
-  w.reply = 'Switch to Extra high'
+  w.reply = 'Extra high (recommended)'
   await start($)
   await submit($, 'build the whole app, work alone')
   await step($, 'medium')
@@ -59,7 +59,7 @@ test('a turn with no new prompt keeps the held level only until the menu moves',
 
 test('a new session start lets go of a held level', async ($, on) => {
   const w = world(on)
-  w.reply = 'Switch to High'
+  w.reply = 'High (recommended)'
   await start($)
   await submit($, 'fix the login')
   await step($, 'medium')
@@ -79,20 +79,6 @@ test('suggest Keep, a dismissed question and an other answer keep the level', as
   expect(w.asked.length).toBe(3)
   expect(w.set.length).toBe(0)
   expect(w.efforts).toEqual(['medium', 'medium', 'medium'])
-})
-
-test('Switch and auto-adjust stores auto mode', async ($, on) => {
-  const w = world(on)
-  w.reply = 'Switch, and auto-adjust from now'
-  await start($)
-  await submit($, 'fix the login')
-  await step($, 'medium')
-  expect(w.efforts).toEqual(['high'])
-  w.answer = '{"level":"low","why":"typo"}'
-  await submit($, 'fix a typo')
-  await step($, 'high')
-  expect(w.asked.length).toBe(1)
-  expect(w.efforts).toEqual(['high', 'low'])
 })
 
 test('auto applies low, medium and high silently', { options: { mode: 'auto' } }, async ($, on) => {
@@ -157,7 +143,7 @@ test('a stale pick is dropped', async ($, on) => {
     await w.clock.settle()
   }
   await submit($, 'never mind, fix a typo')
-  answer('Switch to High')
+  answer('High (recommended)')
   await first
   expect(w.set.length).toBe(0)
   expect(w.efforts).toEqual(['medium'])
@@ -166,7 +152,7 @@ test('a stale pick is dropped', async ($, on) => {
 test('a locked row falls back to the hold, kept on later requests', async ($, on) => {
   const w = world(on)
   w.row = row('Medium', true)
-  w.reply = 'Switch to High'
+  w.reply = 'High (recommended)'
   await start($)
   await submit($, 'fix the login')
   await step($, 'medium')
@@ -179,7 +165,7 @@ test('a row without the level falls back to the hold', async ($, on) => {
   const w = world(on)
   w.row = { ...row(), options: ['Low', 'Medium', 'High'] }
   w.answer = '{"level":"xhigh","why":"w"}'
-  w.reply = 'Switch to Extra high'
+  w.reply = 'Extra high (recommended)'
   await start($)
   await submit($, 'build the whole app, work alone')
   await step($, 'high')
@@ -189,7 +175,7 @@ test('a row without the level falls back to the hold', async ($, on) => {
 test('moving the menu releases the hold', async ($, on) => {
   const w = world(on)
   w.row = null
-  w.reply = 'Switch to High'
+  w.reply = 'High (recommended)'
   await start($)
   await submit($, 'fix the login')
   await step($, 'medium')
@@ -227,6 +213,122 @@ test('a Russian prompt gets the question in Russian', async ($, on) => {
   await start($)
   await submit($, 'почини авторизацию')
   await step($, 'medium')
-  expect(w.asked[0]).toEqual(['Переключить на «Высокое»', 'Переключить и дальше сам', 'Оставить «Среднее»'])
+  expect(w.asked[0]).toEqual(['Высокое (советую)', 'Оставить «Среднее»', 'Очень высокое', 'Низкое'])
+  expect(w.headers[0]).toBe('Усилие')
   expect(w.efforts).toEqual(['medium'])
+})
+
+// CoreModel: the model part of a pick (spec §4.2, §4.3).
+const MID = 'an earlier answer'
+
+test('first prompt in auto switches the model silently', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"medium","model":"opus","why":"many files"}'
+  await start($)
+  await submit($, 'refactor the module')
+  await step($, 'medium')
+  expect(w.asked.length).toBe(0)
+  expect(w.models).toEqual(['claude-opus-5-5'])
+})
+
+test('first prompt in suggest asks the model', async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"medium","model":"opus","why":"many files"}'
+  w.reply = ['Opus (recommended)']
+  await start($)
+  await submit($, 'refactor the module')
+  await step($, 'medium')
+  expect(w.asked[0]).toEqual(['Opus (recommended)', 'Keep Sonnet', 'Fable', 'Haiku'])
+  expect(w.headers[0]).toBe('Model')
+  expect(w.models).toEqual(['claude-opus-5-5'])
+})
+
+test('fable always asks', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"medium","model":"fable","why":"whole app"}'
+  await start($)
+  await submit($, 'build the whole app, work alone')
+  await step($, 'medium')
+  expect(w.asked.length).toBe(1)
+  expect(w.models).toEqual(['claude-sonnet-5-5'])
+})
+
+test('mid-chat stronger pick asks with the cost', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.lastReply = MID
+  w.tokens = 100_000
+  w.answer = '{"level":"medium","model":"opus","why":"x"}'
+  w.reply = ['Opus (recommended)']
+  await start($)
+  await submit($, 'now the hard part')
+  await step($, 'medium')
+  expect(w.questions[0]).toContain('≈ 100k tokens')
+  expect(w.questions[0]).toContain('~50')
+  expect(w.models).toEqual(['claude-opus-5-5'])
+})
+
+test('mid-chat question without a known size says it costs tokens', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.lastReply = MID
+  w.answer = '{"level":"medium","model":"opus","why":"x"}'
+  await start($)
+  await submit($, 'now the hard part')
+  await step($, 'medium')
+  expect(w.questions[0]).toContain('which costs tokens')
+})
+
+test('mid-chat weaker pick changes nothing', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.lastReply = MID
+  w.answer = '{"level":"medium","model":"haiku","why":"x"}'
+  await start($)
+  await submit($, 'a small question')
+  await step($, 'medium')
+  expect(w.asked.length).toBe(0)
+  expect(w.models).toEqual(['claude-sonnet-5-5'])
+})
+
+test('dismissed model question still asks effort', async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"high","model":"opus","why":"x"}'
+  w.reply = [null, 'High (recommended)']
+  await start($)
+  await submit($, 'fix the login')
+  await step($, 'medium')
+  expect(w.headers).toEqual(['Model', 'Effort'])
+  expect(w.models).toEqual(['claude-sonnet-5-5'])
+  expect(w.efforts).toEqual(['high'])
+})
+
+test('a model outside the list is ignored', { options: { mode: 'auto', models: 'haiku,sonnet,opus' } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"high","model":"fable","why":"x"}'
+  await start($)
+  await submit($, 'build it all')
+  await step($, 'medium')
+  expect(w.asked.length).toBe(0)
+  expect(w.models).toEqual(['claude-sonnet-5-5'])
+  expect(w.efforts).toEqual(['high'])
+})
+
+test('unknown current model asks nothing', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.lastReply = MID
+  w.answer = '{"level":"medium","model":"opus","why":"x"}'
+  await start($)
+  await submit($, 'now the hard part')
+  await step($, 'medium', 0, undefined, 'claude-opus-4-8')
+  expect(w.asked.length).toBe(0)
+  expect(w.models).toEqual(['claude-opus-4-8'])
+})
+
+test('pickModel off keeps CoreEffort behaviour', { options: { mode: 'auto', pickModel: 'off' } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"high","model":"opus","why":"x"}'
+  await start($)
+  await submit($, 'fix the login')
+  await step($, 'medium')
+  expect(w.asked.length).toBe(0)
+  expect(w.models).toEqual(['claude-sonnet-5-5'])
+  expect(w.efforts).toEqual(['high'])
 })
