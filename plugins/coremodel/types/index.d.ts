@@ -1,6 +1,7 @@
-import type { ModelKey } from '../hooks/models'
-
 export type Level = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+/** The models CoreModel picks from, weakest to strongest. */
+export type ModelKey = 'haiku' | 'sonnet' | 'opus' | 'fable'
 
 /** The line above the prompt after a switch. */
 export type Band = {

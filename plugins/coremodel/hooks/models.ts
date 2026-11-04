@@ -1,7 +1,9 @@
 // The models CoreModel picks from, their prices, and the cost of a model switch mid-chat.
 // No calls on `$` here. Prices: Anthropic API, $ per million input tokens (spec §3).
 
-export type ModelKey = 'haiku' | 'sonnet' | 'opus' | 'fable'
+import type { ModelKey } from '../types'
+
+export type { ModelKey }
 
 /** Weakest to strongest. */
 export const LADDER: readonly ModelKey[] = ['haiku', 'sonnet', 'opus', 'fable']
