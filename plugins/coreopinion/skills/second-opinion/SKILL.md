@@ -28,23 +28,33 @@ Do not try to install or sign in for them.
 
 ## 2. Build the material
 
+**Never send secrets, and never read them yourself.** Secret files are `.env` and `.env.*`, key
+and certificate files (`*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`), files
+with `credentials` in the name, and anything under `~/.ssh`. So **list paths first, then read
+only the allowed ones**, always through this exclusion pathspec (call it `<EXCLUDE>` below):
+
+```bash
+git diff HEAD --name-only -- . ':(exclude)*.env' ':(exclude)*.env.*' ':(exclude)*.pem' ':(exclude)*.key' ':(exclude)*.p12' ':(exclude)*.pfx' ':(exclude)*id_rsa*' ':(exclude)*id_ed25519*' ':(exclude)*credentials*'
+```
+
 Pick the smallest material that answers the question:
 
-1. **What the user named** — files, a function, a question, a plan. Use that.
-2. **Otherwise the uncommitted work**: `git diff HEAD --stat`, then `git diff HEAD` (unstaged
-   and staged changes together). Check `git status --short` for new untracked files the change
-   needs, and add the relevant ones.
-3. **If that is empty, the last commit**: `git show --stat HEAD`, then `git show HEAD`.
+1. **What the user named** — files, a function, a question, a plan. Use that, unless it is a
+   secret file: then say you will not send it.
+2. **Otherwise the uncommitted work** (unstaged and staged together): the paths with the command
+   above, then `git diff HEAD --stat -- . <EXCLUDE>`, then `git diff HEAD -- . <EXCLUDE>`. Never a
+   bare `git diff HEAD`. Check `git status --short` for new untracked files the change needs;
+   add the relevant ones that are not secret files.
+3. **If that is empty, the last commit**: `git show --name-only --format= HEAD` to see the
+   paths, then `git show HEAD -- . <EXCLUDE>`.
 4. Nothing to review at all: say so and stop.
+
+If a path you skipped matters to the review, tell the user it was left out and why. If a line in
+the material still looks like a token, password or private key, replace its value with
+`<redacted>`.
 
 Keep it focused: a large diff (over ~1500 lines) — ask the user which part matters, or send
 `--stat` plus the key hunks; GPT can open the files in the project itself.
-
-**Never send secrets.** Leave out `.env` and `.env.*`, key and certificate files (`*.pem`,
-`*.key`, `id_rsa*`, `*.p12`), credential files, and anything under `~/.ssh`. Exclude them from
-the diff (`git diff HEAD -- . ':(exclude).env*' ':(exclude)*.pem' ':(exclude)*.key'`), and if a
-line in the material looks like a token, password or private key, replace its value with
-`<redacted>`. Never read `.env` or `~/.ssh` yourself to build the material.
 
 ## 3. Ask GPT
 
@@ -101,8 +111,11 @@ do:
 
 - **Not signed in** (`login`, `401`, `unauthorized`, `not logged in`): run `codex login` in a
   normal terminal, then ask again.
-- **Usage limit** (`usage limit`, `rate limit`, `429`, `quota`): the ChatGPT plan's Codex limit
-  is used up for now; it resets later (the message often says when). Nothing was reviewed.
+- **Limit or throttling** (`usage limit`, `rate limit`, `429`, `quota`): quote the error line
+  from the log and say what it says. Only when it says the plan's usage limit is reached, say
+  the ChatGPT plan's Codex limit is used up and resets later (the message often says when);
+  otherwise it may be short-term throttling, and trying again in a minute or two may work.
+  Either way, nothing was reviewed.
 - **`failed to initialize in-process app-server client: Operation not permitted (os error 1)`**:
   Codex was started inside a sandbox (Claude Code's Bash sandbox, or Codex's own app). Codex
   needs to run outside Claude Code's Bash sandbox. The user can add to their own

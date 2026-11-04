@@ -50,7 +50,7 @@ not a lock.
 Claude says what failed and never pretends a review happened:
 
 - **Not signed in**: run `codex login` in a terminal.
-- **Usage limit reached**: the ChatGPT plan's Codex limit resets later.
+- **Usage limit or throttling**: Claude quotes the error; a plan limit resets later, short throttling passes in a minute or two.
 - **`Operation not permitted (os error 1)`**: Codex was started inside a sandbox. If you turned on
   Claude Code's Bash sandbox, let `codex exec` run outside it in your own
   `~/.claude/settings.json`:
