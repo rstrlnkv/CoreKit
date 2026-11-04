@@ -59,13 +59,20 @@ attribution value resolved at Start" instead of placeholders:
    creates (a git repo `<Core>` with `standards/`, `knowledge/`, `.coredev`, `PROJECTS.md`); on
    "ok" run `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/setup-core.sh" "<Core>"`.
    If the user declines setup, stop; change nothing.
-2. **Project.** The working directory must be inside `<Core>/<project>/`. The `<project>` is
-   the first path component under `<Core>`. If the directory is inside
-   `<Core>/<project>/code/.claude/worktrees/<w>/`, that worktree is the code root for briefs,
-   tests and release (not `<Core>/<project>/code/`). If the directory is outside `<Core>`: for
-   `adopt` follow `references/adopt.md`; for anything else say in one line that
-   `/corecrew:new-project` (a new project) or `/corecrew:task adopt <folder>` (an existing one)
-   brings it into the layout, and stop.
+2. **Project.** Find the project of the working directory:
+   `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" project-of "$PWD"`
+   prints `<name>` (exit 1: the directory is not in a project). Not a project: for `adopt`
+   follow `references/adopt.md`; for anything else say in one line that `/corecrew:new-project`
+   (a new project) or `/corecrew:task adopt <folder>` (an existing one) brings it into the
+   layout, and stop. Then
+   `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" layout <name>`:
+   - `old`: say in one line "this project uses the old layout; run `/corecrew:task adopt <path>`"
+     and stop (`adopt` itself goes on, as above).
+   - `new`: the code root is the worktree root when the directory is inside
+     `<Projects>/<Name>/.claude/worktrees/<w>/`, else the printed
+     `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" code-dir <name>`
+     (`<Projects>/<Name>`, the folder beside the Core). Use the code root for briefs, tests,
+     release and `git`. The wiki and `CLAUDE.md` stay in `<Core>/<name>/`.
 3. **feature-dev.** Look at the agent types listed for your Agent tool. If
    `feature-dev:code-architect` or `feature-dev:code-explorer` is missing, name the install
    command `/plugin install feature-dev@claude-plugins-official`. Paths that need them stop

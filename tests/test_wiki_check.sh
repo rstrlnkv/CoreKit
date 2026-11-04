@@ -58,6 +58,10 @@ assert_exit 0 bash "$W" "$FX/wiki-good" --changed src/app.sh ../docs/architectur
 assert_eq "$OUT" "" "page passed as ../docs/<page>.md"
 assert_exit 0 bash "$W" "$FX/wiki-good" --changed ./src/app.sh ../docs/architecture.md src/other.sh
 # Unrelated or no changes: nothing to report.
+# Absolute <project_dir>/docs/<page>.md counts as that page; an absolute path elsewhere is a code path.
+assert_exit 0 bash "$W" "$FX/wiki-good" --changed src/app.sh "$FX/wiki-good/docs/architecture.md"
+assert_exit 0 bash "$W" "$FX/wiki-good/" --changed src/app.sh "$FX/wiki-good/docs/architecture.md"
+check wiki-good "$DRIFT" --changed src/app.sh "$FX/other/docs/architecture.md"
 assert_exit 0 bash "$W" "$FX/wiki-good" --changed src/unrelated.sh
 assert_exit 0 bash "$W" "$FX/wiki-good" --changed
 assert_exit 0 bash "$W" "$FX/wiki-good" --changed README.md

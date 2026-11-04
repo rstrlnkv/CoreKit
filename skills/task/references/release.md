@@ -9,8 +9,8 @@ The base commits were recorded at Start: `git rev-parse HEAD` in the code root (
 and in `<Core>` (`<Core base>`). The tree was clean at Start, so everything changed since is
 this chain's work. `<files>` for the wiki check, run in the code root (code-relative paths):
 `{ git diff --name-only <code base>; git ls-files --others --exclude-standard; }`.
-`<pages>`, the changed wiki pages, from `<Core>/<project>/docs/` (rewrite the
-`<project>/docs/` prefix to `../docs/`):
+`<pages>`, the changed wiki pages, from `<Core>/<project>/docs/` (prefix each path with
+`<Core>/`, so it reads `<Core>/<project>/docs/<page>.md`):
 `{ git -C <Core> diff --name-only <Core base> -- <project>/docs; git -C <Core> ls-files --others --exclude-standard -- <project>/docs; }`.
 
 **Question path with accepted knowledge lines:** only postconditions 5–7 (nothing else changed).

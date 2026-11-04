@@ -15,7 +15,7 @@ reads `CLAUDE.md`, then the map, then the one page its task needs. A user standa
 - A page over about 8 KB needs `##` headings so a reader can jump to the part they need.
 - Every page starts with front matter, all six fields:
   `title`, `description`, `status`, `files`, `related`, `updated`.
-  - `files:` lists the code paths (relative to `code/`) the page describes; a path ending in
+  - `files:` lists the code paths (relative to the code root) the page describes; a path ending in
     `/` stands for a folder. Write `files: []` when the page describes no code.
   - `related:` lists other pages. `updated:` is the date of the last content change.
 - Headings are unique within a page.
@@ -63,7 +63,8 @@ reads `CLAUDE.md`, then the map, then the one page its task needs. A user standa
 | `page over 8 KB without ## headings` | add headings or split the page |
 | `drift: <code path> changed, page not updated` | `--changed` lists a code file that a page's `files:` names, and the page is not among the changed files |
 
-`--changed` takes code-relative paths (as `git diff --name-only` prints in `code/`). A changed
-page is passed as `../docs/<page>.md` or `docs/<page>.md`. Pages live in the Core repo, so list the
-changed ones there (read-only), then rewrite `<project>/docs/` to `../docs/`:
+`--changed` takes paths relative to the code root (as `git diff --name-only` prints there). A
+changed page is passed as the absolute `<Core>/<project>/docs/<page>.md` (`docs/<page>.md` and
+`../docs/<page>.md` also work). Pages live in the Core repo, so list the changed ones there
+(read-only) and prefix each with `<Core>/`:
 `{ git -C <Core> diff --name-only HEAD -- <project>/docs; git -C <Core> ls-files --others --exclude-standard -- <project>/docs; }`.

@@ -75,7 +75,6 @@ rule "subagent_type for feature-dev" '`corecrew:<role>` for corecrew roles, the 
 rule "no model for feature-dev" 'Do not pass `model` to feature-dev agents'
 assert_contains "$SK" 'applies-to'
 assert_not_contains "$SK" 'docs/specs/'
-assert_contains "$SK" 'first path component'
 assert_contains "$SK" 'worktrees/<w>'
 assert_contains "$SK" 'If the user declines'
 c="$(grep -n 'lib.sh" core-dir' "$SK" | head -1 | cut -d: -f1)"; r="$(grep -n 'lib.sh" ready' "$SK" | head -1 | cut -d: -f1)"
@@ -123,7 +122,7 @@ for n in 1 2 3 4 5 6 7; do
   if [ -n "$l" ] && [ "$l" -gt "$prev" ]; then pass; else fail "release.md postcondition $n missing or out of order"; fi
   prev="${l:-$prev}"
 done
-for w in 'wiki-check.sh' '--changed' '../docs/' 'git diff --name-only' \
+for w in 'wiki-check.sh' '--changed' '<Core>/<project>/docs/<page>.md' 'git diff --name-only' \
          "git log --format=%B <range> | grep -icE '^[[:space:]]*(co-authored-by:|(🤖[[:space:]]*)?generated with)'" \
          'attribution=forbid' 'skipped (attribution=allow)' 'the attribution value resolved at Start' \
          'bash "<scripts>/save"' 'never tags' 'never pushes' 'Step-Id' \
@@ -149,7 +148,7 @@ assert_contains "$REL" 'git -C "<Core>" status --short -- $(CORE_DIR="<Core>" ba
 assert_contains "$REL" 'git -C "<Core>" log --format=%B <Core base>..HEAD -- $(CORE_DIR="<Core>" bash "<scripts>/lib.sh" core-paths <project>)'
 assert_contains "$REL" "{ git diff --name-only <code base>; git ls-files --others --exclude-standard; }"
 assert_contains "$REL" "{ git -C <Core> diff --name-only <Core base> -- <project>/docs; git -C <Core> ls-files --others --exclude-standard -- <project>/docs; }"
-assert_contains "$REL" '`<project>/docs/` prefix'
+assert_contains "$REL" 'prefix each path with'
 assert_contains "$REL" "git log -1 --format='%h %s'"
 assert_contains "$REL" 'final tester'
 assert_contains "$REL" '`<version>`'
@@ -198,4 +197,16 @@ assert_contains "$REL" '<scripts>/save'
 assert_contains "$REL" '<scripts>/wiki-check.sh'
 assert_contains "$T/references/adopt.md" '<scripts>/adopt.sh'
 assert_contains "$BR" '<plugin>/reference/wiki.md'
+
+# New layout: the code lives beside the Core
+sec_has "$SK" Start 'lib.sh" project-of'
+sec_has "$SK" Start '<Projects>/<Name>'
+sec_has "$SK" Start 'old layout'
+sec_has "$SK" Start 'lib.sh" layout'
+sec_has "$SK" Start 'lib.sh" code-dir'
+section "$SK" Start | grep -qF 'must be inside `<Core>/<project>/`' && fail "Start step 2 still demands <Core>/<project>/" || pass
+assert_not_contains "$BR" '<Core>/<project>/code/'
+assert_not_contains "$REL" '../docs/'
+assert_not_contains "$PA" '<Core>/<project>/code'
+assert_not_contains "$ROOT/reference/wiki.md" 'relative to `code/`'
 finish

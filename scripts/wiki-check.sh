@@ -2,7 +2,8 @@
 # wiki-check.sh — deterministic wiki checks (spec section 8.3, rules in reference/wiki.md).
 #
 # Usage: wiki-check.sh <project_dir> [--changed <path>...]
-#   <project_dir>  the Core project folder: CLAUDE.md, docs/ (map docs/INDEX.md), code/
+#   <project_dir>  the Core project folder <Core>/<name>: CLAUDE.md, docs/ (map docs/INDEX.md).
+#                  The code lives elsewhere (beside the Core, or in the old layout in code/).
 #
 # Wiki pages are docs/**/*.md except docs/knowledge/, docs/standards/, docs/superpowers/
 # and INDEX.md (the map is checked for links only).
@@ -24,10 +25,11 @@
 # backtick (so wrap a reference in backticks when prose follows it); if the exact text is not a
 # heading, one trailing . , ; : or ) is dropped and it is tried again ("... § Components.").
 #
-# --changed paths: code files as code-relative paths (what "git diff --name-only" prints in
-# code/). A changed wiki page is passed as "../docs/<page>.md" (the unambiguous form) or as
-# "docs/<page>.md"; both mean docs/<page>.md of the project. So a code file that lives in a
+# --changed paths: code files as code-root-relative paths (what "git diff --name-only" prints in
+# the code root). A changed wiki page is passed as "<project_dir>/docs/<page>.md" (absolute, the
+# unambiguous form), "../docs/<page>.md" or "docs/<page>.md"; all mean docs/<page>.md of the project. So a code file that lives in a
 # top-level docs/ folder of code/ cannot be told apart from a wiki page; it is taken as a page.
+# (An absolute path under another folder is a code path, not a page.)
 # A page's files: entries match a changed path exactly, or by prefix when the entry ends in "/".
 #
 # Exit: 0 green, 1 problems found, 2 usage or internal error (e.g. awk failed: never "green"). Portable bash 3.2 + BSD awk.
@@ -66,6 +68,7 @@ if [ "$HAVE_CHANGED" = 1 ]; then
   for a in "$@"; do
     a="${a#./}"
     case "$a" in
+      "$PROJ"/docs/*) printf 'P %s\n' "${a#"$PROJ"/docs/}" ;;
       ../docs/*) printf 'P %s\n' "${a#../docs/}" ;;
       docs/*)    printf 'P %s\n' "${a#docs/}" ;;
       ../*)      ;;                         # outside the project's code and docs

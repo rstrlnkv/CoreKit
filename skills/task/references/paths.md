@@ -83,4 +83,4 @@ tagged or pushed.
 ## adopt
 `/corecrew:task adopt <folder>`: bring an existing project into the Core layout.
 Read `references/adopt.md` (listed in SKILL.md) and follow it. This path works outside
-`<Core>/<project>/`.
+a project.

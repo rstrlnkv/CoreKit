@@ -15,7 +15,7 @@ The first line of every brief, exactly. `<path>` is `fix`, `full`, `question`, `
    do not add the user's other requests (they go to `Open` in the report).
 2. **Previous report** — the reply of the step before it, pasted whole. For the first agent
    of a chain: none. A checker gets tester's report; designer also gets engineer's `Screens`.
-3. **Affected files** — paths relative to `<Core>/<project>/code/`, and the wiki pages that list
+3. **Affected files** — paths relative to the code root, and the wiki pages that list
    them in `files:`.
 4. **Check** — the command to run for this step: the touched modules' tests, or the project's
    `check:` line when this is the final run.
