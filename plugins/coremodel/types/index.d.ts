@@ -1,3 +1,5 @@
+import type { ModelKey } from '../hooks/models'
+
 export type Level = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 /** The line above the prompt after a switch. */
@@ -35,7 +37,7 @@ declare module 'claude-code' {
     'coremodel': {
       band: Band | null
       /** The level put on every main-chat request when the effort setting could not take it. */
-      override: Level | null
+      override: { model: ModelKey | null; level: Level | null } | null
       /** The transcript rows placed for switches, by row id. */
       marks: Record<string, Mark>
       /** Null until something is counted. */

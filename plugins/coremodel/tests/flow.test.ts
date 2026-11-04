@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { row, start, step, submit, world } from './world'
+import { type Eng, row, start, step, submit, world, type World } from './world'
 
 test('skips slash commands, empty prompts and non-composer origins', async ($, on) => {
   const w = world(on)
@@ -331,4 +331,60 @@ test('pickModel off keeps CoreEffort behaviour', { options: { mode: 'auto', pick
   expect(w.asked.length).toBe(0)
   expect(w.models).toEqual(['claude-sonnet-5-5'])
   expect(w.efforts).toEqual(['high'])
+})
+
+// CoreModel: holding the pair (spec §4.4).
+async function holdOpusHigh($: Eng, w: World) {
+  w.answer = '{"level":"high","model":"opus","why":"x"}'
+  await submit($, 'fix the login')
+  await step($, 'medium')
+}
+
+test('the held model goes on every main-chat request', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await holdOpusHigh($, w)
+  await step($, 'medium', 1)
+  await step($, 'medium', 0)
+  expect(w.models).toEqual(['claude-opus-5-5', 'claude-opus-5-5', 'claude-opus-5-5'])
+})
+
+test('model and effort release on their own', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await holdOpusHigh($, w)
+  await step($, 'medium', 1, undefined, 'claude-haiku-5-5')
+  expect(w.models.at(-1)).toBe('claude-haiku-5-5')
+  expect(w.efforts.at(-1)).toBe('high')
+  await step($, 'low', 2, undefined, 'claude-haiku-5-5')
+  expect(w.efforts.at(-1)).toBe('low')
+  await step($, 'low', 3, undefined, 'claude-haiku-5-5')
+  expect(w.models.at(-1)).toBe('claude-haiku-5-5')
+})
+
+test('a model without effort gets none', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await holdOpusHigh($, w)
+  await step($, undefined, 1)
+  expect(w.efforts.at(-1)).toBe(undefined)
+  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+})
+
+test('subagent requests keep their model', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await holdOpusHigh($, w)
+  await step($, 'medium', 0, 'a1', 'claude-haiku-5-5')
+  expect(w.models.at(-1)).toBe('claude-haiku-5-5')
+})
+
+test('a new session drops the model', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await holdOpusHigh($, w)
+  await start($)
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
 })

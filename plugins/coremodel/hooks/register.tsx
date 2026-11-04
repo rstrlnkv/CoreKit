@@ -56,13 +56,32 @@ export async function currentMode($: EngineInterface, options: { mode?: unknown 
 /** Switches to `level` by holding it on this chat's requests (spec §4.4). */
 export async function applyLevel($: EngineInterface, level: Level, base: string): Promise<void> {
   hold = { level, base }
-  await update($, override, () => level)
+  await syncOverride($)
 }
 
-/** Lets go of a held level: the chat runs at the menu's level again. */
+/** What the drawings read: the held pair, or null when nothing is held. */
+async function syncOverride($: EngineInterface): Promise<void> {
+  const pair = { model: modelHold?.key ?? null, level: hold?.level ?? null }
+  await update($, override, () => (pair.model || pair.level ? pair : null))
+}
+
+/** Lets go of the held level: the chat runs at the menu's level again. */
+export async function releaseLevel($: EngineInterface): Promise<void> {
+  hold = null
+  await syncOverride($)
+}
+
+/** Lets go of the held model: the chat runs on the person's own model again. */
+export async function releaseModel($: EngineInterface): Promise<void> {
+  modelHold = null
+  await syncOverride($)
+}
+
+/** Lets go of both parts (off, Release, a new session). */
 export async function releaseHold($: EngineInterface): Promise<void> {
   hold = null
-  await update($, override, () => null)
+  modelHold = null
+  await syncOverride($)
 }
 
 /** Updates this session's counts, starting from zeros. */
@@ -83,8 +102,9 @@ async function placeMark($: EngineInterface, level: Level, from: Level | '', why
 }
 
 /** Switches to `key` by holding it on this chat's requests (spec §4.4, M7). */
-export async function applyModel(_$: EngineInterface, key: ModelKey, base: string): Promise<void> {
+export async function applyModel($: EngineInterface, key: ModelKey, base: string): Promise<void> {
   modelHold = { key, base }
+  await syncOverride($)
 }
 
 /** The chat's size as the last response read it; undefined when Claude Code does not say. */
@@ -266,26 +286,33 @@ export const register: Register = (on, options) => {
 
   // Every main-chat request: release a hold the menu moved past, run a waiting pick, put the level on.
   on('turn.step', async function* ($, e, next) {
-    if (e.agentId !== undefined || typeof e.effort !== 'string') return yield* next(e)
-    asked = e.effort
-    // A level picked in the pane before any request learns the menu's level here.
-    if (hold && hold.base === '') hold = { ...hold, base: asked }
-    if (hold && asked !== hold.base) await releaseHold($)
+    if (e.agentId !== undefined) return yield* next(e)
+    // A model without effort carries none; the level part then sleeps.
+    const hasEffort = typeof e.effort === 'string'
+    if (hasEffort) {
+      asked = e.effort as string
+      // A level picked in the pane before any request learns the menu's level here.
+      if (hold && hold.base === '') hold = { ...hold, base: asked }
+      if (hold && asked !== hold.base) await releaseLevel($)
+    }
+    if (modelHold && modelHold.base === '') modelHold = { ...modelHold, base: e.model }
+    // The person chose another model with /model: their choice stands.
+    if (modelHold && e.model !== modelHold.base) await releaseModel($)
     if (held && e.index === 0) {
       const h = held
       held = null
       try {
-        await runPick($, options, h, hold?.level ?? toLevel(asked), asked, modelHold?.key ?? toModel(e.model), e.model)
+        await runPick($, options, h, hasEffort ? (hold?.level ?? toLevel(asked)) : '', hasEffort ? asked : '', modelHold?.key ?? toModel(e.model), e.model)
       } catch (err) {
         await log($, 'pick', err)
       }
     }
-    const want = hold?.level ?? null
+    const want = hasEffort ? (hold?.level ?? null) : null
     const was = seen
     seen = want ?? (toLevel(asked) || seen)
     if (seen !== was) $.ui.invalidate('ui.render')
     const model = modelHold ? MODELS[modelHold.key].id : e.model
-    if ((!want || want === asked) && model === e.model) return yield* next(e)
+    if ((!want || want === e.effort) && model === e.model) return yield* next(e)
     return yield* next({ ...e, effort: want ?? e.effort, model })
   })
 
@@ -331,7 +358,7 @@ export const register: Register = (on, options) => {
 
   // The app's menu shows the person's own setting; the footer slot beside it names a held level.
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
-    const level = await read($, override)
+    const level = (await read($, override))?.level
     if (!level) return next(e)
     return next({ ...e, props: { ...e.props, modes: [...e.props.modes, texts(lastLang).label(level)] } })
   })
@@ -340,7 +367,7 @@ export const register: Register = (on, options) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const t = texts(lastLang)
     const mode = await currentMode($, options)
-    const held = await read($, override)
+    const held = (await read($, override))?.level ?? null
     const s = await read($, stats)
     const act = (what: string, f: () => Promise<unknown>) => () => {
       f().catch(err => log($, what, err))
@@ -371,7 +398,7 @@ export const register: Register = (on, options) => {
 
   // The working line names the menu's level; while a level is held it says the real one too.
   on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
-    const level = await read($, override)
+    const level = (await read($, override))?.level
     if (!level) return next(e)
     return next({ ...e, props: { ...e.props, suffix: `${e.props.suffix} · ${texts(lastLang).levelName(level)}` } })
   })
@@ -395,7 +422,7 @@ export const register: Register = (on, options) => {
       // An old band, or a hold the menu already took back: the person's own choice stands.
       const cur = await read($, band)
       if (!cur || cur.id !== b.id || !hold || hold.level !== b.level || !undo) return
-      if (undo === 'release') await releaseHold($)
+      if (undo === 'release') await releaseLevel($)
       else await applyLevel($, undo, hold.base)
       await update($, band, () => null)
     }
