@@ -369,7 +369,7 @@ fi
 if ! CORE_DIR="$CORE_DIR" bash "$ROOT_DIR/scripts/install-hooks.sh" "$P"; then
   echo "warning: git hooks were not installed; run: CORE_DIR=\"$CORE_DIR\" bash \"$ROOT_DIR/scripts/install-hooks.sh\" \"$P\"" >&2
 fi
-projects_entry "$NAME" "$PURPOSE" >/dev/null || echo "warning: could not write PROJECTS.md" >&2
+projects_entry "$NAME" "$PURPOSE" "$NAME/code/" >/dev/null || echo "warning: could not write PROJECTS.md" >&2
 if git -C "$CORE_DIR" add -- "$NAME" PROJECTS.md && git -C "$CORE_DIR" commit -q -m "Adopt $NAME" -- "$NAME" PROJECTS.md >/dev/null 2>&1; then
   echo "Core commit: Adopt $NAME"
 else

@@ -123,7 +123,7 @@ else
 fi
 
 # --- PROJECTS.md line and the Core commit (only test-coredev/ and PROJECTS.md)
-projects_entry "$NAME" "$PURPOSE" || die "could not write PROJECTS.md"
+projects_entry "$NAME" "$PURPOSE" "$NAME/code/" || die "could not write PROJECTS.md"
 if git -C "$CORE_DIR" add -- "$NAME" PROJECTS.md && git -C "$CORE_DIR" commit -q -m "Add test-coredev fixture" -- "$NAME" PROJECTS.md >/dev/null 2>&1; then
   echo "created Core commit: Add test-coredev fixture"
 else

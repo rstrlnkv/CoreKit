@@ -103,6 +103,7 @@ load_settings() {
   a="$(opt_value "${CLAUDE_PLUGIN_OPTION_ATTRIBUTION:-}")"; m="$(opt_value "${CLAUDE_PLUGIN_OPTION_MODEL_PROFILE:-}")"
   CORE_DIR="$(canon_dir "${c:-${o:-$HOME/Projects/Core}}")"
   CORE_NAME="$(basename "$CORE_DIR")"
+  PROJECTS_DIR="$(dirname "$CORE_DIR")"
   ATTRIBUTION="${a:-allow}"
   MODEL_PROFILE="${m:-balanced}"
   APP_ID_PREFIX="$(coredev_get app-id-prefix)"
@@ -204,20 +205,67 @@ json_str() {
   return 0
 }
 
-# project_of <path> — with CORE_DIR loaded (load_settings), prints <project> when the canonical
-# path is <Core>/<project> or anything below it (worktrees under code/.claude/worktrees included);
-# exit 0. Otherwise prints nothing and exits 1. A project is a top-level folder of the Core that
-# holds a CLAUDE.md or a code/ folder; dot-folders, standards/ and knowledge/ never count.
+# project_of <path> — with CORE_DIR loaded (load_settings), prints <project> and exits 0 when the path is
+# inside a project; otherwise prints nothing and exits 1. Two places count:
+#  - inside the Core: <Core>/<project> or anything below it (old layout, worktrees under code/ included);
+#    a project is a top-level folder of the Core that holds a CLAUDE.md or a code/ folder; dot-folders,
+#    standards/ and knowledge/ never count.
+#  - beside the Core: the first folder under <Projects> (the Core's parent) is <Name>; it is a project
+#    when lc <Name> is a valid project name and <Core>/<name>/CLAUDE.md exists.
 project_of() {
-  local p rest first
+  local p rest first name pd
   [ -n "${CORE_DIR:-}" ] && [ -n "${1:-}" ] || return 1
   p="$(canon_dir "$1")"
-  case "$p" in "$CORE_DIR"/*) ;; *) return 1 ;; esac
-  rest="${p#"$CORE_DIR"/}"; first="${rest%%/*}"
-  case "$first" in ""|.*|standards|knowledge) return 1 ;; esac
-  [ -d "$CORE_DIR/$first" ] || return 1
-  [ -f "$CORE_DIR/$first/CLAUDE.md" ] || [ -d "$CORE_DIR/$first/code" ] || return 1
-  printf '%s\n' "$first"
+  case "$p" in
+    "$CORE_DIR"/*)
+      rest="${p#"$CORE_DIR"/}"; first="${rest%%/*}"
+      case "$first" in ""|.*|standards|knowledge) return 1 ;; esac
+      [ -d "$CORE_DIR/$first" ] || return 1
+      [ -f "$CORE_DIR/$first/CLAUDE.md" ] || [ -d "$CORE_DIR/$first/code" ] || return 1
+      printf '%s\n' "$first" ;;
+    "$CORE_DIR") return 1 ;;
+    *)
+      pd="${PROJECTS_DIR:-$(dirname "$CORE_DIR")}"
+      case "$p" in "$pd"/*) ;; *) return 1 ;; esac
+      rest="${p#"$pd"/}"; first="${rest%%/*}"
+      name="$(lc "$first")"
+      valid_project_name "$name" || return 1
+      [ -f "$CORE_DIR/$name/CLAUDE.md" ] || return 1
+      printf '%s\n' "$name" ;;
+  esac
+}
+
+# code_dir_of <name> — prints the main code folder of a project: the one folder in <Projects> (not the
+# Core) whose lower-case name is <name>; else <Core>/<name>/code when that is a directory. Exit 1 when
+# there is neither; exit 3 (and a line on stderr) when two folders differ only in letter case.
+code_dir_of() {
+  local pd d b found="" n=0 second=""
+  [ -n "${CORE_DIR:-}" ] && [ -n "${1:-}" ] || return 1
+  pd="${PROJECTS_DIR:-$(dirname "$CORE_DIR")}"
+  for d in "$pd"/*/; do
+    d="${d%/}"; [ -d "$d" ] || continue
+    [ "$d" = "$CORE_DIR" ] && continue
+    b="$(basename "$d")"
+    [ "$(lc "$b")" = "$1" ] || continue
+    n=$((n + 1))
+    if [ $n -eq 1 ]; then found="$d"; else second="$d"; fi
+  done
+  if [ $n -gt 1 ]; then
+    printf 'two folders differ only in case: %s, %s\n' "$(basename "$found")" "$(basename "$second")" >&2
+    return 3
+  fi
+  if [ $n -eq 1 ]; then printf '%s\n' "$found"; return 0; fi
+  [ -d "$CORE_DIR/$1/code" ] || return 1
+  printf '%s\n' "$CORE_DIR/$1/code"
+}
+
+# layout_of <name> — prints "new" (code folder beside the Core) or "old" (<Core>/<name>/code); exit 1
+# when the project has no code folder (or exit 3 on a case clash, from code_dir_of).
+layout_of() {
+  local d rc=0
+  d="$(code_dir_of "$1")" || rc=$?
+  [ $rc -eq 0 ] || return $rc
+  case "$d" in "$CORE_DIR"/*) echo old ;; *) echo new ;; esac
 }
 
 # --- Path helpers for the path-judging hooks (guard-code.sh, guard-secrets.sh).
@@ -266,14 +314,23 @@ resolve_abs() {
 # --- Helpers that create things in the Core. They honour DRY=1 (print "would create", touch
 # nothing) and print paths relative to $CORE_DIR ("." for the Core itself).
 
-# rel_core <path> — path relative to $CORE_DIR.
+# rel_core <path> — path relative to $CORE_DIR; a path beside the Core (under <Projects>) prints as
+# ../<path relative to <Projects>>.
 rel_core() {
-  if [ "$1" = "$CORE_DIR" ]; then printf '.'; else printf '%s' "${1#"$CORE_DIR"/}"; fi
+  local pd="${PROJECTS_DIR:-$(dirname "$CORE_DIR")}"
+  case "$1" in
+    "$CORE_DIR") printf '.' ;;
+    "$CORE_DIR"/*) printf '%s' "${1#"$CORE_DIR"/}" ;;
+    "$pd"/*) printf '../%s' "${1#"$pd"/}" ;;
+    *) printf '%s' "$1" ;;
+  esac
 }
 
 # valid_project_name <name> — exit 0 when it is 3-40 Latin lowercase letters, digits and hyphens,
-# starting with a letter and not ending with a hyphen (the rule for <Core>/<name>/).
+# starting with a letter and not ending with a hyphen (the rule for <Core>/<name>/), and is not
+# core, standards or knowledge.
 valid_project_name() {
+  case "$1" in core|standards|knowledge) return 1 ;; esac
   LC_ALL=C bash -c '[[ "$1" =~ ^[a-z][a-z0-9-]{1,38}[a-z0-9]$ ]]' _ "$1"
 }
 
@@ -345,11 +402,11 @@ put_project_docs() {
   done <<< "$(project_docs_manifest)"
 }
 
-# projects_entry <name> <purpose> — add "- <name> — <purpose> — <name>/code/" to $CORE_DIR/PROJECTS.md
+# projects_entry <name> <purpose> <entry> — add "- <name> — <purpose> — <entry>" to $CORE_DIR/PROJECTS.md
 # unless a line for the name is there. Prints "created|skipped PROJECTS.md entry" ("would create"
 # with DRY=1, nothing written).
 projects_entry() {
-  local line="- $1 — $2 — $1/code/"
+  local line="- $1 — $2 — $3"
   if [ -f "$CORE_DIR/PROJECTS.md" ] && grep -q "^- $1 " "$CORE_DIR/PROJECTS.md"; then
     echo "skipped PROJECTS.md entry"
   elif [ "${DRY:-0}" -eq 1 ]; then
@@ -363,6 +420,7 @@ projects_entry() {
 # CLI: bash lib.sh get <key> | set <key> <value> | ready (exit 0 when core_ready) | core-dir (absolute path)
 #      | schema (the plugin's schema number) | core-paths <project> (the Core paths `save` commits for
 #      the project, one line, space-separated; from _locate.sh next to this file)
+#      | project-of <path> | code-dir <name> | layout <name> (see project_of, code_dir_of, layout_of)
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   load_settings
   case "${1:-}" in
@@ -371,10 +429,13 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     ready) core_ready ;;
     core-dir) printf '%s\n' "$CORE_DIR" ;;
     schema) printf '%s\n' "$COREDEV_SCHEMA" ;;
+    project-of) [ $# -eq 2 ] || { echo "Usage: lib.sh project-of <path>" >&2; exit 2; }; project_of "$2" ;;
+    code-dir) [ $# -eq 2 ] || { echo "Usage: lib.sh code-dir <name>" >&2; exit 2; }; code_dir_of "$2" ;;
+    layout) [ $# -eq 2 ] || { echo "Usage: lib.sh layout <name>" >&2; exit 2; }; layout_of "$2" ;;
     core-paths)
       [ $# -eq 2 ] && [ -n "$2" ] || { echo "Usage: lib.sh core-paths <project>" >&2; exit 2; }
       . "$(dirname "${BASH_SOURCE[0]}")/_locate.sh" || exit 1
       core_paths "$CORE_DIR" "$2" ;;
-    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | schema | core-paths <project>" >&2; exit 2 ;;
+    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | schema | core-paths <project> | project-of <path> | code-dir <name> | layout <name>" >&2; exit 2 ;;
   esac
 fi

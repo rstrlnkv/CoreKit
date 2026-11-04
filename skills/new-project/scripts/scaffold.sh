@@ -48,4 +48,4 @@ put "$TPL/code/settings.local.json.tmpl"  "$P/code/.claude/settings.local.json"
 put "$TPL/code/worktreeinclude"           "$P/code/.worktreeinclude" copy
 
 # Project list
-projects_entry "$NAME" "$PURPOSE" || exit 1
+projects_entry "$NAME" "$PURPOSE" "$NAME/code/" || exit 1
