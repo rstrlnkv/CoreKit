@@ -23,6 +23,8 @@ export function uiLang(text: string): Lang {
   return /[Ѐ-ӿ]{3,}/.test(text) ? 'ru' : 'en'
 }
 
+const ORDER: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
+
 const NAMES: Record<Lang, Record<Level, string>> = {
   en: { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' },
   ru: { low: 'Низкое', medium: 'Среднее', high: 'Высокое', xhigh: 'Очень высокое', max: 'Максимальное' },
@@ -42,12 +44,30 @@ export function texts(lang: Lang) {
         : `This looks like a ${n(l)} effort task${why ? `: ${why}` : ''}. Switch before Claude starts?`,
     switchTo: (l: Level) => (ru ? `Переключить на «${n(l)}»` : `Switch to ${n(l)}`),
     switchAndAuto: ru ? 'Переключить и дальше сам' : 'Switch, and auto-adjust from now',
+    back: (l: Level) => (ru ? `Вернуть «${n(l)}»` : `Back to ${n(l)}`),
     keep: (now: Level | '') =>
       now ? (ru ? `Оставить «${n(now)}»` : `Keep ${n(now)}`) : ru ? 'Оставить как есть' : 'Keep it as it is',
     applied: (l: Level, from: Level | '', why: string) =>
       (ru ? `Усилие: ${n(l)}` : `Effort: ${n(l)}`) +
       (from ? (ru ? ` (было ${n(from)})` : ` (was ${n(from)})`) : '') +
       (why ? ` · ${why}` : ''),
+    mark: (l: Level, from: Level | '', why: string) =>
+      `${from && ORDER.indexOf(from) > ORDER.indexOf(l) ? '↓' : '↑'} ` +
+      (ru ? `Усилие: ${n(l)}` : `Effort: ${n(l)}`) +
+      (from ? (ru ? ` (было ${n(from)})` : ` (was ${n(from)})`) : '') +
+      (why ? ` · ${why}` : ''),
+    runsAt: (l: Level | '') =>
+      ru ? `Чат работает на: ${l ? n(l) : 'пока неизвестно'}` : `Chat runs at: ${l ? n(l) : 'unknown yet'}`,
+    inMenu: (l: Level | '') => (ru ? `в меню: ${l ? n(l) : '?'} (ваше)` : `in the menu: ${l ? n(l) : '?'} (yours)`),
+    modeQuestion: (mode: Mode, l: Level | '') =>
+      ru
+        ? `CoreEffort: ${mode}. Чат работает на: ${l ? n(l) : 'пока неизвестно'}. Какой режим?`
+        : `CoreEffort: ${mode}. Chat runs at: ${l ? n(l) : 'unknown yet'}. Which mode?`,
+    lastPick: ru ? 'Последний выбор' : 'Last pick',
+    session: ru ? 'За сессию' : 'This session',
+    kept: ru ? 'Оставлено как есть' : 'Kept as it was',
+    release: ru ? 'Снять' : 'Release',
+    noPicks: ru ? 'Пока нет выборов.' : 'No picks yet.',
     label: (l: Level) => `${ru ? 'Усилие' : 'Effort'} ${SHORT[l]}`,
     checking: ru ? 'подбираю усилие…' : 'checking effort…',
   }

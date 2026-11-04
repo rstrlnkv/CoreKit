@@ -1,7 +1,7 @@
 {
   "name": "coreeffort",
   "displayName": "CoreEffort",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Picks the effort level each prompt needs, for code and office work, and asks before any switch to xhigh or max.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",

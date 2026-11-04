@@ -5,7 +5,7 @@ import type { ConfigRow, On } from 'claude-code'
 // The world beneath the plugin, answered from memory. `answer` is the classifier's next reply;
 // `reply` the person's answer to the question (null = dismissed); `row` the config menu's effort row.
 export type World = {
-  answer: string | Error | { isAnswered: false }
+  answer: string | Error | { isAnswered: false } | Promise<string>
   reply: string | null | Promise<string | null>
   row: ConfigRow | null
   lastReply: string
@@ -15,6 +15,8 @@ export type World = {
   set: unknown[]
   logs: string[]
   efforts: (string | number | undefined)[]
+  placed: string[]
+  opened: unknown[]
   clock: ReturnType<typeof mock.clock>
 }
 
@@ -42,6 +44,8 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     set: [],
     logs: [],
     efforts: [],
+    placed: [],
+    opened: [],
     clock: mock.clock(on),
   }
   mock.store(on, store)
@@ -50,6 +54,14 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
   mock.env(on, { HOME: '/fake-home' })
   on('command.register', (_, e) => ({ value: { command: e.name } }) as never)
   on('ui.status', () => ({ value: undefined }) as never)
+  on('ui.place', (_, e) => {
+    w.placed.push((e as { id: string }).id)
+    return { value: { isPlaced: true } } as never
+  })
+  on('ui.open', (_, e) => {
+    w.opened.push(e)
+    return { value: { isPlaced: true } } as never
+  })
   on('ui.invalidate', () => ({ value: undefined }) as never)
   on('session.messages', () => ({ value: w.lastReply ? [{ role: 'assistant', text: w.lastReply, toolUses: [] }] : [] }) as never)
   on('fs.exists', () => ({ value: false }) as never)
@@ -63,10 +75,10 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     w.set.push(e)
     return { value: (e as { value: unknown }).value } as never
   })
-  on('model.complete', (_, e) => {
+  on('model.complete', async (_, e) => {
     w.model.push(e.model)
     w.prompts.push(e.prompt)
-    const a = w.answer
+    const a = await w.answer
     if (a instanceof Error) throw a
     if (typeof a !== 'string') return { value: { isAnswered: false, reason: 'api-error', status: null } } as never
     return { value: { isAnswered: true, text: a, usage: {} } } as never

@@ -136,3 +136,388 @@ test('off clears a held level and its label', { options: { mode: 'auto' } }, asy
   expect(await ui.find({ type: 'Text', text: /Effort High/ })).toBe(undefined)
   await ui.unmount()
 })
+
+async function undoButton($: Eng, surface: 'terminal' | 'desktop' = 'desktop') {
+  const ui = await $.ui.mount({ ...ABOVE, surface })
+  const b = await ui.find({ type: 'Button', key: 'undo' })
+  await ui.unmount()
+  return b
+}
+
+async function pressUndo($: Eng) {
+  const ui = await $.ui.mount({ ...ABOVE, surface: 'desktop' })
+  await ui.press({ key: 'undo' })
+  await ui.unmount()
+}
+
+test('an auto switch shows an undo button that releases the hold', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  for (const surface of SURFACES) {
+    const b = await undoButton($, surface)
+    expect(String(b?.props.label ?? '')).toMatch(/Back to Medium/)
+  }
+  await pressUndo($)
+  await step($, 'medium', 1)
+  expect(w.efforts.at(-1)).toBe('medium')
+  const ui = await $.ui.mount({ ...ABOVE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /Effort:/ })).toBe(undefined)
+  await ui.unmount()
+})
+
+test('undo holds the previous held level', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await switchTo($, w, 'low', 'medium', 'rename a variable')
+  expect(w.efforts.at(-1)).toBe('low')
+  await pressUndo($)
+  await step($, 'medium', 1)
+  expect(w.efforts.at(-1)).toBe('high')
+})
+
+test('no undo after an agreed switch', async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  w.reply = 'Switch to High'
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  expect(await undoButton($)).toBe(undefined)
+})
+
+test('undo after the menu moved does nothing', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await step($, 'low', 1)
+  await pressUndo($)
+  await step($, 'low', 2)
+  expect(w.efforts.at(-1)).toBe('low')
+})
+
+function placed(id: string, plugin = 'coreeffort') {
+  return { plugin: 'coreeffort', component: 'Placed', props: { id, plugin } } as const
+}
+
+test('each applied switch places one mark', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  on('ui.render', { component: 'Placed' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>engine</Text>
+  })
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await switchTo($, w, 'keep', 'medium', 'ok')
+  await switchTo($, w, 'low', 'medium', 'rename it')
+  expect(w.placed).toEqual(['mark-1', 'mark-2'])
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ ...placed('mark-2'), surface })
+    expect((await ui.find({ type: 'Text', text: /↓ Effort: Low \(was High\)/ })) !== undefined).toBe(true)
+    await ui.unmount()
+  }
+})
+
+test('a placed row of another plugin is left alone', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  on('ui.render', { component: 'Placed' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>engine</Text>
+  })
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  const ui = await $.ui.mount({ ...placed('mark-1', 'other'), surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /engine/ })) !== undefined).toBe(true)
+  await ui.unmount()
+})
+
+test('mark ids stay unique across a session restart', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await start($)
+  await switchTo($, w, 'low', 'medium', 'rename it')
+  expect(w.placed).toEqual(['mark-1', 'mark-2'])
+  const ui = await $.ui.mount({ ...placed('mark-1'), surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /Effort: High/ })) !== undefined).toBe(true)
+  await ui.unmount()
+})
+
+const PANE = {
+  plugin: 'coreeffort',
+  component: 'Pane',
+  requestId: 'coreeffort',
+  props: { title: 'CoreEffort', isFocused: false, bodyColumns: 40, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
+} as const
+
+async function pane($: Eng, surface: 'terminal' | 'desktop' = 'desktop') {
+  return $.ui.mount({ ...PANE, surface })
+}
+
+async function has($: Eng, text: RegExp, surface: 'terminal' | 'desktop' = 'desktop') {
+  const ui = await pane($, surface)
+  const found = await ui.find({ type: 'Text', text })
+  await ui.unmount()
+  return found !== undefined
+}
+
+async function pressPane($: Eng, key: string) {
+  const ui = await pane($)
+  await ui.press({ key })
+  await ui.unmount()
+}
+
+test('/coreeffort panel opens the pane', async ($, on) => {
+  const w = world(on)
+  await start($)
+  await run($, 'panel')
+  expect(w.opened).toEqual([{ id: 'coreeffort', title: 'CoreEffort' }])
+})
+
+test('the pane shows mode, level, last pick and counts', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  for (const surface of SURFACES) {
+    expect(await has($, /Chat runs at: High/, surface)).toBe(true)
+    expect(await has($, /in the menu: Medium/, surface)).toBe(true)
+    expect(await has($, /High · auth bug/, surface)).toBe(true)
+    expect(await has($, /^High 1$/, surface)).toBe(true)
+    const ui = await pane($, surface)
+    expect(String((await ui.find({ type: 'Button', key: 'mode-auto' }))?.props.label)).toBe('● auto')
+    await ui.unmount()
+  }
+})
+
+test('a mode button in the pane sets the mode', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await pressPane($, 'mode-off')
+  await switchTo($, w, 'high', 'medium')
+  expect(w.model.length).toBe(0)
+  const ui = await pane($)
+  expect(String((await ui.find({ type: 'Button', key: 'mode-off' }))?.props.label)).toBe('● off')
+  await ui.unmount()
+})
+
+test('a level picked in the pane holds at once, xhigh included', async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await step($, 'medium')
+  await pressPane($, 'level-xhigh')
+  await step($, 'medium', 1)
+  expect(w.asked.length).toBe(0)
+  expect(w.efforts.at(-1)).toBe('xhigh')
+  expect(w.placed).toEqual([])
+})
+
+test('a pane pick before any request survives the first request', async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await pressPane($, 'level-high')
+  await step($, 'medium')
+  await step($, 'medium', 1)
+  expect(w.efforts).toEqual(['high', 'high'])
+  await step($, 'low', 2)
+  expect(w.efforts.at(-1)).toBe('low')
+})
+
+test('Release in the pane drops the hold', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await pressPane($, 'release')
+  await step($, 'medium', 1)
+  expect(w.efforts.at(-1)).toBe('medium')
+  const ui = await pane($)
+  expect(await ui.find({ type: 'Button', key: 'release' })).toBe(undefined)
+  await ui.unmount()
+})
+
+test('off from the pane clears the band and its undo', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await pressPane($, 'mode-off')
+  const ui = await $.ui.mount({ ...ABOVE, surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /engine/ })) !== undefined).toBe(true)
+  expect(await ui.find({ type: 'Button', key: 'undo' })).toBe(undefined)
+  await ui.unmount()
+  await step($, 'medium', 1)
+  expect(w.efforts.at(-1)).toBe('medium')
+})
+
+test('a fresh pane says there are no picks yet', async ($, on) => {
+  const w = world(on)
+  w.answer = new Error('down')
+  await start($)
+  await submit($, 'почини авторизацию')
+  await step($, 'medium')
+  expect(await has($, /Пока нет выборов/)).toBe(true)
+})
+
+test('the pane counts kept prompts', async ($, on) => {
+  const w = world(on)
+  w.row = null
+  w.reply = 'Keep Medium'
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await switchTo($, w, 'keep', 'medium', 'ok')
+  expect(await has($, /^High 1$/)).toBe(true)
+  expect(await has($, /Kept as it was 2/)).toBe(true)
+  expect(await has($, /High · auth bug/)).toBe(true)
+})
+
+const SPIN = { plugin: 'coreeffort', component: 'Spinner', props: { word: 'Thinking', message: null, suffix: '…', mode: 'thinking' } } as const
+
+async function spinner($: Eng, surface: 'terminal' | 'desktop') {
+  const ui = await $.ui.mount({ ...SPIN, surface })
+  const t = await ui.find({ type: 'Text' })
+  await ui.unmount()
+  return t?.text
+}
+
+test('the working line names a held level', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  on('ui.render', { component: 'Spinner' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    const p = e.props as { word: string; suffix: string }
+    return <Text>{p.word + p.suffix}</Text>
+  })
+  w.row = null
+  await start($)
+  for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking…')
+  await switchTo($, w, 'high', 'medium')
+  for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking… · High')
+  await run($, 'off')
+  for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking…')
+})
+
+test('/coreeffort with no argument asks for the mode', async ($, on) => {
+  const w = world(on)
+  w.reply = 'auto'
+  await start($)
+  const text = await run($, '')
+  expect(w.asked.at(-1)).toEqual(['auto', 'suggest', 'off'])
+  expect(text).toContain('CoreEffort: auto.')
+  await switchTo($, w, 'high', 'medium')
+  expect(w.asked.length).toBe(1)
+})
+
+test('a dismissed mode question changes nothing', async ($, on) => {
+  const w = world(on)
+  w.reply = null
+  await start($)
+  const text = await run($, '')
+  expect(w.asked.length).toBe(1)
+  expect(text).toContain('CoreEffort: suggest.')
+  w.reply = 'Keep Medium'
+  await switchTo($, w, 'high', 'medium')
+  expect(w.asked.length).toBe(2)
+})
+
+test('off pressed while the classifier runs leaves the level alone', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  let answer: (s: string) => void = () => {}
+  w.answer = new Promise<string>(r => {
+    answer = r
+  })
+  await start($)
+  await submit($, 'fix the login')
+  const running = step($, 'medium')
+  await pressPane($, 'mode-off')
+  answer('{"level":"high","why":"auth bug"}')
+  await running
+  expect(w.efforts).toEqual(['medium'])
+  expect(w.placed).toEqual([])
+})
+
+test('a level picked in the pane takes the undo button away', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await pressPane($, 'level-low')
+  expect(await undoButton($)).toBe(undefined)
+  await step($, 'medium', 1)
+  expect(w.efforts.at(-1)).toBe('low')
+})
+
+test('a pane pick made after the menu moved still holds', async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await step($, 'medium')
+  await pressPane($, 'level-high')
+  await step($, 'low', 1)
+  expect(w.efforts.at(-1)).toBe('high')
+})
+
+test('the pane button rows wrap in a narrow pane', async ($, on) => {
+  world(on)
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await pane($, surface)
+    for (const key of ['modes', 'levels']) expect((await ui.find({ type: 'Box', key }))?.props.flexWrap).toBe('wrap')
+    await ui.unmount()
+  }
+})
+
+test('the pane hides the menu line until a request shows the menu', async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await pressPane($, 'level-high')
+  expect(await has($, /in the menu/)).toBe(false)
+  await step($, 'medium')
+  expect(await has($, /in the menu: Medium/)).toBe(true)
+})
+
+test('no undo when the previous level is unknown', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'unset')
+  expect(w.efforts.at(-1)).toBe('high')
+  expect(await undoButton($)).toBe(undefined)
+})
+
+test('an undo button drawn before off does nothing when pressed after', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  const ui = await $.ui.mount({ ...ABOVE, surface: 'desktop' })
+  await run($, 'off')
+  await run($, 'auto')
+  await pressPane($, 'level-low')
+  try {
+    await ui.press({ key: 'undo' })
+  } catch {
+    // The engine may refuse a press on a button it no longer draws; either way nothing changes.
+  }
+  await ui.unmount()
+  await step($, 'medium', 1)
+  expect(w.efforts.at(-1)).toBe('low')
+})

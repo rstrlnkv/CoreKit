@@ -97,6 +97,47 @@ timeout 10 s.
 Every failure (classifier, config, UI) is caught, written to
 `~/.claude/mods-logs/effort-picker.log` (last 20 KB kept) and the prompt goes on (E7).
 
+### 4.7 Interface additions (0.3.0)
+Since 0.2.0 the plugin is `coreeffort` (brand CoreEffort), command `/coreeffort`, log
+`~/.claude/mods-logs/coreeffort.log`; the older sections still say `effort-picker`. Everything in
+§4.5 stays unless a point below changes it. All texts follow the language rule of §4.5.
+
+1. **Pane "CoreEffort"** (`$.ui.open({ id: 'coreeffort', title: 'CoreEffort' })`). Opened by
+   `/coreeffort panel`, never by itself; the person closes it with the engine's own mark and
+   reopens it with the command. The surface places it: docked beside the chat (desktop, the
+   terminal in fullscreen from 110 columns), else inline above the prompt. It shows:
+   - the mode as three buttons `suggest` / `auto` / `off`; a press does what `/coreeffort <mode>`
+     does;
+   - "Chat runs at: <level>", and under it "in the menu: <level> (yours)" while a level is held;
+   - the last pick and its `why`;
+   - counts for this session: picks per level, and how many prompts kept their level (a `keep`
+     pick, a pick equal to the current level, or a "Keep" answer);
+   - buttons "Release" (drops the hold, as moving the menu does, §4.4) and "Level" (a choice of the
+     five levels; the person's own pick holds that level at once and needs no further question,
+     `xhigh` and `max` included: picking it is the yes of E6).
+   Counts and the last pick live in `$.state` (this session only) and redraw the pane.
+2. **Undo on the switch line.** After a silent switch in `auto` (§4.3) the 15-s line of §4.5
+   gets a button "Back to <previous>" (hotkey `1`). A press holds the previous level, or releases
+   the hold when the previous level is the menu's own; the line then goes away. No button when the
+   previous level is unknown. A switch the person agreed to in the question gets no button.
+3. **Marks in the transcript.** Each applied switch (silent or agreed) places a row in the chat
+   (`$.ui.place`, drawn by a `Placed` hook): "↑ Effort High (was Low) · <why>", `↓` for a lower
+   level. A `keep` or an unchanged level places nothing. Outside fullscreen a compaction ends the
+   rows; that is accepted.
+4. **Level beside the working line.** While a level is held, the `Spinner` row names it
+   ("· High") so the line shows what the chat really runs at. Checked first (§7.3): if the row's
+   own effort already shows the held level, nothing is added; if it shows the menu's level, the
+   hook adds the held one through `suffix`.
+   Checked 2026-11-04 in the terminal (owner): the line names the menu's level, so the hook adds
+   the held one.
+5. **`/coreeffort` with no argument asks** (`$.ui.ask`): "CoreEffort: <mode>. Chat runs at:
+   <level>." with the options `auto`, `suggest`, `off`; a dismissed question changes nothing.
+   `/coreeffort auto|suggest|off|on|panel` keep working as text commands.
+   Checked 2026-11-04 in the terminal: a question asked from a `command.run` hook shows.
+
+The question before `xhigh` and `max` (§4.3) stays the app's own question (`$.ui.ask`); the
+plugin draws no buttons of its own for it.
+
 ## 5. Settings
 
 `userConfig` in `plugin.json`:
@@ -148,6 +189,12 @@ anything else as no answer (E7).
 - Stale pick dropped when a newer prompt arrives.
 - Hold released when the menu moves; `off` clears the hold and the label.
 - Rendering on `terminal` and `desktop`.
+- 0.3.0 (§4.7): the pane draws mode, real and menu level, last pick and counts; a mode button
+  sets the mode; "Release" drops the hold; a level picked in the pane holds at once, `xhigh`
+  included, with no question. The undo button holds the previous level, or releases when that
+  was the menu's; no button after an agreed switch or with an unknown previous level. A switch
+  places one transcript row with the right arrow; `keep` places none. The spinner shows the held
+  level only while one is held. `/coreeffort` without arguments asks; a dismiss changes nothing.
 
 `tests/run.sh` runs `tests/test_effort_picker.sh`, which calls
 `claude plugin test plugins/effort-picker` and `claude plugin validate plugins/effort-picker`,
@@ -174,11 +221,16 @@ Not part of `tests/run.sh` (it needs the network).
 - coredev installed from `./` does not load anything from `plugins/effort-picker/`.
 - The plugin loads and works on the current Claude Code (2.1.309) in the terminal and the
   desktop Code tab.
+- 0.3.0, before the code: which effort the `Spinner` row shows while a level is held (§4.7.4),
+  and whether `$.ui.ask` works from a `command.run` hook (§4.7.5), both on the desktop and in
+  the terminal.
 
 ## 8. Release
 - `plugins/effort-picker/.claude-plugin/plugin.json` version `0.1.0`, `"license": "MIT"`.
 - An entry in `plugins/effort-picker/CHANGELOG.md` and an install line in the root README.
 - coredev's version is not bumped: coredev does not change.
+- The interface additions of §4.7 ship as coreeffort `0.3.0`, with an entry in
+  `plugins/coreeffort/CHANGELOG.md` and the README's command list updated (`/coreeffort panel`).
 
 ## 9. Out of scope
 - Effort for coredev's crew agents (`/coredev:task`).
