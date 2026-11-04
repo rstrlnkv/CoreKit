@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.1 — 2026-11-05
+- guard-secrets: a secret name written with quotes or a backslash (`.e'n'v`, `.\env`, `~/.s""sh/id_rsa`)
+  is judged after quote removal; globs that can match `.env`, `.env.*` or `.ssh` (`.e*`, `.en?`,
+  `.[e]nv`, `~/.s*/id_rsa`) are blocked; `*`, `.*` and `*.env` still pass.
+- Both guards: wrapper options that take a value are skipped, so `timeout 5 cat .env`,
+  `nice -n 5 cat .env`, `sudo -u root cat .env`, `env -u X cat .env` and `timeout 5 tee docs/a` are
+  seen. `timeout`, `stdbuf`, `setsid`, `caffeinate`, `ionice` count as wrappers.
+- `zip a.zip src -x .env` is no longer blocked (`-x`/`-i` take patterns).
+- With HOME unset, `~/.ssh` is still protected (HOME comes from the account).
+- A `core_dir` that is a symlink: the code folders next to the link are recognised.
+- guard-code blocks a file written directly under `.claude/worktrees/`.
+- one-suite sees `echo $((1<<3)); swift test` as a test run.
+- Docs: CLAUDE.md layout, README (evals, release/adopt, session-rules), migration-0.3 names
+  `coremodel`, old specs carry a "superseded / now true" note.
 ## 0.5.0 — 2026-11-04
 - New projects keep their code beside the Core, in `<Projects>/<Name>` (Projects is the folder
   that holds the Core, for example `~/Projects/MyApp`). Private files stay in `<Core>/<name>/`.
