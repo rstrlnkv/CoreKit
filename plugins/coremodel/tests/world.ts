@@ -11,6 +11,8 @@ export type World = {
    * on the mocked clock; with no text the call hangs until its own timeoutMs cuts it, or until
    * `after` ms when `cut` (an Esc on the turn).
    */
+  /** A reason: every prompt submit is dropped with it (a hook beneath refused). */
+  drop: string | null
   answers: (string | { fail: true } | { after: number; text?: string; cut?: boolean })[]
   /** The timeoutMs of each classifier call. */
   timeouts: (number | undefined)[]
@@ -48,6 +50,7 @@ export function row(value = 'Medium', isLocked = false): ConfigRow {
 export function world(on: On, store: Record<string, unknown> = {}): World {
   const w: World = {
     answer: '{"level":"high","why":"auth bug"}',
+    drop: null,
     answers: [],
     timeouts: [],
     reply: null,
@@ -69,7 +72,8 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
   }
   mock.store(on, store)
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('prompt.submit', (_, e) => ({ text: e.text, origin: e.origin }))
+  on('prompt.submit', (_, e) => (w.drop ? { drop: w.drop } : { text: e.text, origin: e.origin }))
+  on('turn.complete', () => ({ text: '' }))
   mock.env(on, { HOME: '/fake-home' })
   on('command.register', (_, e) => ({ value: { command: e.name } }) as never)
   on('ui.status', () => ({ value: undefined }) as never)

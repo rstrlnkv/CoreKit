@@ -25,8 +25,9 @@ const HEDGE_MS = 3_000
 // Bumped on every prompt, so a pick for an older prompt is dropped.
 let gen = 0
 let nextBand = 1
-// The prompt waiting for its pick at the turn's first request.
-let held: { text: string; gen: number; lang: Lang } | null = null
+// The prompt waiting for its pick at the turn's first request. `turn` is the turn that was
+// running when it was typed (it waits in the queue behind that turn); absent when the chat was idle.
+let held: { text: string; gen: number; lang: Lang; turn?: string } | null = null
 // The chosen level, put on every main-chat request until the person moves the menu. It lives in
 // this chat only: the app's own effort setting is never written. `base` is the menu's level when
 // the hold began.
@@ -96,14 +97,19 @@ export async function releaseHold($: EngineInterface): Promise<void> {
 }
 
 /**
- * A new chat starts with nothing held: the hold, a prompt waiting for its pick and the undo line
- * go, and a pick still on its way is dropped. Models the account refused stay dropped.
+ * A new chat starts with nothing held: the hold and the undo line go, and a pick still on its way
+ * is dropped. Models the account refused stay dropped.
+ * `fromEngine`: /clear, /resume or a fork. The prompt typed for the new chat may reach us before
+ * the engine's SessionStart does, so a prompt still waiting for its first request stays (with the
+ * new generation), and the rows of the old chat's switches go. A new session or a reload (`false`)
+ * starts clean, and keeps the rows its transcript still shows.
  */
-async function newChat($: EngineInterface): Promise<void> {
+async function newChat($: EngineInterface, fromEngine: boolean): Promise<void> {
   gen += 1
-  held = null
+  held = fromEngine && held ? { ...held, gen } : null
   seen = toLevel(asked)
   await releaseHold($)
+  if (fromEngine) await update($, marks, () => ({}))
   await update($, band, () => null)
   $.ui.invalidate('ui.render')
 }
@@ -226,6 +232,7 @@ async function runPick(
   base: string,
   nowModel: ModelKey | '',
   baseModel: string,
+  hasEffort: boolean,
 ) {
   const mode = await currentMode($, options)
   if (mode === 'off') return
@@ -287,7 +294,8 @@ async function runPick(
   }
 
   // Then the effort.
-  const action = decide(mode, now, pick)
+  // A request with no effort has nowhere to put a level: that part is skipped, not asked or marked.
+  const action = hasEffort ? decide(mode, now, pick) : 'none'
   let levelTo: Level | null = action === 'apply' ? level : null
   if (action === 'ask') {
     const opts = keepFirst(effortOptions(level, now), now as Level, isCostlyLevel(level))
@@ -382,14 +390,33 @@ const LEVELS: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
 export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
-    if (e.origin.kind !== 'composer' && e.origin.kind !== 'bridge') return next(e)
+    if (e.origin.kind !== 'composer' && e.origin.kind !== 'bridge') {
+      // That prompt takes the next turn; an older one waiting is not it.
+      held = null
+      return next(e)
+    }
     const text = e.text.trim()
-    if (!text || text.startsWith('/')) return next(e)
+    if (!text || text.startsWith('/')) {
+      // A prompt of ours is not the next turn's any more.
+      held = null
+      return next(e)
+    }
     gen += 1
     lastLang = uiLang(text)
-    held = { text, gen, lang: lastLang }
-    return next(e)
+    const mine = { text, gen, lang: lastLang, ...(e.turnId ? { turn: e.turnId } : {}) }
+    held = mine
+    const r = await next(e)
+    // Refused beneath us: no turn will come of it.
+    if (r.drop !== undefined && held === mine) held = null
+    return r
   }).catch(($, e, next) => next(e))
+
+  // A turn that ends with a prompt still waiting (blocked, Esc'd before its first request) leaves
+  // nothing for the next turn; only a prompt queued behind this very turn stays.
+  on('turn.complete', async ($, e, next) => {
+    if (e.agentId === undefined && held && held.turn !== e.turnId) held = null
+    return next(e)
+  })
 
   // Every main-chat request: release a hold the menu moved past, run a waiting pick, put the level on.
   on('turn.step', async function* ($, e, next) {
@@ -410,7 +437,7 @@ export const register: Register = (on, options) => {
       const h = held
       held = null
       try {
-        await runPick($, options, h, hasEffort ? (hold?.level ?? toLevel(asked)) : '', hasEffort ? asked : '', modelHold?.key ?? toModel(e.model), e.model)
+        await runPick($, options, h, hasEffort ? (hold?.level ?? toLevel(asked)) : '', hasEffort ? asked : '', modelHold?.key ?? toModel(e.model), e.model, hasEffort)
       } catch (err) {
         await log($, 'pick', err)
       }
@@ -442,7 +469,7 @@ export const register: Register = (on, options) => {
   // for them; the module's own variables would carry the hold into the new chat. A compacted chat
   // is the same chat and keeps it.
   on('classic.SessionStart', async ($, e, next) => {
-    if (e.source === 'clear' || e.source === 'resume' || e.source === 'fork') await newChat($)
+    if (e.source === 'clear' || e.source === 'resume' || e.source === 'fork') await newChat($, true)
     return next(e)
   })
 
@@ -451,7 +478,7 @@ export const register: Register = (on, options) => {
     const typos = unknownModels(options.models)
     if (typos.length) await log($, 'models', `unknown in the setting: ${typos.join(', ')} (use haiku, sonnet, opus, fable)`)
     // A new session, or a reload of this module, starts with no held level: drop what $.state kept.
-    await newChat($)
+    await newChat($, false)
     await $.command.register({
       name: 'coremodel',
       description: 'CoreModel: show what the chat runs at, set the mode (auto, suggest, off, on), or open the pane (panel)',

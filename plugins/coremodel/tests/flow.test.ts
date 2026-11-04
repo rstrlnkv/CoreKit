@@ -103,6 +103,11 @@ test('a pick still running when a new chat starts is dropped', { options: { mode
   await start($)
   await submit($, 'rename x to count')
   const first = step($, 'medium')
+  // The pick is on its way once the classifier has been asked.
+  for (let i = 0; w.model.length === 0; i += 1) {
+    if (i > 500) throw new Error('the classifier was never asked')
+    await w.clock.settle()
+  }
   await $.classic.SessionStart({ source: 'clear' } as never)
   answer('{"level":"low","model":"haiku","why":"w"}')
   await first
@@ -613,4 +618,63 @@ test('the held model keeps the context suffix of the request', { options: { mode
   await submit($, 'refactor it')
   await step($, 'medium', 0, undefined, 'claude-sonnet-5-5[1m]')
   expect(w.models).toEqual(['claude-opus-5-5[1m]'])
+})
+
+// The waiting prompt belongs to the next turn only.
+test('a submit that was dropped leaves nothing waiting', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.drop = 'blocked'
+  await start($)
+  await submit($, 'fix the login')
+  await step($, 'medium', 0)
+  expect(w.model.length).toBe(0)
+  expect(w.efforts).toEqual(['medium'])
+})
+
+test('a turn that ended without a step leaves nothing waiting', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await submit($, 'fix the login')
+  await $.turn.complete({ turnId: 't0', answer: '', durationMs: 1, isAborted: true, reason: 'aborted' } as never)
+  await step($, 'medium', 0)
+  expect(w.model.length).toBe(0)
+})
+
+test('a prompt queued behind a running turn survives that turn ending', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await $.prompt.submit({ text: 'fix the login', wait: false, turnId: 't0', origin: { kind: 'composer' } as never })
+  await $.turn.complete({ turnId: 't0', answer: 'x', durationMs: 1, isAborted: false, reason: 'answer' } as never)
+  await step($, 'medium', 0)
+  expect(w.model.length).toBe(1)
+  expect(w.efforts).toEqual(['high'])
+})
+
+test('a prompt of another origin takes the next turn, so an older waiting one goes', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await submit($, 'fix the login')
+  await submit($, 'background note', 'sdk')
+  await step($, 'medium', 0)
+  expect(w.model.length).toBe(0)
+})
+
+test('a prompt sent before the new chat hook fires still gets its pick', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await submit($, 'fix the login')
+  await $.classic.SessionStart({ source: 'clear' } as never)
+  await step($, 'medium', 0)
+  expect(w.model.length).toBe(1)
+  expect(w.efforts).toEqual(['high'])
+})
+
+// A model without effort carries none: the level part sleeps.
+test('a model without effort is not asked about a level', async ($, on) => {
+  const w = world(on)
+  await start($)
+  await submit($, 'fix the login')
+  await step($, undefined, 0)
+  expect(w.asked.length).toBe(0)
+  expect(w.efforts).toEqual([undefined])
 })

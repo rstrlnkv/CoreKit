@@ -614,6 +614,27 @@ test('mark arrow follows the model', { options: { mode: 'auto' } }, async ($, on
   await ui.unmount()
 })
 
+test('a new chat clears the rows of the old chat, a reload keeps them', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  on('ui.render', { component: 'Placed' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>engine</Text>
+  })
+  w.row = null
+  await start($)
+  await switchPair($, w, 'haiku', 'high')
+  const shown = async () => {
+    const ui = await $.ui.mount({ ...placed('mark-1'), surface: 'desktop' })
+    const found = (await ui.find({ type: 'Text', text: /Haiku/ })) !== undefined
+    await ui.unmount()
+    return found
+  }
+  await start($)
+  expect(await shown()).toBe(true)
+  await $.classic.SessionStart({ source: 'clear' } as never)
+  expect(await shown()).toBe(false)
+})
+
 test('footer shows the pair', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   engineFooter(on)
@@ -815,4 +836,20 @@ test('/coremodel replies speak of the pair, not only the level', async ($, on) =
   expect(await run($, 'off')).toBe('Off. /coremodel on turns it back on.')
   expect(await run($, 'on')).toMatch(/^On: (auto|suggest)\.$/)
   expect(await run($, 'panel')).toBe('The pane is open.')
+})
+
+test('a model without effort shows no level in the applied line', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  w.answer = '{"level":"high","model":"opus","why":"auth bug"}'
+  await start($)
+  await submit($, 'fix the login')
+  await step($, undefined, 0)
+  expect(w.models.length).toBe(1)
+  const ui = await $.ui.mount({ ...ABOVE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /Opus/ })).not.toBe(undefined)
+  expect(await ui.find({ type: 'Text', text: /Effort|High/ })).toBe(undefined)
+  await ui.unmount()
+  expect(await has($, /^Opus$/)).toBe(true)
 })
