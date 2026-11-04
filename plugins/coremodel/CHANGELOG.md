@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2 — 2026-11-04
+
+- Fixed: a model and level CoreModel held survived `/clear`, `/resume` and a fork, so the new chat
+  ran on the old pick (Fable included) with no label in the footer, and its first switch line
+  named the wrong "was". A new chat now starts with nothing held, and a pick still on its way when
+  it starts is dropped. A compacted chat keeps its hold.
+
 ## 0.4.1 — 2026-11-04
 
 - The pane is redrawn. On top is what the chat runs at ("Opus · High"), with "held by CoreModel"

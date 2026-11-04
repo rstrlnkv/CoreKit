@@ -68,6 +68,49 @@ test('a new session start lets go of a held level', async ($, on) => {
   expect(w.efforts).toEqual(['high', 'medium'])
 })
 
+// /clear, /resume and a fork start another chat in the same process: session.start does not run,
+// so the hold must go here, or the new chat runs on the old pick with no label in the footer.
+for (const source of ['clear', 'resume', 'fork'] as const) {
+  test(`a new chat (${source}) lets go of a held model and level`, { options: { mode: 'auto' } }, async ($, on) => {
+    const w = world(on)
+    w.answer = '{"level":"low","model":"haiku","why":"w"}'
+    await start($)
+    await submit($, 'rename x to count')
+    await step($, 'medium')
+    await $.classic.SessionStart({ source } as never)
+    await step($, 'medium', 0)
+    expect(w.efforts).toEqual(['low', 'medium'])
+    expect(w.models).toEqual(['claude-haiku-5-5', 'claude-sonnet-5-5'])
+  })
+}
+
+test('a compacted chat keeps its held model and level', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"low","model":"haiku","why":"w"}'
+  await start($)
+  await submit($, 'rename x to count')
+  await step($, 'medium')
+  await $.classic.SessionStart({ source: 'compact' } as never)
+  await step($, 'medium', 0)
+  expect(w.efforts).toEqual(['low', 'low'])
+  expect(w.models).toEqual(['claude-haiku-5-5', 'claude-haiku-5-5'])
+})
+
+test('a pick still running when a new chat starts is dropped', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  let answer: (a: string) => void = () => {}
+  w.answer = new Promise<string>(r => (answer = r))
+  await start($)
+  await submit($, 'rename x to count')
+  const first = step($, 'medium')
+  await $.classic.SessionStart({ source: 'clear' } as never)
+  answer('{"level":"low","model":"haiku","why":"w"}')
+  await first
+  await step($, 'medium', 0)
+  expect(w.efforts).toEqual(['medium', 'medium'])
+  expect(w.models).toEqual(['claude-sonnet-5-5', 'claude-sonnet-5-5'])
+})
+
 test('suggest Keep, a dismissed question and an other answer keep the level', async ($, on) => {
   const w = world(on)
   await start($)

@@ -52,7 +52,8 @@ The plugin puts the chosen model and level on every request of this chat only. I
 your model or effort setting, so other chats and later sessions keep your own defaults. The menus
 therefore keep showing your own settings; the footer shows a label such as **Opus · High**, and
 `/coremodel` prints what the chat really runs at. Choose a model with `/model` or move the effort
-menu yourself, and the plugin lets go of that part; a new session lets go of both.
+menu yourself, and the plugin lets go of that part; a new chat (`/clear`, `/resume`) or a new
+session lets go of both.
 
 If your plan does not include a model the plugin picked, the turn fails once; CoreModel then stops
 using that model for the session and says so in the pane. Remove it from the `models` setting.

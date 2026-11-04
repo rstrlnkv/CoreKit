@@ -88,6 +88,19 @@ export async function releaseHold($: EngineInterface): Promise<void> {
   await syncOverride($)
 }
 
+/**
+ * A new chat starts with nothing held: the hold, a prompt waiting for its pick and the undo line
+ * go, and a pick still on its way is dropped. Models the account refused stay dropped.
+ */
+async function newChat($: EngineInterface): Promise<void> {
+  gen += 1
+  held = null
+  seen = toLevel(asked)
+  await releaseHold($)
+  await update($, band, () => null)
+  $.ui.invalidate('ui.render')
+}
+
 /** Updates this session's counts, starting from zeros. */
 export async function count($: EngineInterface, f: (s: Stats) => Stats): Promise<void> {
   await update($, stats, cur => f(cur ?? NO_STATS))
@@ -366,12 +379,18 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // /clear, /resume and a fork start another chat in this process, and session.start does not run
+  // for them; the module's own variables would carry the hold into the new chat. A compacted chat
+  // is the same chat and keeps it.
+  on('classic.SessionStart', async ($, e, next) => {
+    if (e.source === 'clear' || e.source === 'resume' || e.source === 'fork') await newChat($)
+    return next(e)
+  })
+
   on('session.start', async ($, e, next) => {
     unavailable.clear()
     // A new session, or a reload of this module, starts with no held level: drop what $.state kept.
-    held = null
-    await releaseHold($)
-    await update($, band, () => null)
+    await newChat($)
     await $.command.register({
       name: 'coremodel',
       description: 'CoreModel: show the real effort level, set the mode (auto, suggest, off, on), or open the pane (panel)',
