@@ -414,7 +414,8 @@ test('mid-chat stronger pick asks with the cost',{ options: { mode: 'auto' } }, 
   await submit($, 'now the hard part')
   await step($, 'medium')
   expect(w.questions[0]).toContain('≈ 100k tokens')
-  expect(w.questions[0]).toContain('~50')
+  expect(w.questions[0]).toContain('about $0.50')
+  expect(w.questions[0]).toContain('(x)')
   expect(w.models).toEqual(['claude-opus-5-5'])
 })
 
@@ -425,7 +426,7 @@ test('mid-chat question without a known size says it costs tokens', { options: {
   await start($)
   await submit($, 'now the hard part')
   await step($, 'medium')
-  expect(w.questions[0]).toContain('which costs tokens')
+  expect(w.questions[0]).toContain('read again once, which costs tokens')
 })
 
 test('mid-chat weaker pick changes nothing', { options: { mode: 'auto' } }, async ($, on) => {

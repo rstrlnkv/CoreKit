@@ -42,12 +42,10 @@ export function parseModels(setting: unknown): ModelKey[] {
 }
 
 /**
- * What a switch from `from` to `to` costs, in replies read from the cache on `from`: the chat is
- * written to the new model's cache once. Null when the chat size or the current model is unknown.
+ * What a switch to `to` costs once, in dollars at API prices: the chat is written to the new
+ * model's cache. Null when the chat size is unknown.
  */
-export function switchCost(tokens: number | undefined, from: ModelKey | '', to: ModelKey): number | null {
-  if (!tokens || tokens <= 0 || !from) return null
-  const write = tokens * MODELS[to].input * WRITE
-  const read = tokens * MODELS[from].input * MODELS[from].read
-  return Math.max(1, Math.ceil(write / read))
+export function switchUsd(tokens: number | undefined, to: ModelKey): number | null {
+  if (!tokens || tokens <= 0) return null
+  return (tokens * MODELS[to].input * WRITE) / 1_000_000
 }

@@ -668,7 +668,7 @@ test('pane model press mid-chat asks the cost', async ($, on) => {
   await step($, 'medium')
   w.reply = 'Switch to Opus'
   await pressPane($, 'model-opus')
-  expect(w.questions[0]).toContain('~50')
+  expect(w.questions[0]).toContain('about $0.50')
   await step($, 'medium', 1)
   expect(w.models.at(-1)).toBe('claude-opus-5-5')
 })

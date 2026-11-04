@@ -134,14 +134,17 @@ export function texts(lang: Lang) {
     modelOption: (m: ModelKey, recommended: boolean) => `${MODELS[m].name}${recommended ? (ru ? ' (советую)' : ' (recommended)') : ''}`,
     keepCurrent: ru ? 'Оставить текущую модель' : 'Keep the current model',
     keepModel: (m: ModelKey) => (ru ? `Оставить ${MODELS[m].name}` : `Keep ${MODELS[m].name}`),
-    modelQuestion: (to: ModelKey, cost: number | null, tokens: number | undefined, isFirst: boolean, why: string) => {
+    modelQuestion: (to: ModelKey, usd: number | null, tokens: number | undefined, isFirst: boolean, why: string) => {
       const name = MODELS[to].name
       if (isFirst) return ru ? `Похоже, это работа для ${name}${why ? `: ${why}` : ''}. Сменить модель?` : `This looks like work for ${name}${why ? `: ${why}` : ''}. Switch the model?`
-      if (cost === null || !tokens) return ru ? `Перейти на ${name}? Чат перечитается заново, это стоит токенов.` : `Switch to ${name}? The chat is read again, which costs tokens.`
+      // Mid-chat the new model reads the whole chat again, once: say why, and what that costs.
+      const head = ru ? `Перейти на ${name}${why ? ` (${why})` : ''}?` : `Switch to ${name}${why ? ` (${why})` : ''}?`
+      if (usd === null || !tokens) return ru ? `${head} Чат один раз перечитается заново, это стоит токенов.` : `${head} The chat is read again once, which costs tokens.`
       const k = Math.max(1, Math.round(tokens / 1000))
+      const money = usd < 0.01 ? '< $0.01' : `$${usd.toFixed(2)}`
       return ru
-        ? `Перейти на ${name}? Чат перечитается заново: ≈ ${k} тыс. токенов, как ~${cost} обычных ответов. Дальше ответы снова дешёвые.`
-        : `Switch to ${name}? The chat is read again: ≈ ${k}k tokens, like ~${cost} ordinary replies. Replies are cheap again after that.`
+        ? `${head} Чат один раз перечитается заново: ≈ ${k} тыс. токенов, около ${money.replace('.', ',')} по ценам API.`
+        : `${head} The chat is read again once: ≈ ${k}k tokens, about ${money} at API prices.`
     },
     back,
     keep: (now: Level | '') =>

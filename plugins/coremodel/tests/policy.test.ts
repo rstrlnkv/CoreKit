@@ -100,8 +100,16 @@ test('keepFirst moves Keep to the top only for a costly pick', () => {
   expect(isCostlyLevel('high')).toBe(false)
 })
 
-test('the model question names the cost in the prompt language', () => {
-  expect(texts('ru').modelQuestion('opus', 50, 100_000, false, '')).toContain('Чат перечитается заново: ≈ 100 тыс. токенов, как ~50')
-  expect(texts('en').modelQuestion('opus', null, undefined, false, '')).toContain('which costs tokens')
+test('the model question names the reason and the one-time cost in the prompt language', () => {
+  const ru = texts('ru').modelQuestion('opus', 0.5, 100_000, false, 'много файлов')
+  expect(ru).toContain('Перейти на Opus (много файлов)?')
+  expect(ru).toContain('Чат один раз перечитается заново: ≈ 100 тыс. токенов, около $0,50')
+  const en = texts('en').modelQuestion('opus', 0.5, 100_000, false, 'many files')
+  expect(en).toContain('Switch to Opus (many files)?')
+  expect(en).toContain('The chat is read again once: ≈ 100k tokens, about $0.50 at API prices.')
+  // No "ordinary replies" figure and no claim that replies get cheap: a stronger model costs more per reply.
+  for (const t of [ru, en]) expect(/replies|ответ|cheap|дешёв/.test(t)).toBe(false)
+  expect(texts('en').modelQuestion('haiku', 0.004, 100_000, false, '')).toContain('< $0.01')
+  expect(texts('en').modelQuestion('opus', null, undefined, false, '')).toContain('read again once, which costs tokens')
   expect(texts('en').modelQuestion('opus', null, undefined, true, 'many files')).toContain('Opus')
 })

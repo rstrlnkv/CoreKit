@@ -16,8 +16,8 @@ whole chat again at full price. So:
 
 - On the **first prompt** of a chat the model changes freely: there is nothing to re-read.
 - **Later** CoreModel only offers a **stronger** model, always with a question that names the cost,
-  for example "The chat is read again: ≈ 100k tokens, like ~50 ordinary replies". It never offers
-  a weaker model mid-chat: the re-read would eat the saving.
+  for example "Switch to Opus (many files)? The chat is read again once: ≈ 100k tokens, about
+  $0.50 at API prices". It never offers a weaker model mid-chat: the re-read would eat the saving.
 - **Fable** always asks first.
 
 ## Modes

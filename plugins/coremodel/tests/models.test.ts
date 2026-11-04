@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { LADDER, MODELS, parseModels, stronger, switchCost, toModel } from '../hooks/models'
+import { LADDER, MODELS, parseModels, stronger, switchUsd, toModel } from '../hooks/models'
 
 test('the ladder and ids follow the spec', () => {
   expect(LADDER).toEqual(['haiku', 'sonnet', 'opus', 'fable'])
@@ -8,12 +8,12 @@ test('the ladder and ids follow the spec', () => {
   expect(MODELS.fable.id).toBe('claude-fable-5-1')
 })
 
-test('switchCost compares a cache write on the new model with a cache read on the current one', () => {
-  expect(switchCost(100_000, 'sonnet', 'opus')).toBe(50)
-  expect(switchCost(undefined, 'sonnet', 'opus')).toBe(null)
-  expect(switchCost(100_000, '', 'opus')).toBe(null)
-  expect(switchCost(0, 'sonnet', 'opus')).toBe(null)
-  expect(switchCost(100_000, 'fable', 'haiku')).toBe(1)
+test('switchUsd is one cache write of the chat on the new model, at API prices', () => {
+  expect(switchUsd(100_000, 'opus')).toBe(0.5)
+  expect(Math.round(switchUsd(100_000, 'haiku')! * 1e6)).toBe(12_500)
+  expect(switchUsd(100_000, 'fable')).toBe(1.25)
+  expect(switchUsd(undefined, 'opus')).toBe(null)
+  expect(switchUsd(0, 'opus')).toBe(null)
 })
 
 test('stronger follows the ladder and is false for an unknown model', () => {

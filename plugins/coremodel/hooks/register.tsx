@@ -3,7 +3,7 @@ import type { EngineInterface, ModelCompleteResult, Register } from 'claude-code
 
 import type { Band, Level, Mark, Stats } from '../types'
 import { buildPrompt, parseAnswer, type Pick, toLevel } from './classifier'
-import { LADDER, MODELS, type ModelKey, parseModels, switchCost, toModel } from './models'
+import { LADDER, MODELS, type ModelKey, parseModels, switchUsd, toModel } from './models'
 import { decide, decideModel, effortOptions, isCostlyLevel, keepFirst, type Lang, type Mode, modelOptions, texts, uiLang } from './policy'
 
 const PLUGIN = 'coremodel'
@@ -256,7 +256,7 @@ async function runPick(
     const opts = keepFirst(listed, nowModel || 'keep', to === 'fable')
     const labels = opts.map(m => (m === 'keep' ? t.keepCurrent : m === nowModel ? t.keepModel(m) : t.modelOption(m, m === to)))
     try {
-      const answer = await $.ui.ask(t.modelQuestion(to, switchCost(tokens, nowModel, to), tokens, isFirst, pick.why), { options: labels, header: t.modelHeader })
+      const answer = await $.ui.ask(t.modelQuestion(to, switchUsd(tokens, to), tokens, isFirst, pick.why), { options: labels, header: t.modelHeader })
       const chosen = opts[labels.indexOf(answer)]
       if (chosen && chosen !== 'keep' && chosen !== nowModel) modelTo = chosen
     } catch {
@@ -341,7 +341,7 @@ async function paneModel($: EngineInterface, key: ModelKey): Promise<void> {
     const t = texts(lastLang)
     const tokens = await chatTokens($)
     try {
-      const answer = await $.ui.ask(t.modelQuestion(key, switchCost(tokens, nowModel, key), tokens, false, ''), { options: [t.switchModel(key), t.cancel], header: t.modelHeader })
+      const answer = await $.ui.ask(t.modelQuestion(key, switchUsd(tokens, key), tokens, false, ''), { options: [t.switchModel(key), t.cancel], header: t.modelHeader })
       if (answer !== t.switchModel(key)) return
     } catch {
       return

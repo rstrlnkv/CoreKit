@@ -100,16 +100,17 @@ names no model, so the model held at that moment is the one dropped.
 
 ## 5. The cost line
 
-Mid-chat model questions say what the switch costs, in the prompt's language:
-"Чат перечитается заново: ≈ 100 тыс. токенов, как ~25 обычных ответов. Дальше ответы снова
-дешёвые." / "The chat is read again: ≈ 100k tokens, like ~25 ordinary replies. Replies are cheap
-again after that."
+Mid-chat model questions say why the model is suggested and what the switch costs, once, in the
+prompt's language (changed in 0.4.2; the "~N ordinary replies" figure scared more than it told, and
+"replies are cheap again" is false when the new model is Opus or Fable):
+"Перейти на Opus (много файлов)? Чат один раз перечитается заново: ≈ 100 тыс. токенов, около
+$0,50 по ценам API." / "Switch to Opus (many files)? The chat is read again once: ≈ 100k tokens,
+about $0.50 at API prices."
 - Tokens: `$.session.usage().context.tokens` (the last response's input tokens; free call).
-- "Ordinary replies": `ceil(tokens × input(new) × 1.25 / (tokens × input(current) × read(current)))`,
-  rounded to a whole number. Example: 100k tokens, Sonnet → Opus: 100k × 4 × 1.25 = $0.50 against
-  100k × 2 × 0.05 = $0.01 per reply → "~50".
-- Unknown tokens, or a current model not in §3: "Чат перечитается заново, это стоит токенов." /
-  "The chat is read again, which costs tokens."
+- Dollars: `tokens × input(new) × 1.25 / 1e6` (one cache write on the new model). Example: 100k
+  tokens to Opus: 100k × $4 × 1.25 / 1M = $0.50. Under a cent it reads "< $0.01".
+- Unknown tokens: "Чат один раз перечитается заново, это стоит токенов." / "The chat is read
+  again once, which costs tokens."
 - Numbers are rounded: thousands as "тыс." / "k", replies to a whole number, never below 1.
 
 ## 6. Settings
