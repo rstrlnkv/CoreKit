@@ -481,3 +481,43 @@ test('the pane button rows wrap in a narrow pane', async ($, on) => {
     await ui.unmount()
   }
 })
+
+test('the pane hides the menu line until a request shows the menu', async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await pressPane($, 'level-high')
+  expect(await has($, /in the menu/)).toBe(false)
+  await step($, 'medium')
+  expect(await has($, /in the menu: Medium/)).toBe(true)
+})
+
+test('no undo when the previous level is unknown', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'unset')
+  expect(w.efforts.at(-1)).toBe('high')
+  expect(await undoButton($)).toBe(undefined)
+})
+
+test('an undo button drawn before off does nothing when pressed after', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  const ui = await $.ui.mount({ ...ABOVE, surface: 'desktop' })
+  await run($, 'off')
+  await run($, 'auto')
+  await pressPane($, 'level-low')
+  try {
+    await ui.press({ key: 'undo' })
+  } catch {
+    // The engine may refuse a press on a button it no longer draws; either way nothing changes.
+  }
+  await ui.unmount()
+  await step($, 'medium', 1)
+  expect(w.efforts.at(-1)).toBe('low')
+})

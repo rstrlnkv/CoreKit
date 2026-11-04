@@ -63,3 +63,8 @@ test('mark points up or down by level and says it in the prompt language', () =>
   expect(texts('en').mark('high', 'low', 'auth bug').includes('Effort: High (was Low) · auth bug')).toBe(true)
   expect(texts('ru').mark('high', 'low', 'x').includes('Усилие')).toBe(true)
 })
+
+test('the mode question ends as a question', () => {
+  expect(texts('en').modeQuestion('auto', 'high').endsWith('?')).toBe(true)
+  expect(texts('ru').modeQuestion('auto', '').endsWith('?')).toBe(true)
+})

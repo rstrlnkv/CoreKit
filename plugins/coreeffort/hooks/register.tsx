@@ -300,7 +300,7 @@ export const register: Register = (on, options) => {
           ))}
         </Box>
         <Text bold>{t.runsAt(held ?? seen)}</Text>
-        {held ? <Text dimColor>{t.inMenu(toLevel(asked))}</Text> : null}
+        {held && toLevel(asked) ? <Text dimColor>{t.inMenu(toLevel(asked))}</Text> : null}
         <Text dimColor>{t.lastPick}</Text>
         <Text>{s?.last ? `${t.levelName(s.last.level)} · ${s.last.why}` : t.noPicks}</Text>
         {s ? <Text dimColor>{t.session}</Text> : null}
