@@ -33,6 +33,8 @@ let modelHold: { key: ModelKey; base: string } | null = null
 let seen: Level | '' = ''
 // The model the last main-chat request named (the person's own unless held).
 let seenModel = ''
+// Models this account refused in this session (spec §4.5): never picked again until a new session.
+const unavailable = new Set<ModelKey>()
 // The menu's own effort as the last main-chat request carried it.
 let asked = ''
 let lastLang: Lang = 'en'
@@ -196,7 +198,7 @@ async function runPick(
   const level = pick.level
 
   // The model first (spec §4.3): it decides what the chat costs from here on.
-  const allowed = parseModels(options.models)
+  const allowed = parseModels(options.models).filter(k => !unavailable.has(k))
   const isFirst = !(await $.session.messages()).some(m => m.role === 'assistant')
   const mAction = decideModel({ mode, pickModel: options.pickModel !== 'off', isFirst, now: nowModel, pick: pick.model, allowed })
   let modelTo: ModelKey | null = mAction === 'apply' && pick.model ? pick.model : null
@@ -348,7 +350,21 @@ export const register: Register = (on, options) => {
     return yield* next({ ...e, effort: want ?? e.effort, model })
   })
 
+  // A model the account cannot use: the turn fails with model_not_found, naming no model, so the
+  // held one is the one refused. Drop it for this session, once, instead of failing every request.
+  on('classic.StopFailure', async ($, e, next) => {
+    if (e.error === 'model_not_found' && modelHold) {
+      const key = modelHold.key
+      unavailable.add(key)
+      await releaseModel($)
+      await log($, 'model', `${MODELS[key].name} is not available: ${e.error_details ?? e.error}`)
+      $.ui.invalidate('ui.render')
+    }
+    return next(e)
+  })
+
   on('session.start', async ($, e, next) => {
+    unavailable.clear()
     // A new session, or a reload of this module, starts with no held level: drop what $.state kept.
     held = null
     await releaseHold($)
@@ -403,7 +419,7 @@ export const register: Register = (on, options) => {
     const held = pair?.level ?? null
     const heldModel = pair?.model ?? null
     const s = await read($, stats)
-    const allowed = parseModels(options.models)
+    const allowed = parseModels(options.models).filter(k => !unavailable.has(k))
     const act = (what: string, f: () => Promise<unknown>) => () => {
       f().catch(err => log($, what, err))
     }
@@ -422,6 +438,9 @@ export const register: Register = (on, options) => {
         {s?.models ? LADDER.filter(m => s.models![m] > 0).map(m => <Text>{`${MODELS[m].name} ${s.models![m]}`}</Text>) : null}
         {s ? LEVELS.filter(l => s.picks[l] > 0).map(l => <Text>{`${t.levelName(l)} ${s.picks[l]}`}</Text>) : null}
         {s && s.kept > 0 ? <Text>{`${t.kept} ${s.kept}`}</Text> : null}
+        {[...unavailable].map(m => (
+          <Text color="yellow">{t.unavailable(m)}</Text>
+        ))}
         <Box key="models" flexWrap="wrap">
           {allowed.map(m => (
             <Button key={`model-${m}`} label={m === heldModel ? `● ${MODELS[m].name}` : MODELS[m].name} onPress={act('model', () => paneModel($, m))} />

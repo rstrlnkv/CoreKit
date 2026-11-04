@@ -79,6 +79,7 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     w.logs.push(`${e.path}\n${e.text}`)
     return { value: undefined } as never
   })
+  on('classic.StopFailure', () => ({}) as never)
   on('session.usage', () => ({ value: { startedAt: 0, context: { tokens: w.tokens, window: 1_000_000 }, rateLimits: [] } }) as never)
   on('config.list', () => ({ value: w.row ? [w.row] : [] }) as never)
   on('config.set', (_, e) => {

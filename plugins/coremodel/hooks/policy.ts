@@ -137,6 +137,8 @@ export function texts(lang: Lang) {
     },
     switchModel: (m: ModelKey) => (ru ? `Перейти на ${MODELS[m].name}` : `Switch to ${MODELS[m].name}`),
     cancel: ru ? 'Отмена' : 'Cancel',
+    unavailable: (m: ModelKey) =>
+      ru ? `Модель ${MODELS[m].name} недоступна — уберите её из настройки models` : `${MODELS[m].name} is not available — remove it from the models setting`,
     checking: ru ? 'подбираю усилие…' : 'checking effort…',
   }
 }

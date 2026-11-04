@@ -93,6 +93,8 @@ later picks of this session, a log line is written, and the pane shows
 "Модель <name> недоступна — уберите её из настройки models" / "<name> is not available — remove
 it from the models setting". No retry on every request. How such a failure reaches a hook
 (`turn.step` result, an error event) is checked in the plan before this part is built.
+Checked 2026-11-04: Claude Code raises `classic.StopFailure` with `error: 'model_not_found'`; it
+names no model, so the model held at that moment is the one dropped.
 
 ## 5. The cost line
 

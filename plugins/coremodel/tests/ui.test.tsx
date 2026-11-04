@@ -640,3 +640,29 @@ test('pane counts per model', { options: { mode: 'auto' } }, async ($, on) => {
   expect(await has($, /in the menu: Sonnet · Medium/)).toBe(true)
   expect(await has($, /Opus · High · auth bug/)).toBe(true)
 })
+
+// CoreModel: a model the account cannot use (spec §4.5).
+test('an unavailable model is dropped for the session', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'medium')
+  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+  await $.classic.StopFailure({ error: 'model_not_found', error_details: 'model: claude-opus-5-5' } as never)
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
+  expect(w.logs.some(l => l.includes('Opus'))).toBe(true)
+  expect(await has($, /Opus is not available/)).toBe(true)
+  await switchPair($, w, 'opus', 'medium')
+  expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
+})
+
+test('other failures leave the model alone', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'medium')
+  await $.classic.StopFailure({ error: 'rate_limit' } as never)
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+})
