@@ -140,12 +140,15 @@ files in `<S>/Projects/Core/foo/`:
   (in settings `env` or the shell): not loaded. Docs: `additionalDirectories` grants file
   access only; only `--add-dir` loads configuration.
 - Control: real files in `.claude/rules/` (always-on and `paths:`) load.
+- After implementation (0.5.0, `claude -p --plugin-dir`): a project made by `scaffold.sh` loads
+  `<Core>/<name>/CLAUDE.md` through the symlink in the main session and in a general-purpose
+  subagent it launched (check 2 below: done).
 
 ## 8. Open checks (during implementation)
 1. Interactive session in a trusted folder: the symlinked `CLAUDE.local.md` loads with no
    dialog (check with `/context`). If a dialog appears, the user approves it once per project;
    note it in the adopt report.
-2. A corecrew subagent sees the `CLAUDE.local.md` content.
+2. A subagent sees the `CLAUDE.local.md` content — done (§7).
 3. Desktop-app worktrees (created by the app, not `git worktree add`) load the parent symlink.
 If check 1 fails outright, stop and revisit L4 with the owner before going on.
 
