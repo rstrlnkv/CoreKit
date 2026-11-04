@@ -355,6 +355,11 @@ async function paneModel($: EngineInterface, key: ModelKey): Promise<void> {
   await update($, band, () => null)
 }
 
+/** True when the `models` setting names `key` itself; an empty setting means all four without naming any. */
+function namedInSetting(setting: unknown, key: ModelKey): boolean {
+  return typeof setting === 'string' && setting.split(',').some(w => toModel(w) === key)
+}
+
 const ASK_MODES: readonly Mode[] = ['auto', 'suggest', 'off']
 const LEVELS: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
@@ -512,7 +517,7 @@ export const register: Register = (on, options) => {
             <Text key="typo" color="warning">{t.unknownModels(unknownModels(options.models))}</Text>
           ) : null}
           {[...unavailable].map(m => (
-            <Text key={`unavailable-${m}`} color="warning">{t.unavailable(m)}</Text>
+            <Text key={`unavailable-${m}`} color="warning">{t.unavailable(m, namedInSetting(options.models, m))}</Text>
           ))}
           <Box key="models" flexWrap="wrap" marginTop="sm">
             {(pickOn ? allowed : []).map(m => (

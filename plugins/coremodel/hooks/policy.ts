@@ -202,8 +202,10 @@ export function texts(lang: Lang) {
     },
     switchModel: (m: ModelKey) => (ru ? `Перейти на ${MODELS[m].name}` : `Switch to ${MODELS[m].name}`),
     cancel: ru ? 'Отмена' : 'Cancel',
-    unavailable: (m: ModelKey) =>
-      ru ? `Модель ${MODELS[m].name} недоступна — уберите её из настройки models` : `${MODELS[m].name} is not available — remove it from the models setting`,
+    unavailable: (m: ModelKey, listed = false) =>
+      ru
+        ? `Модель ${MODELS[m].name} недоступна — ${listed ? 'уберите её из настройки models' : 'CoreModel больше не выберет её в этой сессии'}`
+        : `${MODELS[m].name} is not available — ${listed ? 'remove it from the models setting' : 'CoreModel will not pick it again this session'}`,
     checking: ru ? 'подбираю усилие…' : 'checking effort…',
   }
 }

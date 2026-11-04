@@ -706,6 +706,25 @@ test('an unavailable model is dropped for the session', { options: { mode: 'auto
   expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
 })
 
+test('the unavailable note does not mention the setting when it is empty', { options: { mode: 'auto', models: '' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'medium')
+  await $.classic.StopFailure({ error: 'model_not_found' } as never)
+  expect(await has($, /Opus is not available — CoreModel will not pick it again/)).toBe(true)
+  expect(await has($, /models setting/)).toBe(false)
+})
+
+test('the unavailable note names the models setting when it is set', { options: { mode: 'auto', models: 'sonnet,opus' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'medium')
+  await $.classic.StopFailure({ error: 'model_not_found' } as never)
+  expect(await has($, /remove it from the models setting/)).toBe(true)
+})
+
 test('other failures leave the model alone', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.row = null
