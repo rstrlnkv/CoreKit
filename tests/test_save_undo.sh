@@ -177,6 +177,17 @@ assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "No env"
 assert_eq "$(cat "$F/n.txt")" "n1" "new layout: undo did not restore code"
 assert_eq "$(cat "$CORE_DIR/foo/d.md")" "doc1" "new layout: undo did not restore docs"
 
+# a session in <Core>/<name>/ of a new-layout project: save and undo-step use the code folder beside the Core
+echo "n3" > "$F/n.txt"; echo "doc3" > "$CORE_DIR/foo/d.md"
+(cd "$CORE_DIR/foo" && bash "$SAVE" "From the Core folder") > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "0" "save from <Core>/foo: $(cat "$SANDBOX/out")"
+assert_contains "$SANDBOX/out" "saved code"; assert_contains "$SANDBOX/out" "saved docs"
+assert_eq "$(git -C "$F" log -1 --format=%s)" "From the Core folder" "save from <Core>/foo: code commit"
+assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "From the Core folder" "save from <Core>/foo: docs commit"
+(cd "$CORE_DIR/foo" && bash "$UNDO") > "$SANDBOX/out" 2>&1
+assert_eq "$(cat "$F/n.txt")" "n1" "undo from <Core>/foo did not restore code"
+assert_eq "$(cat "$CORE_DIR/foo/d.md")" "doc1" "undo from <Core>/foo did not restore docs"
+
 # an old-layout project plus an unrelated repo of the same name beside the Core: save works in
 # <Core>/<name>/code and writes nothing into the unrelated repo
 scaffold_old twin-app

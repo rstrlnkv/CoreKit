@@ -3,10 +3,20 @@
 # NAME, CORE, CORE_PATHS. Two layouts: old (<Core>/<name>/code) and new (<Projects>/<Name> beside
 # the Core, with a CLAUDE.local.md symlink to <Core>/<name>/CLAUDE.md).
 locate() {
-  local here="$PWD" common link ldir
+  local here="$PWD" common link ldir n
   [ -d "$here/code/.git" ] && here="$here/code"
   CODE=$(git -C "$here" rev-parse --show-toplevel 2>/dev/null) || {
     echo "Run this inside a project's code folder." >&2; return 1; }
+  # A session in <Core>/<name>/ (a new-layout project, or a subfolder of an old-layout one): git finds
+  # the Core repo (it has .coredev); the code folder is the project's, from code_dir_of.
+  if [ -f "$CODE/.coredev" ]; then
+    type project_of >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/lib.sh" || return 1
+    CORE_DIR="$CODE"; load_settings
+    if n=$(project_of "$here"); then
+      here=$(code_dir_of "$n" 2>/dev/null) && CODE=$(git -C "$here" rev-parse --show-toplevel 2>/dev/null) || {
+        echo "Run this inside a project's code folder." >&2; return 1; }
+    fi
+  fi
   common=$(cd "$CODE" && cd "$(git rev-parse --git-common-dir)" && pwd)
   MAIN=$(dirname "$common")
   PROJECT=$(dirname "$MAIN"); NAME=$(basename "$PROJECT")

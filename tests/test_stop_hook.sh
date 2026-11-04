@@ -38,6 +38,12 @@ assert_eq "$(git -C "$C" status --porcelain)" "?? new.txt" "hook left files in t
 # dirty docs only -> 2
 (cd "$C" && bash "$SCRIPTS/save" "s") >/dev/null 2>&1; echo y >> "$P/docs/brief.md"
 input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "dirty docs should block"
+# a session in <Core>/<name>/ of a new-layout project: the reminder covers the code folder beside the Core
+(cd "$C" && bash "$SCRIPTS/save" "s-core") >/dev/null 2>&1; echo z > "$C/from-core.txt"
+OUT=$(input "$P" false | bash "$H" 2>&1); rc=$?
+assert_eq "$rc" "2" "dirty code, session in <Core>/<name>/: $OUT"
+echo "$OUT" | grep -q 'save' && pass || fail "reminder from <Core>/<name>/ lacks save: $OUT"
+(cd "$C" && bash "$SCRIPTS/save" "s-core2") >/dev/null 2>&1
 # outside a project -> 0 (never block unrelated sessions)
 OUT=$(input "$SANDBOX" false | bash "$H" 2>&1); assert_eq "$?" "0" "outside project should pass"
 assert_eq "$OUT" "" "hook must stay silent outside a Core project"
