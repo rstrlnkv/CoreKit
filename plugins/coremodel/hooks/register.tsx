@@ -466,10 +466,24 @@ export const register: Register = (on, options) => {
   })
 
   // The app's menu shows the person's own setting; the footer slot beside it names a held level.
-  on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
+  // The footer slot also holds a button that opens and closes the pane: no chat command, so a
+  // running turn is not interrupted. It lists the mode labels itself, the engine's first.
+  on('ui.render', { component: 'SessionMode' }, async ($, e) => {
+    const { Box, Button, Text } = $.ui.resolve(e)
     const pair = await read($, override)
-    if (!pair) return next(e)
-    return next({ ...e, props: { ...e.props, modes: [...e.props.modes, texts(lastLang).pairLabel(pair.model, pair.level)] } })
+    const modes = pair ? [...e.props.modes, texts(lastLang).pairLabel(pair.model, pair.level)] : [...e.props.modes]
+    const isUp = (await $.ui.panes()).some(p => p.id === PLUGIN)
+    const toggle = async () => {
+      if ((await $.ui.panes()).some(p => p.id === PLUGIN)) await $.ui.close({ id: PLUGIN })
+      else await $.ui.open({ id: PLUGIN, title: 'CoreModel' })
+      $.ui.invalidate('ui.render')
+    }
+    return (
+      <Box gap="sm">
+        {modes.length ? <Text dimColor>{modes.join(' & ')}</Text> : null}
+        <Button key="pane" label="CoreModel" variant={isUp ? 'primary' : undefined} onPress={() => void toggle().catch(err => log($, 'pane', err))} />
+      </Box>
+    )
   })
 
   on('ui.render', { component: 'Pane', requestId: PLUGIN }, async ($, e) => {

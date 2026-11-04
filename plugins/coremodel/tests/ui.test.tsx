@@ -278,6 +278,51 @@ async function pressPane($: Eng, key: string) {
   await ui.unmount()
 }
 
+test('the footer carries a button that opens and closes the pane without the chat', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  const closed = w.closed
+  engineFooter(on)
+  w.row = null
+  await start($)
+  for (const surface of SURFACES) {
+    const before = w.opened.length
+    let ui = await $.ui.mount({ ...MODE, surface })
+    const btn = await ui.find({ type: 'Button', key: 'pane' })
+    expect(String(btn?.props.label)).toBe('CoreModel')
+    expect(btn?.props.variant).toBe(undefined)
+    // The engine's own mode labels stay beside it.
+    expect((await ui.find({ type: 'Text', text: /default/ })) !== undefined).toBe(true)
+    await ui.press({ key: 'pane' })
+    await ui.unmount()
+    expect(w.opened.length).toBe(before + 1)
+    expect(w.opened[before]).toEqual({ id: 'coremodel', title: 'CoreModel' })
+    // Open now: the button is marked and a second press closes it.
+    ui = await $.ui.mount({ ...MODE, surface })
+    expect((await ui.find({ type: 'Button', key: 'pane' }))?.props.variant).toBe('primary')
+    await ui.press({ key: 'pane' })
+    await ui.unmount()
+    expect(closed).toEqual(['coremodel'])
+    // Close it for the next surface.
+    closed.length = 0
+    w.opened.length = 0
+  }
+  expect(w.prompts.length).toBe(0)
+})
+
+test('the footer button shows beside a held level too', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ ...MODE, surface })
+    expect((await ui.find({ type: 'Text', text: /Effort High/ })) !== undefined).toBe(true)
+    expect((await ui.find({ type: 'Button', key: 'pane' })) !== undefined).toBe(true)
+    await ui.unmount()
+  }
+})
+
 test('/coremodel panel opens the pane', async ($, on) => {
   const w = world(on)
   await start($)
