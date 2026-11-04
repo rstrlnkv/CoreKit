@@ -204,6 +204,14 @@ sec_has "$SK" Start '<Projects>/<Name>'
 sec_has "$SK" Start 'old layout'
 sec_has "$SK" Start 'lib.sh" layout'
 sec_has "$SK" Start 'lib.sh" code-dir'
+# a non-zero exit of layout / code-dir: no code folder (exit 1) or a case clash (exit 3)
+sec_has "$SK" Start 'exit 1 from `layout` or `code-dir`'
+sec_has "$SK" Start 'the code is not cloned'
+sec_has "$SK" Start '`<Projects>/<Name>`'
+sec_has "$SK" Start 'exit 3'
+sec_has "$SK" Start 'two folders differ only in case'
+sec_has "$SK" Start 'the output of'
+section "$SK" Start | grep -qF 'the printed' && fail "Start step 2 still says 'the printed'" || pass
 section "$SK" Start | grep -qF 'must be inside `<Core>/<project>/`' && fail "Start step 2 still demands <Core>/<project>/" || pass
 assert_not_contains "$BR" '<Core>/<project>/code/'
 assert_not_contains "$REL" '../docs/'

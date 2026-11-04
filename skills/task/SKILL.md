@@ -69,10 +69,17 @@ attribution value resolved at Start" instead of placeholders:
    - `old`: say in one line "this project uses the old layout; run `/corecrew:task adopt <path>`"
      and stop (`adopt` itself goes on, as above).
    - `new`: the code root is the worktree root when the directory is inside
-     `<Projects>/<Name>/.claude/worktrees/<w>/`, else the printed
+     `<Projects>/<Name>/.claude/worktrees/<w>/`, else the output of
      `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" code-dir <name>`
      (`<Projects>/<Name>`, the folder beside the Core). Use the code root for briefs, tests,
      release and `git`. The wiki and `CLAUDE.md` stay in `<Core>/<name>/`.
+   - exit 1 from `layout` or `code-dir`: the project has no code folder (for example the Core is
+     synced to this machine but the code is not cloned). Say so in one line, name where the code
+     is expected (`<Projects>/<Name>`, a folder beside the Core whose lower-case name is `<name>`),
+     and stop.
+   - exit 3: two folders in `<Projects>` differ only in letter case. Show the
+     `two folders differ only in case: …` line it printed, say one of them has to be renamed, and
+     stop.
 3. **feature-dev.** Look at the agent types listed for your Agent tool. If
    `feature-dev:code-architect` or `feature-dev:code-explorer` is missing, name the install
    command `/plugin install feature-dev@claude-plugins-official`. Paths that need them stop
