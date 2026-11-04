@@ -1,6 +1,6 @@
 ---
 name: task
-description: Run one development task through the corecrew crew (fix, full feature, question, batch), with proof and one commit. Use /corecrew:task <task>, release <version> or adopt <folder>.
+description: Run one development task through the corecrew crew (fix, full feature, question, batch), with proof and one commit. Use /corecrew:task [task], release [version] or adopt [folder].
 disable-model-invocation: true
 argument-hint: "<task> | release <version> | adopt <folder>"
 ---

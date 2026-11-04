@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.2 — 2026-11-05
+- Both guards judge the command line handed to `bash -c`, `sh -c`, `zsh -c`, `dash`, `ksh` and
+  `eval`: `bash -c "cat .env"` and `bash -c "echo x > CLAUDE.md"` are blocked like the plain commands.
+  Interpreters (`python -c`, `node -e`), `find -exec`, `git show REV:.env`, `dd` and `curl -F @file`
+  are still not seen; the README now says so.
+- The one-time "Core not set up / not found" hint is shown to the person (a `systemMessage`), not
+  only handed to the model; before, it was marked as shown even when nobody read it.
+- README: the Claude Code version it needs (2.1.271 for corecrew, 2.1.287 for coremodel) and a short
+  "What the hooks do" section. The `task` description uses `[task]` instead of `<task>`.
+- Docs: finished plans and the old effort-picker documents carry a "historical" banner. The audit is in
+  docs/plans/2026-11-05-findings.md, -docs-gaps.md and -ux-findings.md.
+
 ## 0.5.1 — 2026-11-05
 - guard-secrets: a secret name written with quotes or a backslash (`.e'n'v`, `.\env`, `~/.s""sh/id_rsa`)
   is judged after quote removal; globs that can match `.env`, `.env.*` or `.ssh` (`.e*`, `.en?`,

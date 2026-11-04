@@ -1,5 +1,7 @@
 # effort-picker Implementation Plan
 
+> **Historical (done).** Built as `effort-picker`, renamed `coreeffort`, then `coremodel` (docs/specs/2026-11-04-coremodel-design.md, docs/plans/2026-11-04-coremodel.md). Names and paths below are the old ones; the tree wins where it differs.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A second plugin in the corekit marketplace, `effort-picker`, that picks the effort level for each main-chat prompt and asks before any switch to xhigh or max.

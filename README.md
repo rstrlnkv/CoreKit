@@ -42,6 +42,11 @@ the plugin's settings when it is enabled:
 /plugin install feature-dev@claude-plugins-official
 ```
 
+### Requirements
+
+Claude Code 2.1.271 or later: the plugin settings with a list of choices (`userConfig` with `options`) need it,
+and an older client cannot load the plugin. The `coremodel` plugin needs 2.1.287 or later (its hooks run as a module).
+
 ### Settings
 
 An install from the command line does not ask for the plugin's settings, so the defaults apply
@@ -123,6 +128,20 @@ exists, session start prints it into the conversation.
 Claude runs the plugin's `save` tool to commit code and docs together as one step, and `undo-step`
 to revert the last step in both (with `git revert`, history kept). Nothing is copied into your
 docs repo. The plugin's Stop hook reminds Claude to save when a step is left uncommitted.
+
+### What the hooks do
+
+Inside a Core project (the Core folder, or the code folder beside it) and nowhere else:
+
+- **Session start** refreshes the plugin's tools, links `CLAUDE.local.md`, and prints the project, the docs index, the save and undo commands and your `session-rules.md`.
+- **Secrets guard** refuses to read `.env`, `.env.*` (not `.env.example`) and `~/.ssh`, also through `bash -c`, `sh -c` and `eval`.
+  For Bash it is a best-effort check, not a sandbox: it does not see `python -c`, `node -e`, `find -exec`, `git show REV:.env`, `dd` or `curl -F @.env`.
+  Treat it as a seat belt against accidents, not as protection from a determined program.
+- **Code guard** refuses to write `CLAUDE.md`, `AGENTS.md`, `docs/` and `.claude/` into the code folder, which may be public; they belong in the Core.
+- **One suite at a time** holds a test run while another one runs on the machine, so two suites do not break each other.
+- **Stop** reminds Claude to save a step that is left uncommitted.
+
+Outside a Core project every hook exits at once and prints nothing.
 
 ## `coremodel` (a second plugin)
 

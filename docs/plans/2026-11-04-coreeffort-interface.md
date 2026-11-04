@@ -1,5 +1,7 @@
 # coreeffort 0.3.0 interface Implementation Plan
 
+> **Historical (done).** The CoreEffort 0.3.0 pane, built before the rename to `coremodel`; the pane was redrawn in coremodel 0.4.1 and later. The tree wins where it differs.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add the interface of spec §4.7 to the `coreeffort` plugin: a CoreEffort pane, an undo button on the switch line, switch marks in the transcript, the held level beside the working line, and `/coreeffort` asking for the mode.

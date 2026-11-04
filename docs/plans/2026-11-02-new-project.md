@@ -1,5 +1,7 @@
 # new-project Skill Implementation Plan
 
+> **Historical (done).** Built as the `corekit` plugin's `new-project` skill (0.1.x). The plugin is `corecrew` now and the project layout changed in 0.5.0; where this plan and the tree differ, the tree and docs/specs/2026-11-04-project-layout-design.md win.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the `new-project` Claude Code skill in CoreKit: scripts, templates, references, SKILL.md, tests and evals.
