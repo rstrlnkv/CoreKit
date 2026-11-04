@@ -2,7 +2,7 @@
 source "$(dirname "$0")/lib.sh"
 new_sandbox; setup_core
 bash "$SKILL/scripts/scaffold.sh" --name gen-app >/dev/null
-C="$CORE_DIR/gen-app/code"; G="$SANDBOX/gen"; mkdir -p "$G/src"
+C="$(dirname "$CORE_DIR")/gen-app"; G="$SANDBOX/gen"; mkdir -p "$G/src"
 echo "main" > "$G/src/main.txt"; printf 'node_modules/\n.DS_Store\ndist/\n' > "$G/.gitignore"
 echo "theirs" > "$G/.worktreeinclude"; mkdir -p "$G/.git"; echo junk > "$G/.git/HEAD"
 before=$(cat "$C/.worktreeinclude")

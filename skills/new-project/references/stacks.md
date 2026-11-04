@@ -4,17 +4,17 @@ Starting options for the analysis step. Verified against official docs on 2026-1
 the research subagent re-checks versions and flags for each new project.
 
 ## Contents
-- How to generate into `code/` (all stacks)
+- How to generate into the code folder (all stacks)
 - Choosing a stack
 - Flutter · SwiftUI (XcodeGen) · Tauri v2 · Web (Vite) · Telegram bot (Python) · Python CLI
 
-## How to generate into `code/` (all stacks)
-`code/` already holds `.git`, `.gitignore`, `.claude/`, `.worktreeinclude`. Generators either
+## How to generate into the code folder (all stacks)
+The code folder (`<Projects>/<name>`) already holds `.git`, `.gitignore`, `.claude/`, `.worktreeinclude`. Generators either
 refuse a non-empty folder or their overwrite flags delete everything except `.git`.
-**Never run a generator with `--force`/`--overwrite` in `code/`.** Always:
+**Never run a generator with `--force`/`--overwrite` in the code folder.** Always:
 ```bash
 TMP=$(mktemp -d) && cd "$TMP" && <generator command>
-bash <skill>/scripts/merge-generated.sh "$TMP/<generated-folder>" "<project>/code"
+bash <skill>/scripts/merge-generated.sh "$TMP/<generated-folder>" "<Projects>/<name>"
 ```
 `merge-generated.sh` never overwrites files and appends missing `.gitignore` lines.
 Names: `<name>` = project name (`my-notes-app`), `<snake>` = `my_notes_app`,

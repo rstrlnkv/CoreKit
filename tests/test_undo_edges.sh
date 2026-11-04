@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/lib.sh"
 new_sandbox; setup_core; sync_tools
-bash "$SKILL/scripts/scaffold.sh" --name edge-app >/dev/null
+scaffold_old edge-app
 C="$CORE_DIR/edge-app/code"; SAVE="$SCRIPTS/save"; UNDO="$SCRIPTS/undo-step"
 cd "$C" || exit 1
 bash "$SAVE" "Scaffold" >/dev/null

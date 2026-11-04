@@ -31,7 +31,7 @@ OUT="$(printf '{"cwd":"unterminated' | bash "$H" 2>&1)"; assert_eq "$?" "0" "bro
 
 # --- Core set up, session elsewhere: silent (tools still synced)
 setup_core
-bash "$SKILL/scripts/scaffold.sh" --name sess-app >/dev/null
+scaffold_old sess-app
 P="$CORE_DIR/sess-app"; C="$P/code"
 rm -rf "$CLAUDE_PLUGIN_DATA/tools" "$CLAUDE_PLUGIN_DATA/state"
 run_rc "$SANDBOX/elsewhere"
@@ -129,7 +129,7 @@ run_rc "$C"; echo "$OUT" | grep -qF "install-hooks.sh" && fail "fresh shims repo
 # --- cwd given with JSON escapes (\u Cyrillic, \/ and \") in a Core whose path has a space
 E="$SANDBOX/Мой проект \"q\""; mkdir -p "$E"
 export CORE_DIR="$E/Ядро"
-setup_core; bash "$SKILL/scripts/scaffold.sh" --name esc-app >/dev/null
+setup_core; scaffold_old esc-app
 EP="$CORE_DIR/esc-app"
 # JSON-escape the sandbox path: \u for Мой, \" for quotes, \/ for slashes
 json_path="$(printf '%s' "$EP/code" | sed -e 's/"/\\"/g' -e 's|/|\\/|g' -e 's/Мой/\\u041c\\u043e\\u0439/')"

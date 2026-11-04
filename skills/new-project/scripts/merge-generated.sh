@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Copies a project generated in a temp dir into code/ without overwriting anything,
-# and appends the generator's .gitignore lines that code/.gitignore lacks.
+# Copies a project generated in a temp dir into the code folder (<Projects>/<name>) without overwriting anything,
+# and appends the generator's .gitignore lines that the code .gitignore lacks.
 # Usage: bash merge-generated.sh <generated_dir> <code_dir>
 set -u
 SRC="${1:?generated dir}"; DST="${2:?code dir}"

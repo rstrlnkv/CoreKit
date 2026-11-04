@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/lib.sh"
 new_sandbox; setup_core; sync_tools
-bash "$SKILL/scripts/scaffold.sh" --name save-app >/dev/null
+scaffold_old save-app
 P="$CORE_DIR/save-app"; C="$P/code"; SAVE="$SCRIPTS/save"; UNDO="$SCRIPTS/undo-step"
 assert_file "$SAVE"; assert_file "$UNDO"; assert_no_file "$CORE_DIR/bin"; assert_no_file "$CORE_DIR/hooks"
 step_ids() { git -C "$1" log --format=%B | sed -n 's/^Step-Id: //p'; }

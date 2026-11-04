@@ -25,7 +25,7 @@ Claude Code asks for the plugin options when the plugin is enabled. The Core set
 `${user_config.core_dir}`. A value that still reads literally `${user_config.` means the plugin is
 unconfigured: treat it as unset; the scripts then use the default `~/Projects/Core`. Below,
 `<Core>` means the absolute Core path resolved once in stage 0 (when resuming at a later stage,
-resolve it first the same way), `<CoreName>` its last path component, `<prefix>` the app id prefix
+resolve it first the same way), `<CoreName>` its last path component, `<Projects>` its parent folder (where the code repos live), `<prefix>` the app id prefix
 stored in `<Core>/.coredev`:
 `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" get app-id-prefix`
 (empty until the user has given one).
@@ -34,8 +34,9 @@ stored in `<Core>/.coredev`:
 ```
 <Core>/                          private GitHub repo <CoreName> (default ~/Projects/Core)
   .coredev, PROJECTS.md, README.md, standards/, knowledge/
-  <name>/CLAUDE.md, docs/, .claude/rules/
-  <name>/code/                   separate git repo "<name>"; Claude Code is launched here
+  <name>/CLAUDE.md, docs/
+<Projects>/<name>/               beside the Core (<Projects> = parent of <Core>): separate git repo "<name>";
+                                 Claude Code is launched here; CLAUDE.local.md -> <Core>/<name>/CLAUDE.md
 ```
 
 ## Stages
@@ -92,23 +93,23 @@ Get approval for each part. Write `docs/architecture.md` and
 never invent it) and save it with
 `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" set app-id-prefix <prefix>`.
 This runs on every entry to stage 4, so it also happens when resuming at `decided`. Generate the app with the stack's command from `references/stacks.md` **in a temp
-dir**, then `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/scripts/merge-generated.sh" <tmp>/<folder> "<Core>/<name>/code"`. Never run a
-generator with `--force`/`--overwrite` in `code/`. Fill the Build/Test/Run and Stack sections of
-`CLAUDE.md` (leave the `check:` line for stage 6). `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/install-hooks.sh" "<Core>/<name>"`. Then from `code/`:
+dir**, then `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/scripts/merge-generated.sh" <tmp>/<folder> "<Projects>/<name>"`. Never run a
+generator with `--force`/`--overwrite` in the code folder. Fill the Build/Test/Run and Stack sections of
+`CLAUDE.md` (leave the `check:` line for stage 6). `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/install-hooks.sh" "<Core>/<name>"`. Then from `<Projects>/<name>`:
 `bash "${CLAUDE_SKILL_DIR}/../../scripts/save" "Scaffold <stack> project"`. Set `stage: scaffolded`.
 
 **5. GitHub.** Ask separately before each repo is created, naming it and its visibility:
 - docs repo (once): `gh repo create <CoreName> --private --source "<Core>" --push`
-- code: `gh repo create <name> --private --source "<Core>/<name>/code" --push`; use `--public`
+- code: `gh repo create <name> --private --source "<Projects>/<name>" --push`; use `--public`
   only if the user said "public" in the interview.
 
-**6. Verify.** Run the stack's check command from `references/stacks.md` (from `code/`). Once the
+**6. Verify.** Run the stack's check command from `references/stacks.md` (from `<Projects>/<name>`). Once the
 first build and that command succeed, replace the placeholder line `check: <set after scaffolding>`
 in `<Core>/<name>/CLAUDE.md` with the real single command, e.g. `check: flutter test` (the one
-test/check command, run in `code/`; hooks and the verifier read it). Then run
+test/check command, run in `<Projects>/<name>`; hooks and the verifier read it). Then run
 `bash "${CLAUDE_SKILL_DIR}/../../scripts/wiki-check.sh" "<Core>/<name>"` and fix every
 `wiki-check:` line it prints (silent = green). Set `stage: ready` and `save "Ready"`. Report in the user's language: what was created and where; how to open it
-(`cd <Core>/<name>/code && claude`); how to check it themselves; what may break.
+(`cd <Projects>/<name> && claude`); how to check it themselves; what may break.
 
 **7. Offer a plan.** Offer a v1 plan with `superpowers:writing-plans`, saved to
 `../docs/superpowers/plans/`. Do not write app features in this skill.
@@ -130,7 +131,7 @@ decision is a new file `docs/decisions/NNN-<slug>.md` plus a map line. `docs/kno
 | "I'll write the first features now" | This skill ends at a building empty project + optional plan. |
 | "Docs in the user's language are friendlier" | Files are English; summaries in chat are in their language. |
 | "The user said ok earlier, I'll create the repo" | Each `gh repo create` needs its own approval. |
-| "Faster to use --force in code/" | It deletes `.claude/` and `.gitignore`. Generate in a temp dir. |
+| "Faster to use --force in the code folder" | It deletes `.claude/` and `.gitignore`. Generate in a temp dir. |
 
 ## Quick reference
 Every `…` below stands for `CORE_DIR="<Core>"`.

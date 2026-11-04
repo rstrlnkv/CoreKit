@@ -38,7 +38,20 @@ new_sandbox() {
 }
 
 # setup_core — creates the Core skeleton in $CORE_DIR (what scaffold.sh requires).
-setup_core() { bash "$SCRIPTS/setup-core.sh" "$CORE_DIR" >/dev/null; }
+# The Core template no longer ignores */code/ (code lives beside the Core); tests still built in the
+# old layout (<Core>/<name>/code) get the line back, folded into the setup commit.
+setup_core() {
+  bash "$SCRIPTS/setup-core.sh" "$CORE_DIR" >/dev/null || return 1
+  printf '*/code/\n' >> "$CORE_DIR/.gitignore"
+  git -C "$CORE_DIR" add .gitignore && git -C "$CORE_DIR" commit -q --amend --no-edit
+}
+
+# scaffold_old <name> — scaffold, then put the code folder where the old layout had it
+# (<Core>/<name>/code), for tests of the old-layout paths. Silent.
+scaffold_old() {
+  bash "$SKILL/scripts/scaffold.sh" --name "$1" >/dev/null || return 1
+  mv "$(dirname "$CORE_DIR")/$1" "$CORE_DIR/$1/code" && rm -f "$CORE_DIR/$1/code/CLAUDE.local.md"
+}
 
 # sync_tools — copies the plugin's scripts into $COREDEV_TOOLS (what session-start does),
 # so git hook shims installed in the sandbox have something to run.

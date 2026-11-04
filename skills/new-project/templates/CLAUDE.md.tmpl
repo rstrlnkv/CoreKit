@@ -1,23 +1,23 @@
 # {{NAME}}
 
-<!-- Internal file. Lives in the private {{CORE_NAME}} repo; never commit it to the code repo. -->
+<!-- Internal file. Lives in the private {{CORE_NAME}} repo and reaches the code folder as a
+     gitignored CLAUDE.local.md symlink; never commit it to the code repo. -->
 
 ## Purpose
 {{PURPOSE}}
 
 ## Stack
-See `../docs/decisions/001-stack-and-architecture.md`. Fill in after the analysis step.
+See `{{PROJECT_DIR}}/docs/decisions/001-stack-and-architecture.md`. Fill in after the analysis step.
 
-## Commands (run in `code/`)
+## Commands (run in the code folder)
 - Build: _set after scaffolding_
 - Test: _set after scaffolding_
 - Run: _set after scaffolding_
 check: <set after scaffolding>
 
 ## Layout
-- `code/` — the code repository (this is where Claude Code is launched).
-- `../docs/` — project wiki. Start with `../docs/INDEX.md` (one line per page).
-- `../.claude/rules/` — detailed rules scoped with `paths:`.
+- The code repository is the folder this session was launched in (beside the `{{CORE_NAME}}` folder).
+- `{{PROJECT_DIR}}/docs/` — project wiki. Start with `{{PROJECT_DIR}}/docs/INDEX.md` (one line per page).
 - Docs live in the private `{{CORE_NAME}}` repo; code lives in its own repo.
 
 ## Rules
@@ -27,11 +27,13 @@ check: <set after scaffolding>
   Claude runs it; its path is printed at session start, or `<plugin>/scripts/save`).
   To publish: `save "<message>" --push`. `undo-step` reverts the last step in both repos,
   including knowledge and standards edits made in that step.
-- After changing a feature, update its page in `../docs/features/` and its `updated` field;
-  a new page gets a map line in `../docs/INDEX.md`.
-- A new architectural decision gets a new file `../docs/decisions/NNN-<slug>.md` and a map line.
-- Put specs and plans (e.g. from Superpowers) in `../docs/superpowers/`, not in `code/`.
-- The wiki is `{{PROJECT_DIR}}/docs/`, one wiki for every worktree. From a worktree under
-  `code/.claude/worktrees/<w>/`, edit it there by that absolute path (`../docs/` does not reach
-  it from a worktree); `save` run in the worktree commits the wiki with the worktree's code.
+- After changing a feature, update its page in `{{PROJECT_DIR}}/docs/features/` and its `updated` field;
+  a new page gets a map line in `{{PROJECT_DIR}}/docs/INDEX.md`.
+- A new architectural decision gets a new file `{{PROJECT_DIR}}/docs/decisions/NNN-<slug>.md` and a map line.
+- Put specs and plans (e.g. from Superpowers) in `{{PROJECT_DIR}}/docs/superpowers/`, not in the code repo.
+- The wiki is `{{PROJECT_DIR}}/docs/`, one wiki for every worktree. Edit it by that absolute path
+  from any worktree; `save` run in the worktree commits the wiki with the worktree's code.
+- Tests (`**/test/**`, `**/tests/**`, `*_test.*`, `*.test.*`): write the failing test first, watch it
+  fail, then implement. Tests must not depend on network access or real accounts. Keep test names
+  descriptive: what behavior, under which condition.
 - Never read `.env` files or `~/.ssh`.

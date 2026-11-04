@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Creates a project skeleton in $CORE_DIR/<name>/ from templates.
+# Creates a project skeleton from templates: the internal docs in $CORE_DIR/<name>/ and the code
+# repo beside the Core in $PROJECTS_DIR/<name> (with a CLAUDE.local.md symlink to the private CLAUDE.md).
 # Never overwrites existing files. Needs a set-up Core (scripts/setup-core.sh); exits 3 if not.
 # Usage:
 #   bash scaffold.sh --name <name> [--purpose "<text>"] [--dry-run]
@@ -35,17 +36,25 @@ if ! core_ready; then
 fi
 
 P="$CORE_DIR/$NAME"
+K="$PROJECTS_DIR/$NAME"
 DATE="$(date +%Y-%m-%d)"
+
+# A folder in <Projects> that is not ours (no project in the Core yet) is never touched.
+if [ -e "$K" ] && [ ! -e "$P" ]; then
+  echo "target exists: $K" >&2
+  exit 2
+fi
 
 # Project docs (the Core itself comes from setup-core.sh)
 put_project_docs "$TPL" "$P" || exit 1
 
-# Code repo
-mkdir_p "$P/code"
-git_init "$P/code"
-put "$TPL/code/gitignore-common"          "$P/code/.gitignore" copy
-put "$TPL/code/settings.local.json.tmpl"  "$P/code/.claude/settings.local.json"
-put "$TPL/code/worktreeinclude"           "$P/code/.worktreeinclude" copy
+# Code repo, beside the Core
+mkdir_p "$K"
+git_init "$K"
+put "$TPL/code/gitignore-common"          "$K/.gitignore" copy
+put "$TPL/code/settings.local.json.tmpl"  "$K/.claude/settings.local.json"
+put "$TPL/code/worktreeinclude"           "$K/.worktreeinclude" copy
+link_local_claude "$K" "$P" || exit 1
 
 # Project list
-projects_entry "$NAME" "$PURPOSE" "$NAME/code/" || exit 1
+projects_entry "$NAME" "$PURPOSE" "$NAME/" || exit 1

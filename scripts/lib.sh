@@ -388,7 +388,6 @@ docs/architecture.md.tmpl|docs/architecture.md
 docs/decisions/001-stack-and-architecture.md.tmpl|docs/decisions/001-stack-and-architecture.md
 mkdir|docs/features
 mkdir|docs/knowledge
-rules/tests.md.tmpl|.claude/rules/tests.md
 EOF
 }
 
@@ -400,6 +399,24 @@ put_project_docs() {
     if [ "$a" = mkdir ]; then mkdir_p "$dest/$b" || return 1
     else put "$tpl/$a" "$dest/$b" || return 1; fi
   done <<< "$(project_docs_manifest)"
+}
+
+# link_local_claude <code_dir> <core_project_dir> — make <code_dir>/CLAUDE.local.md a symlink to
+# <core_project_dir>/CLAUDE.md. Prints "created|skipped <path>" ("would create" with DRY=1, nothing
+# written). A real file or a link to somewhere else is never touched: exit 1 with a plain line.
+link_local_claude() {
+  local link="$1/CLAUDE.local.md" target="$2/CLAUDE.md"
+  if [ -L "$link" ] && [ "$(readlink "$link")" = "$target" ]; then
+    echo "skipped $(rel_core "$link")"; return 0
+  fi
+  if [ -e "$link" ] || [ -L "$link" ]; then
+    echo "CLAUDE.local.md exists and is not a link to $target; leave it or remove it yourself" >&2
+    return 1
+  fi
+  if [ "${DRY:-0}" -eq 1 ]; then echo "would create $(rel_core "$link")"; return 0; fi
+  mkdir -p "$1" || return 1
+  ln -s "$target" "$link" || return 1
+  echo "created $(rel_core "$link")"
 }
 
 # projects_entry <name> <purpose> <entry> — add "- <name> — <purpose> — <entry>" to $CORE_DIR/PROJECTS.md

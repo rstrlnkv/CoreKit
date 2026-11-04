@@ -49,7 +49,7 @@ echo "$OUT1" | grep -qxF "old: $F" && pass || fail "no old: line: $OUT1"
 echo "$OUT1" | grep -qxF "new: $P/code" && pass || fail "no new: line: $OUT1"
 assert_no_file "$F"
 for f in CLAUDE.md docs/guide.md .claude/settings.json docs/INDEX.md docs/brief.md docs/architecture.md \
-         docs/decisions/001-stack-and-architecture.md .claude/rules/tests.md; do
+         docs/decisions/001-stack-and-architecture.md; do
   assert_file "$P/$f"
 done
 assert_dir "$P/docs/knowledge"; assert_dir "$P/docs/features"

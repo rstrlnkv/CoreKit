@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/lib.sh"
 new_sandbox; setup_core; sync_tools
-bash "$SKILL/scripts/scaffold.sh" --name hook-app >/dev/null
+scaffold_old hook-app
 P="$CORE_DIR/hook-app"; C="$P/code"
 assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P"
 assert_file "$C/.git/hooks/pre-commit"; assert_file "$C/.git/hooks/pre-push"
@@ -102,7 +102,7 @@ git -C "$C" commit -q -m clean >/dev/null 2>&1 && pass || fail "clean commit blo
 
 # install-hooks run from the plugin syncs the tools first: empty tools dir, then a clean commit works
 new_sandbox; setup_core
-bash "$SKILL/scripts/scaffold.sh" --name fresh-app >/dev/null
+scaffold_old fresh-app
 C="$CORE_DIR/fresh-app/code"
 assert_no_file "$COREDEV_TOOLS"
 assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/fresh-app"

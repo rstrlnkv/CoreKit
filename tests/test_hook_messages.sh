@@ -210,7 +210,7 @@ done
 # --- stop-remind: the reminder on stderr, exit 2; the dirty-part words follow the language
 H="$HOOKS/stop-remind.sh"
 setup_core; sync_tools
-bash "$SKILL/scripts/scaffold.sh" --name stop-app >/dev/null
+scaffold_old stop-app
 SP="$CORE_DIR/stop-app"; SC="$SP/code"
 (cd "$SC" && bash "$SCRIPTS/save" "init") >/dev/null 2>&1
 sinput() { printf '{"session_id":"x","cwd":"%s","hook_event_name":"Stop","stop_hook_active":false}' "$SC"; }

@@ -2,7 +2,7 @@
 source "$(dirname "$0")/lib.sh"
 new_sandbox; setup_core; sync_tools
 bash "$SKILL/scripts/scaffold.sh" --name stop-app >/dev/null
-P="$CORE_DIR/stop-app"; C="$P/code"; H="$HOOKS/stop-remind.sh"
+P="$CORE_DIR/stop-app"; C="$(dirname "$CORE_DIR")/stop-app"; H="$HOOKS/stop-remind.sh"
 assert_file "$H"
 J="$C/.claude/settings.local.json"
 python3 -m json.tool "$J" >/dev/null 2>&1 && pass || fail "settings.local.json is not valid JSON"
@@ -51,14 +51,14 @@ echo b >> "$C/заметки.txt"
 input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "edit of non-ASCII untracked file missed"
 
 # repo with no commits yet (right after scaffold): edits to a staged file are noticed
-bash "$SKILL/scripts/scaffold.sh" --name fresh-app >/dev/null; F="$CORE_DIR/fresh-app/code"
+bash "$SKILL/scripts/scaffold.sh" --name fresh-app >/dev/null; F="$(dirname "$CORE_DIR")/fresh-app"
 echo 1 > "$F/a.txt"; git -C "$F" add a.txt; echo 2 >> "$F/a.txt"
 input "$F" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "no-commit repo: first reminder"
 echo 3 >> "$F/a.txt"
 input "$F" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "no-commit repo: edit of staged file missed"
 # cwd with JSON escapes: a Core whose path has a space, quotes and Cyrillic (written as \u, \/ and \")
 OLD_CORE="$CORE_DIR"; EC="$SANDBOX/Мой проекты \"q\"/Ядро"; export CORE_DIR="$EC"; setup_core
-bash "$SKILL/scripts/scaffold.sh" --name esc-app >/dev/null; X="$EC/esc-app/code"
+bash "$SKILL/scripts/scaffold.sh" --name esc-app >/dev/null; X="$(dirname "$EC")/esc-app"
 echo x > "$X/new.txt"
 esc_json() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's|/|\\/|g' -e 's/Мой/\\u041c\\u043e\\u0439/'; }
 printf '{"session_id":"x",\n "cwd" :\n "%s", "hook_event_name":"Stop","stop_hook_active":false}' "$(esc_json "$X")" | bash "$H" >/dev/null 2>&1
