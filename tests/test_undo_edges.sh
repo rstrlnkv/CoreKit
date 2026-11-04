@@ -22,7 +22,6 @@ assert_file "$SAVE"; assert_file "$CORE_DIR/edge-app/CLAUDE.md"
 B="$SANDBOX/Projects/Bar"; mkdir -p "$B" "$CORE_DIR/bar"; echo "# bar" > "$CORE_DIR/bar/CLAUDE.md"
 git -C "$B" init -q; cp "$ROOT/skills/new-project/templates/code/gitignore-common" "$B/.gitignore"
 ln -s "$CORE_DIR/bar/CLAUDE.md" "$B/CLAUDE.local.md"
-for h in pre-commit pre-push; do printf '#!/bin/sh\nexit 0\n' > "$B/.git/hooks/$h"; chmod +x "$B/.git/hooks/$h"; done
 cd "$B" || exit 1
 echo 1 > one.txt; bash "$SAVE" "Bar first" >/dev/null
 echo 2 > two.txt; bash "$SAVE" "Bar second" >/dev/null

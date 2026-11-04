@@ -119,4 +119,17 @@ BROKEN="$SANDBOX/broken"; mkdir -p "$BROKEN"; cp "$SCRIPTS/install-hooks.sh" "$B
 assert_exit 1 bash "$BROKEN/install-hooks.sh" "$P"
 echo "$OUT" | grep -q 'hooks installed' && fail "claimed success without sources" || pass
 echo "$OUT" | grep -qi 'missing\|not found' && pass || fail "no plain message: $OUT"
+# new layout: code repo beside the Core (<Projects>/Foo), project dir argument is <Core>/foo
+new_sandbox; setup_core; sync_tools
+F="$SANDBOX/Projects/Foo"; mkdir -p "$F" "$CORE_DIR/foo"; git -C "$F" init -q
+assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/foo"
+for h in "$F/.git/hooks/pre-commit" "$F/.git/hooks/pre-push" "$CORE_DIR/.git/hooks/pre-push"; do
+  assert_contains "$h" "# corecrew hook shim"
+done
+assert_no_file "$CORE_DIR/foo/code"
+# no code folder at all: exit 1, names the missing folder
+mkdir -p "$CORE_DIR/bar"
+assert_exit 1 bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/bar"
+echo "$OUT" | grep -q 'No git repo at' && pass || fail "no 'No git repo at' message: $OUT"
+
 finish

@@ -151,8 +151,6 @@ F="$SANDBOX/Projects/Foo"; mkdir -p "$F" "$CORE_DIR/foo"
 echo "# foo" > "$CORE_DIR/foo/CLAUDE.md"
 git -C "$F" init -q; cp "$ROOT/skills/new-project/templates/code/gitignore-common" "$F/.gitignore"
 ln -s "$CORE_DIR/foo/CLAUDE.md" "$F/CLAUDE.local.md"
-for h in pre-commit pre-push; do printf '#!/bin/sh\nexit 0\n' > "$F/.git/hooks/$h"; chmod +x "$F/.git/hooks/$h"; done
-[ -x "$CORE_DIR/.git/hooks/pre-push" ] || { printf '#!/bin/sh\nexit 0\n' > "$CORE_DIR/.git/hooks/pre-push"; chmod +x "$CORE_DIR/.git/hooks/pre-push"; }
 echo "n1" > "$F/n.txt"; echo "doc1" > "$CORE_DIR/foo/d.md"
 (cd "$F" && bash "$SAVE" "New layout step") > "$SANDBOX/out" 2>&1
 assert_contains "$SANDBOX/out" "saved code"; assert_contains "$SANDBOX/out" "saved docs"
