@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Claude Code PreToolUse hook on Write|Edit|NotebookEdit (and Bash, best effort): a project's
 # internal files must not live in its code repo. It blocks writes of
-#   CLAUDE.md (and CLAUDE.local.md), docs/**, .claude/**
+#   CLAUDE.md (and CLAUDE.local.md), AGENTS.md (the cross-tool agent instructions), docs/**, .claude/**
 # under <Core>/<project>/code/**, with exit 2 and a message naming the right place:
 #   corecrew: <path> is an internal file and must not live in code/. Write it to <Core>/<project>/<relative path> instead.
 #   Docs meant to stay public in code/: list them on a "public-docs: <paths>" line in <Core>/<project>/CLAUDE.md.
@@ -11,8 +11,8 @@
 # for the part that exists, then folded to lower case for the comparison, ASCII only):
 # - The code root is <Core>/<p>/code/, or a worktree root <Core>/<p>/code/.claude/worktrees/<w>/;
 #   inside a worktree the path relative to the worktree root is what counts.
-# - Blocked: docs and docs/** and .claude/** at the root, and CLAUDE.md / CLAUDE.local.md at ANY depth
-#   (the same as scripts/git-hooks/blocked-patterns, so the hook and the commit check agree).
+# - Blocked: docs and docs/** and .claude/** at the root, and CLAUDE.md / CLAUDE.local.md / AGENTS.md at
+#   ANY depth (the same as scripts/git-hooks/blocked-patterns, so the hook and the commit check agree).
 # - Allowed: .claude/settings.local.json, .claude/worktrees/** (the worktree dirs themselves), and the
 #   paths on a "public-docs: <paths>" line of <Core>/<p>/CLAUDE.md (space or comma separated, relative
 #   to the code root; a directory entry covers everything under it; a glob is not expanded).
@@ -84,6 +84,7 @@ check_path() {
     .claude) [ "$mode" = dir ] && return 0 ;;
     .claude/*|docs|docs/*) ;;
     claude.md|claude.local.md|*/claude.md|*/claude.local.md) ;;
+    agents.md|*/agents.md) ;;
     *) return 0 ;;
   esac
   if is_public "$proj" "$sub_l"; then return 0; fi
@@ -95,6 +96,8 @@ check_path() {
     claude.local.md) tgt="CLAUDE.local.md" ;;
     */claude.md) tgt="${tgt%/*}/CLAUDE.md" ;;
     */claude.local.md) tgt="${tgt%/*}/CLAUDE.local.md" ;;
+    agents.md) tgt="AGENTS.md" ;;
+    */agents.md) tgt="${tgt%/*}/AGENTS.md" ;;
   esac
   printf '%s\n' "$(msg guard_code_blocked "$CORE_DIR/$proj/code/${rest:5}" "$CORE_DIR/$proj/$tgt")" >&2
   printf '%s\n' "$(msg guard_code_public "$CORE_DIR/$proj/CLAUDE.md")" >&2

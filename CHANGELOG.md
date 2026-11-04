@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 — 2026-11-04
+- `AGENTS.md` (the agent-instructions file Codex, Cursor and other tools read) is now an internal
+  file, like `CLAUDE.md`: `guard-code` blocks writing it at any depth under `<Core>/<project>/code/`
+  (file tools and Bash), the git pre-commit and pre-push checks block committing it
+  (`blocked-patterns`), and the new-project `.gitignore` template lists it. Its place is
+  `<Core>/<project>/AGENTS.md`.
+- `/corecrew:task adopt` moves a root `AGENTS.md` to `<Core>/<name>/` with `CLAUDE.md`, and adds
+  the `AGENTS.md` ignore line. An `AGENTS.md` that is a symlink is refused, as `CLAUDE.md` is.
+- Existing projects: a code repo that already tracks `AGENTS.md` can no longer commit changes to
+  it. Move it by hand: copy it to `<Core>/<project>/AGENTS.md`, then in `code/` run
+  `git rm AGENTS.md`, add the line `AGENTS.md` to `.gitignore`, and commit.
+
 ## 0.3.1 — 2026-11-04
 - Plugin lists show the names as CoreCrew and CoreEffort (`displayName` in the manifests),
   not "Corecrew" and "Coreeffort". Commands keep their lowercase names.

@@ -354,11 +354,11 @@ One ✗ → stop; the finding goes to engineer; no second cycle. Never tags, nev
 
 ## 11. Adopt (`/coredev:task adopt <folder>`, `scripts/adopt.sh`)
 1. Inspect: the folder must be a git repo with a clean tree; read its name, `CLAUDE.md`,
-   `docs/`, `.claude/`. Show the plan in plain words; wait for "ok".
-2. Create `<Core>/<name>/`; copy `CLAUDE.md`, `docs/` and `.claude/` (except
+   `AGENTS.md`, `docs/`, `.claude/`. Show the plan in plain words; wait for "ok".
+2. Create `<Core>/<name>/`; copy `CLAUDE.md`, `AGENTS.md`, `docs/` and `.claude/` (except
    `settings.local.json` and `worktrees/`) there, then remove them from the repo in one commit
    (revertible). The same commit appends to the repo's `.gitignore` the coredev lines of the
-   new-project template it lacks (`CLAUDE.md`, `CLAUDE.local.md`, `.claude/`, `docs/superpowers/`,
+   new-project template it lacks (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.claude/`, `docs/superpowers/`,
    `.env`, `.env.*` and the `.env` template exceptions); user lines are never changed or removed. Docs the user wants to keep public stay in the repo and are listed in
    `<Core>/<name>/CLAUDE.md` as `public-docs: <paths>` (`guard-code` allows them).
 3. Move the repo folder to `<Core>/<name>/code` (`mv`; history unchanged). Refuse if the target
@@ -457,7 +457,7 @@ its input lets the call through, except where noted.
    text and heredoc bodies ignored; no `pgrep` → let through. The wait limit stays under the
    hook's `timeout`.
 3. **guard-code.sh** — `PreToolUse` Write|Edit|MultiEdit|NotebookEdit (+ Bash, best effort): blocks
-   `CLAUDE.md`, `docs/**`, `.claude/**` inside any `<Core>/<project>/code/**`, worktrees
+   `CLAUDE.md`, `AGENTS.md`, `docs/**`, `.claude/**` inside any `<Core>/<project>/code/**`, worktrees
    included; allows `.claude/settings.local.json`, `.claude/worktrees/**` and `public-docs:`
    paths (§11). Paths compared after resolving `..` and case-folding. Bash: `>`, `>>`, `cp`,
    `mv`, `tee`, `touch` targets; not complete — the git pre-commit hook stays the last layer.

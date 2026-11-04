@@ -366,8 +366,9 @@ printf 'node_modules/\n.env.*\n' > "$F/.gitignore"
 printf '# Old\n' > "$F/CLAUDE.md"; echo 'echo a' > "$F/src/a.sh"
 git -C "$F" add -A && git -C "$F" commit -q -m initial
 # the lines adopt owes: the corecrew lines of the new-project template (internal files, .env)
-WANT="$(grep -E '^(CLAUDE|\.claude/|docs/superpowers/|!?\.env)' "$SKILL/templates/code/gitignore-common")"
-[ "$(printf '%s\n' "$WANT" | grep -c .)" -ge 7 ] && pass || fail "fixture: template ignore lines: $WANT"
+WANT="$(grep -E '^(CLAUDE|AGENTS\.md$|\.claude/|docs/superpowers/|!?\.env)' "$SKILL/templates/code/gitignore-common")"
+printf '%s\n' "$WANT" | grep -qxF AGENTS.md && pass || fail "fixture: template lacks AGENTS.md: $WANT"
+[ "$(printf '%s\n' "$WANT" | grep -c .)" -ge 8 ] && pass || fail "fixture: template ignore lines: $WANT"
 assert_exit 0 bash "$AD" --from "$F" --dry-run
 echo "$OUT" | grep -qF "add to code/.gitignore (in the same commit):" && pass || fail "plan lacks the .gitignore lines: $OUT"
 echo "$OUT" | grep -qxF "  .claude/" && pass || fail "plan lacks .claude/: $OUT"
@@ -401,5 +402,23 @@ assert_exit 0 bash "$AD" --from "$F" --dry-run
 echo "$OUT" | grep -qF ".gitignore" && fail "plan touches a complete .gitignore: $OUT" || pass
 assert_exit 0 bash "$AD" --from "$F"
 assert_eq "$(git -C "$CORE_DIR/gi-full/code" rev-list --count HEAD)" "1" "commit made without changes"
+
+
+# --- AGENTS.md moves to the Core like CLAUDE.md (personal agent instructions; guard-code blocks it in code/)
+new_sandbox; setup_core
+F="$SANDBOX/in/ag-app"; mkrepo "$F"
+printf '# Agents\n\nCross-tool rules.\n' > "$F/AGENTS.md"; printf 'sub\n' > "$F/src/AGENTS.md"
+git -C "$F" add -A && git -C "$F" commit -q -m agents
+assert_exit 0 bash "$AD" --from "$F" --dry-run
+echo "$OUT" | grep -qxF "  AGENTS.md" && pass || fail "plan lacks AGENTS.md: $OUT"
+assert_exit 0 bash "$AD" --from "$F"
+P="$CORE_DIR/ag-app"; C="$P/code"
+assert_contains "$P/AGENTS.md" "Cross-tool rules."
+assert_no_file "$C/AGENTS.md"
+git -C "$C" show --name-only --format= HEAD | grep -qxF AGENTS.md && pass || fail "repo commit lacks AGENTS.md"
+grep -qxF AGENTS.md "$C/.gitignore" && pass || fail ".gitignore lacks AGENTS.md"
+git -C "$CORE_DIR" ls-files -- ag-app/AGENTS.md | grep -qxF ag-app/AGENTS.md && pass || fail "AGENTS.md not in the Core commit"
+# like a nested CLAUDE.md, a nested AGENTS.md is not moved (only the root one is)
+assert_file "$C/src/AGENTS.md"
 
 finish
