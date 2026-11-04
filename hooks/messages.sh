@@ -19,7 +19,7 @@
 
 MSG_KEYS="sync_failed hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
 session_rules schema_none run_starting layout_note old_hooks guard_code_blocked guard_code_public secrets_blocked secrets_ask
-one_suite_wait dirty_code dirty_docs dirty_both stop_remind"
+local_link_created local_link_wrong old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind"
 
 # _msg_text <lang> <key> — sets MSG_T to the text, or to nothing when there is none. Keep the keys and
 # the en:/ru: branches in step with MSG_KEYS.
@@ -60,6 +60,12 @@ _msg_text() {
     ru:secrets_blocked) MSG_T='corecrew: чтение секретов заблокировано (@1)' ;;
     en:secrets_ask) MSG_T='Ask the user to check the value themselves, or use .env.example.' ;;
     ru:secrets_ask) MSG_T='Попросите пользователя проверить значение самому или используйте .env.example.' ;;
+    en:local_link_created) MSG_T='corecrew: linked CLAUDE.local.md to @1; restart the session to load it' ;;
+    ru:local_link_created) MSG_T='corecrew: CLAUDE.local.md связан с @1; перезапустите сессию, чтобы он загрузился' ;;
+    en:local_link_wrong) MSG_T='corecrew: @1 exists and is not a link to @2, so the private CLAUDE.md is not loaded. Move that file away, then run: ln -s "@2" "@1"' ;;
+    ru:local_link_wrong) MSG_T='corecrew: @1 уже существует и не ведёт на @2, поэтому приватный CLAUDE.md не загружается. Уберите этот файл и выполните: ln -s "@2" "@1"' ;;
+    en:old_layout) MSG_T='corecrew: this project still lives in @1; run /corecrew:task adopt @2 to move it to @3' ;;
+    ru:old_layout) MSG_T='corecrew: этот проект всё ещё лежит в @1; выполните /corecrew:task adopt @2, чтобы перенести его в @3' ;;
     en:one_suite_wait) MSG_T='one-suite: a test run is still in progress after @1 s of waiting (@2) — run the same command again: this hook waits for it. If it is a watcher you started, stop it first.' ;;
     ru:one_suite_wait) MSG_T='one-suite: тесты всё ещё идут после ожидания @1 с (@2) — запустите ту же команду ещё раз: хук дождётся. Если это процесс, который сам перезапускает тесты при изменении файлов, сначала остановите его.' ;;
     en:dirty_code) MSG_T='code' ;;

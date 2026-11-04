@@ -126,6 +126,43 @@ rm -f "$C/.git/hooks/pre-commit" "$C/.git/hooks/pre-push" "$CORE_DIR/.git/hooks/
 bash "$SCRIPTS/install-hooks.sh" "$P" >/dev/null 2>&1
 run_rc "$C"; echo "$OUT" | grep -qF "install-hooks.sh" && fail "fresh shims reported: $OUT" || pass
 
+# --- new layout: the CLAUDE.local.md link, created once, never overwritten; old layout is named
+PR="$(dirname "$CORE_DIR")"
+bash "$SKILL/scripts/scaffold.sh" --name newapp >/dev/null
+NP="$CORE_DIR/newapp"; NC="$PR/newapp"
+rm -f "$NC/CLAUDE.local.md"
+run_rc "$NC"; assert_eq "$RC" "0" "new layout: exit"
+echo "$OUT" | grep -qF "corecrew: linked CLAUDE.local.md to $NP/CLAUDE.md; restart the session to load it" && pass || fail "link created line missing: $OUT"
+[ -L "$NC/CLAUDE.local.md" ] && pass || fail "symlink not created"
+assert_eq "$(readlink "$NC/CLAUDE.local.md")" "$NP/CLAUDE.md" "link target"
+echo "$OUT" | grep -qF "$NP/docs/INDEX.md" && pass || fail "new layout: project context missing: $OUT"
+echo "$OUT" | grep -qF "still lives in" && fail "old-layout line in a new layout: $OUT" || pass
+run_rc "$NC"; echo "$OUT" | grep -qF "linked CLAUDE.local.md" && fail "second run links again: $OUT" || pass
+echo "$OUT" | grep -qF "created " && fail "link_local_claude line leaked: $OUT" || pass
+echo "$OUT" | grep -qF "skipped " && fail "link_local_claude line leaked: $OUT" || pass
+# from a worktree under the code folder and from the Core project folder: the link is in the main folder
+rm "$NC/CLAUDE.local.md"; mkdir -p "$NC/.claude/worktrees/w1"
+run_rc "$NC/.claude/worktrees/w1"; [ -L "$NC/CLAUDE.local.md" ] && pass || fail "worktree session: link not made in the main folder"
+[ -e "$NC/.claude/worktrees/w1/CLAUDE.local.md" ] && fail "link made in the worktree" || pass
+rm "$NC/CLAUDE.local.md"; run_rc "$NP"; [ -L "$NC/CLAUDE.local.md" ] && pass || fail "Core-folder session: link not made"
+# a real file: left alone, one line names the fix
+rm "$NC/CLAUDE.local.md"; printf 'mine\n' > "$NC/CLAUDE.local.md"
+run_rc "$NC"; assert_eq "$RC" "0" "real file: exit"
+assert_eq "$(cat "$NC/CLAUDE.local.md")" "mine" "real file untouched"; [ -L "$NC/CLAUDE.local.md" ] && fail "real file replaced" || pass
+echo "$OUT" | grep -qF "ln -s \"$NP/CLAUDE.md\" \"$NC/CLAUDE.local.md\"" && pass || fail "real file: fix missing: $OUT"
+echo "$OUT" | grep -qF "linked CLAUDE.local.md" && fail "real file: claims a link: $OUT" || pass
+# a dangling link to an old Core path: left alone, same line
+rm "$NC/CLAUDE.local.md"; ln -s "$CORE_DIR/gone/CLAUDE.md" "$NC/CLAUDE.local.md"
+run_rc "$NC"; assert_eq "$(readlink "$NC/CLAUDE.local.md")" "$CORE_DIR/gone/CLAUDE.md" "dangling link untouched"
+echo "$OUT" | grep -qF "ln -s \"$NP/CLAUDE.md\"" && pass || fail "dangling link: fix missing: $OUT"
+rm "$NC/CLAUDE.local.md"
+# the old layout: its line, no link
+run_rc "$C"
+echo "$OUT" | grep -qF "corecrew: this project still lives in $C; run /corecrew:task adopt $C to move it to $PR/sess-app" && pass || fail "old layout line missing: $OUT"
+[ -e "$C/CLAUDE.local.md" ] && fail "link made in an old-layout code folder" || pass
+# a folder of Projects that is not a project: nothing at all
+mkdir -p "$PR/Brain"; run_rc "$PR/Brain"; assert_eq "$OUT" "" "Projects/Brain: silent"
+
 # --- cwd given with JSON escapes (\u Cyrillic, \/ and \") in a Core whose path has a space
 E="$SANDBOX/Мой проект \"q\""; mkdir -p "$E"
 export CORE_DIR="$E/Ядро"

@@ -2,7 +2,7 @@
 # Claude Code SessionStart hook (startup, resume, clear, compact). Stdout becomes context.
 #  1. refreshes ${CLAUDE_PLUGIN_DATA}/tools (runs everywhere; it only touches the plugin's own folder);
 #  2. Core not set up and the session is not in a project: one hint per machine (marker in state/);
-#  3. inside <Core>/<project>/ (worktrees included): project name, docs index, tools, standards,
+#  3. inside a project (<Core>/<project>/ or its code folder beside the Core, worktrees included): project name, docs index, tools, standards,
 #     session rules, layout notes, old git hooks that need re-installing.
 # Outside the Core it prints nothing else. Always exits 0: a hook must never block a session.
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)"
@@ -67,10 +67,25 @@ if [ "$old" -eq 1 ]; then
   printf '%s\n' "$(msg layout_note "$shown" "$COREDEV_SCHEMA" "$ROOT/scripts/setup-core.sh" "$CORE_DIR")"
 fi
 
+# Code folder: new layout gets the CLAUDE.local.md link (the main folder, also from a worktree or the
+# Core project folder); old layout is named. No code folder, or a case clash: nothing to do.
+code=""; code="$(code_dir_of "$proj" 2>/dev/null)" || code=""
+if [ -n "$code" ]; then
+  if [ "$(layout_of "$proj" 2>/dev/null)" = old ]; then
+    printf '%s\n' "$(msg old_layout "$code" "$code" "$PROJECTS_DIR/$proj")"
+  else
+    if lout="$(link_local_claude "$code" "$P" 2>/dev/null)"; then
+      case "$lout" in created*) printf '%s\n' "$(msg local_link_created "$P/CLAUDE.md")" ;; esac
+    else
+      printf '%s\n' "$(msg local_link_wrong "$code/CLAUDE.local.md" "$P/CLAUDE.md")"
+    fi
+  fi
+fi
+
 # Old git hooks: from before the plugin ("new-project hook") or 0.2.x shims of coredev, which run a
 # tools copy that is no longer updated. A current shim, or a hook of the user's own, is left alone.
 stale=""
-for h in "$P/code/.git/hooks/pre-commit" "$P/code/.git/hooks/pre-push" "$CORE_DIR/.git/hooks/pre-push"; do
+for h in "${code:-$P/code}/.git/hooks/pre-commit" "${code:-$P/code}/.git/hooks/pre-push" "$CORE_DIR/.git/hooks/pre-push"; do
   [ -f "$h" ] || continue
   grep -qF "# corecrew hook shim" "$h" && continue
   grep -qF -e "new-project hook" -e "# coredev hook shim" "$h" && stale="${stale:+$stale, }$h"

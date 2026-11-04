@@ -61,6 +61,8 @@ closed() {
 
 # --- File tools: paths
 sec_files() {
+mkdir -p "$CORE_DIR/foo" "$(dirname "$CORE_DIR")/Foo"; : > "$CORE_DIR/foo/CLAUDE.md"; echo "FAKE=1" > "$(dirname "$CORE_DIR")/Foo/.env"
+run_file Read "$(dirname "$CORE_DIR")/Foo/.env" "$(dirname "$CORE_DIR")/Foo"; blocked "new layout: Read Projects/Foo/.env" "$(dirname "$CORE_DIR")/Foo/.env"
 for t in Read Edit MultiEdit Write NotebookEdit; do
   run_file "$t" "$C/.env";             blocked "$t .env" "$C/.env"
 done
