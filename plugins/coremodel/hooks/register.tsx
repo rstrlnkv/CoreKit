@@ -181,18 +181,35 @@ async function classify($: EngineInterface, text: string, now: Level | '', model
     $.model.complete({ model, prompt, maxTokens: 120, effort: 'low', timeoutMs }, { signal: stop.signal })
   // A call sometimes hangs with no reply (seen on a chat's first prompt, beside the title request):
   // a second one starts after HEDGE_MS, the first answer of the two is used, the other is cut.
+  // A call that fails outright before that (a 529, a throw) is tried once more at once; an Esc
+  // ('aborted') is not a failure to retry.
   const first = new AbortController()
   const second = new AbortController()
   const began = await $.clock.now()
+  type Done = { r: ModelCompleteResult } | { err: unknown }
   const a = ask(CLASSIFY_MS, first)
-  const early = await Promise.race([a, $.clock.sleep(HEDGE_MS).then(() => null, () => null)])
-  const r = early ?? (await firstAnswered([a, ask(CLASSIFY_MS - HEDGE_MS, second)]))
+  const aDone: Promise<Done> = a.then(r => ({ r }), err => ({ err }))
+  // A sleep that fails never fires the second call early: the first one is simply waited for.
+  const hedge = $.clock.sleep(HEDGE_MS).then(() => 'hedge' as const, () => new Promise<never>(() => {}))
+  const early = await Promise.race([aDone, hedge])
+  const retry = async (): Promise<ModelCompleteResult> => ask(Math.max(1_000, CLASSIFY_MS - ((await $.clock.now()) - began)), second)
+  let r: ModelCompleteResult
+  let tried = false
+  if (early === 'hedge') {
+    tried = true
+    r = await firstAnswered([a, ask(CLASSIFY_MS - HEDGE_MS, second)])
+  } else if ('r' in early && (early.r.isAnswered || early.r.reason === 'aborted')) {
+    r = early.r
+  } else {
+    tried = true
+    r = await retry()
+  }
   first.abort()
   second.abort()
   if (!r.isAnswered) {
     // An Esc on the turn cuts both calls too, sooner: only the full wait is a timeout.
     const waited = (await $.clock.now()) - began
-    if (!early && r.reason === 'aborted' && waited >= CLASSIFY_MS) throw new Error(`classifier timed out after ${CLASSIFY_MS / 1000} s (two tries)`)
+    if (tried && r.reason === 'aborted' && waited >= CLASSIFY_MS) throw new Error(`classifier timed out after ${CLASSIFY_MS / 1000} s (two tries)`)
     throw new Error(`classifier gave no answer: ${r.reason}`)
   }
   const pick = parseAnswer(r.text)

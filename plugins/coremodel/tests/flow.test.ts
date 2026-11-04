@@ -205,6 +205,29 @@ test('a hung classifier call gets a second try after 3 s', { options: { mode: 'a
   expect(w.logs.length).toBe(0)
 })
 
+test('a quick API failure is tried once more at once', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answers = [{ fail: true }, HIGH]
+  await start($)
+  await submit($, 'fix the login')
+  await step($, 'medium')
+  expect(w.model.length).toBe(2)
+  expect(w.timeouts).toEqual([8_000, 8_000])
+  expect(w.efforts).toEqual(['high'])
+  expect(w.logs.length).toBe(0)
+})
+
+test('two quick failures log the last one and leave the level', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answers = [{ fail: true }, { fail: true }]
+  await start($)
+  await submit($, 'fix the login')
+  await step($, 'medium')
+  expect(w.model.length).toBe(2)
+  expect(w.efforts).toEqual(['medium'])
+  expect(w.logs[0]!.includes('api-error')).toBe(true)
+})
+
 test('a late first answer still wins over the second try', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.answers = [{ after: 4_000, text: HIGH }, { after: 0 }]

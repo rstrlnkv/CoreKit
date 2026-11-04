@@ -7,11 +7,11 @@ import type { ConfigRow, On } from 'claude-code'
 export type World = {
   answer: string | Error | { isAnswered: false } | Promise<string>
   /**
-   * Per-call answers, taken in order before `answer`: a text at once, or one that comes `after` ms
+   * Per-call answers, taken in order before `answer`: a text at once, `{ fail: true }` (an API error at once), or one that comes `after` ms
    * on the mocked clock; with no text the call hangs until its own timeoutMs cuts it, or until
    * `after` ms when `cut` (an Esc on the turn).
    */
-  answers: (string | { after: number; text?: string; cut?: boolean })[]
+  answers: (string | { fail: true } | { after: number; text?: string; cut?: boolean })[]
   /** The timeoutMs of each classifier call. */
   timeouts: (number | undefined)[]
   /** One answer for every question, or a queue answered in order (an empty queue dismisses). */
@@ -102,6 +102,7 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     w.prompts.push(e.prompt)
     w.timeouts.push(e.timeoutMs)
     const next = w.answers.shift()
+    if (typeof next === 'object' && 'fail' in next) return { value: { isAnswered: false, reason: 'api-error', status: 529 } } as never
     if (typeof next === 'object') {
       await w.clock.sleep(next.text === undefined && !next.cut ? (e.timeoutMs ?? 10_000) : next.after)
       if (next.text === undefined) return { value: { isAnswered: false, reason: 'aborted', usage: {} } } as never
