@@ -45,8 +45,9 @@
 # folder becomes <Core>/<name>/.
 # Old layout: the internal files are in <Core>/<name>/ already; the repo commit holds only the missing
 # ignore lines and .worktreeinclude; then the repo folder is moved with mv to <Projects>/<name> and linked
-# worktrees under .claude/worktrees are repaired; a warning: line names <Core>/<name>/CLAUDE.md when it
-# still says ../docs/ or `code/` (it is not rewritten).
+# worktrees under .claude/worktrees are repaired; each <Core>/<name>/.claude/rules/<f>.md is folded into
+# <Core>/<name>/CLAUDE.md the same way (the rule files are kept; they no longer load); a warning: line
+# names <Core>/<name>/CLAUDE.md when it still says ../docs/ or `code/` (it is not rewritten).
 # Warnings (plan and report): tracked CLAUDE.md / AGENTS.md / CLAUDE.local.md files that stay in the repo
 # (nested ones, public ones), which corecrew's hooks block changing or adding after adopt.
 # Both: CLAUDE.local.md in the code folder becomes a link to <Core>/<name>/CLAUDE.md;
@@ -193,9 +194,19 @@ while IFS= read -r f; do
     stay) NSTAY=$((NSTAY + 1)) ;;
   esac
 done <<< "$TRACKED"
-# Old layout: .claude/ files already in the Core folder no longer load either.
+# Old layout: .claude/ files already in the Core folder no longer load either. Its rule files (0.4 and
+# older wrote .claude/rules/tests.md) are folded into CLAUDE.md like the new layout's; the files stay.
 if [ "$OLD" -eq 1 ] && [ -d "$P/.claude" ]; then
   KEPT="$(cd "$P" && find .claude \( -type f -o -type l \) -print | LC_ALL=C sort)"
+  if [ -d "$P/.claude/rules" ]; then
+    RULES="$(cd "$P" && find .claude/rules -type f -name '*.md' -print | LC_ALL=C sort)"
+    if [ -n "$RULES" ]; then
+      KEPT="$(printf '%s\n' "$KEPT" | LC_ALL=C comm -23 - <(printf '%s\n' "$RULES"))"
+      NRULES="$(printf '%s\n' "$RULES" | grep -c .)"
+      RULES="$RULES
+"
+    fi
+  fi
 fi
 
 # The corecrew ignore lines the repo's .gitignore lacks (internal Claude files and .env, from the
@@ -300,8 +311,8 @@ if [ "$DRY" -eq 1 ]; then
   else
     echo "Plan: adopt $FROM as '$NAME' (the folder stays where it is)"
     show "copy to $P/:" "$COPY"
-    show "fold into $P/CLAUDE.md under ## Rules:" "$RULES"
   fi
+  show "fold into $P/CLAUDE.md under ## Rules:" "$RULES"
   show "kept in Core, no longer loaded:" "$KEPT"
   if [ "${#REMOVE[@]}" -gt 0 ]; then
     echo "remove from the repo in one commit \"Move internal Claude files to Core\": ${#REMOVE[@]} file(s) (the copied and folded ones that git tracks)"
@@ -348,7 +359,7 @@ fi
 # (the trap only removes the temp folder while it is empty).
 COMMITTED=0
 TMP="$(mktemp -d "$CORE_DIR/.adopt.XXXXXX")" || { echo "adopt: cannot create a temp folder in $CORE_DIR" >&2; exit 1; }
-cleanup() { if [ "$COMMITTED" -eq 0 ]; then rm -rf "$TMP"; else rmdir "$TMP" 2>/dev/null; fi; }
+cleanup() { if [ "$COMMITTED" -eq 0 ]; then rm -rf "$TMP"; else rm -f "$TMP/rules.md"; rmdir "$TMP" 2>/dev/null; fi; }
 trap cleanup EXIT
 STAGE="$TMP/p"
 DATE="$(date +%Y-%m-%d)"
@@ -516,6 +527,14 @@ if [ "$OLD" -eq 0 ]; then
     [ -z "$(tail -c1 "$STAGE/docs/INDEX.md")" ] || printf '\n' >> "$STAGE/docs/INDEX.md"
     printf -- '- [%s](%s) — %s\n' "$title" "$target" "$desc" >> "$STAGE/docs/INDEX.md" || exit 1
   done <<< "$(printf '%s\n' "$W" | sed -n 's/^wiki-check: \(.*\): not in INDEX\.md$/\1/p')"
+elif [ -n "$RULES" ]; then
+  # Old layout: the rule blocks are read now (nothing changed yet); they are folded after the move.
+  : > "$TMP/rules.md" || exit 1
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    lab="${f#.claude/rules/}"; lab="${lab%.md}"
+    rule_block "$P/$f" "$lab" >> "$TMP/rules.md" || { echo "adopt: could not read $P/$f" >&2; exit 1; }
+  done <<< "$RULES"
 fi
 
 # The repo commit. If it fails the files and .gitignore come back; nothing else was touched.
@@ -575,6 +594,15 @@ fi
 if [ "$OLD" -eq 0 ]; then
   echo "copied ${NCOPY} file(s) to $P/"
   [ "$NRULES" -eq 0 ] || echo "folded ${NRULES} rule file(s) into $P/CLAUDE.md (## Rules)"
+elif [ "$NRULES" -gt 0 ]; then
+  # Old layout: the rule files stay in <Core>/<name>/.claude/rules/; their text joins CLAUDE.md, which
+  # goes into the "Adopt <name>" commit below.
+  if fold_rules "$P/CLAUDE.md" "$TMP/rules.md"; then
+    echo "folded ${NRULES} rule file(s) into $P/CLAUDE.md (## Rules)"
+  else
+    echo "warning: could not fold the rule files into $P/CLAUDE.md; they are in $P/.claude/rules/ and no longer load" >&2
+  fi
+  rm -f "$TMP/rules.md"
 fi
 show "kept in Core, no longer loaded:" "$KEPT"
 if [ "$COMMITTED" -eq 1 ]; then

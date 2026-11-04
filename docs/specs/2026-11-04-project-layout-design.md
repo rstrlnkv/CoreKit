@@ -91,7 +91,8 @@ hook shims, the `PROJECTS.md` line, first `save`. `CLAUDE.md.tmpl` names Core pa
    `<Core>/<name>/.claude/` and the report says they no longer load. One revertible commit in
    the repo removes them and appends the missing ignore lines (user lines untouched).
 3. Old layout only: `mv <Core>/<name>/code <Projects>/<name>` (same disk, refuse otherwise);
-   repair worktrees.
+   repair worktrees; fold `<Core>/<name>/.claude/rules/*.md` (0.4 and older wrote `tests.md`)
+   into `CLAUDE.md` the same way, keeping the files.
 4. Symlink, `settings.local.json` (`additionalDirectories` = `<Core>/<name>`), hook shims,
    wiki map and missing pages, `PROJECTS.md` line, commit "Adopt <name>" in Core;
    `wiki-check.sh` green.

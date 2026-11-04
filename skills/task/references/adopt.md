@@ -30,7 +30,9 @@ never run `adopt.sh` before "ok".
    - which files go to `<Core>/<name>/` (under "copy to");
    - the rule files under "fold into ... under ## Rules": their text becomes a subsection of the
      Rules section of the private `CLAUDE.md` (with "Applies to: ..." for rules limited to some
-     files), because rule files kept in the Core would not load;
+     files), because rule files kept in the Core would not load; in the old layout these are the
+     rule files already in `<Core>/<name>/.claude/rules/` (for example `tests.md`): they stay
+     there, and their text joins the private `CLAUDE.md` in the "Adopt <name>" commit;
    - the files under "kept in Core, no longer loaded": they are kept in `<Core>/<name>/.claude/`
      but Claude Code no longer reads them (for example `settings.json` permissions or hooks,
      custom commands); if the user still needs one, it has to be set up again another way;

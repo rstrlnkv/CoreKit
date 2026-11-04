@@ -464,6 +464,36 @@ assert_contains "$K/.git/hooks/pre-commit" "corecrew hook shim"
 assert_eq "$(bash "$SCRIPTS/lib.sh" layout old-app)" "new" "layout after the move"
 bash "$WC" "$CORE_DIR/old-app" >/dev/null 2>&1 && pass || fail "wiki-check (old layout): $(bash "$WC" "$CORE_DIR/old-app" 2>&1)"
 
+# old layout: <Core>/<name>/.claude/rules/*.md (0.4 and older) stop loading after the move, so they are
+# folded into <Core>/<name>/CLAUDE.md under ## Rules in the "Adopt <name>" commit; the files are kept
+new_sandbox; setup_core; sync_tools
+mkold rule-old
+RP="$CORE_DIR/rule-old"; mkdir -p "$RP/.claude/rules/web"
+printf -- '---\npaths: ["src/**"]\n---\n\n# Tests\n\nWrite the test first.\n' > "$RP/.claude/rules/tests.md"
+printf 'Use tabs.\n' > "$RP/.claude/rules/web/style.md"
+printf '{}\n' > "$RP/.claude/settings.json"
+git -C "$CORE_DIR" add -A && git -C "$CORE_DIR" commit -q -m "old rules"
+assert_exit 0 bash "$AD" --from "$RP/code" --dry-run
+echo "$OUT" | grep -qxF "fold into $RP/CLAUDE.md under ## Rules:" && pass || fail "old-layout plan lacks the fold: $OUT"
+echo "$OUT" | grep -qxF "  .claude/rules/tests.md" && pass || fail "old-layout plan lacks tests.md: $OUT"
+echo "$OUT" | grep -qxF "  .claude/rules/web/style.md" && pass || fail "old-layout plan lacks web/style.md: $OUT"
+assert_eq "$(printf '%s\n' "$OUT" | sed -n '/^kept in Core, no longer loaded:$/,/^[^ ]/p' | grep -c 'rules/')" "0" "folded rules listed as kept: $OUT"
+echo "$OUT" | grep -qxF "  .claude/settings.json" && pass || fail "old-layout plan lacks settings.json as kept: $OUT"
+assert_not_contains "$RP/CLAUDE.md" "### tests"
+assert_exit 0 bash "$AD" --from "$RP/code"
+echo "$OUT" | grep -qxF "folded 2 rule file(s) into $RP/CLAUDE.md (## Rules)" && pass || fail "old-layout report lacks the fold: $OUT"
+assert_contains "$RP/CLAUDE.md" "### tests"
+assert_contains "$RP/CLAUDE.md" "Applies to: src/**"
+assert_contains "$RP/CLAUDE.md" "#### Tests"
+assert_contains "$RP/CLAUDE.md" "### web/style"
+assert_contains "$RP/CLAUDE.md" "Use tabs."
+assert_eq "$(grep -c '^## Rules$' "$RP/CLAUDE.md")" "1" "one Rules section (old layout)"
+assert_file "$RP/.claude/rules/tests.md"; assert_file "$RP/.claude/rules/web/style.md"
+assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "Adopt rule-old" "Core commit (old-layout rules)"
+git -C "$CORE_DIR" show --name-only --format= HEAD | grep -qxF rule-old/CLAUDE.md && pass || fail "the fold is not in the Adopt commit"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "Core dirty (old-layout rules)"
+assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "temp folder left in the Core"
+
 # old layout: the target folder exists (in any letter case) -> refuse, nothing changed
 new_sandbox; setup_core
 mkold old-app
