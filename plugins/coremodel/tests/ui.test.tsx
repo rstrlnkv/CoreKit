@@ -521,3 +521,122 @@ test('an undo button drawn before off does nothing when pressed after', { option
   await step($, 'medium', 1)
   expect(w.efforts.at(-1)).toBe('low')
 })
+
+// CoreModel: the pair in the interface (spec §7).
+async function switchPair($: Eng, w: World, model: string, level: string, why = 'auth bug') {
+  w.answer = `{"level":"${level}","model":"${model}","why":"${why}"}`
+  await submit($, 'fix the login')
+  await step($, 'medium')
+}
+
+test('switch line names both parts', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ ...ABOVE, surface })
+    expect((await ui.find({ type: 'Text', text: /Opus · High \(was Sonnet · Medium\) · auth bug/ })) !== undefined).toBe(true)
+    await ui.unmount()
+  }
+})
+
+test('undo restores both parts the silent switch changed', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  expect(String((await undoButton($))?.props.label)).toMatch(/Back to Sonnet · Medium/)
+  await pressUndo($)
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
+  expect(w.efforts.at(-1)).toBe('medium')
+})
+
+test('mark arrow follows the model', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  on('ui.render', { component: 'Placed' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>engine</Text>
+  })
+  w.row = null
+  await start($)
+  await switchPair($, w, 'haiku', 'high')
+  const ui = await $.ui.mount({ ...placed('mark-1'), surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /^↓ Haiku · High \(was Sonnet · Medium\)/ })) !== undefined).toBe(true)
+  await ui.unmount()
+})
+
+test('footer shows the pair', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ ...MODE, surface })
+    expect((await ui.find({ type: 'Text', text: /Opus · High/ })) !== undefined).toBe(true)
+    await ui.unmount()
+  }
+})
+
+test('working line names the pair', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  on('ui.render', { component: 'Spinner' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    const p = e.props as { word: string; suffix: string }
+    return <Text>{p.word + p.suffix}</Text>
+  })
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking… · Opus · High')
+})
+
+test('pane model buttons only for allowed models', { options: { models: 'sonnet,opus' } }, async ($, on) => {
+  world(on)
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await pane($, surface)
+    expect((await ui.find({ type: 'Button', key: 'model-opus' })) !== undefined).toBe(true)
+    expect((await ui.find({ type: 'Button', key: 'model-sonnet' })) !== undefined).toBe(true)
+    expect(await ui.find({ type: 'Button', key: 'model-haiku' })).toBe(undefined)
+    expect((await ui.find({ type: 'Box', key: 'models' }))?.props.flexWrap).toBe('wrap')
+    await ui.unmount()
+  }
+})
+
+test('pane model press on an empty chat holds at once', async ($, on) => {
+  const w = world(on)
+  await start($)
+  await pressPane($, 'model-opus')
+  await step($, 'medium')
+  expect(w.asked.length).toBe(0)
+  expect(w.models).toEqual(['claude-opus-5-5'])
+})
+
+test('pane model press mid-chat asks the cost', async ($, on) => {
+  const w = world(on)
+  w.lastReply = 'an earlier answer'
+  w.tokens = 100_000
+  await start($)
+  await step($, 'medium')
+  w.reply = 'Switch to Opus'
+  await pressPane($, 'model-opus')
+  expect(w.questions[0]).toContain('~50')
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+})
+
+test('pane counts per model', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  expect(await has($, /^Opus 1$/)).toBe(true)
+  expect(await has($, /Chat runs at: Opus · High/)).toBe(true)
+  expect(await has($, /in the menu: Sonnet · Medium/)).toBe(true)
+  expect(await has($, /Opus · High · auth bug/)).toBe(true)
+})

@@ -72,6 +72,10 @@ const SHORT: Record<Level, string> = { low: 'Low', medium: 'Medium', high: 'High
 export function texts(lang: Lang) {
   const n = (l: Level) => NAMES[lang][l]
   const ru = lang === 'ru'
+  const back = (l: Level) => (ru ? `Вернуть «${n(l)}»` : `Back to ${n(l)}`)
+  const applied = (l: Level, from: Level | '', why: string) =>
+    (ru ? `Усилие: ${n(l)}` : `Effort: ${n(l)}`) + (from ? (ru ? ` (было ${n(from)})` : ` (was ${n(from)})`) : '') + (why ? ` · ${why}` : '')
+  const markLevel = (l: Level, from: Level | '', why: string) => `${from && ORDER.indexOf(from) > ORDER.indexOf(l) ? '↓' : '↑'} ${applied(l, from, why)}`
   return {
     levelName: n,
     question: (l: Level, why: string) =>
@@ -92,18 +96,11 @@ export function texts(lang: Lang) {
         ? `Перейти на ${name}? Чат перечитается заново: ≈ ${k} тыс. токенов, как ~${cost} обычных ответов. Дальше ответы снова дешёвые.`
         : `Switch to ${name}? The chat is read again: ≈ ${k}k tokens, like ~${cost} ordinary replies. Replies are cheap again after that.`
     },
-    back: (l: Level) => (ru ? `Вернуть «${n(l)}»` : `Back to ${n(l)}`),
+    back,
     keep: (now: Level | '') =>
       now ? (ru ? `Оставить «${n(now)}»` : `Keep ${n(now)}`) : ru ? 'Оставить как есть' : 'Keep it as it is',
-    applied: (l: Level, from: Level | '', why: string) =>
-      (ru ? `Усилие: ${n(l)}` : `Effort: ${n(l)}`) +
-      (from ? (ru ? ` (было ${n(from)})` : ` (was ${n(from)})`) : '') +
-      (why ? ` · ${why}` : ''),
-    mark: (l: Level, from: Level | '', why: string) =>
-      `${from && ORDER.indexOf(from) > ORDER.indexOf(l) ? '↓' : '↑'} ` +
-      (ru ? `Усилие: ${n(l)}` : `Effort: ${n(l)}`) +
-      (from ? (ru ? ` (было ${n(from)})` : ` (was ${n(from)})`) : '') +
-      (why ? ` · ${why}` : ''),
+    applied,
+    mark: markLevel,
     runsAt: (l: Level | '') =>
       ru ? `Чат работает на: ${l ? n(l) : 'пока неизвестно'}` : `Chat runs at: ${l ? n(l) : 'unknown yet'}`,
     inMenu: (l: Level | '') => (ru ? `в меню: ${l ? n(l) : '?'} (ваше)` : `in the menu: ${l ? n(l) : '?'} (yours)`),
@@ -117,6 +114,29 @@ export function texts(lang: Lang) {
     release: ru ? 'Снять' : 'Release',
     noPicks: ru ? 'Пока нет выборов.' : 'No picks yet.',
     label: (l: Level) => `${ru ? 'Усилие' : 'Effort'} ${SHORT[l]}`,
+    // The pair (spec §7). With no model part each falls back to the effort-only text above.
+    change: (m: ModelKey | null | undefined, fromM: ModelKey | '' | undefined, l: Level | null, fromL: Level | '', why: string) => {
+      if (!m && l) return applied(l, fromL, why)
+      const was = [fromM ? MODELS[fromM].name : '', l && fromL ? n(fromL) : ''].filter(Boolean).join(' · ')
+      const now = m ? (l ? `${MODELS[m].name} · ${n(l)}` : `${ru ? 'Модель' : 'Model'}: ${MODELS[m].name}`) : ''
+      return now + (was ? (ru ? ` (было ${was})` : ` (was ${was})`) : '') + (why ? ` · ${why}` : '')
+    },
+    markPair: (m: ModelKey | null | undefined, fromM: ModelKey | '' | undefined, l: Level | null, fromL: Level | '', why: string) => {
+      if (!m && l) return markLevel(l, fromL, why)
+      const down = m && fromM ? LADDER.indexOf(fromM) > LADDER.indexOf(m) : !!(l && fromL && ORDER.indexOf(fromL) > ORDER.indexOf(l))
+      return `${down ? '↓' : '↑'} ${texts(lang).change(m, fromM, l, fromL, why)}`
+    },
+    backPair: (m: ModelKey | '' | undefined, l: Level | '' | undefined) =>
+      m && l ? (ru ? `Вернуть ${MODELS[m].name} · ${n(l)}` : `Back to ${MODELS[m].name} · ${n(l)}`) : m ? (ru ? `Вернуть ${MODELS[m].name}` : `Back to ${MODELS[m].name}`) : l ? back(l) : '',
+    pairLabel: (m: ModelKey | null, l: Level | null) => (m && l ? `${MODELS[m].name} · ${SHORT[l]}` : m ? MODELS[m].name : l ? `${ru ? 'Усилие' : 'Effort'} ${SHORT[l]}` : ''),
+    pairSuffix: (m: ModelKey | null, l: Level | null) => [m ? MODELS[m].name : '', l ? n(l) : ''].filter(Boolean).join(' · '),
+    runsAtPair: (m: ModelKey, l: Level | '') => `${ru ? 'Чат работает на: ' : 'Chat runs at: '}${MODELS[m].name}${l ? ` · ${n(l)}` : ''}`,
+    inMenuPair: (m: ModelKey | '', l: Level | '') => {
+      const what = [m ? MODELS[m].name : '?', l ? n(l) : ''].filter(Boolean).join(' · ')
+      return ru ? `в меню: ${what} (ваше)` : `in the menu: ${what} (yours)`
+    },
+    switchModel: (m: ModelKey) => (ru ? `Перейти на ${MODELS[m].name}` : `Switch to ${MODELS[m].name}`),
+    cancel: ru ? 'Отмена' : 'Cancel',
     checking: ru ? 'подбираю усилие…' : 'checking effort…',
   }
 }

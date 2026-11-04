@@ -7,19 +7,23 @@ export type ModelKey = 'haiku' | 'sonnet' | 'opus' | 'fable'
 export type Band = {
   /** Changes with every new band, so an old timer never clears a newer one. */
   id: number
-  level: Level
+  /** The level the switch moved to; null when only the model changed. */
+  level: Level | null
   /** The level before the switch; '' when it was not known. */
   from: Level | ''
   /** The classifier's short reason. */
   why: string
   /** The language of the prompt the band answers. */
   lang: 'ru' | 'en'
-  /** What the undo button does: hold this level, drop the hold, or no button (null). */
-  undo: Level | 'release' | null
+  /** The model the switch moved to, and from; absent when the model did not change. */
+  model?: ModelKey | null
+  fromModel?: ModelKey | ''
+  /** What the undo button restores per part: a level or model to hold, or 'release'; null: no button. */
+  undo: { level?: Level | 'release'; model?: ModelKey | 'release' } | null
 }
 
 /** One switch, drawn as a row in the transcript. */
-export type Mark = { level: Level; from: Level | ''; why: string; lang: 'ru' | 'en' }
+export type Mark = { level: Level | null; from: Level | ''; model?: ModelKey | null; fromModel?: ModelKey | ''; why: string; lang: 'ru' | 'en' }
 
 /** What this session's picks came to. */
 export type Stats = {
@@ -28,7 +32,9 @@ export type Stats = {
   /** Prompts whose level stayed: a keep pick, the same level, a Keep answer or a dismissed question. */
   kept: number
   /** The last readable pick. */
-  last: { level: Level; why: string } | null
+  last: { level: Level; why: string; model?: ModelKey } | null
+  /** Readable picks per model; absent in counts stored before 0.4.0. */
+  models?: Record<ModelKey, number>
   /** How many marks were placed; the next mark's id is `mark-<marks + 1>`. */
   marks: number
 }

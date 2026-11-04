@@ -1,9 +1,9 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Band, Level, Stats } from '../types'
+import type { Band, Level, Mark, Stats } from '../types'
 import { buildPrompt, parseAnswer, type Pick, toLevel } from './classifier'
-import { MODELS, type ModelKey, parseModels, switchCost, toModel } from './models'
+import { LADDER, MODELS, type ModelKey, parseModels, switchCost, toModel } from './models'
 import { decide, decideModel, effortOptions, type Lang, type Mode, modelOptions, texts, uiLang } from './policy'
 
 const PLUGIN = 'coremodel'
@@ -11,7 +11,7 @@ const band = atom({ plugin: 'coremodel', key: 'band' } as const, null)
 const override = atom({ plugin: 'coremodel', key: 'override' } as const, null)
 const marks = atom({ plugin: 'coremodel', key: 'marks' } as const, {})
 const stats = atom({ plugin: 'coremodel', key: 'stats' } as const, null)
-const NO_STATS: Stats = { picks: { low: 0, medium: 0, high: 0, xhigh: 0, max: 0 }, kept: 0, last: null, marks: 0 }
+const NO_STATS: Stats = { picks: { low: 0, medium: 0, high: 0, xhigh: 0, max: 0 }, kept: 0, last: null, marks: 0, models: { haiku: 0, sonnet: 0, opus: 0, fable: 0 } }
 const CLASSIFIERS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5' } as const
 const MODES: readonly Mode[] = ['suggest', 'auto', 'off']
 const LOG_KEEP = 20_000
@@ -31,6 +31,8 @@ let hold: { level: Level; base: string } | null = null
 let modelHold: { key: ModelKey; base: string } | null = null
 // The level the last main-chat request ran at, and the language of the last prompt.
 let seen: Level | '' = ''
+// The model the last main-chat request named (the person's own unless held).
+let seenModel = ''
 // The menu's own effort as the last main-chat request carried it.
 let asked = ''
 let lastLang: Lang = 'en'
@@ -90,14 +92,14 @@ export async function count($: EngineInterface, f: (s: Stats) => Stats): Promise
 }
 
 /** A row in the transcript for an applied switch. Its id comes from $.state, so a reload never reuses one. */
-async function placeMark($: EngineInterface, level: Level, from: Level | '', why: string, lang: Lang) {
+async function placeMark($: EngineInterface, change: Mark) {
   let n = 0
   await count($, s => {
     n = s.marks + 1
     return { ...s, marks: n }
   })
   const id = `mark-${n}`
-  await update($, marks, cur => ({ ...cur, [id]: { level, from, why, lang } }))
+  await update($, marks, cur => ({ ...cur, [id]: change }))
   await $.ui.place({ id })
 }
 
@@ -116,8 +118,8 @@ async function chatTokens($: EngineInterface): Promise<number | undefined> {
   }
 }
 
-async function announce($: EngineInterface, level: Level, from: Level | '', why: string, lang: Lang, undo: Band['undo']) {
-  const b: Band = { id: nextBand++, level, from, why, lang, undo }
+async function announce($: EngineInterface, change: Mark, undo: Band['undo']) {
+  const b: Band = { id: nextBand++, ...change, undo }
   await update($, band, () => b)
   void (async () => {
     await $.clock.sleep(BAND_MS)
@@ -183,7 +185,12 @@ async function runPick(
   const stale = async () => h.gen !== gen || (await currentMode($, options)) === 'off'
   if (await stale()) return
   const named = pick.level === 'keep' ? null : pick.level
-  await count($, s => (named ? { ...s, picks: { ...s.picks, [named]: s.picks[named] + 1 }, last: { level: named, why: pick.why } } : s))
+  await count($, s => {
+    if (!named) return s
+    const models = { ...NO_STATS.models!, ...s.models }
+    if (pick.model) models[pick.model] += 1
+    return { ...s, picks: { ...s.picks, [named]: s.picks[named] + 1 }, models, last: { level: named, why: pick.why, ...(pick.model ? { model: pick.model } : {}) } }
+  })
   const kept = () => count($, s => ({ ...s, kept: s.kept + 1 }))
   if (pick.level === 'keep') return kept()
   const level = pick.level
@@ -225,14 +232,16 @@ async function runPick(
   }
 
   if (!modelTo && !levelTo) return kept()
+  // A silent switch can be undone, part by part: back to the menu's own value, or to the one held before.
+  const parts: NonNullable<Band['undo']> = {}
+  if (modelTo && mAction === 'apply' && nowModel) parts.model = nowModel === toModel(baseModel) ? 'release' : nowModel
+  if (levelTo && action === 'apply' && now) parts.level = now === toLevel(base) ? 'release' : now
   if (modelTo) await applyModel($, modelTo, baseModel)
-  if (!levelTo) return
-  // A silent switch can be undone: back to the menu's own level, or to the level held before.
-  const undo: Band['undo'] = action === 'apply' && now ? (now === toLevel(base) ? 'release' : now) : null
-  await applyLevel($, levelTo, base)
-  await announce($, levelTo, now, pick.why, h.lang, undo)
+  if (levelTo) await applyLevel($, levelTo, base)
+  const change: Mark = { level: levelTo, from: levelTo ? now : '', model: modelTo, fromModel: modelTo ? nowModel : '', why: pick.why, lang: h.lang }
+  await announce($, change, parts.model || parts.level ? parts : null)
   try {
-    await placeMark($, levelTo, now, pick.why, h.lang)
+    await placeMark($, change)
   } catch (err) {
     await log($, 'mark', err)
   }
@@ -270,6 +279,28 @@ async function paneChoice($: EngineInterface, level: Level | null): Promise<void
   await update($, band, () => null)
 }
 
+/**
+ * A model the person presses in the pane. Mid-chat the cost question comes first (spec §7.5);
+ * the press itself is their yes, so no other question follows.
+ */
+async function paneModel($: EngineInterface, key: ModelKey): Promise<void> {
+  const nowModel = modelHold?.key ?? toModel(seenModel)
+  if (key === nowModel) return
+  const isEmpty = !(await $.session.messages()).some(m => m.role === 'assistant')
+  if (!isEmpty) {
+    const t = texts(lastLang)
+    const tokens = await chatTokens($)
+    try {
+      const answer = await $.ui.ask(t.modelQuestion(key, switchCost(tokens, nowModel, key), tokens, false, ''), { options: [t.switchModel(key), t.cancel], header: t.modelHeader })
+      if (answer !== t.switchModel(key)) return
+    } catch {
+      return
+    }
+  }
+  await applyModel($, key, '')
+  await update($, band, () => null)
+}
+
 const ASK_MODES: readonly Mode[] = ['auto', 'suggest', 'off']
 const LEVELS: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
@@ -295,6 +326,7 @@ export const register: Register = (on, options) => {
       if (hold && hold.base === '') hold = { ...hold, base: asked }
       if (hold && asked !== hold.base) await releaseLevel($)
     }
+    seenModel = e.model
     if (modelHold && modelHold.base === '') modelHold = { ...modelHold, base: e.model }
     // The person chose another model with /model: their choice stands.
     if (modelHold && e.model !== modelHold.base) await releaseModel($)
@@ -358,17 +390,20 @@ export const register: Register = (on, options) => {
 
   // The app's menu shows the person's own setting; the footer slot beside it names a held level.
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
-    const level = (await read($, override))?.level
-    if (!level) return next(e)
-    return next({ ...e, props: { ...e.props, modes: [...e.props.modes, texts(lastLang).label(level)] } })
+    const pair = await read($, override)
+    if (!pair) return next(e)
+    return next({ ...e, props: { ...e.props, modes: [...e.props.modes, texts(lastLang).pairLabel(pair.model, pair.level)] } })
   })
 
   on('ui.render', { component: 'Pane', requestId: PLUGIN }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const t = texts(lastLang)
     const mode = await currentMode($, options)
-    const held = (await read($, override))?.level ?? null
+    const pair = await read($, override)
+    const held = pair?.level ?? null
+    const heldModel = pair?.model ?? null
     const s = await read($, stats)
+    const allowed = parseModels(options.models)
     const act = (what: string, f: () => Promise<unknown>) => () => {
       f().catch(err => log($, what, err))
     }
@@ -379,15 +414,21 @@ export const register: Register = (on, options) => {
             <Button key={`mode-${m}`} label={m === mode ? `● ${m}` : m} onPress={act('mode', () => setMode($, options, m))} />
           ))}
         </Box>
-        <Text bold>{t.runsAt(held ?? seen)}</Text>
-        {held && toLevel(asked) ? <Text dimColor>{t.inMenu(toLevel(asked))}</Text> : null}
+        <Text bold>{heldModel ? t.runsAtPair(heldModel, held ?? seen) : t.runsAt(held ?? seen)}</Text>
+        {heldModel ? <Text dimColor>{t.inMenuPair(toModel(seenModel), toLevel(asked))}</Text> : held && toLevel(asked) ? <Text dimColor>{t.inMenu(toLevel(asked))}</Text> : null}
         <Text dimColor>{t.lastPick}</Text>
-        <Text>{s?.last ? `${t.levelName(s.last.level)} · ${s.last.why}` : t.noPicks}</Text>
+        <Text>{s?.last ? `${s.last.model ? `${MODELS[s.last.model].name} · ` : ''}${t.levelName(s.last.level)} · ${s.last.why}` : t.noPicks}</Text>
         {s ? <Text dimColor>{t.session}</Text> : null}
+        {s?.models ? LADDER.filter(m => s.models![m] > 0).map(m => <Text>{`${MODELS[m].name} ${s.models![m]}`}</Text>) : null}
         {s ? LEVELS.filter(l => s.picks[l] > 0).map(l => <Text>{`${t.levelName(l)} ${s.picks[l]}`}</Text>) : null}
         {s && s.kept > 0 ? <Text>{`${t.kept} ${s.kept}`}</Text> : null}
+        <Box key="models" flexWrap="wrap">
+          {allowed.map(m => (
+            <Button key={`model-${m}`} label={m === heldModel ? `● ${MODELS[m].name}` : MODELS[m].name} onPress={act('model', () => paneModel($, m))} />
+          ))}
+        </Box>
         <Box key="levels" flexWrap="wrap">
-          {held ? <Button key="release" label={t.release} onPress={act('release', () => paneChoice($, null))} /> : null}
+          {held || heldModel ? <Button key="release" label={t.release} onPress={act('release', () => paneChoice($, null))} /> : null}
           {LEVELS.map(l => (
             <Button key={`level-${l}`} label={t.levelName(l)} onPress={act('level', () => paneChoice($, l))} />
           ))}
@@ -398,9 +439,9 @@ export const register: Register = (on, options) => {
 
   // The working line names the menu's level; while a level is held it says the real one too.
   on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
-    const level = (await read($, override))?.level
-    if (!level) return next(e)
-    return next({ ...e, props: { ...e.props, suffix: `${e.props.suffix} · ${texts(lastLang).levelName(level)}` } })
+    const pair = await read($, override)
+    if (!pair) return next(e)
+    return next({ ...e, props: { ...e.props, suffix: `${e.props.suffix} · ${texts(lastLang).pairSuffix(pair.model, pair.level)}` } })
   })
 
   on('ui.render', { component: 'Placed' }, async ($, e, next) => {
@@ -408,7 +449,7 @@ export const register: Register = (on, options) => {
     const m = (await read($, marks))[e.props.id]
     if (!m) return next(e)
     const { Text } = $.ui.resolve(e)
-    return <Text dimColor>{texts(m.lang).mark(m.level, m.from, m.why)}</Text>
+    return <Text dimColor>{texts(m.lang).markPair(m.model, m.fromModel, m.level, m.from, m.why)}</Text>
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
@@ -419,19 +460,27 @@ export const register: Register = (on, options) => {
     const t = texts(b.lang)
     const undo = b.undo
     const onUndo = async () => {
-      // An old band, or a hold the menu already took back: the person's own choice stands.
+      // An old band, or a part the person already changed: their own choice stands.
       const cur = await read($, band)
-      if (!cur || cur.id !== b.id || !hold || hold.level !== b.level || !undo) return
-      if (undo === 'release') await releaseLevel($)
-      else await applyLevel($, undo, hold.base)
+      if (!cur || cur.id !== b.id || !undo) return
+      if (undo.model && b.model && modelHold?.key === b.model) {
+        if (undo.model === 'release') await releaseModel($)
+        else await applyModel($, undo.model, modelHold.base)
+      }
+      if (undo.level && b.level && hold?.level === b.level) {
+        if (undo.level === 'release') await releaseLevel($)
+        else await applyLevel($, undo.level, hold.base)
+      }
       await update($, band, () => null)
     }
+    const backModel = undo?.model === 'release' ? b.fromModel : undo?.model
+    const backLevel = undo?.level === 'release' ? b.from : undo?.level
     return (
       <Box flexDirection="column">
         {rest}
         <Box>
-          <Text wrap="truncate-end">{`✓ ${t.applied(b.level, b.from, b.why)} `}</Text>
-          {undo ? <Button key="undo" hotkey="1" label={t.back(undo === 'release' ? (b.from || b.level) : undo)} onPress={() => onUndo().catch(err => log($, 'undo', err))} /> : null}
+          <Text wrap="truncate-end">{`✓ ${t.change(b.model, b.fromModel, b.level, b.from, b.why)} `}</Text>
+          {undo ? <Button key="undo" hotkey="1" label={t.backPair(backModel, backLevel)} onPress={() => onUndo().catch(err => log($, 'undo', err))} /> : null}
         </Box>
       </Box>
     )
