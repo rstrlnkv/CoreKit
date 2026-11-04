@@ -515,7 +515,7 @@ p 'cat <<< ".env"'
 p 'cat <<< .env'
 p 'echo hi
 cat src/a.ts'
-p 'bash -c "cat .env"'
+run_bash 'bash -c "cat .env"'; blocked "Bash: bash -c cat .env" ".env"   # a command line handed to another shell is judged (was a known gap before 0.5.2)
 p 'cat ~/.sshx/y'
 p 'cat ~/.ssh_old'
 p 'cd ~/.ssh && cat config'   # known gap: after a cd a relative path is unknown
