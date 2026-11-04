@@ -235,12 +235,14 @@ project_of() {
   esac
 }
 
-# code_dir_of <name> — prints the main code folder of a project: the one folder in <Projects> (not the
-# Core) whose lower-case name is <name>; else <Core>/<name>/code when that is a directory. Exit 1 when
-# there is neither; exit 3 (and a line on stderr) when two folders differ only in letter case.
+# code_dir_of <name> — prints the main code folder of a project: <Core>/<name>/code when that is a
+# directory (only the old layout has one, so an unrelated <Projects>/<Name> never takes its place); else
+# the one folder in <Projects> (not the Core) whose lower-case name is <name>. Exit 1 when there is
+# neither; exit 3 (and a line on stderr) when two folders there differ only in letter case.
 code_dir_of() {
   local pd d b found="" n=0 second=""
   [ -n "${CORE_DIR:-}" ] && [ -n "${1:-}" ] || return 1
+  if [ -d "$CORE_DIR/$1/code" ]; then printf '%s\n' "$CORE_DIR/$1/code"; return 0; fi
   pd="${PROJECTS_DIR:-$(dirname "$CORE_DIR")}"
   for d in "$pd"/*/; do
     d="${d%/}"; [ -d "$d" ] || continue
@@ -254,9 +256,8 @@ code_dir_of() {
     printf 'two folders differ only in case: %s, %s\n' "$(basename "$found")" "$(basename "$second")" >&2
     return 3
   fi
-  if [ $n -eq 1 ]; then printf '%s\n' "$found"; return 0; fi
-  [ -d "$CORE_DIR/$1/code" ] || return 1
-  printf '%s\n' "$CORE_DIR/$1/code"
+  [ $n -eq 1 ] || return 1
+  printf '%s\n' "$found"
 }
 
 # layout_of <name> — prints "new" (code folder beside the Core) or "old" (<Core>/<name>/code); exit 1

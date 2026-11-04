@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Installs corecrew git hook shims into the project's code folder (beside the Core, or <project_dir>/code in the old layout) and the Core repo. A shim is a tiny
-# script that runs the hook body kept in the tools folder (see sync-tools.sh), so hooks stay
-# current after plugin updates.
+# Installs corecrew git hook shims into the project's code folder (beside the Core, or
+# <project_dir>/code in the old layout) and the Core repo. A shim is a tiny script that runs the hook
+# body kept in the tools folder (see sync-tools.sh), so hooks stay current after plugin updates.
 # Usage: bash install-hooks.sh <project_dir> [--tools <dir>]   (project_dir = <Core>/<name>)
 # Env:   CORE_DIR (default: parent of project_dir)
 #        COREDEV_TOOLS (default: ${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/corecrew-corekit}/tools)
@@ -60,7 +60,9 @@ install_shim() {  # install_shim <name in tools/git-hooks> <dest hook path>
 . "$HERE/lib.sh"
 export CORE_DIR; load_settings
 NAME="$(basename "$P")"
-CODE="$(code_dir_of "$NAME" 2>/dev/null)" || CODE="$P/code"
+# A case clash (exit 3): code_dir_of's line on stderr names the two folders; nothing is installed.
+rc=0; CODE="$(code_dir_of "$NAME")" || rc=$?
+case "$rc" in 0) ;; 3) exit 1 ;; *) CODE="$P/code" ;; esac
 [ -d "$CODE/.git" ] || { echo "No git repo at $CODE" >&2; exit 1; }
 [ -d "$CORE_DIR/.git" ] || { echo "No git repo at $CORE_DIR" >&2; exit 1; }
 H="$CODE/.git/hooks"

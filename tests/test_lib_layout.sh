@@ -25,6 +25,12 @@ assert_exit 0 bash "$LIB" code-dir old;                                  assert_
 assert_exit 1 bash "$LIB" code-dir none
 assert_exit 1 bash "$LIB" layout none
 
+# An old-layout project plus an unrelated folder of the same name beside the Core: <Core>/<name>/code
+# wins (only the old layout has one).
+mkdir -p "$CORE_DIR/twin/code" "$P/Twin"; : > "$CORE_DIR/twin/CLAUDE.md"; git init -q "$P/Twin"
+assert_exit 0 bash "$LIB" layout twin;                                   assert_eq "$OUT" "old" "layout twin (old + unrelated Twin)"
+assert_exit 0 bash "$LIB" code-dir twin;                                 assert_eq "$OUT" "$CORE_DIR/twin/code" "code-dir twin"
+
 # shellcheck disable=SC1090
 ( source "$LIB"; load_settings
   for n in core standards knowledge; do valid_project_name "$n" && echo "accepted $n"; done

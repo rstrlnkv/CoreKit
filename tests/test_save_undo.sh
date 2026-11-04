@@ -177,6 +177,28 @@ assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "No env"
 assert_eq "$(cat "$F/n.txt")" "n1" "new layout: undo did not restore code"
 assert_eq "$(cat "$CORE_DIR/foo/d.md")" "doc1" "new layout: undo did not restore docs"
 
+# an old-layout project plus an unrelated repo of the same name beside the Core: save works in
+# <Core>/<name>/code and writes nothing into the unrelated repo
+scaffold_old twin-app
+T="$SANDBOX/Projects/Twin-App"; mkdir -p "$T"; git -C "$T" init -q
+echo "t1" > "$CORE_DIR/twin-app/code/t.txt"
+(cd "$CORE_DIR/twin-app/code" && bash "$SAVE" "Twin step") > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "0" "save in an old-layout project with an unrelated twin: $(cat "$SANDBOX/out")"
+assert_eq "$(git -C "$CORE_DIR/twin-app/code" log -1 --format=%s 2>/dev/null)" "Twin step" "twin: code not saved"
+assert_file "$CORE_DIR/twin-app/code/.git/hooks/pre-commit"
+assert_no_file "$T/.git/hooks/pre-commit"; assert_no_file "$T/CLAUDE.local.md"
+
+# install-hooks lets a case-clash line through and exits non-zero (it does not swallow code_dir_of's exit 3)
+grep -q 'code_dir_of "$NAME" 2>/dev/null' "$SCRIPTS/install-hooks.sh" && fail "install-hooks swallows the case-clash line" || pass
+mkdir -p "$SANDBOX/Projects/Clash" "$SANDBOX/Projects/clash" "$CORE_DIR/clash"; : > "$CORE_DIR/clash/CLAUDE.md"
+if [ "$(ls "$SANDBOX/Projects" | grep -ci '^clash$')" -eq 2 ]; then
+  CORE_DIR="$CORE_DIR" bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/clash" > "$SANDBOX/out" 2>&1; rc=$?
+  [ "$rc" -ne 0 ] && pass || fail "install-hooks with a case clash exited 0"
+  assert_contains "$SANDBOX/out" "two folders differ only in case"
+else
+  echo "  note: case-insensitive disk, install-hooks case-clash check skipped"
+fi
+
 # a git repo beside the Core that is not a project
 mkdir -p "$SANDBOX/Projects/Brain"; git -C "$SANDBOX/Projects/Brain" init -q
 (cd "$SANDBOX/Projects/Brain" && bash "$SAVE" "x") > "$SANDBOX/out" 2>&1; rc=$?
