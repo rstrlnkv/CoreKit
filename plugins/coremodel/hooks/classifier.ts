@@ -1,8 +1,9 @@
 // The classifier: the model prompt that picks an effort level, and the parser of its answer.
 // No calls on `$` here, so the rules can change without touching the hooks.
 import type { Level } from '../types'
+import { type ModelKey, toModel } from './models'
 
-export type Pick = { level: Level | 'keep'; why: string }
+export type Pick = { level: Level | 'keep'; model: ModelKey | ''; why: string }
 
 const LEVELS: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
@@ -52,7 +53,14 @@ The prompt:
 {{PROMPT}}
 </prompt>
 
-Answer with JSON only: {"level": "low|medium|high|xhigh|max|keep", "why": "the reason in at most 12 plain words, in the language of the prompt"}`
+Also pick the model, on its own ladder, independently of the level: a strong model at low effort and a light model at high effort are both fine. Stop at the first match:
+- haiku: a question, an explanation, a mechanical edit, a short text, a command to run.
+- sonnet (also when unsure): ordinary work with a clear path.
+- opus: a hidden mistake is costly or the path is unclear; many files; analysis across sources.
+- fable: long, critical work handed off to run alone, or the prompt asks for the deepest work.
+For "keep", name the model the work needs anyway.
+
+Answer with JSON only: {"level": "low|medium|high|xhigh|max|keep", "model": "haiku|sonnet|opus|fable", "why": "the reason in at most 12 plain words, in the language of the prompt"}`
 // TEMPLATE-END
 
 /** The model prompt for one pick. The person's text is spliced in, never read as a pattern. */
@@ -81,14 +89,17 @@ function cleanWhy(raw: string): string {
 export function parseAnswer(text: string): Pick | null {
   const m = /\{[\s\S]*?\}/.exec(text)
   if (!m) return null
-  let j: { level?: unknown; why?: unknown }
+  let j: { level?: unknown; model?: unknown; why?: unknown }
   try {
     j = JSON.parse(m[0]) as typeof j
   } catch {
     return null
   }
   const why = typeof j.why === 'string' ? cleanWhy(j.why) : ''
-  if (typeof j.level === 'string' && j.level.trim().toLowerCase() === 'keep') return { level: 'keep', why }
+  // Only a bare model word counts here: a key the ladder names.
+  const word = typeof j.model === 'string' ? j.model.trim().toLowerCase() : ''
+  const model = word === toModel(word) ? toModel(word) : ''
+  if (typeof j.level === 'string' && j.level.trim().toLowerCase() === 'keep') return { level: 'keep', model, why }
   const level = toLevel(j.level)
-  return level ? { level, why } : null
+  return level ? { level, model, why } : null
 }

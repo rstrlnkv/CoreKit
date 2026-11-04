@@ -13,7 +13,7 @@ test('toLevel reads the spellings of xhigh and refuses the rest', () => {
 })
 
 test('parseAnswer takes the JSON out of surrounding prose', () => {
-  expect(parseAnswer('Sure: {"level":"high","why":"auth bug"} ok')).toEqual({ level: 'high', why: 'auth bug' })
+  expect(parseAnswer('Sure: {"level":"high","why":"auth bug"} ok')).toEqual({ level: 'high', model: '', why: 'auth bug' })
 })
 
 test('parseAnswer reads keep', () => {
@@ -55,4 +55,15 @@ test('buildPrompt cuts the prompt and the reply and names an unknown level', () 
 test('why loses a trailing period, so the question never shows two', () => {
   expect(parseAnswer('{"level":"high","why":"auth bug."}')?.why).toBe('auth bug')
   expect(parseAnswer('{"level":"high","why":"нужно расследование..."}')?.why).toBe('нужно расследование')
+})
+
+test('parseAnswer reads the model', () => {
+  expect(parseAnswer('{"level":"high","model":"opus","why":"x"}')?.model).toBe('opus')
+  expect(parseAnswer('{"level":"high","why":"x"}')?.model).toBe('')
+  expect(parseAnswer('{"level":"high","model":"gpt","why":"x"}')?.model).toBe('')
+  expect(parseAnswer('{"level":"keep","model":"opus","why":"x"}')?.model).toBe('opus')
+})
+
+test('the template asks for a model from the ladder', () => {
+  for (const w of ['haiku', 'sonnet', 'opus', 'fable', '"model"']) expect(TEMPLATE.includes(w)).toBe(true)
 })
