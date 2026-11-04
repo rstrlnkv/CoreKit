@@ -666,3 +666,14 @@ test('other failures leave the model alone', { options: { mode: 'auto' } }, asyn
   await step($, 'medium', 1)
   expect(w.models.at(-1)).toBe('claude-opus-5-5')
 })
+
+test('with pickModel off the pane shows no model buttons or model counts', { options: { mode: 'auto', pickModel: 'off' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  const ui = await pane($)
+  expect(await ui.find({ type: 'Button', key: 'model-opus' })).toBe(undefined)
+  expect(await ui.find({ type: 'Text', text: /^Opus 1$/ })).toBe(undefined)
+  await ui.unmount()
+})

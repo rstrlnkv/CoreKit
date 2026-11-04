@@ -388,3 +388,54 @@ test('a new session drops the model', { options: { mode: 'auto' } }, async ($, o
   await step($, 'medium', 1)
   expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
 })
+
+// Final review fixes.
+test('mid-chat the model question offers only the pick and Keep', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.lastReply = MID
+  w.answer = '{"level":"medium","model":"opus","why":"x"}'
+  await start($)
+  await submit($, 'now the hard part')
+  await step($, 'medium')
+  expect(w.asked[0]).toEqual(['Opus (recommended)', 'Keep Sonnet'])
+})
+
+test('Keep is offered for a current model outside the list', { options: { models: 'haiku,sonnet' } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"medium","model":"sonnet","why":"x"}'
+  w.reply = ['Keep Opus']
+  await start($)
+  await submit($, 'write the report')
+  await step($, 'medium', 0, undefined, 'claude-opus-5-5')
+  expect(w.asked[0]).toEqual(['Sonnet (recommended)', 'Keep Opus', 'Haiku'])
+  expect(w.models).toEqual(['claude-opus-5-5'])
+})
+
+test('a one-model list still gives two options', { options: { models: 'opus' } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"medium","model":"opus","why":"x"}'
+  await start($)
+  await submit($, 'refactor it')
+  await step($, 'medium')
+  expect(w.asked[0]).toEqual(['Opus (recommended)', 'Keep Sonnet'])
+})
+
+test('an unknown current model gets a plain Keep', async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"medium","model":"opus","why":"x"}'
+  w.reply = ['Keep the current model']
+  await start($)
+  await submit($, 'refactor it')
+  await step($, 'medium', 0, undefined, 'claude-opus-4-8')
+  expect(w.asked[0]?.[1]).toBe('Keep the current model')
+  expect(w.models).toEqual(['claude-opus-4-8'])
+})
+
+test('the held model keeps the context suffix of the request', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"medium","model":"opus","why":"x"}'
+  await start($)
+  await submit($, 'refactor it')
+  await step($, 'medium', 0, undefined, 'claude-sonnet-5-5[1m]')
+  expect(w.models).toEqual(['claude-opus-5-5[1m]'])
+})

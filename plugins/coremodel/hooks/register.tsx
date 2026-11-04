@@ -205,12 +205,14 @@ async function runPick(
   if (mAction === 'ask' && pick.model) {
     const to = pick.model
     const tokens = isFirst ? undefined : await chatTokens($)
-    const opts = modelOptions(to, nowModel, allowed)
-    const labels = opts.map(m => (m === nowModel ? t.keepModel(m) : t.modelOption(m, m === to)))
+    const models = modelOptions(to, nowModel, allowed, isFirst)
+    // A current model CoreModel does not know still gets its Keep, second, so a question never has one option.
+    const opts: (ModelKey | 'keep')[] = nowModel ? models : [models[0]!, 'keep' as const, ...models.slice(1)].slice(0, 4)
+    const labels = opts.map(m => (m === 'keep' ? t.keepCurrent : m === nowModel ? t.keepModel(m) : t.modelOption(m, m === to)))
     try {
       const answer = await $.ui.ask(t.modelQuestion(to, switchCost(tokens, nowModel, to), tokens, isFirst, pick.why), { options: labels, header: t.modelHeader })
       const chosen = opts[labels.indexOf(answer)]
-      if (chosen && chosen !== nowModel) modelTo = chosen
+      if (chosen && chosen !== 'keep' && chosen !== nowModel) modelTo = chosen
     } catch {
       // A dismissed question keeps the model; the effort is still asked.
     }
@@ -345,7 +347,8 @@ export const register: Register = (on, options) => {
     const was = seen
     seen = want ?? (toLevel(asked) || seen)
     if (seen !== was) $.ui.invalidate('ui.render')
-    const model = modelHold ? MODELS[modelHold.key].id : e.model
+    // The request's context suffix (`[1m]`) stays on the held model: a long chat must still fit.
+    const model = modelHold ? MODELS[modelHold.key].id + (/\[[^\]]*\]$/.exec(e.model)?.[0] ?? '') : e.model
     if ((!want || want === e.effort) && model === e.model) return yield* next(e)
     return yield* next({ ...e, effort: want ?? e.effort, model })
   })
@@ -420,6 +423,8 @@ export const register: Register = (on, options) => {
     const heldModel = pair?.model ?? null
     const s = await read($, stats)
     const allowed = parseModels(options.models).filter(k => !unavailable.has(k))
+    // pickModel off: effort only, as CoreEffort was (spec §6).
+    const pickOn = options.pickModel !== 'off'
     const act = (what: string, f: () => Promise<unknown>) => () => {
       f().catch(err => log($, what, err))
     }
@@ -435,14 +440,14 @@ export const register: Register = (on, options) => {
         <Text dimColor>{t.lastPick}</Text>
         <Text>{s?.last ? `${s.last.model ? `${MODELS[s.last.model].name} · ` : ''}${t.levelName(s.last.level)} · ${s.last.why}` : t.noPicks}</Text>
         {s ? <Text dimColor>{t.session}</Text> : null}
-        {s?.models ? LADDER.filter(m => s.models![m] > 0).map(m => <Text>{`${MODELS[m].name} ${s.models![m]}`}</Text>) : null}
+        {pickOn && s?.models ? LADDER.filter(m => s.models![m] > 0).map(m => <Text>{`${MODELS[m].name} ${s.models![m]}`}</Text>) : null}
         {s ? LEVELS.filter(l => s.picks[l] > 0).map(l => <Text>{`${t.levelName(l)} ${s.picks[l]}`}</Text>) : null}
         {s && s.kept > 0 ? <Text>{`${t.kept} ${s.kept}`}</Text> : null}
         {[...unavailable].map(m => (
           <Text color="yellow">{t.unavailable(m)}</Text>
         ))}
         <Box key="models" flexWrap="wrap">
-          {allowed.map(m => (
+          {(pickOn ? allowed : []).map(m => (
             <Button key={`model-${m}`} label={m === heldModel ? `● ${MODELS[m].name}` : MODELS[m].name} onPress={act('model', () => paneModel($, m))} />
           ))}
         </Box>

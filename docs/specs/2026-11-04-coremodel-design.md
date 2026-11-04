@@ -68,9 +68,11 @@ untouched; the level is handled as before. `keep` keeps both.
 
 ### 4.3 The questions
 Asked in this order, each only when needed; a dismissed question keeps that part.
-1. Model (header `Модель` / `Model`): the picked model marked "(recommended)", "Keep <current>",
-   then up to two more models from `models`, nearest to the pick first. Mid-chat the question
-   text carries the cost line.
+1. Model (header `Модель` / `Model`): the picked model marked "(recommended)", "Keep <current>"
+   (also for a current model outside `models`; "Keep the current model" when it is none of the
+   four), then, on the first prompt only, up to two more models from `models`, nearest to the pick
+   first. Mid-chat it offers the pick and Keep alone, and the text carries the cost line (M4, M5).
+   The request's context suffix (`[1m]`) stays on a held model.
 2. Effort (header `Усилие` / `Effort`): the picked level "(recommended)", "Keep <current>", then
    the neighbouring levels while they fit four options.
 "Switch, and auto-adjust from now" leaves the questions; `auto` is set in the pane or with

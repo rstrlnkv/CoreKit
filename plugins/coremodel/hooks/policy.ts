@@ -53,8 +53,14 @@ function nearest<T>(order: readonly T[], pick: T, now: T | '', allowed: readonly
   return [...out, ...rest].slice(0, 4)
 }
 
-export function modelOptions(pick: ModelKey, now: ModelKey | '', allowed: readonly ModelKey[]): ModelKey[] {
-  return nearest(LADDER, pick, now, allowed)
+/**
+ * The models the question offers. The current one is always among them, listed or not. Mid-chat
+ * only the pick and the current: a weaker model never pays back the re-read, and the cost line
+ * fits the pick alone (spec M4, M5).
+ */
+export function modelOptions(pick: ModelKey, now: ModelKey | '', allowed: readonly ModelKey[], isFirst = true): ModelKey[] {
+  if (!isFirst) return now ? [pick, now] : [pick]
+  return nearest(LADDER, pick, now, now && !allowed.includes(now) ? [...allowed, now] : allowed)
 }
 
 export function effortOptions(pick: Level, now: Level | ''): Level[] {
@@ -86,6 +92,7 @@ export function texts(lang: Lang) {
     levelOption: (l: Level, recommended: boolean) => `${n(l)}${recommended ? (ru ? ' (советую)' : ' (recommended)') : ''}`,
     modelHeader: ru ? 'Модель' : 'Model',
     modelOption: (m: ModelKey, recommended: boolean) => `${MODELS[m].name}${recommended ? (ru ? ' (советую)' : ' (recommended)') : ''}`,
+    keepCurrent: ru ? 'Оставить текущую модель' : 'Keep the current model',
     keepModel: (m: ModelKey) => (ru ? `Оставить ${MODELS[m].name}` : `Keep ${MODELS[m].name}`),
     modelQuestion: (to: ModelKey, cost: number | null, tokens: number | undefined, isFirst: boolean, why: string) => {
       const name = MODELS[to].name
