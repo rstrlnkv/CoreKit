@@ -1,6 +1,6 @@
 ---
 name: task
-description: Run one development task through the coredev crew (fix, full feature, question, batch), with proof and one commit. Use /coredev:task <task>, release <version> or adopt <folder>.
+description: Run one development task through the corecrew crew (fix, full feature, question, batch), with proof and one commit. Use /corecrew:task <task>, release <version> or adopt <folder>.
 disable-model-invocation: true
 argument-hint: "<task> | release <version> | adopt <folder>"
 ---
@@ -9,7 +9,7 @@ argument-hint: "<task> | release <version> | adopt <folder>"
 
 ## Overview
 You are the orchestrator, in the main session. You do not write code: the crew does, one agent
-per step, and you carry the user's task from request to one verified commit. One `/coredev:task`
+per step, and you carry the user's task from request to one verified commit. One `/corecrew:task`
 call is one chain.
 
 Detail lives in references, read when you reach that step:
@@ -33,7 +33,7 @@ Settings arrive as `${user_config.core_dir}`, `${user_config.attribution}` and
 plugin is unconfigured: treat it as unset and use the defaults: `core_dir` `~/Projects/Core`,
 `attribution` `allow`, `model_profile` `balanced`.
 
-Model per role, from `model_profile`; pass it as the `model` of every coredev Agent call.
+Model per role, from `model_profile`; pass it as the `model` of every corecrew Agent call.
 Do not pass `model` to feature-dev agents; they use their own default.
 
 | Role | economy | balanced | strong |
@@ -64,7 +64,7 @@ attribution value resolved at Start" instead of placeholders:
    `<Core>/<project>/code/.claude/worktrees/<w>/`, that worktree is the code root for briefs,
    tests and release (not `<Core>/<project>/code/`). If the directory is outside `<Core>`: for
    `adopt` follow `references/adopt.md`; for anything else say in one line that
-   `/coredev:new-project` (a new project) or `/coredev:task adopt <folder>` (an existing one)
+   `/corecrew:new-project` (a new project) or `/corecrew:task adopt <folder>` (an existing one)
    brings it into the layout, and stop.
 3. **feature-dev.** Look at the agent types listed for your Agent tool. If
    `feature-dev:code-architect` or `feature-dev:code-explorer` is missing, name the install
@@ -92,9 +92,9 @@ attribution value resolved at Start" instead of placeholders:
    `references/paths.md`) and name it in the first line you say to the user.
 
 ## Running the chain
-Briefs follow `references/brief.md`. A coredev agent's `subagent_type` is `coredev:<role>`:
-`coredev:engineer`, `coredev:tester`, `coredev:security`, `coredev:verifier`,
-`coredev:localizer`, `coredev:designer`. A feature-dev agent's `subagent_type` is its full name,
+Briefs follow `references/brief.md`. A corecrew agent's `subagent_type` is `corecrew:<role>`:
+`corecrew:engineer`, `corecrew:tester`, `corecrew:security`, `corecrew:verifier`,
+`corecrew:localizer`, `corecrew:designer`. A feature-dev agent's `subagent_type` is its full name,
 `feature-dev:code-architect` or `feature-dev:code-explorer`.
 
 ## Rules
@@ -109,8 +109,8 @@ Briefs follow `references/brief.md`. A coredev agent's `subagent_type` is `cored
    in one sentence; make no third attempt on it.
 5. Dispatch in the foreground, always: pass `run_in_background: false` on every Agent call. A
    wave is several Agent calls in one message.
-6. Every Agent call passes `subagent_type`: `coredev:<role>` for coredev roles, the full name for
-   feature-dev agents. Coredev calls also pass `model` from the table above.
+6. Every Agent call passes `subagent_type`: `corecrew:<role>` for corecrew roles, the full name for
+   feature-dev agents. CoreCrew calls also pass `model` from the table above.
    Do not pass `model` to feature-dev agents.
 7. Only the touched modules' tests per pass; the full `check:` once, at the end, as its own
    tester call.
@@ -138,7 +138,7 @@ Every agent reply ends with `Knowledge line: <symptom → cause → guard | none
   and `Commit:` is the hash; with no accepted lines there is no commit.
 - A line whose cause already appears in another project's knowledge or in
   `<Core>/knowledge/` is a recurring lesson: offer to turn it into a standard with
-  `/coredev:new-standard` (pass the line). Do not write the standard yourself.
+  `/corecrew:new-standard` (pass the line). Do not write the standard yourself.
 
 ## Finish
 Run `references/release.md` for every chain that changed files, including a `question` that saved

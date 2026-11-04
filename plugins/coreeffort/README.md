@@ -1,4 +1,4 @@
-# effort-picker
+# coreeffort
 
 A Claude Code plugin in the `corekit` marketplace. Before Claude starts on a prompt, a short model
 call reads it and picks the effort level the work needs: Low, Medium, High, Extra high or Max. It
@@ -23,20 +23,20 @@ The texts are in Russian for a Russian prompt and in English otherwise.
 The plugin puts the chosen level on every request of this chat only. It never writes your effort
 setting, so other chats and later sessions keep your own default. The menu next to the model name
 therefore keeps showing your own setting; the footer shows a label such as **Effort High**, and
-`/effort-picker` prints the level the chat really runs at. Move the menu yourself, or start a new
+`/coreeffort` prints the level the chat really runs at. Move the menu yourself, or start a new
 session, and the plugin lets go of its level.
 
 ## Commands
 
-- `/effort-picker` shows the mode and the real level.
-- `/effort-picker auto`, `/effort-picker suggest` set the mode for every session.
-- `/effort-picker off` and `/effort-picker on` turn it off and back on.
+- `/coreeffort` shows the mode and the real level.
+- `/coreeffort auto`, `/coreeffort suggest` set the mode for every session.
+- `/coreeffort off` and `/coreeffort on` turn it off and back on.
 
 ## Settings
 
-`/plugin` → Installed → effort-picker → Configure options:
+`/plugin` → Installed → coreeffort → Configure options:
 
-- `mode`: `suggest`, `auto` or `off` (default `suggest`). `/effort-picker` wins over it.
+- `mode`: `suggest`, `auto` or `off` (default `suggest`). `/coreeffort` wins over it.
 - `classifier`: `sonnet` (default, the more accurate) or `haiku` (faster, cheaper).
 
 ## Install
@@ -46,7 +46,7 @@ Claude Code's early-access plugin API, which can change between releases.
 
 ```
 /plugin marketplace add rstrlnkv/CoreKit
-/plugin install effort-picker@corekit
+/plugin install coreeffort@corekit
 ```
 
 ## Cost
@@ -54,7 +54,7 @@ Claude Code's early-access plugin API, which can change between releases.
 One short classifier call per prompt you type (at most 120 output tokens), through your own
 Claude Code account; it adds about 1 to 3 seconds before Claude starts. Slash commands and
 messages that do not come from the prompt box are never checked. Errors are written to
-`~/.claude/mods-logs/effort-picker.log` and never block the prompt.
+`~/.claude/mods-logs/coreeffort.log` and never block the prompt.
 
 ## Credits
 

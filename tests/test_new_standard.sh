@@ -107,7 +107,7 @@ assert_contains "$SK" 'commit -m "Add standard <name>"'
 assert_contains "$SK" 'commit -m "Update standard <name>"'
 assert_contains "$SK" '<Core>/standards/<name>.md'
 assert_contains "$SK" "lib.sh\" ready"
-assert_contains "$SK" "/coredev:new-project"
+assert_contains "$SK" "/corecrew:new-project"
 assert_contains "$SK" "general-purpose"
 assert_contains "$SK" "300 words"
 assert_contains "$SK" "lib.sh\" core-dir"

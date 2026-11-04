@@ -2,7 +2,7 @@
 
 Knowledge is what a project (or all of them) learned the hard way, kept as short lines an agent
 reads before it works. It is not a wiki page and not a standard: it is the raw lesson.
-A lesson that keeps recurring becomes a standard through `/coredev:new-standard`.
+A lesson that keeps recurring becomes a standard through `/corecrew:new-standard`.
 
 ## Two levels
 
@@ -46,7 +46,7 @@ line. The role file keeps a link line:
 
 ## Who writes it
 
-Only `/coredev:task`, and only after the user's ok. An agent never edits these files; it ends
+Only `/corecrew:task`, and only after the user's ok. An agent never edits these files; it ends
 its reply with `Knowledge line: <symptom → cause → guard | none>`; `task` shows it in plain
 words and asks whether to keep it and at which level (this project or all projects). The line
 goes into the file of the role that proposed it, in the right section; when that file would

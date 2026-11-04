@@ -75,7 +75,7 @@ procs="${ONE_SUITE_PROCS:-$default_procs}"
 # will, and the next waiter takes it. If the turn can be neither made nor cleared (its folder is
 # missing or read-only, a stale turn belongs to someone else) waiting cannot help: the call is let
 # through. Every other path through the loop below reaches the limit check and the sleep.
-turn="${ONE_SUITE_TURN:-${TMPDIR:-/tmp}/coredev-one-suite.turn}"
+turn="${ONE_SUITE_TURN:-${TMPDIR:-/tmp}/corecrew-one-suite.turn}"
 grace="${ONE_SUITE_GRACE:-10}"; limit="${ONE_SUITE_WAIT:-480}"
 case "$grace" in ''|*[!0-9]*) grace=10 ;; esac
 case "$limit" in ''|*[!0-9]*) limit=480 ;; esac

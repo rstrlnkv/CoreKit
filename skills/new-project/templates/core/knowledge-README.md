@@ -11,4 +11,4 @@ Two levels:
 - `<Core>/knowledge/<role>.md` holds lessons for all projects (one file per role, such as engineer or tester).
 - `<Core>/<project>/docs/knowledge/<role>.md` holds lessons for that project only.
 
-`/coredev:task` writes these lines after you say ok to them. Edit or delete any line by hand.
+`/corecrew:task` writes these lines after you say ok to them. Edit or delete any line by hand.

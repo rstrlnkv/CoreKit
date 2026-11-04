@@ -43,7 +43,7 @@ run_bash() { run_json "$(printf '{"session_id":"s","cwd":"%s","hook_event_name":
 # The second line points at public-docs: in the project's CLAUDE.md (<Core>/<p>, the part of the shown
 # path before its first /code/).
 msg() {
-  printf 'coredev: %s is an internal file and must not live in code/. Write it to %s instead.\n' "$1" "$2"
+  printf 'corecrew: %s is an internal file and must not live in code/. Write it to %s instead.\n' "$1" "$2"
   printf 'Docs meant to stay public in code/: list them on a "public-docs: <paths>" line in %s.' "${1%%/code/*}/CLAUDE.md"
 }
 # ok <label> — exit 0, silent
@@ -259,7 +259,7 @@ mkdir -p "$SANDBOX/nogit"
 for t in cat sed tr grep date mkdir head dirname basename awk rm readlink pwd; do ln -sf "$(command -v $t)" "$SANDBOX/nogit/$t" 2>/dev/null; done
 OUT="$(printf '{"cwd":"%s","tool_name":"Write","tool_input":{"file_path":"%s/docs/a.md"}}' "$C" "$C" | PATH="$SANDBOX/nogit" "$(command -v bash)" "$H" 2>&1 >/dev/null)"
 assert_eq "$?" "2" "run without git/PATH tools: blocked"
-case "$OUT" in "coredev: $C/docs/a.md is an internal file"*) pass ;; *) fail "no git on PATH: $OUT" ;; esac
+case "$OUT" in "corecrew: $C/docs/a.md is an internal file"*) pass ;; *) fail "no git on PATH: $OUT" ;; esac
 
 }
 bg sec_json

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The one table of every message the coredev hooks show. Sourced by all five hooks.
+# The one table of every message the corecrew hooks show. Sourced by all five hooks.
 #
 #   msg <key> [arg ...]    prints the text of <key> in the language of the plugin setting ui_language
 #                          ($CLAUDE_PLUGIN_OPTION_UI_LANGUAGE), without a final newline.
@@ -26,14 +26,14 @@ one_suite_wait dirty_code dirty_docs dirty_both stop_remind"
 _msg_text() {
   MSG_T=""
   case "$1:$2" in
-    en:sync_failed) MSG_T='coredev: tools not refreshed: @1' ;;
-    ru:sync_failed) MSG_T='coredev: инструменты не обновлены: @1' ;;
-    en:hint_not_set_up) MSG_T='coredev: Core at @1 is not set up — /coredev:new-project or /coredev:task adopt <folder> will set it up' ;;
-    ru:hint_not_set_up) MSG_T='coredev: Core в @1 не настроен — /coredev:new-project или /coredev:task adopt <folder> настроят его' ;;
-    en:hint_not_found) MSG_T='coredev: Core not found at @1 — /coredev:new-project or /coredev:task adopt <folder> will set it up' ;;
-    ru:hint_not_found) MSG_T='coredev: Core не найден в @1 — /coredev:new-project или /coredev:task adopt <folder> создадут его' ;;
-    en:project_header) MSG_T='coredev: you are in the Core project "@1" (Core: @2)' ;;
-    ru:project_header) MSG_T='coredev: вы в проекте Core "@1" (Core: @2)' ;;
+    en:sync_failed) MSG_T='corecrew: tools not refreshed: @1' ;;
+    ru:sync_failed) MSG_T='corecrew: инструменты не обновлены: @1' ;;
+    en:hint_not_set_up) MSG_T='corecrew: Core at @1 is not set up — /corecrew:new-project or /corecrew:task adopt <folder> will set it up' ;;
+    ru:hint_not_set_up) MSG_T='corecrew: Core в @1 не настроен — /corecrew:new-project или /corecrew:task adopt <folder> настроят его' ;;
+    en:hint_not_found) MSG_T='corecrew: Core not found at @1 — /corecrew:new-project or /corecrew:task adopt <folder> will set it up' ;;
+    ru:hint_not_found) MSG_T='corecrew: Core не найден в @1 — /corecrew:new-project или /corecrew:task adopt <folder> создадут его' ;;
+    en:project_header) MSG_T='corecrew: you are in the Core project "@1" (Core: @2)' ;;
+    ru:project_header) MSG_T='corecrew: вы в проекте Core "@1" (Core: @2)' ;;
     en:docs_index) MSG_T='Project docs index: @1' ;;
     ru:docs_index) MSG_T='Индекс документации проекта: @1' ;;
     en:save_hint) MSG_T='Save a finished step: bash "@1" "<message>"@2; undo the last step: bash "@3"' ;;
@@ -50,14 +50,14 @@ _msg_text() {
     ru:run_starting) MSG_T='тест, который запускается' ;;
     en:layout_note) MSG_T='Layout note: this Core has layout schema @1, the plugin expects @2. Bring it up to date (adds only what is missing): bash "@3" "@4"' ;;
     ru:layout_note) MSG_T='Заметка о структуре: структура этого Core — версия @1, плагину нужна @2. Обновите её (добавится только недостающее): bash "@3" "@4"' ;;
-    en:old_hooks) MSG_T='Old git hooks (not coredev shims): @1. Replace them with: bash "@2" "@3"' ;;
-    ru:old_hooks) MSG_T='Найдены старые git-хуки, не от coredev: @1. Замените их командой: bash "@2" "@3"' ;;
-    en:guard_code_blocked) MSG_T='coredev: @1 is an internal file and must not live in code/. Write it to @2 instead.' ;;
-    ru:guard_code_blocked) MSG_T='coredev: @1 — внутренний файл, ему не место в code/. Запишите его в @2.' ;;
+    en:old_hooks) MSG_T='Old git hooks from an older version: @1. Replace them with: bash "@2" "@3"' ;;
+    ru:old_hooks) MSG_T='Найдены старые git-хуки от прошлой версии: @1. Замените их командой: bash "@2" "@3"' ;;
+    en:guard_code_blocked) MSG_T='corecrew: @1 is an internal file and must not live in code/. Write it to @2 instead.' ;;
+    ru:guard_code_blocked) MSG_T='corecrew: @1 — внутренний файл, ему не место в code/. Запишите его в @2.' ;;
     en:guard_code_public) MSG_T='Docs meant to stay public in code/: list them on a "public-docs: <paths>" line in @1.' ;;
     ru:guard_code_public) MSG_T='Документы, которые должны остаться в code/ публичными, перечислите в строке "public-docs: <paths>" в @1.' ;;
-    en:secrets_blocked) MSG_T='coredev: reading secrets is blocked (@1)' ;;
-    ru:secrets_blocked) MSG_T='coredev: чтение секретов заблокировано (@1)' ;;
+    en:secrets_blocked) MSG_T='corecrew: reading secrets is blocked (@1)' ;;
+    ru:secrets_blocked) MSG_T='corecrew: чтение секретов заблокировано (@1)' ;;
     en:secrets_ask) MSG_T='Ask the user to check the value themselves, or use .env.example.' ;;
     ru:secrets_ask) MSG_T='Попросите пользователя проверить значение самому или используйте .env.example.' ;;
     en:one_suite_wait) MSG_T='one-suite: a test run is still in progress after @1 s of waiting (@2) — run the same command again: this hook waits for it. If it is a watcher you started, stop it first.' ;;

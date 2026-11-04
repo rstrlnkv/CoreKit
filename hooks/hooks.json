@@ -1,5 +1,5 @@
 {
-  "description": "coredev: session-start context and tools refresh, one test suite at a time, guards for project docs in code and for secrets, and a save-the-step reminder",
+  "description": "corecrew: session-start context and tools refresh, one test suite at a time, guards for project docs in code and for secrets, and a save-the-step reminder",
   "hooks": {
     "SessionStart": [
       {

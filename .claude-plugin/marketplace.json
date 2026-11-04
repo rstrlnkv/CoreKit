@@ -1,20 +1,22 @@
 {
   "name": "corekit",
-  "description": "CoreKit: the coredev plugin for starting and running projects with Claude Code.",
+  "description": "CoreKit: the corecrew plugin for starting and running projects with Claude Code.",
   "owner": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "plugins": [
     {
-      "name": "coredev",
+      "name": "corecrew",
       "source": "./",
       "description": "Start projects from an interview and run tasks with a crew of agents; standards and lessons live in your private Core repo."
     },
     {
-      "name": "effort-picker",
-      "source": "./plugins/effort-picker",
+      "name": "coreeffort",
+      "source": "./plugins/coreeffort",
       "description": "Picks the effort level each prompt needs, for code and office work, and asks before any switch to xhigh or max."
     }
   ],
   "renames": {
-    "corekit": "coredev"
+    "corekit": "corecrew",
+    "coredev": "corecrew",
+    "effort-picker": "coreeffort"
   }
 }

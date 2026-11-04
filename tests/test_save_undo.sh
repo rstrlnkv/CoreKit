@@ -64,19 +64,19 @@ rm -f "$C/.git/hooks/pre-push"
 sleep 1; echo "hook" > "$C/app.txt"
 (cd "$C" && bash "$SAVE" "Restore hook") >/dev/null 2>&1
 [ -x "$C/.git/hooks/pre-push" ] && pass || fail "save did not restore code pre-push hook"
-assert_contains "$C/.git/hooks/pre-push" "# coredev hook shim"
+assert_contains "$C/.git/hooks/pre-push" "# corecrew hook shim"
 # save restores a deleted pre-commit shim; blocked-patterns is not a hook-folder file any more
 rm -f "$C/.git/hooks/pre-commit"
 sleep 1; echo "patterns" > "$C/app.txt"
 (cd "$C" && bash "$SAVE" "Restore pre-commit") >/dev/null 2>&1
-assert_contains "$C/.git/hooks/pre-commit" "# coredev hook shim"
+assert_contains "$C/.git/hooks/pre-commit" "# corecrew hook shim"
 assert_no_file "$C/.git/hooks/blocked-patterns"
 assert_eq "$(git -C "$C" log -1 --format=%s)" "Restore pre-commit" "save failed after restoring the shim"
 
 # --push pushes both to their remotes
 git init -q --bare "$SANDBOX/code.git"; git -C "$C" remote add origin "$SANDBOX/code.git"
 git init -q --bare "$SANDBOX/core.git"; git -C "$CORE_DIR" remote add origin "$SANDBOX/core.git"
-printf '#!/bin/sh\n# coredev hook shim (test no-op)\nexit 0\n' > "$CORE_DIR/.git/hooks/pre-push"  # privacy hook needs GitHub; tested in test_hooks
+printf '#!/bin/sh\n# corecrew hook shim (test no-op)\nexit 0\n' > "$CORE_DIR/.git/hooks/pre-push"  # privacy hook needs GitHub; tested in test_hooks
 sleep 1; echo "v3" > "$C/app.txt"; echo y >> "$P/docs/brief.md"
 (cd "$C" && bash "$SAVE" "Publish" --push) > "$SANDBOX/out" 2>&1
 assert_eq "$(git -C "$SANDBOX/code.git" log -1 --format=%s main 2>/dev/null)" "Publish"

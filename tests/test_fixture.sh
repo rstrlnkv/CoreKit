@@ -42,9 +42,9 @@ assert_eq "$(cd "$C" && bash add.sh 2 3)" "6" "planted bug: add 2 3"
 assert_eq "$(cd "$C" && bash add.sh 2 2)" "4" "add 2 2"
 
 # Hooks: shims in both repos
-assert_contains "$C/.git/hooks/pre-commit" "coredev hook shim"
-assert_contains "$C/.git/hooks/pre-push" "coredev hook shim"
-assert_contains "$CORE_DIR/.git/hooks/pre-push" "coredev hook shim"
+assert_contains "$C/.git/hooks/pre-commit" "corecrew hook shim"
+assert_contains "$C/.git/hooks/pre-push" "corecrew hook shim"
+assert_contains "$CORE_DIR/.git/hooks/pre-push" "corecrew hook shim"
 
 # --- second run: refused, exit 2, one plain line, nothing changed
 before="$(state "$CORE_DIR"; state "$C")"

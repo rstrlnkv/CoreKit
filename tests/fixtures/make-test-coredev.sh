@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the end-to-end fixture <core_dir>/test-coredev/ (spec section 16): a tiny project with a
-# planted bug, to try "/coredev:task fix: ..." on.
+# planted bug, to try "/corecrew:task fix: ..." on.
 #   Core side: CLAUDE.md with "check: bash tests/run.sh", a wiki that passes wiki-check.sh (made
 #              from the new-project templates), docs/knowledge/, a PROJECTS.md line.
 #   code/:     its own git repo on main with add.sh (add <a> <b> prints the sum, except that a
@@ -26,7 +26,7 @@ load_settings
 NAME="test-coredev"
 P="$CORE_DIR/$NAME"
 C="$P/code"
-PURPOSE="Tiny fixture for the end-to-end check of coredev: adds two numbers."
+PURPOSE="Tiny fixture for the end-to-end check of corecrew: adds two numbers."
 DATE="$(date +%Y-%m-%d)"
 
 { core_ready && [ -d "$CORE_DIR/.git" ]; } || refuse "Core is not set up at $CORE_DIR (nothing was created)"
