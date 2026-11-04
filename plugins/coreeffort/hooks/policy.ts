@@ -59,6 +59,10 @@ export function texts(lang: Lang) {
     runsAt: (l: Level | '') =>
       ru ? `Чат работает на: ${l ? n(l) : 'пока неизвестно'}` : `Chat runs at: ${l ? n(l) : 'unknown yet'}`,
     inMenu: (l: Level | '') => (ru ? `в меню: ${l ? n(l) : '?'} (ваше)` : `in the menu: ${l ? n(l) : '?'} (yours)`),
+    modeQuestion: (mode: Mode, l: Level | '') =>
+      ru
+        ? `CoreEffort: ${mode}. Чат работает на: ${l ? n(l) : 'пока неизвестно'}.`
+        : `CoreEffort: ${mode}. Chat runs at: ${l ? n(l) : 'unknown yet'}.`,
     lastPick: ru ? 'Последний выбор' : 'Last pick',
     session: ru ? 'За сессию' : 'This session',
     kept: ru ? 'Оставлено как есть' : 'Kept as it was',

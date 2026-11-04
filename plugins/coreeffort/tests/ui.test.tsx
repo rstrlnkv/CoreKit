@@ -409,3 +409,26 @@ test('the working line names a held level', { options: { mode: 'auto' } }, async
   await run($, 'off')
   for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking…')
 })
+
+test('/coreeffort with no argument asks for the mode', async ($, on) => {
+  const w = world(on)
+  w.reply = 'auto'
+  await start($)
+  const text = await run($, '')
+  expect(w.asked.at(-1)).toEqual(['auto', 'suggest', 'off'])
+  expect(text).toContain('CoreEffort: auto.')
+  await switchTo($, w, 'high', 'medium')
+  expect(w.asked.length).toBe(1)
+})
+
+test('a dismissed mode question changes nothing', async ($, on) => {
+  const w = world(on)
+  w.reply = null
+  await start($)
+  const text = await run($, '')
+  expect(w.asked.length).toBe(1)
+  expect(text).toContain('CoreEffort: suggest.')
+  w.reply = 'Keep Medium'
+  await switchTo($, w, 'high', 'medium')
+  expect(w.asked.length).toBe(2)
+})

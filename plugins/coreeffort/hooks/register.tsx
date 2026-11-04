@@ -187,6 +187,7 @@ export async function setMode($: EngineInterface, options: { mode?: unknown }, a
   return text
 }
 
+const ASK_MODES: readonly Mode[] = ['auto', 'suggest', 'off']
 const LEVELS: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
 export const register: Register = (on, options) => {
@@ -246,6 +247,15 @@ export const register: Register = (on, options) => {
     }
     const mode = await currentMode($, options)
     const level = hold?.level ?? seen
+    if (!arg) {
+      let answer = ''
+      try {
+        answer = await $.ui.ask(texts(lastLang).modeQuestion(mode, level), { options: [...ASK_MODES], header: 'CoreEffort' })
+      } catch {
+        // Dismissed: say where things stand, change nothing.
+      }
+      if ((ASK_MODES as readonly string[]).includes(answer)) return { text: await setMode($, options, answer as Mode) }
+    }
     return {
       text: [
         `CoreEffort: ${mode}.`,
