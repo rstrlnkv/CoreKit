@@ -295,6 +295,13 @@ export const register: Register = (on, options) => {
     )
   })
 
+  // The working line names the menu's level; while a level is held it says the real one too.
+  on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
+    const level = await read($, override)
+    if (!level) return next(e)
+    return next({ ...e, props: { ...e.props, suffix: `${e.props.suffix} · ${texts(lastLang).levelName(level)}` } })
+  })
+
   on('ui.render', { component: 'Placed' }, async ($, e, next) => {
     if (e.props.plugin !== PLUGIN) return next(e)
     const m = (await read($, marks))[e.props.id]

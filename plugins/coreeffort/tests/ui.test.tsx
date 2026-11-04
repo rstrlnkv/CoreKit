@@ -384,3 +384,28 @@ test('the pane counts kept prompts', async ($, on) => {
   expect(await has($, /Kept as it was 2/)).toBe(true)
   expect(await has($, /High · auth bug/)).toBe(true)
 })
+
+const SPIN = { plugin: 'coreeffort', component: 'Spinner', props: { word: 'Thinking', message: null, suffix: '…', mode: 'thinking' } } as const
+
+async function spinner($: Eng, surface: 'terminal' | 'desktop') {
+  const ui = await $.ui.mount({ ...SPIN, surface })
+  const t = await ui.find({ type: 'Text' })
+  await ui.unmount()
+  return t?.text
+}
+
+test('the working line names a held level', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  on('ui.render', { component: 'Spinner' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    const p = e.props as { word: string; suffix: string }
+    return <Text>{p.word + p.suffix}</Text>
+  })
+  w.row = null
+  await start($)
+  for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking…')
+  await switchTo($, w, 'high', 'medium')
+  for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking… · High')
+  await run($, 'off')
+  for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking…')
+})
