@@ -31,7 +31,8 @@
 #   hook cannot parse passes (exit 0). The git pre-commit hook stays the last layer.
 #   The tokenizer lives in scripts/bash-lex.awk and scripts/bashlex-guard-code.awk: if they are missing the
 #   Bash path fails open (silently); the file tools are still judged.
-# - Inert outside <Core>/<project>/: a target and a cwd that are not in a Core project pass (exit 0).
+# - Inert outside a project (docs/specs/2026-11-04-project-layout-design.md section 4: <Core>/<project>/
+#   or its code folder beside the Core): a target and a cwd that are not in a project pass (exit 0).
 #   No network, no git; only canon_dir, project_of and one grep of the CLAUDE.md public-docs line.
 # - Input it cannot read (not JSON, no cwd, no path or command) passes.
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0

@@ -10,12 +10,15 @@
 - Project rules move into `CLAUDE.md`: there is no `.claude/rules/` template any more.
 - `/corecrew:task adopt` keeps the repo where it is. It adds `.worktreeinclude`, folds tracked
   `.claude/rules/` into `CLAUDE.md`, warns about nested `CLAUDE.md` files, and moves only
-  old-layout `<Core>/<name>/code` folders (to `<Projects>/<Name>`).
+  old-layout `<Core>/<name>/code` folders (to `<Projects>/<name>`), folding their
+  `<Core>/<name>/.claude/rules/` into `CLAUDE.md` too.
 - `guard-code` guards the code folder beside the Core, as it did `<Core>/<name>/code`.
+  `docs/superpowers/` stays private even when `docs/` is listed as public.
 - Core schema 2: a schema 1 Core gets one layout note at session start; the setup command changes
   only the schema line of `.coredev`.
-- Existing projects keep working in the old layout. To move one, run
-  `/corecrew:task adopt <Core>/<name>/code` for each old project.
+- Existing projects (code in `<Core>/<name>/code`): `/corecrew:task` stops in them and asks you to
+  run `/corecrew:task adopt <Core>/<name>/code` first, which moves the code folder to
+  `<Projects>/<name>`. `save` and the hooks still work there until then.
 
 ## 0.4.0 — 2026-11-04
 - `AGENTS.md` (the agent-instructions file Codex, Cursor and other tools read) is now an internal

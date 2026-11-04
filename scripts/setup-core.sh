@@ -6,9 +6,8 @@
 # Usage: bash setup-core.sh [<core_dir>] [--dry-run]
 #   <core_dir> defaults to $CORE_DIR, then the plugin option core_dir (see lib.sh).
 # Output, one line per item: created|skipped <item>, would create|would update <item> (dry run),
-#   updated .coredev (the file existed without "schema:" — e.g. only "app-id-prefix:" — or with an older
-#   schema number, so
-#   "schema: N" is put first and the other lines are kept as they were).
+#   updated .coredev (the file existed without "schema:" — e.g. only "app-id-prefix:" — or with an
+#   older schema number, so "schema: N" is put first and the other lines are kept as they were).
 # Setup files that are not committed yet are committed as "Set up Core" (a failed commit is
 # retried on the next run); only setup-owned files, nothing else in the repo. Git must know the
 # user's name and email; if not, the run stops first with the commands to set them.

@@ -45,8 +45,9 @@
 #   The tokenizer lives in scripts/bash-lex.awk and scripts/bashlex-guard-secrets.awk: if they are missing
 #   the Bash path fails open (silently); the file tools are still judged. If awk is there but fails, the
 #   hook fails closed when the command has a secret-looking string.
-# - Inert outside <Core>/<project>/: cwd missing or not in a Core project -> exit 0 at once (so ~/.ssh is
-#   open when Claude works outside the Core, spec D17). No network, no git.
+# - Inert outside a project (docs/specs/2026-11-04-project-layout-design.md section 4: <Core>/<project>/
+#   or its code folder beside the Core): cwd missing or not in a project -> exit 0 at once (so ~/.ssh is
+#   open when Claude works outside a project, spec D17). No network, no git.
 #
 # Fail closed (the one hook that does): the input is odd when a path key the tool needs cannot be read
 # as a clean string (truncated JSON, a number, an array, an object, null, a key spelled with an escape);
@@ -57,7 +58,7 @@
 # every "<key>": "<value>" in the raw text is judged like the parsed value. Other keys (content,
 # old_string, new_string, pattern of a Grep, description) are never looked at, so a Write whose
 # content mentions .env or ~/.ssh passes, and so does odd input that has no secret-looking string.
-# An odd input with no cwd, or with a cwd outside the Core, is inert like any other.
+# An odd input with no cwd, or with a cwd outside a project, is inert like any other.
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0

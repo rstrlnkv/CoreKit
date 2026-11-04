@@ -6,8 +6,9 @@
 # nothing to wait with, so it asks again or looks at `ps` once per step, and every step re-reads its
 # whole context. Only a wait longer than ONE_SUITE_WAIT seconds is refused (exit 2; stderr goes back
 # to the caller: "run the same command again").
-# Inert outside <Core>/<project>/: with no cwd, or a cwd that is not inside a Core project, it exits 0
-# at once, before it looks at the command or at any process (spec section 14, item 2).
+# Inert outside a project (docs/specs/2026-11-04-project-layout-design.md section 4: <Core>/<project>/ or
+# its code folder beside the Core): with no cwd, or a cwd that is not inside a project, it exits 0 at
+# once, before it looks at the command or at any process.
 # Only the command is read, never the description: "see whether swift test runs" is not a test run.
 # Anything this hook cannot judge passes (exit 0): a stuck guard would stop every Bash call, which is
 # worse than one clash. It never prints to stdout. No jq, no python. Without pgrep it lets everything
@@ -23,7 +24,7 @@ in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 
-# Inert outside the Core.
+# Inert outside a project.
 cwd="$(json_str "$in" cwd)"
 [ -n "$cwd" ] || exit 0
 load_settings

@@ -85,8 +85,8 @@ for r in $ROLES; do
   for s in '.claude/crew' 'CoreCrew' 'superpowers' '${CLAUDE_'; do
     grep -qF -- "$s" "$f" && fail "$r.md contains: $s" || pass
   done
-  # no plugin-relative path; "../docs/<page>.md" (a --changed argument) is the one allowed form
-  sed 's#\.\./docs/#docs/#g' "$f" | grep -qF -- '../' && fail "$r.md contains a ../ path" || pass
+  # no plugin-relative path (wiki pages are passed as absolute <Core>/<project>/docs/<page>.md)
+  grep -qF -- '../' "$f" && fail "$r.md contains a ../ path" || pass
 done
 
 # Read-only roles: no Edit/Write, say so, and have a "nothing found" form.
@@ -110,7 +110,8 @@ has "$E" 'only author of changes'
 has "$E" 'wiki'
 has "$E" 'git diff --name-only'
 has "$E" 'git ls-files --others --exclude-standard'
-has "$E" '../docs/<page>.md'
+has "$E" '<Core>/<project>/docs/<page>.md'
+grep -qF -- '../docs/<page>.md' "$E" && fail "engineer.md passes pages as ../docs/<page>.md" || pass
 has "$E" 'where the checker pointed'
 has "$E" 'same check the checker ran'
 has "$E" 'files:'
@@ -141,7 +142,8 @@ has "$V" 'wiki-check.sh'
 has "$V" '--changed'
 has "$V" 'git diff --name-only'
 has "$V" 'git ls-files --others --exclude-standard'
-has "$V" '../docs/<page>.md'
+has "$V" '<Core>/<project>/docs/<page>.md'
+grep -qF -- '../docs/<page>.md' "$V" && fail "verifier.md passes pages as ../docs/<page>.md" || pass
 has "$V" '`Knowledge line:` proposals in the reports'
 has "$V" 'the brief gives'
 has "$V" 'dead'

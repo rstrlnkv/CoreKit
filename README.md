@@ -112,8 +112,8 @@ session start makes and repairs. Rules live in `CLAUDE.md`. Internal files never
 code repo, so publishing the code cannot leak them. Five safety layers: separate folders,
 `.gitignore`, pre-commit and pre-push hooks in the code repo, and a Core pre-push hook that
 refuses to push unless the GitHub repo is private. Projects made by 0.4 and older keep the code
-in `<Core>/<name>/code/`; they work as before, and `/corecrew:task adopt <Core>/<name>/code`
-moves one to the new layout.
+in `<Core>/<name>/code/`: in such a project `/corecrew:task` stops and asks you to run
+`/corecrew:task adopt <Core>/<name>/code` first, which moves it to the new layout.
 
 Claude runs the plugin's `save` tool to commit code and docs together as one step, and `undo-step`
 to revert the last step in both (with `git revert`, history kept). Nothing is copied into your

@@ -4,7 +4,8 @@
 #  2. Core not set up and the session is not in a project: one hint per machine (marker in state/);
 #  3. inside a project (<Core>/<project>/ or its code folder beside the Core, worktrees included): project name, docs index, tools, standards,
 #     session rules, layout notes, old git hooks that need re-installing.
-# Outside the Core it prints nothing else. Always exits 0: a hook must never block a session.
+# Outside a project (docs/specs/2026-11-04-project-layout-design.md section 4) it prints nothing else.
+# Always exits 0: a hook must never block a session.
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)"
 ROOT="${CLAUDE_PLUGIN_ROOT:-$SELF}"
 DATA="${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/corecrew-corekit}"
