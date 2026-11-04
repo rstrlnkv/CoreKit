@@ -5,11 +5,13 @@
   "plugins": [
     {
       "name": "corecrew",
+      "displayName": "CoreCrew",
       "source": "./",
       "description": "Start projects from an interview and run tasks with a crew of agents; standards and lessons live in your private Core repo."
     },
     {
       "name": "coreeffort",
+      "displayName": "CoreEffort",
       "source": "./plugins/coreeffort",
       "description": "Picks the effort level each prompt needs, for code and office work, and asks before any switch to xhigh or max."
     }
