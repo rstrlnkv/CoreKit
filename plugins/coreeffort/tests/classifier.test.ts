@@ -51,3 +51,8 @@ test('buildPrompt cuts the prompt and the reply and names an unknown level', () 
   expect(out.includes('The chat runs at: unknown')).toBe(true)
   for (const w of ['low', 'medium', 'high', 'xhigh', 'max', 'keep']) expect(out.includes(w)).toBe(true)
 })
+
+test('why loses a trailing period, so the question never shows two', () => {
+  expect(parseAnswer('{"level":"high","why":"auth bug."}')?.why).toBe('auth bug')
+  expect(parseAnswer('{"level":"high","why":"нужно расследование..."}')?.why).toBe('нужно расследование')
+})

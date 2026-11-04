@@ -432,3 +432,42 @@ test('a dismissed mode question changes nothing', async ($, on) => {
   await switchTo($, w, 'high', 'medium')
   expect(w.asked.length).toBe(2)
 })
+
+test('off pressed while the classifier runs leaves the level alone', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  let answer: (s: string) => void = () => {}
+  w.answer = new Promise<string>(r => {
+    answer = r
+  })
+  await start($)
+  await submit($, 'fix the login')
+  const running = step($, 'medium')
+  await pressPane($, 'mode-off')
+  answer('{"level":"high","why":"auth bug"}')
+  await running
+  expect(w.efforts).toEqual(['medium'])
+  expect(w.placed).toEqual([])
+})
+
+test('a level picked in the pane takes the undo button away', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await pressPane($, 'level-low')
+  expect(await undoButton($)).toBe(undefined)
+  await step($, 'medium', 1)
+  expect(w.efforts.at(-1)).toBe('low')
+})
+
+test('a pane pick made after the menu moved still holds', async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await step($, 'medium')
+  await pressPane($, 'level-high')
+  await step($, 'low', 1)
+  expect(w.efforts.at(-1)).toBe('high')
+})

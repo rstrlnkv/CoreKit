@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Band, Level, Stats } from '../types'
-import { buildPrompt, parseAnswer, toLevel } from './classifier'
+import { buildPrompt, parseAnswer, type Pick, toLevel } from './classifier'
 import { decide, type Lang, type Mode, texts, uiLang } from './policy'
 
 const PLUGIN = 'coreeffort'
@@ -121,7 +121,7 @@ async function runPick($: EngineInterface, options: { mode?: unknown; classifier
   } catch {
     // The status line is a nicety.
   }
-  let pick
+  let pick: Pick
   try {
     pick = await classify($, h.text, now, options.classifier === 'haiku' ? MODELS.haiku : MODELS.sonnet)
   } catch (err) {
@@ -134,7 +134,8 @@ async function runPick($: EngineInterface, options: { mode?: unknown; classifier
       // Nothing to clear.
     }
   }
-  if (h.gen !== gen) return
+  // The person may have turned the plugin off while the classifier ran.
+  if (h.gen !== gen || (await currentMode($, options)) === 'off') return
   const action = decide(mode, now, pick)
   const named = pick.level === 'keep' ? null : pick.level
   await count($, s => (named ? { ...s, picks: { ...s.picks, [named]: s.picks[named] + 1 }, last: { level: named, why: pick.why } } : s))
@@ -152,7 +153,7 @@ async function runPick($: EngineInterface, options: { mode?: unknown; classifier
       // A dismissed question keeps the level.
       return kept()
     }
-    if (h.gen !== gen) return
+    if (h.gen !== gen || (await currentMode($, options)) === 'off') return
     if (answer === t.switchAndAuto) await $.store.set('mode', 'auto')
     else if (answer !== go) return kept()
   }
@@ -185,6 +186,16 @@ export async function setMode($: EngineInterface, options: { mode?: unknown }, a
   }
   $.ui.invalidate('ui.render')
   return text
+}
+
+/**
+ * A level the person picks in the pane (null: Release). It is their newest choice, so the undo line
+ * goes, and the hold takes the menu's level from the next request as its base.
+ */
+async function paneChoice($: EngineInterface, level: Level | null): Promise<void> {
+  if (level) await applyLevel($, level, '')
+  else await releaseHold($)
+  await update($, band, () => null)
 }
 
 const ASK_MODES: readonly Mode[] = ['auto', 'suggest', 'off']
@@ -296,9 +307,9 @@ export const register: Register = (on, options) => {
         {s ? LEVELS.filter(l => s.picks[l] > 0).map(l => <Text>{`${t.levelName(l)} ${s.picks[l]}`}</Text>) : null}
         {s && s.kept > 0 ? <Text>{`${t.kept} ${s.kept}`}</Text> : null}
         <Box>
-          {held ? <Button key="release" label={t.release} onPress={act('release', () => releaseHold($))} /> : null}
+          {held ? <Button key="release" label={t.release} onPress={act('release', () => paneChoice($, null))} /> : null}
           {LEVELS.map(l => (
-            <Button key={`level-${l}`} label={t.levelName(l)} onPress={act('level', () => applyLevel($, l, asked))} />
+            <Button key={`level-${l}`} label={t.levelName(l)} onPress={act('level', () => paneChoice($, l))} />
           ))}
         </Box>
       </Box>
@@ -330,7 +341,7 @@ export const register: Register = (on, options) => {
     const onUndo = async () => {
       // An old band, or a hold the menu already took back: the person's own choice stands.
       const cur = await read($, band)
-      if (!cur || cur.id !== b.id || !hold || !undo) return
+      if (!cur || cur.id !== b.id || !hold || hold.level !== b.level || !undo) return
       if (undo === 'release') await releaseHold($)
       else await applyLevel($, undo, hold.base)
       await update($, band, () => null)

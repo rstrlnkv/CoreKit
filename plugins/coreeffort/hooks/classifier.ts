@@ -72,6 +72,9 @@ function cleanWhy(raw: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 90)
+    .trim()
+    // The texts add their own punctuation after the reason.
+    .replace(/[.。…]+$/, '')
 }
 
 /** The first JSON object of the model's answer as a pick; null when there is none or its level is unknown. */

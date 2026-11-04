@@ -5,7 +5,7 @@ import type { ConfigRow, On } from 'claude-code'
 // The world beneath the plugin, answered from memory. `answer` is the classifier's next reply;
 // `reply` the person's answer to the question (null = dismissed); `row` the config menu's effort row.
 export type World = {
-  answer: string | Error | { isAnswered: false }
+  answer: string | Error | { isAnswered: false } | Promise<string>
   reply: string | null | Promise<string | null>
   row: ConfigRow | null
   lastReply: string
@@ -75,10 +75,10 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     w.set.push(e)
     return { value: (e as { value: unknown }).value } as never
   })
-  on('model.complete', (_, e) => {
+  on('model.complete', async (_, e) => {
     w.model.push(e.model)
     w.prompts.push(e.prompt)
-    const a = w.answer
+    const a = await w.answer
     if (a instanceof Error) throw a
     if (typeof a !== 'string') return { value: { isAnswered: false, reason: 'api-error', status: null } } as never
     return { value: { isAnswered: true, text: a, usage: {} } } as never
