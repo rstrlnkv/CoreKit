@@ -1,7 +1,7 @@
 {
   "name": "coreopinion",
   "displayName": "CoreOpinion",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Ask OpenAI's GPT, through the Codex CLI in a read-only sandbox, for a second opinion or a review; Claude shows the answer with its own assessment and stays the only one that edits.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",

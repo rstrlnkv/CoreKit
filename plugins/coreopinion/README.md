@@ -26,7 +26,7 @@ It does not depend on `corecrew` or `coremodel`.
 ## Usage
 
 - `/coreopinion:second-opinion` — reviews your uncommitted changes (`git diff HEAD`), or the last
-  commit when there are none.
+  commit when there are none. You see the file list and confirm first.
 - `/coreopinion:second-opinion the error handling in sync.sh` — reviews what you name.
 - Or just say "get a second opinion from GPT", "ask ChatGPT about this plan", "review with GPT".
   Ask for a "deep" or "detailed" review to use a higher reasoning effort (slower, uses more of
@@ -34,16 +34,34 @@ It does not depend on `corecrew` or `coremodel`.
 
 An answer takes about 10–60 seconds, sometimes longer; Claude waits up to 5 minutes.
 
-## Read-only by design
+## What is sent, and what GPT can read
 
-Codex runs as `codex exec --sandbox read-only` with reasoning effort `medium` (`high` on
-request). In that sandbox GPT can read the project but cannot change a file or run a command
-that changes anything. Two agents editing the same files would step on each other, and an outside
-model's advice deserves a check before it lands, so only Claude edits, after your yes.
+**Before anything is sent, Claude shows you the list of files** that go to GPT (and the paths left
+out as secrets) and waits for your yes. The default material is your uncommitted diff plus new
+untracked files; the diff text is pasted into the prompt and goes to OpenAI.
 
-Claude never sends `.env` files, keys or `~/.ssh` in the material. Read-only still means GPT can
-*read* files in the project folder; it is told not to open secrets, but that is an instruction,
-not a lock.
+Claude never sends `.env` files, keys, certificates, `.npmrc`, `.netrc`, `.pypirc`,
+`.git-credentials`, `*.tfvars`, `*.tfstate`, keystores, `kubeconfig`, `.aws/*`, service-account
+JSON, or files with `credentials`, `secret` or `token` in the name. The same filter covers
+untracked files and files you name.
+
+**What the Codex sandbox really confines** (checked with `codex sandbox`, codex 0.166, which runs a
+command under the same sandbox without contacting OpenAI):
+
+- `codex exec --sandbox read-only` on its own blocks writes and network, but **does not limit
+  reading**: GPT could read the whole disk, including `~/.ssh` and `.env` files. The only barrier
+  would be a sentence in the prompt. The plugin therefore does not rely on it.
+- The plugin runs Codex with a narrow permission profile instead: GPT's commands can read the
+  project folder and minimal system paths, nothing else in your home folder, and cannot write.
+  Files matching the secret patterns above are blocked even inside the project. A secret with an
+  unusual name inside the project is still readable, and so are temp folders.
+- `--ignore-user-config` keeps your `~/.codex/config.toml` out of the run: your Codex MCP servers,
+  plugins and connectors are not started, and web search is off. Codex then uses its default model.
+- Two agents editing the same files would step on each other, and an outside model's advice
+  deserves a check before it lands, so only Claude edits, after your yes.
+
+Reasoning effort is `medium` (`high` on request). Not verified end to end: the profile was tested
+with `codex sandbox`, not with a real review request (that would send data to OpenAI).
 
 ## If it fails
 
