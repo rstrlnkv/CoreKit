@@ -17,7 +17,8 @@
 #   ANY depth (the same as scripts/git-hooks/blocked-patterns, so the hook and the commit check agree).
 # - Allowed: .claude/settings.local.json, .claude/worktrees/** (the worktree dirs themselves), and the
 #   paths on a "public-docs: <paths>" line of <Core>/<p>/CLAUDE.md (space or comma separated, relative
-#   to the code root; a directory entry covers everything under it; a glob is not expanded).
+#   to the code root; a directory entry covers everything under it; a glob is not expanded), except
+#   docs/superpowers/** (git ignores it and the pre-commit hook blocks it, so it is always private).
 # - Bash is best effort. Targets of > >> 2> &> >| >&file, tee, touch, cp, mv (the destination; a
 #   destination directory also gets the sources' names), mkdir. mkdir follows the same rules as a
 #   write (docs, .claude/rules, ...) except the bare ".claude" dir, which holds settings.local.json.
@@ -95,7 +96,12 @@ check_path() {
     agents.md|*/agents.md) ;;
     *) return 0 ;;
   esac
-  if is_public "$proj" "$sub_l"; then return 0; fi
+  # docs/superpowers stays private even under a public docs entry: .gitignore and the pre-commit hook keep
+  # it out of git, so plans written there would never be versioned.
+  case "$sub_l" in
+    docs/superpowers|docs/superpowers/*) ;;
+    *) if is_public "$proj" "$sub_l"; then return 0; fi ;;
+  esac
   # the Core's copy is spelled the usual way even when the path was typed in another letter case
   tgt="$sub"
   case "$sub_l" in docs|docs/*) tgt="docs${sub:4}" ;; .claude/*) tgt=".claude${sub:7}" ;; esac
