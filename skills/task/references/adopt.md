@@ -20,6 +20,8 @@ never run `adopt.sh` before "ok".
    - `invalid project name` or `name ... does not match the folder`: the folder name, in lower
      case, must be 3-40 Latin letters, digits and hyphens; the user renames the folder.
    - `target exists: <path>`: that folder is taken; nothing is merged or overwritten.
+   - `different disk` (old layout): the Core sits on another disk than `<Projects>`, so the code
+     folder cannot be moved by a rename; the user puts the Core on the same disk first.
    - `CLAUDE.local.md exists`: the user moves their own file away first.
 
    Otherwise tell the user in plain words:
@@ -35,12 +37,20 @@ never run `adopt.sh` before "ok".
    - that git history stays and one commit "Move internal Claude files to Core" removes those
      files from the repo and adds the corecrew ignore lines the repo's `.gitignore` lacks (listed
      under "add to .gitignore"; the user's own lines stay as they are), so local Claude files never
-     reach a commit;
+     reach a commit, and, when the repo has none, a `.worktreeinclude` that copies
+     `.claude/settings.local.json` into new worktrees (an existing one is left as is);
    - the `CLAUDE.local.md` link and `.claude/settings.local.json` (created, or a `warning:` line:
      the user's own file is left as is and needs the `additionalDirectories` entry it names);
    - what gets created.
    If the plan lists `CLAUDE.md` or `.claude/` under "stays in the repo (ignored by git)", tell
    the user: the Core gets a template `CLAUDE.md`, and their own file stays in the repo.
+   If the plan has the `warning: git tracks N CLAUDE.md / AGENTS.md file(s) that stay in the repo`
+   line, raise it before asking for "ok": those files (often test fixtures) stay in the repo, but
+   after adopt corecrew's hooks and guard block changing them or adding new ones there, so the
+   user decides whether that is acceptable, or renames them first.
+   Old layout: a `warning: ... still names ../docs/ or `code/` paths` line means the private
+   `CLAUDE.md` has paths that pointed from the old code folder; adopt does not rewrite them, so
+   offer to fix them afterwards (as `<Core>/<name>/docs/...`).
 3. **Public docs** (new layout only). Ask which docs, if any, stay in the repo for everyone to
    read (for example `docs/`, or one page). Those paths are not moved and are listed as `public-docs:`.
 4. **Purpose.** Ask for one line on what the project is for; it goes on the `PROJECTS.md`

@@ -84,7 +84,7 @@ assert_eq "$(inode "$F")" "$I0" "folder inode"
 assert_eq "$(git -C "$F" rev-list --count HEAD)" "$((N0 + 1))" "commit count"
 assert_eq "$(git -C "$F" log -1 --format=%s)" "Move internal Claude files to Core" "repo commit subject"
 assert_eq "$(git -C "$F" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ';')" \
-  ".claude/commands/x.md;.claude/rules/always.md;.claude/rules/t.md;.gitignore;CLAUDE.md;docs/a.md;" "repo commit files"
+  ".claude/commands/x.md;.claude/rules/always.md;.claude/rules/t.md;.gitignore;.worktreeinclude;CLAUDE.md;docs/a.md;" "repo commit files"
 assert_no_file "$F/CLAUDE.md"; assert_no_file "$F/docs"; assert_no_file "$F/.claude/rules"
 assert_eq "$(git -C "$F" ls-files -- CLAUDE.md)" "" "CLAUDE.md still tracked"
 assert_eq "$(git -C "$F" status --porcelain)" "" "repo dirty"
@@ -105,6 +105,8 @@ assert_file "$P/docs/a.md"
 [ -L "$F/CLAUDE.local.md" ] && pass || fail "no CLAUDE.local.md link"
 assert_eq "$(readlink "$F/CLAUDE.local.md")" "$P/CLAUDE.md" "link target"
 assert_contains "$F/.claude/settings.local.json" "\"$P\""
+assert_eq "$(cat "$F/.worktreeinclude")" "$(cat "$SKILL/templates/code/worktreeinclude")" ".worktreeinclude from the template"
+echo "$DRY_OUT" | grep -qF ".worktreeinclude" && pass || fail "plan lacks .worktreeinclude: $DRY_OUT"
 grep -qxF -- "- foo — Adopted existing project — Foo/" "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md line: $(cat "$CORE_DIR/PROJECTS.md")"
 assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "Adopt foo" "Core commit"
 assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "Core dirty"
@@ -132,7 +134,7 @@ assert_no_file "$P/.claude/settings.local.json"
 assert_no_file "$P/.claude/worktrees"
 assert_eq "$(git -C "$F" rev-list --count HEAD)" "$((N0 + 1))" "commit count"
 assert_eq "$(git -C "$F" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ';')" \
-  ".claude/settings.json;.gitignore;CLAUDE.md;docs/guide.md;" "removed files (and the .gitignore lines)"
+  ".claude/settings.json;.gitignore;.worktreeinclude;CLAUDE.md;docs/guide.md;" "removed files (and the .gitignore lines)"
 assert_eq "$(cat "$F/.claude/settings.local.json")" '{"local":true}' "settings.local.json changed"
 echo "$OUT1" | grep -qF "warning: $F/.claude/settings.local.json exists and was left as is; add \"$P\" to permissions.additionalDirectories in it" && pass || fail "no settings warning: $OUT1"
 assert_file "$F/.claude/worktrees/w/f.txt"
@@ -167,7 +169,7 @@ assert_contains "$P/CLAUDE.md" "public-docs: docs/"
 assert_contains "$P/CLAUDE.md" "check: bash tests/run.sh"
 assert_not_contains "$P/CLAUDE.md" "check: <set after scaffolding>"
 assert_eq "$(git -C "$F" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ';')" \
-  ".gitignore;CLAUDE.md;" "removed files (public docs kept)"
+  ".gitignore;.worktreeinclude;CLAUDE.md;" "removed files (public docs kept)"
 assert_file "$P/docs/INDEX.md"
 bash "$WC" "$P" >/dev/null 2>&1 && pass || fail "wiki-check (public docs): $(bash "$WC" "$P" 2>&1)"
 
@@ -227,10 +229,10 @@ refuses "not in $PR: move the folder to $PR/Bar first" --from "$SANDBOX/elsewher
 mkrepo "$PR/group/deep-app"
 refuses "not in $PR: move the folder to $PR/deep-app first" --from "$PR/group/deep-app"
 mkrepo "$PR/My App"
-refuses "invalid project name 'my app' (use --name)" --from "$PR/My App"
-refuses "invalid project name 'Bad_Name' (use --name)" --from "$F" --name Bad_Name
-refuses "invalid project name 'ab' (use --name)" --from "$F" --name ab
-refuses "invalid project name 'core' (use --name)" --from "$F" --name core
+refuses "invalid project name 'my app' (rename the folder)" --from "$PR/My App"
+refuses "invalid project name 'Bad_Name' (rename the folder)" --from "$F" --name Bad_Name
+refuses "invalid project name 'ab' (rename the folder)" --from "$F" --name ab
+refuses "invalid project name 'core' (rename the folder)" --from "$F" --name core
 refuses "name 'my-app' does not match the folder 'My App': rename the folder to $PR/my-app first" --from "$PR/My App" --name my-app
 mkdir -p "$CORE_DIR/dirty-app"
 refuses "target exists: $CORE_DIR/dirty-app" --from "$F"
@@ -244,7 +246,7 @@ mkrepo "$PR/loc-app"; echo mine > "$PR/loc-app/CLAUDE.local.md"; echo CLAUDE.loc
 refuses "CLAUDE.local.md exists in $PR/loc-app: move it away first (adopt links that name to $CORE_DIR/loc-app/CLAUDE.md)" --from "$PR/loc-app"
 # --dry-run refuses too
 mkrepo "$PR/ok-app"
-refuses "invalid project name 'Bad Name' (use --name)" --from "$PR/ok-app" --name "Bad Name" --dry-run
+refuses "invalid project name 'Bad Name' (rename the folder)" --from "$PR/ok-app" --name "Bad Name" --dry-run
 
 # two folders that differ only in case (a case-sensitive disk): refuse
 mkdir -p "$PR/Casetest" "$PR/casetest" 2>/dev/null
@@ -279,6 +281,7 @@ echo "$OUT" | grep -q "could not commit" && pass || fail "commit failure message
 after="$(snap)"
 assert_eq "$after" "$before" "commit failure changed something"
 assert_eq "$(git -C "$F" diff --cached --name-only)" "" "index not restored"
+assert_no_file "$F/.worktreeinclude"
 # the same with a .gitignore of the user's: it comes back byte for byte
 printf 'build/\n' > "$F/.gitignore"; git -C "$F" add .gitignore; git -C "$F" commit -q --no-verify -m gi
 before="$(snap)"
@@ -303,7 +306,7 @@ grep -q '^- my-proj — .* — My-Proj/$' "$CORE_DIR/PROJECTS.md" && pass || fai
 bash "$WC" "$P" >/dev/null 2>&1 && pass || fail "wiki-check (non-ASCII): $(bash "$WC" "$P" 2>&1)"
 # a Cyrillic folder name: refused (it is not a project name, and --name cannot rename the folder)
 F="$SANDBOX/Projects/Мой проект"; mkrepo "$F"
-refuses "invalid project name 'Мой проект' (use --name)" --from "$F"
+refuses "invalid project name 'Мой проект' (rename the folder)" --from "$F"
 
 # --- a repo with no internal files: the repo commit only adds the .gitignore lines; CLAUDE.md comes
 # from the template
@@ -313,7 +316,7 @@ echo code > "$F/main.sh"; git -C "$F" add -A && git -C "$F" commit -q -m "initia
 assert_exit 0 bash "$AD" --from "$F" --check "make test"
 P="$CORE_DIR/bare-app"
 assert_eq "$(git -C "$F" rev-list --count HEAD)" "2" "one repo commit"
-assert_eq "$(git -C "$F" show --name-only --format= HEAD)" ".gitignore" "the repo commit holds only .gitignore"
+assert_eq "$(git -C "$F" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ';')" ".gitignore;.worktreeinclude;" "the repo commit holds .gitignore and .worktreeinclude"
 assert_contains "$P/CLAUDE.md" "# bare-app"
 assert_contains "$P/CLAUDE.md" "check: make test"
 assert_contains "$P/CLAUDE.md" "## Rules"
@@ -477,7 +480,7 @@ refuses "old layout: only --purpose and --dry-run apply" --from "$CORE_DIR/old-a
 # old layout: df gives nothing usable -> the disk check fails closed; another disk -> refuse
 mkdir -p "$SANDBOX/stub"; printf '#!/bin/sh\nexit 0\n' > "$SANDBOX/stub/df"; chmod +x "$SANDBOX/stub/df"
 SAVE_PATH="$PATH"; PATH="$SANDBOX/stub:$PATH"
-refuses "different disk: could not compare disks; move the folder next to Core first" --from "$CORE_DIR/old-app/code"
+refuses "different disk: could not compare the disks of $CORE_DIR and $SANDBOX/Projects" --from "$CORE_DIR/old-app/code"
 PATH="$SAVE_PATH"
 cat > "$SANDBOX/stub/df" <<'STUB'
 #!/bin/sh
@@ -488,8 +491,8 @@ esac
 STUB
 chmod +x "$SANDBOX/stub/df"
 PATH="$SANDBOX/stub:$PATH"
-refuses "different disk: move the folder next to Core first" --from "$CORE_DIR/old-app/code"
-refuses "different disk: move the folder next to Core first" --from "$CORE_DIR/old-app/code" --dry-run
+refuses "different disk: $CORE_DIR and $SANDBOX/Projects are on different disks; put the Core on the same disk as $SANDBOX/Projects first" --from "$CORE_DIR/old-app/code"
+refuses "different disk: $CORE_DIR and $SANDBOX/Projects are on different disks; put the Core on the same disk as $SANDBOX/Projects first" --from "$CORE_DIR/old-app/code" --dry-run
 # the new layout moves no folder: another disk for the Core does not matter
 mkrepo "$SANDBOX/Projects/disk-app"
 assert_exit 0 bash "$AD" --from "$SANDBOX/Projects/disk-app" --dry-run
@@ -538,7 +541,7 @@ while IFS= read -r l; do
   grep -qxF -- "$l" "$F/.gitignore" && pass || fail ".gitignore lacks: $l"
 done <<< "$WANT"
 assert_eq "$(grep -cxF '.env.*' "$F/.gitignore")" "1" ".env.* duplicated"
-assert_eq "$(git -C "$F" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ';')" ".gitignore;CLAUDE.md;" "repo commit files"
+assert_eq "$(git -C "$F" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ';')" ".gitignore;.worktreeinclude;CLAUDE.md;" "repo commit files"
 assert_eq "$(git -C "$F" status --porcelain)" "" "code repo dirty after adopt"
 git -C "$F" worktree add -q "$F/.claude/worktrees/w1" -b w1 2>/dev/null
 echo 'echo b' > "$F/src/b.sh"
@@ -551,12 +554,53 @@ assert_eq "$(git -C "$F" status --porcelain)" "" "code repo dirty after save"
 new_sandbox; setup_core
 F="$SANDBOX/Projects/gi-full"; mkdir -p "$F"; git init -q "$F" && git -C "$F" symbolic-ref HEAD refs/heads/main
 grep -v '^#' "$SKILL/templates/code/gitignore-common" > "$F/.gitignore"; echo x > "$F/main.sh"
+printf 'mine\n' > "$F/.worktreeinclude"
 git -C "$F" add -A && git -C "$F" commit -q -m initial
 assert_exit 0 bash "$AD" --from "$F" --dry-run
 echo "$OUT" | grep -qF "add to .gitignore" && fail "plan touches a complete .gitignore: $OUT" || pass
+echo "$OUT" | grep -qF ".worktreeinclude" && fail "plan touches an existing .worktreeinclude: $OUT" || pass
 assert_exit 0 bash "$AD" --from "$F"
 assert_eq "$(git -C "$F" rev-list --count HEAD)" "1" "commit made without changes"
 assert_eq "$(git -C "$F" status --porcelain)" "" "repo dirty (complete .gitignore)"
+assert_eq "$(cat "$F/.worktreeinclude")" "mine" ".worktreeinclude of the user's changed"
+
+# --- tracked nested CLAUDE.md / AGENTS.md stay in the repo; the plan and the report warn that the hooks
+# will block changing them
+new_sandbox; setup_core
+F="$SANDBOX/Projects/nest-app"; mkrepo "$F"
+mkdir -p "$F/tests/fixtures/w1" "$F/lib"
+echo fx > "$F/tests/fixtures/w1/CLAUDE.md"; echo ag > "$F/lib/AGENTS.md"
+git -C "$F" add -A && git -C "$F" commit -q -m fixtures
+NW="warning: git tracks 2 CLAUDE.md / AGENTS.md file(s) that stay in the repo; after adopt, corecrew's hooks block changing or adding such files:"
+assert_exit 0 bash "$AD" --from "$F" --dry-run
+echo "$OUT" | grep -qxF "$NW" && pass || fail "plan lacks the nested warning: $OUT"
+echo "$OUT" | grep -qxF "  tests/fixtures/w1/CLAUDE.md" && pass || fail "plan lacks the fixture: $OUT"
+echo "$OUT" | grep -qxF "  lib/AGENTS.md" && pass || fail "plan lacks lib/AGENTS.md: $OUT"
+echo "$OUT" | grep -qxF "  CLAUDE.md" && pass || fail "plan lacks the root CLAUDE.md copy: $OUT"
+assert_exit 0 bash "$AD" --from "$F"
+echo "$OUT" | grep -qxF "$NW" && pass || fail "report lacks the nested warning: $OUT"
+echo "$OUT" | grep -qxF "  tests/fixtures/w1/CLAUDE.md" && pass || fail "report lacks the fixture: $OUT"
+assert_eq "$(git -C "$F" ls-files -- tests/fixtures/w1/CLAUDE.md)" "tests/fixtures/w1/CLAUDE.md" "fixture still tracked"
+# many: at most 15 listed, then a count
+new_sandbox; setup_core
+F="$SANDBOX/Projects/many-app"; mkrepo "$F"
+i=1; while [ $i -le 17 ]; do mkdir -p "$F/fx/$i"; echo x > "$F/fx/$i/CLAUDE.md"; i=$((i + 1)); done
+git -C "$F" add -A && git -C "$F" commit -q -m fixtures
+assert_exit 0 bash "$AD" --from "$F" --dry-run
+echo "$OUT" | grep -qxF "  ... and 2 more" && pass || fail "plan lacks the count: $OUT"
+# the count is the full number
+echo "$OUT" | grep -q "git tracks 17 CLAUDE.md" && pass || fail "plan count: $OUT"
+
+# --- old layout: a CLAUDE.md that still names ../docs/ or `code/` paths gets a warning (not rewritten)
+new_sandbox; setup_core
+mkold stale-app
+printf '\nSee ../docs/INDEX.md and `code/`.\n' >> "$CORE_DIR/stale-app/CLAUDE.md"
+git -C "$CORE_DIR" add -A && git -C "$CORE_DIR" commit -q -m stale
+BEFORE="$(cat "$CORE_DIR/stale-app/CLAUDE.md")"
+SW="warning: $CORE_DIR/stale-app/CLAUDE.md still names ../docs/ or \`code/\` paths from the old layout; they now point to the wrong place: write them as $CORE_DIR/stale-app/docs/... and the code folder $SANDBOX/Projects/stale-app"
+assert_exit 0 bash "$AD" --from "$CORE_DIR/stale-app/code"
+echo "$OUT" | grep -qxF "$SW" && pass || fail "no stale-path warning: $OUT"
+assert_eq "$(cat "$CORE_DIR/stale-app/CLAUDE.md")" "$BEFORE" "CLAUDE.md rewritten"
 
 # --- AGENTS.md moves to the Core like CLAUDE.md (personal agent instructions; guard-code blocks it)
 new_sandbox; setup_core

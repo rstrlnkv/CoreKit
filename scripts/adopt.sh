@@ -12,7 +12,7 @@
 #   not in <Projects>: move the folder to <Projects>/<Name> first   (not a direct child of <Projects>,
 #       and not an old-layout <Core>/<name>/code)
 #   old layout: only --purpose and --dry-run apply                  (--name, --public-docs, --check)
-#   invalid project name '<n>' (use --name)
+#   invalid project name '<n>' (rename the folder)                (old layout: without the hint)
 #   name '<n>' does not match the folder '<Name>': rename the folder to <Projects>/<n> first
 #       (--name must be the folder name in lower case: the link to the Core is by name only)
 #   target exists: <path>        <Core>/<name> (new layout) or a <Projects> folder named <name> in any
@@ -23,8 +23,9 @@
 #   not found: <path>                  a --public-docs path that is not in the repo
 #   symlink: <path> -> <target>; replace it with a file first   (a tracked file to be copied)
 #   submodule: <path>; adopt cannot move it                     (a tracked gitlink to be copied)
-#   different disk: move the folder next to Core first          (old layout only: the move must be a
-#       rename; also "different disk: could not compare disks; ..." when df gives no usable answer)
+#   different disk: <Core> and <Projects> are on different disks; put the Core on the same disk as
+#       <Projects> first        (old layout only: the move must be a rename; also "different disk: could
+#       not compare the disks of <Core> and <Projects>" when df gives no usable answer)
 #   git does not know your name and email (...)
 # Only files git tracks are copied and removed; ignored files stay in the repo untouched.
 # Exit 1 (nothing deleted; the message says where the files are): a failed mv after the repo commit.
@@ -37,12 +38,17 @@
 # where they no longer load (the plan and the report list them); give copied pages that lack wiki front
 # matter the missing fields. Then one commit in the repo "Move internal Claude files to Core" (git rm of
 # the copied and folded files, plus the corecrew ignore lines of the new-project .gitignore template that
-# the repo's .gitignore lacks, appended at its end: user lines are never changed or removed; skipped when
-# there is neither; if it fails, the files and .gitignore come back and nothing else was touched). Then
-# the temp folder becomes <Core>/<name>/.
+# the repo's .gitignore lacks, appended at its end: user lines are never changed or removed; plus
+# .worktreeinclude from the new-project template when the repo has none, so native worktrees get
+# .claude/settings.local.json; an existing one is never edited; skipped when there is none of these; if it
+# fails, the files, .gitignore and .worktreeinclude come back and nothing else was touched). Then the temp
+# folder becomes <Core>/<name>/.
 # Old layout: the internal files are in <Core>/<name>/ already; the repo commit holds only the missing
-# ignore lines; then the repo folder is moved with mv to <Projects>/<name> and linked worktrees under
-# .claude/worktrees are repaired.
+# ignore lines and .worktreeinclude; then the repo folder is moved with mv to <Projects>/<name> and linked
+# worktrees under .claude/worktrees are repaired; a warning: line names <Core>/<name>/CLAUDE.md when it
+# still says ../docs/ or `code/` (it is not rewritten).
+# Warnings (plan and report): tracked CLAUDE.md / AGENTS.md / CLAUDE.local.md files that stay in the repo
+# (nested ones, public ones), which corecrew's hooks block changing or adding after adopt.
 # Both: CLAUDE.local.md in the code folder becomes a link to <Core>/<name>/CLAUDE.md;
 # .claude/settings.local.json is created from the template when missing (else left as is, with a
 # warning: line naming the additionalDirectories entry to add when it lacks it); git hook shims are
@@ -100,16 +106,16 @@ BASE="$(basename "$FROM")"
 if [ "$OLD" -eq 0 ]; then
   [ "$(dirname "$FROM")" = "$PROJECTS_DIR" ] || refuse "not in $PROJECTS_DIR: move the folder to $PROJECTS_DIR/$BASE first"
   if [ -n "$NAME" ]; then
-    valid_project_name "$NAME" || refuse "invalid project name '$NAME' (use --name)"
+    valid_project_name "$NAME" || refuse "invalid project name '$NAME' (rename the folder)"
     [ "$(lc "$BASE")" = "$NAME" ] || refuse "name '$NAME' does not match the folder '$BASE': rename the folder to $PROJECTS_DIR/$NAME first"
   else
     NAME="$(lc "$BASE")"
-    valid_project_name "$NAME" || refuse "invalid project name '$NAME' (use --name)"
+    valid_project_name "$NAME" || refuse "invalid project name '$NAME' (rename the folder)"
   fi
 else
   { [ -z "$NAME" ] && [ -z "$PUBLIC" ] && [ -z "$CHECK" ]; } || refuse "old layout: only --purpose and --dry-run apply"
   NAME="$OLDNAME"
-  valid_project_name "$NAME" || refuse "invalid project name '$NAME' (use --name)"
+  valid_project_name "$NAME" || refuse "invalid project name '$NAME'"
 fi
 P="$CORE_DIR/$NAME"
 if [ "$OLD" -eq 0 ]; then
@@ -216,6 +222,26 @@ elif [ -r "$TPL/code/gitignore-common" ]; then
   done < "$TPL/code/gitignore-common"
 fi
 
+# .worktreeinclude (lists .claude/settings.local.json, so native worktrees get it): added when missing.
+WTI="$FROM/.worktreeinclude"; WTI_ADD=0
+{ [ -e "$WTI" ] || [ -L "$WTI" ]; } || { [ -r "$TPL/code/worktreeinclude" ] && WTI_ADD=1; }
+
+# Tracked CLAUDE.md / AGENTS.md / CLAUDE.local.md files that stay in the repo (nested ones, or public
+# ones): corecrew's ignore lines, git hook and guard block changing or adding them after adopt.
+NEST=""; NNEST=0
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  printf '%s' "$COPY$RULES" | grep -qxF -- "$f" && continue   # moved to the Core: not a warning
+  NEST="$NEST$f
+"; NNEST=$((NNEST + 1))
+done <<< "$(git -C "$FROM" -c core.quotepath=false ls-files | grep -E '(^|/)(CLAUDE(\.local)?|AGENTS)\.md$')"
+NEST_WARN="warning: git tracks $NNEST CLAUDE.md / AGENTS.md file(s) that stay in the repo; after adopt, corecrew's hooks block changing or adding such files:"
+
+# Old layout: a CLAUDE.md that still names paths relative to <Core>/<name>/code.
+STALE=0
+if [ "$OLD" -eq 1 ] && { grep -qF -- '../docs/' "$P/CLAUDE.md" || grep -qF -- '`code/`' "$P/CLAUDE.md"; }; then STALE=1; fi
+STALE_WARN="warning: $P/CLAUDE.md still names ../docs/ or \`code/\` paths from the old layout; they now point to the wrong place: write them as $P/docs/... and the code folder $K"
+
 # Symlinks and submodules (gitlinks) cannot be moved faithfully: refuse if a file that would be
 # copied or folded is one.
 if [ "$OLD" -eq 0 ]; then
@@ -237,13 +263,13 @@ if [ "$OLD" -eq 1 ]; then
   M_FROM="$(mount_of "$FROM")"; M_PROJ="$(mount_of "$PROJECTS_DIR")"
   # An empty answer (df failed or printed something unparseable) is a refusal: fail closed.
   { [ -n "$M_FROM" ] && [ -n "$M_PROJ" ]; } \
-    || refuse "different disk: could not compare disks; move the folder next to Core first"
-  [ "$M_FROM" = "$M_PROJ" ] || refuse "different disk: move the folder next to Core first"
+    || refuse "different disk: could not compare the disks of $CORE_DIR and $PROJECTS_DIR"
+  [ "$M_FROM" = "$M_PROJ" ] || refuse "different disk: $CORE_DIR and $PROJECTS_DIR are on different disks; put the Core on the same disk as $PROJECTS_DIR first"
 fi
 
 # Git needs an identity for the commits: refuse now rather than half way.
 ident_ok() { git -C "$1" var GIT_AUTHOR_IDENT >/dev/null 2>&1 && git -C "$1" var GIT_COMMITTER_IDENT >/dev/null 2>&1; }
-if [ "${#REMOVE[@]}" -gt 0 ] || [ -n "$GI_ADD" ]; then
+if [ "${#REMOVE[@]}" -gt 0 ] || [ -n "$GI_ADD" ] || [ "$WTI_ADD" -eq 1 ]; then
   ident_ok "$FROM" || refuse "git does not know your name and email (git config --global user.name / user.email)"
 fi
 ident_ok "$CORE_DIR" || refuse "git does not know your name and email (git config --global user.name / user.email)"
@@ -279,13 +305,16 @@ if [ "$DRY" -eq 1 ]; then
   show "kept in Core, no longer loaded:" "$KEPT"
   if [ "${#REMOVE[@]}" -gt 0 ]; then
     echo "remove from the repo in one commit \"Move internal Claude files to Core\": ${#REMOVE[@]} file(s) (the copied and folded ones that git tracks)"
-  elif [ -n "$GI_ADD" ]; then
-    echo "one repo commit \"Move internal Claude files to Core\" with only the ignore lines below (git tracks none of the internal files)"
+  elif [ -n "$GI_ADD" ] || [ "$WTI_ADD" -eq 1 ]; then
+    echo "one repo commit \"Move internal Claude files to Core\" with only the lines below (git tracks none of the internal files)"
   else
     echo "no repo commit: git tracks none of the internal files"
   fi
   show "add to .gitignore (in the same commit):" "$GI_ADD"
+  [ "$WTI_ADD" -eq 0 ] || echo "add .worktreeinclude (in the same commit; it lists .claude/settings.local.json for new worktrees)"
   [ "$GI_SKIP" -eq 0 ] || echo "warning: .gitignore is not a plain file; add the corecrew ignore lines to it yourself"
+  [ "$NNEST" -eq 0 ] || show "$NEST_WARN" "$NEST"
+  [ "$STALE" -eq 0 ] || echo "$STALE_WARN"
   if [ "$OLD" -eq 0 ]; then
     show "stays in the repo (public docs):" "$PUBKEEP"
     IGN="$(cd "$FROM" && for t in CLAUDE.md AGENTS.md docs .claude; do
@@ -500,9 +529,15 @@ if [ -n "$GI_ADD" ]; then
     || { if [ "$GI_NEW" -eq 1 ]; then rm -f "$GI"; else cp -p "$TMP/gitignore.orig" "$GI"; fi
          echo "adopt: could not write $GI" >&2; exit 1; }
 fi
-if [ "${#REMOVE[@]}" -gt 0 ] || [ -n "$GI_ADD" ]; then
+if [ "$WTI_ADD" -eq 1 ]; then
+  cp "$TPL/code/worktreeinclude" "$WTI" || { rm -f "$WTI"
+    if [ -n "$GI_ADD" ]; then if [ "$GI_NEW" -eq 1 ]; then rm -f "$GI"; else cp -p "$TMP/gitignore.orig" "$GI"; fi; fi
+    echo "adopt: could not write $WTI" >&2; exit 1; }
+fi
+if [ "${#REMOVE[@]}" -gt 0 ] || [ -n "$GI_ADD" ] || [ "$WTI_ADD" -eq 1 ]; then
   if ! { { [ "${#REMOVE[@]}" -eq 0 ] || git -C "$FROM" rm -q -- "${REMOVE[@]}"; } \
          && { [ -z "$GI_ADD" ] || git -C "$FROM" add -- .gitignore; } \
+         && { [ "$WTI_ADD" -eq 0 ] || git -C "$FROM" add -f -- .worktreeinclude; } \
          && git -C "$FROM" commit -q -m "Move internal Claude files to Core"; } >/dev/null 2>&1; then
     if [ "${#REMOVE[@]}" -gt 0 ]; then
       git -C "$FROM" reset -q -- "${REMOVE[@]}" >/dev/null 2>&1
@@ -512,6 +547,7 @@ if [ "${#REMOVE[@]}" -gt 0 ] || [ -n "$GI_ADD" ]; then
       git -C "$FROM" reset -q -- .gitignore >/dev/null 2>&1
       if [ "$GI_NEW" -eq 1 ]; then rm -f "$GI"; else cp -p "$TMP/gitignore.orig" "$GI"; fi
     fi
+    if [ "$WTI_ADD" -eq 1 ]; then git -C "$FROM" reset -q -- .worktreeinclude >/dev/null 2>&1; rm -f "$WTI"; fi
     refuse "could not commit in $FROM (nothing was changed)"
   fi
   COMMITTED=1
@@ -544,6 +580,7 @@ show "kept in Core, no longer loaded:" "$KEPT"
 if [ "$COMMITTED" -eq 1 ]; then
   [ "${#REMOVE[@]}" -eq 0 ] || echo "removed ${#REMOVE[@]} file(s) from the repo (commit: Move internal Claude files to Core)"
   [ -z "$GI_ADD" ] || echo "added $GI_N ignore line(s) to .gitignore (commit: Move internal Claude files to Core)"
+  [ "$WTI_ADD" -eq 0 ] || echo "added .worktreeinclude (commit: Move internal Claude files to Core)"
 else echo "no repo commit: git tracks none of the internal files"; fi
 [ -z "$CREATED" ] || { echo "created:"; printf '%s\n' "$CREATED" | sed 's/^/  /'; }
 if [ "$OLD" -eq 0 ]; then
@@ -562,6 +599,8 @@ else
       || echo "warning: could not repair git worktrees after the move; run: git -C \"$K\" worktree repair <worktree folder>" >&2
   fi
 fi
+[ "$NNEST" -eq 0 ] || show "$NEST_WARN" "$NEST" >&2
+[ "$STALE" -eq 0 ] || echo "$STALE_WARN" >&2
 link_local_claude "$K" "$P" || echo "warning: $K/CLAUDE.local.md was not linked; make it a link to $P/CLAUDE.md" >&2
 case "$SL_STATE" in
   create) put "$TPL/code/settings.local.json.tmpl" "$K/$SL_REL" \
