@@ -114,16 +114,16 @@ Claude runs the plugin's `save` tool to commit code and docs together as one ste
 to revert the last step in both (with `git revert`, history kept). Nothing is copied into your
 docs repo. The plugin's Stop hook reminds Claude to save when a step is left uncommitted.
 
-## `coreeffort` (a second plugin)
+## `coremodel` (a second plugin)
 
-The `corekit` marketplace also holds `coreeffort`: before Claude starts on a prompt it picks the
+The `corekit` marketplace also holds `coremodel`: before Claude starts on a prompt it picks the
 effort level the work needs, for code and office work alike, and offers the switch (or makes it,
 in auto mode, always asking before Extra high and Max). It needs Claude Code 2.1.287 or newer and
 does not depend on `corecrew`:
 ```
-/plugin install coreeffort@corekit
+/plugin install coremodel@corekit
 ```
-Details: plugins/coreeffort/README.md.
+Details: plugins/coremodel/README.md.
 
 ## `coreopinion` (a third plugin)
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Manual check of the classifier on the real model (spec §7.2): nine prompts, each compared with the
 # expected level. Needs the claude CLI and the network, so tests/run.sh does not call it.
-# Usage: bash plugins/coreeffort/tests/quality.sh haiku|sonnet
+# Usage: bash plugins/coremodel/tests/quality.sh haiku|sonnet
 case "$1" in
   haiku) model=claude-haiku-5-5 ;;
   sonnet) model=claude-sonnet-5-5 ;;

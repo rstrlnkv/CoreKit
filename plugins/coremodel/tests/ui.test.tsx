@@ -4,8 +4,8 @@ import type { On } from 'claude-code'
 import { start, step, submit, world, type Eng, type World } from './world'
 
 const SURFACES = ['terminal', 'desktop'] as const
-const ABOVE = { plugin: 'coreeffort', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 80, scroll: { offset: 0, bodyRows: 6 }, view: {} } } as const
-const MODE = { plugin: 'coreeffort', component: 'SessionMode', props: { modes: ['default'] } } as const
+const ABOVE = { plugin: 'coremodel', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 80, scroll: { offset: 0, bodyRows: 6 }, view: {} } } as const
+const MODE = { plugin: 'coremodel', component: 'SessionMode', props: { modes: ['default'] } } as const
 
 // The engine's own footer: what draws when the plugin leaves the slot alone.
 function engineFooter(on: On) {
@@ -88,11 +88,11 @@ test('a new session start clears the footer label and the line', { options: { mo
 })
 
 async function run($: Eng, args: string) {
-  const r = await $.command.run({ command: 'coreeffort', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } } as never)
+  const r = await $.command.run({ command: 'coremodel', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } } as never)
   return (r as { text?: string }).text ?? ''
 }
 
-test('/coreeffort reports the mode and the level the chat runs at', async ($, on) => {
+test('/coremodel reports the mode and the level the chat runs at', async ($, on) => {
   const w = world(on)
   engineFooter(on)
   w.row = null
@@ -103,7 +103,7 @@ test('/coreeffort reports the mode and the level the chat runs at', async ($, on
   expect(await run($, '')).toContain('High')
 })
 
-test('/coreeffort auto, suggest, off and on store the mode over the setting', async ($, on) => {
+test('/coremodel auto, suggest, off and on store the mode over the setting', async ($, on) => {
   const w = world(on)
   engineFooter(on)
   await start($)
@@ -203,8 +203,8 @@ test('undo after the menu moved does nothing', { options: { mode: 'auto' } }, as
   expect(w.efforts.at(-1)).toBe('low')
 })
 
-function placed(id: string, plugin = 'coreeffort') {
-  return { plugin: 'coreeffort', component: 'Placed', props: { id, plugin } } as const
+function placed(id: string, plugin = 'coremodel') {
+  return { plugin: 'coremodel', component: 'Placed', props: { id, plugin } } as const
 }
 
 test('each applied switch places one mark', { options: { mode: 'auto' } }, async ($, on) => {
@@ -255,10 +255,10 @@ test('mark ids stay unique across a session restart', { options: { mode: 'auto' 
 })
 
 const PANE = {
-  plugin: 'coreeffort',
+  plugin: 'coremodel',
   component: 'Pane',
-  requestId: 'coreeffort',
-  props: { title: 'CoreEffort', isFocused: false, bodyColumns: 40, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
+  requestId: 'coremodel',
+  props: { title: 'CoreModel', isFocused: false, bodyColumns: 40, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
 } as const
 
 async function pane($: Eng, surface: 'terminal' | 'desktop' = 'desktop') {
@@ -278,11 +278,11 @@ async function pressPane($: Eng, key: string) {
   await ui.unmount()
 }
 
-test('/coreeffort panel opens the pane', async ($, on) => {
+test('/coremodel panel opens the pane', async ($, on) => {
   const w = world(on)
   await start($)
   await run($, 'panel')
-  expect(w.opened).toEqual([{ id: 'coreeffort', title: 'CoreEffort' }])
+  expect(w.opened).toEqual([{ id: 'coremodel', title: 'CoreModel' }])
 })
 
 test('the pane shows mode, level, last pick and counts', { options: { mode: 'auto' } }, async ($, on) => {
@@ -385,7 +385,7 @@ test('the pane counts kept prompts', async ($, on) => {
   expect(await has($, /High · auth bug/)).toBe(true)
 })
 
-const SPIN = { plugin: 'coreeffort', component: 'Spinner', props: { word: 'Thinking', message: null, suffix: '…', mode: 'thinking' } } as const
+const SPIN = { plugin: 'coremodel', component: 'Spinner', props: { word: 'Thinking', message: null, suffix: '…', mode: 'thinking' } } as const
 
 async function spinner($: Eng, surface: 'terminal' | 'desktop') {
   const ui = await $.ui.mount({ ...SPIN, surface })
@@ -410,13 +410,13 @@ test('the working line names a held level', { options: { mode: 'auto' } }, async
   for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking…')
 })
 
-test('/coreeffort with no argument asks for the mode', async ($, on) => {
+test('/coremodel with no argument asks for the mode', async ($, on) => {
   const w = world(on)
   w.reply = 'auto'
   await start($)
   const text = await run($, '')
   expect(w.asked.at(-1)).toEqual(['auto', 'suggest', 'off'])
-  expect(text).toContain('CoreEffort: auto.')
+  expect(text).toContain('CoreModel: auto.')
   await switchTo($, w, 'high', 'medium')
   expect(w.asked.length).toBe(1)
 })
@@ -427,7 +427,7 @@ test('a dismissed mode question changes nothing', async ($, on) => {
   await start($)
   const text = await run($, '')
   expect(w.asked.length).toBe(1)
-  expect(text).toContain('CoreEffort: suggest.')
+  expect(text).toContain('CoreModel: suggest.')
   w.reply = 'Keep Medium'
   await switchTo($, w, 'high', 'medium')
   expect(w.asked.length).toBe(2)

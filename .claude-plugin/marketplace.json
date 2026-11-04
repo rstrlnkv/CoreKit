@@ -1,6 +1,6 @@
 {
   "name": "corekit",
-  "description": "CoreKit: corecrew for starting and running projects with Claude Code, coreeffort for picking the effort level, and coreopinion for a second opinion from GPT.",
+  "description": "CoreKit: corecrew for starting and running projects with Claude Code, coremodel for picking the model and effort level, and coreopinion for a second opinion from GPT.",
   "owner": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "plugins": [
     {
@@ -10,10 +10,10 @@
       "description": "Start projects from an interview and run tasks with a crew of agents; standards and lessons live in your private Core repo."
     },
     {
-      "name": "coreeffort",
-      "displayName": "CoreEffort",
-      "source": "./plugins/coreeffort",
-      "description": "Picks the effort level each prompt needs, for code and office work, and asks before any switch to xhigh or max."
+      "name": "coremodel",
+      "displayName": "CoreModel",
+      "source": "./plugins/coremodel",
+      "description": "Picks the model and the effort level each prompt needs, for code and office work; asks before Fable, xhigh or max, and names the token cost of a model switch mid-chat."
     },
     {
       "name": "coreopinion",
@@ -25,6 +25,7 @@
   "renames": {
     "corekit": "corecrew",
     "coredev": "corecrew",
-    "effort-picker": "coreeffort"
+    "effort-picker": "coremodel",
+    "coreeffort": "coremodel"
   }
 }

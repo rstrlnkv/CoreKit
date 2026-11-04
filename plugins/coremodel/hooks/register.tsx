@@ -5,11 +5,11 @@ import type { Band, Level, Stats } from '../types'
 import { buildPrompt, parseAnswer, type Pick, toLevel } from './classifier'
 import { decide, type Lang, type Mode, texts, uiLang } from './policy'
 
-const PLUGIN = 'coreeffort'
-const band = atom({ plugin: 'coreeffort', key: 'band' } as const, null)
-const override = atom({ plugin: 'coreeffort', key: 'override' } as const, null)
-const marks = atom({ plugin: 'coreeffort', key: 'marks' } as const, {})
-const stats = atom({ plugin: 'coreeffort', key: 'stats' } as const, null)
+const PLUGIN = 'coremodel'
+const band = atom({ plugin: 'coremodel', key: 'band' } as const, null)
+const override = atom({ plugin: 'coremodel', key: 'override' } as const, null)
+const marks = atom({ plugin: 'coremodel', key: 'marks' } as const, {})
+const stats = atom({ plugin: 'coremodel', key: 'stats' } as const, null)
 const NO_STATS: Stats = { picks: { low: 0, medium: 0, high: 0, xhigh: 0, max: 0 }, kept: 0, last: null, marks: 0 }
 const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5' } as const
 const MODES: readonly Mode[] = ['suggest', 'auto', 'off']
@@ -43,7 +43,7 @@ async function log($: EngineInterface, what: string, err: unknown) {
   }
 }
 
-/** The mode: what /coreeffort stored wins over the setting. */
+/** The mode: what /coremodel stored wins over the setting. */
 export async function currentMode($: EngineInterface, options: { mode?: unknown }): Promise<Mode> {
   const stored = await $.store.get('mode')
   if (MODES.includes(stored as Mode)) return stored as Mode
@@ -166,23 +166,23 @@ async function runPick($: EngineInterface, options: { mode?: unknown; classifier
   }
 }
 
-/** Sets the mode as `/coreeffort <mode>` does; returns the reply. */
+/** Sets the mode as `/coremodel <mode>` does; returns the reply. */
 export async function setMode($: EngineInterface, options: { mode?: unknown }, arg: Mode | 'on'): Promise<string> {
   let text: string
   if (arg === 'auto' || arg === 'suggest') {
     await $.store.set('mode', arg)
     await $.store.set('lastMode', arg)
-    text = `CoreEffort: ${arg}. ${arg === 'auto' ? 'Levels change by themselves; xhigh and max still ask first.' : 'Every change of level asks first.'}`
+    text = `CoreModel: ${arg}. ${arg === 'auto' ? 'Levels change by themselves; xhigh and max still ask first.' : 'Every change of level asks first.'}`
   } else if (arg === 'off') {
     await $.store.set('mode', 'off')
     await releaseHold($)
     await update($, band, () => null)
-    text = 'CoreEffort is off. /coreeffort on turns it back on.'
+    text = 'CoreModel is off. /coremodel on turns it back on.'
   } else {
     const last = await $.store.get('lastMode')
     const mode: Mode = last === 'auto' || last === 'suggest' ? last : options.mode === 'auto' ? 'auto' : 'suggest'
     await $.store.set('mode', mode)
-    text = `CoreEffort is on: ${mode}.`
+    text = `CoreModel is on: ${mode}.`
   }
   $.ui.invalidate('ui.render')
   return text
@@ -242,26 +242,26 @@ export const register: Register = (on, options) => {
     await releaseHold($)
     await update($, band, () => null)
     await $.command.register({
-      name: 'coreeffort',
-      description: 'CoreEffort: show the real effort level, set the mode (auto, suggest, off, on), or open the pane (panel)',
+      name: 'coremodel',
+      description: 'CoreModel: show the real effort level, set the mode (auto, suggest, off, on), or open the pane (panel)',
       argumentHint: '[auto|suggest|off|on|panel]',
     })
     return next(e)
   })
 
-  on('command.run', { command: 'coreeffort' }, async ($, e) => {
+  on('command.run', { command: 'coremodel' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
     if (arg === 'auto' || arg === 'suggest' || arg === 'off' || arg === 'on') return { text: await setMode($, options, arg) }
     if (arg === 'panel') {
-      const r = await $.ui.open({ id: PLUGIN, title: 'CoreEffort' })
-      return { text: r.isPlaced ? 'CoreEffort pane is open.' : `CoreEffort pane is waiting: ${r.reason}` }
+      const r = await $.ui.open({ id: PLUGIN, title: 'CoreModel' })
+      return { text: r.isPlaced ? 'CoreModel pane is open.' : `CoreModel pane is waiting: ${r.reason}` }
     }
     const mode = await currentMode($, options)
     const level = hold?.level ?? seen
     if (!arg) {
       let answer = ''
       try {
-        answer = await $.ui.ask(texts(lastLang).modeQuestion(mode, level), { options: [...ASK_MODES], header: 'CoreEffort' })
+        answer = await $.ui.ask(texts(lastLang).modeQuestion(mode, level), { options: [...ASK_MODES], header: 'CoreModel' })
       } catch {
         // Dismissed: say where things stand, change nothing.
       }
@@ -269,9 +269,9 @@ export const register: Register = (on, options) => {
     }
     return {
       text: [
-        `CoreEffort: ${mode}.`,
+        `CoreModel: ${mode}.`,
         `This chat runs at: ${level ? texts('en').levelName(level) : 'unknown yet'}${hold ? ' (held by the plugin; the menu still shows your own setting)' : ''}.`,
-        'Type /coreeffort auto, suggest, off, on or panel.',
+        'Type /coremodel auto, suggest, off, on or panel.',
       ].join('\n'),
     }
   })

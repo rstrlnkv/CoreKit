@@ -1,4 +1,4 @@
-# coreeffort
+# coremodel
 
 A Claude Code plugin in the `corekit` marketplace. Before Claude starts on a prompt, a short model
 call reads it and picks the effort level the work needs: Low, Medium, High, Extra high or Max. It
@@ -24,7 +24,7 @@ The texts are in Russian for a Russian prompt and in English otherwise.
 
 ## The pane
 
-`/coreeffort panel` opens the CoreEffort pane beside the chat (above the prompt in a narrow
+`/coremodel panel` opens the CoreModel pane beside the chat (above the prompt in a narrow
 terminal). It shows the mode as three buttons, the level the chat really runs at and the menu's
 own level, the last pick and why, and this session's counts. **Release** lets go of a held level;
 the level buttons hold a level at once, Extra high and Max included: your own pick is your yes.
@@ -34,22 +34,22 @@ the level buttons hold a level at once, Extra high and Max included: your own pi
 The plugin puts the chosen level on every request of this chat only. It never writes your effort
 setting, so other chats and later sessions keep your own default. The menu next to the model name
 therefore keeps showing your own setting; the footer shows a label such as **Effort High**, and
-`/coreeffort` prints the level the chat really runs at. Move the menu yourself, or start a new
+`/coremodel` prints the level the chat really runs at. Move the menu yourself, or start a new
 session, and the plugin lets go of its level.
 
 ## Commands
 
-- `/coreeffort` asks which mode to use, showing the current mode and the real level; Esc changes
+- `/coremodel` asks which mode to use, showing the current mode and the real level; Esc changes
   nothing.
-- `/coreeffort panel` opens the pane.
-- `/coreeffort auto`, `/coreeffort suggest` set the mode for every session.
-- `/coreeffort off` and `/coreeffort on` turn it off and back on.
+- `/coremodel panel` opens the pane.
+- `/coremodel auto`, `/coremodel suggest` set the mode for every session.
+- `/coremodel off` and `/coremodel on` turn it off and back on.
 
 ## Settings
 
-`/plugin` → Installed → coreeffort → Configure options:
+`/plugin` → Installed → coremodel → Configure options:
 
-- `mode`: `suggest`, `auto` or `off` (default `suggest`). `/coreeffort` wins over it.
+- `mode`: `suggest`, `auto` or `off` (default `suggest`). `/coremodel` wins over it.
 - `classifier`: `sonnet` (default, the more accurate) or `haiku` (faster, cheaper).
 
 ## Install
@@ -59,7 +59,7 @@ Claude Code's early-access plugin API, which can change between releases.
 
 ```
 /plugin marketplace add rstrlnkv/CoreKit
-/plugin install coreeffort@corekit
+/plugin install coremodel@corekit
 ```
 
 ## Cost
@@ -67,7 +67,7 @@ Claude Code's early-access plugin API, which can change between releases.
 One short classifier call per prompt you type (at most 120 output tokens), through your own
 Claude Code account; it adds about 1 to 3 seconds before Claude starts. Slash commands and
 messages that do not come from the prompt box are never checked. Errors are written to
-`~/.claude/mods-logs/coreeffort.log` and never block the prompt.
+`~/.claude/mods-logs/coremodel.log` and never block the prompt.
 
 ## Credits
 

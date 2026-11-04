@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0 — 2026-11-04
+
+- Renamed from `coreeffort` to `coremodel` (brand CoreModel). The command is `/coremodel`, the log
+  is `~/.claude/mods-logs/coremodel.log`. The marketplace replaces an installed coreeffort. A mode
+  set with `/coreeffort` may not carry over; if so, set it again with `/coremodel auto` or
+  `/coremodel suggest`.
+
 ## 0.3.0 — 2026-11-04
 
 - A CoreEffort pane: `/coreeffort panel`. Mode buttons, the real level and the menu's level, the

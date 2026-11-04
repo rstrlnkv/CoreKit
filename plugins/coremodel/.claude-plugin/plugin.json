@@ -1,0 +1,51 @@
+{
+  "name": "coremodel",
+  "displayName": "CoreModel",
+  "version": "0.4.0",
+  "description": "Picks the model and the effort level each prompt needs, for code and office work; asks before Fable, xhigh or max, and names the token cost of a model switch mid-chat.",
+  "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
+  "homepage": "https://github.com/rstrlnkv/CoreKit",
+  "repository": "https://github.com/rstrlnkv/CoreKit",
+  "license": "MIT",
+  "keywords": ["effort", "model", "cost", "workflow"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "mode": {
+      "type": "string",
+      "title": "Mode",
+      "description": "suggest: ask before every change of level. auto: change by itself, but ask before xhigh and max. off: do nothing.",
+      "options": [
+        "suggest",
+        "auto",
+        "off"
+      ],
+      "default": "suggest"
+    },
+    "classifier": {
+      "type": "string",
+      "title": "Classifier model",
+      "description": "The model that reads each prompt and picks the level: sonnet (more accurate) or haiku (faster, cheaper).",
+      "options": [
+        "haiku",
+        "sonnet"
+      ],
+      "default": "sonnet"
+    },
+    "models": {
+      "type": "string",
+      "title": "Models",
+      "description": "Which models CoreModel may pick, comma-separated: haiku, sonnet, opus, fable. Remove a model your plan does not include.",
+      "default": "haiku,sonnet,opus,fable"
+    },
+    "pickModel": {
+      "type": "string",
+      "title": "Pick the model",
+      "description": "on: pick the model and the effort. off: pick the effort only, as CoreEffort did.",
+      "options": [
+        "on",
+        "off"
+      ],
+      "default": "on"
+    }
+  }
+}

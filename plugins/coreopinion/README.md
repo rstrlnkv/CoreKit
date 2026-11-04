@@ -21,7 +21,7 @@ until you say yes; then Claude makes the change itself.
 /plugin install coreopinion@corekit
 ```
 
-It does not depend on `corecrew` or `coreeffort`.
+It does not depend on `corecrew` or `coremodel`.
 
 ## Usage
 

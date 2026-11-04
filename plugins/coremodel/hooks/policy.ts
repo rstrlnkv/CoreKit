@@ -61,8 +61,8 @@ export function texts(lang: Lang) {
     inMenu: (l: Level | '') => (ru ? `в меню: ${l ? n(l) : '?'} (ваше)` : `in the menu: ${l ? n(l) : '?'} (yours)`),
     modeQuestion: (mode: Mode, l: Level | '') =>
       ru
-        ? `CoreEffort: ${mode}. Чат работает на: ${l ? n(l) : 'пока неизвестно'}. Какой режим?`
-        : `CoreEffort: ${mode}. Chat runs at: ${l ? n(l) : 'unknown yet'}. Which mode?`,
+        ? `CoreModel: ${mode}. Чат работает на: ${l ? n(l) : 'пока неизвестно'}. Какой режим?`
+        : `CoreModel: ${mode}. Chat runs at: ${l ? n(l) : 'unknown yet'}. Which mode?`,
     lastPick: ru ? 'Последний выбор' : 'Last pick',
     session: ru ? 'За сессию' : 'This session',
     kept: ru ? 'Оставлено как есть' : 'Kept as it was',
