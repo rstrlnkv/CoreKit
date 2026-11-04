@@ -1,7 +1,7 @@
 ---
 title: coremodel plugin — design spec
 description: Requirements for CoreModel, the successor of CoreEffort (0.3.0) in the corekit marketplace. Besides the effort level it recommends one of the Anthropic models for each main-chat prompt, holds the pair on the chat's requests, and names the token cost of a model switch mid-chat. Read before changing plugins/coremodel/.
-status: draft
+status: accepted
 files: [plugins/coremodel/, .claude-plugin/marketplace.json, tests/test_coremodel.sh, README.md, CLAUDE.md]
 related: [docs/specs/2026-11-04-effort-picker-design.md]
 updated: 2026-11-04

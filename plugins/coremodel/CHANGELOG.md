@@ -6,6 +6,15 @@
   is `~/.claude/mods-logs/coremodel.log`. The marketplace replaces an installed coreeffort. A mode
   set with `/coreeffort` may not carry over; if so, set it again with `/coremodel auto` or
   `/coremodel suggest`.
+- Picks the model too: Haiku, Sonnet, Opus or Fable, independently of the effort. The model changes
+  freely on the chat's first prompt; later only to a stronger model, always with a question that
+  names the token cost of re-reading the chat. Fable always asks.
+- Two short questions instead of one: the model, then the effort. "Switch, and auto-adjust from
+  now" left the question; set auto in the pane or with `/coremodel auto`.
+- The switch line, marks, footer, working line and pane show the pair "Opus · High"; the pane has
+  a row of model buttons; Back undoes both parts a silent switch changed.
+- New settings `models` and `pickModel`.
+- A model your plan does not include is dropped for the session after the first failed turn.
 
 ## 0.3.0 — 2026-11-04
 

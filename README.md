@@ -116,9 +116,10 @@ docs repo. The plugin's Stop hook reminds Claude to save when a step is left unc
 
 ## `coremodel` (a second plugin)
 
-The `corekit` marketplace also holds `coremodel`: before Claude starts on a prompt it picks the
-effort level the work needs, for code and office work alike, and offers the switch (or makes it,
-in auto mode, always asking before Extra high and Max). It needs Claude Code 2.1.287 or newer and
+The `corekit` marketplace also holds `coremodel` (formerly `coreeffort`): before Claude starts on a
+prompt it picks the model (Haiku, Sonnet, Opus, Fable) and the effort level the work needs, for
+code and office work alike, and offers the switch (or makes it, in auto mode, always asking before
+Fable, Extra high and Max, and naming the token cost of any model switch mid-chat). It needs Claude Code 2.1.287 or newer and
 does not depend on `corecrew`:
 ```
 /plugin install coremodel@corekit
