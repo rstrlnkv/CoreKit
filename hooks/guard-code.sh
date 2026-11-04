@@ -10,7 +10,7 @@
 #
 # Rules, all compared on the canonical path (".." and symlinks resolved, letter case as on disk
 # for the part that exists, then folded to lower case for the comparison, ASCII only):
-# - The code root is <Projects>/<Name>/ (code_dir_of; the CLAUDE.local.md symlink there resolves into the
+# - The code root is <Projects>/<Name>/ (the first folder of the path under <Projects>; the CLAUDE.local.md symlink there resolves into the
 #   Core and so passes), or <Core>/<p>/code/ in the old layout, or a worktree root <code root>/.claude/worktrees/<w>/;
 #   inside a worktree the path relative to the worktree root is what counts.
 # - Blocked: docs and docs/** and .claude/** at the root, and CLAUDE.md / CLAUDE.local.md / AGENTS.md at
@@ -62,12 +62,16 @@ is_public() {
 # check_path <path> [dir] — exits 2 with the message when the path is an internal file under a
 # project's code root; returns 0 otherwise. Mode "dir" (mkdir) lets the bare .claude through.
 check_path() {
-  local mode="${2:-write}" proj root rc=0 abs_l root_l sub sub_l shown w n tgt
+  local mode="${2:-write}" proj root abs_l root_l sub sub_l shown w n tgt first
   resolve_abs "$1"
   proj="$(project_of "$ABS")" || return 0
-  # the code root: <Projects>/<Name> (new layout) or <Core>/<p>/code (old); more than one candidate passes
-  root="$(code_dir_of "$proj" 2>/dev/null)" || rc=$?
-  case "$rc" in 0) root="$(canon_dir "$root")" ;; 1) root="$CORE_DIR/$proj/code" ;; *) return 0 ;; esac
+  # the code root: the project folder in <Projects> taken from the path itself (new layout; so no case
+  # clash between folders can switch the guard off), or <Core>/<p>/code for a path inside the Core (old)
+  case "$ABS" in
+    "$CORE_DIR"/*) root="$CORE_DIR/$proj/code" ;;
+    "$PROJECTS_DIR"/*) first="${ABS#"$PROJECTS_DIR"/}"; root="$PROJECTS_DIR/${first%%/*}" ;;
+    *) return 0 ;;
+  esac
   abs_l="$(lc "$ABS")"; root_l="$(lc "$root")"
   case "$abs_l" in "$root_l"/?*) ;; *) return 0 ;; esac
   sub="${ABS:$((${#root} + 1))}"; sub_l="${abs_l:$((${#root} + 1))}"

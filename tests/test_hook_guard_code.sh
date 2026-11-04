@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # hooks/guard-code.sh: a project's internal files (CLAUDE.md, docs/**, .claude/**) must not be
-# written under <Core>/<project>/code/**. Write|Edit|NotebookEdit read the path from the tool input;
+# written under the project's code folder: <Projects>/<Name>/** (new layout, beside the Core) or
+# <Core>/<project>/code/** (old layout). Write|Edit|NotebookEdit read the path from the tool input;
 # Bash is judged best effort (redirects, tee, touch, cp, mv, mkdir). Inert outside the Core project.
 source "$(dirname "$0")/lib.sh"
 new_sandbox
@@ -458,6 +459,18 @@ sec_new_layout() {
   case "$ERR" in *"code/"*) fail "new: ru message names code/" ;; *) pass "new: ru message has no code/" ;; esac
 }
 bg sec_new_layout
+
+# new layout with a space and non-ASCII in the Projects path, and two folders that differ only in case
+sec_new_odd_path() {
+  local PR="$SANDBOX/Мои проекты x" N
+  export CORE_DIR="$PR/Core"; N="$PR/Foo"
+  mkdir -p "$N/src" "$CORE_DIR/foo" "$PR/FOO"
+  echo '# foo' > "$CORE_DIR/foo/CLAUDE.md"
+  run_file Write "$N/docs/x.md" "$N"; assert_eq "$RC" "2" "odd path: Write docs/x.md"
+  assert_eq "$ERR" "$(printf 'corecrew: %s is an internal file and must not live in the code folder. Write it to %s instead.\nDocs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in %s.' "$N/docs/x.md" "$CORE_DIR/foo/docs/x.md" "$CORE_DIR/foo/CLAUDE.md")" "odd path: message"
+  run_file Write "$N/src/a.sh" "$N"; ok "odd path: src/a.sh"
+}
+bg sec_new_odd_path
 
 bg_wait
 
