@@ -4,7 +4,7 @@ import type { EngineInterface, ModelCompleteResult, Register } from 'claude-code
 import type { Band, Level, Mark, Stats } from '../types'
 import { buildPrompt, parseAnswer, type Pick, toLevel } from './classifier'
 import { LADDER, MODELS, type ModelKey, parseModels, switchCost, toModel } from './models'
-import { decide, decideModel, effortOptions, type Lang, type Mode, modelOptions, texts, uiLang } from './policy'
+import { decide, decideModel, effortOptions, isCostlyLevel, keepFirst, type Lang, type Mode, modelOptions, texts, uiLang } from './policy'
 
 const PLUGIN = 'coremodel'
 const band = atom({ plugin: 'coremodel', key: 'band' } as const, null)
@@ -252,7 +252,8 @@ async function runPick(
     const tokens = isFirst ? undefined : await chatTokens($)
     const models = modelOptions(to, nowModel, allowed, isFirst)
     // A current model CoreModel does not know still gets its Keep, second, so a question never has one option.
-    const opts: (ModelKey | 'keep')[] = nowModel ? models : [models[0]!, 'keep' as const, ...models.slice(1)].slice(0, 4)
+    const listed: (ModelKey | 'keep')[] = nowModel ? models : [models[0]!, 'keep' as const, ...models.slice(1)].slice(0, 4)
+    const opts = keepFirst(listed, nowModel || 'keep', to === 'fable')
     const labels = opts.map(m => (m === 'keep' ? t.keepCurrent : m === nowModel ? t.keepModel(m) : t.modelOption(m, m === to)))
     try {
       const answer = await $.ui.ask(t.modelQuestion(to, switchCost(tokens, nowModel, to), tokens, isFirst, pick.why), { options: labels, header: t.modelHeader })
@@ -268,7 +269,7 @@ async function runPick(
   const action = decide(mode, now, pick)
   let levelTo: Level | null = action === 'apply' ? level : null
   if (action === 'ask') {
-    const opts = effortOptions(level, now)
+    const opts = keepFirst(effortOptions(level, now), now as Level, isCostlyLevel(level))
     const labels = opts.map(l => (l === now ? t.keep(now) : t.levelOption(l, l === level)))
     try {
       const answer = await $.ui.ask(t.question(level, pick.why), { options: labels, header: t.effortHeader })

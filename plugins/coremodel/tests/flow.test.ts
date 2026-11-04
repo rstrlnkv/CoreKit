@@ -367,7 +367,44 @@ test('fable always asks', { options: { mode: 'auto' } }, async ($, on) => {
   expect(w.models).toEqual(['claude-sonnet-5-5'])
 })
 
-test('mid-chat stronger pick asks with the cost', { options: { mode: 'auto' } }, async ($, on) => {
+// A question can pop up while the person types the next message; their Enter then takes the first
+// option. For a costly pick (Fable, Extra high, Max) that first option is Keep.
+test('the Fable question lists Keep first', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"medium","model":"fable","why":"whole app"}'
+  w.reply = ['Fable (recommended)']
+  await start($)
+  await submit($, 'build the whole app, work alone')
+  await step($, 'medium')
+  expect(w.asked[0]).toEqual(['Keep Sonnet', 'Fable (recommended)', 'Opus', 'Haiku'])
+  expect(w.models).toEqual(['claude-fable-5-1'])
+})
+
+test('the Extra high and Max questions list Keep first', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.reply = ['Extra high (recommended)', 'Max (recommended)']
+  await start($)
+  for (const l of ['xhigh', 'max']) {
+    w.answer = `{"level":"${l}","why":"w"}`
+    await submit($, 'build the whole app')
+    await step($, 'medium')
+  }
+  expect(w.asked[0]).toEqual(['Keep Medium', 'Extra high (recommended)', 'High', 'Max'])
+  // The first answer is held, so the second question's Keep is the held Extra high.
+  expect(w.asked[1]![0]).toBe('Keep Extra high')
+  expect(w.asked[1]).toContain('Max (recommended)')
+})
+
+test('a plain High question keeps the pick first', async ($, on) => {
+  const w = world(on)
+  w.reply = 'High (recommended)'
+  await start($)
+  await submit($, 'fix the login, it throws 500')
+  await step($, 'medium')
+  expect(w.asked[0]![0]).toBe('High (recommended)')
+})
+
+test('mid-chat stronger pick asks with the cost',{ options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.lastReply = MID
   w.tokens = 100_000
