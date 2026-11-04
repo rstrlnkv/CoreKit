@@ -174,6 +174,77 @@ test('classifier error and timeout leave the level and write a log line', async 
   expect(w.logs[2]!.includes('not readable')).toBe(true)
 })
 
+// A classifier call sometimes hangs (seen live on a chat's first prompt, beside the title request):
+// a second call starts after 3 s, the first answer of the two is used, and the wait is 8 s at most.
+const HIGH = '{"level":"high","why":"auth bug"}'
+
+test('a quick classifier answer makes one call only', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answers = [{ after: 2_000, text: HIGH }]
+  await start($)
+  await submit($, 'fix the login')
+  const s = step($, 'medium')
+  await w.clock.advance(2_000)
+  await s
+  expect(w.model.length).toBe(1)
+  expect(w.timeouts).toEqual([8_000])
+  expect(w.efforts).toEqual(['high'])
+})
+
+test('a hung classifier call gets a second try after 3 s', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answers = [{ after: 0 }, HIGH]
+  await start($)
+  await submit($, 'fix the login')
+  const s = step($, 'medium')
+  await w.clock.advance(3_000)
+  await s
+  expect(w.model.length).toBe(2)
+  expect(w.timeouts).toEqual([8_000, 5_000])
+  expect(w.efforts).toEqual(['high'])
+  expect(w.logs.length).toBe(0)
+})
+
+test('a late first answer still wins over the second try', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answers = [{ after: 4_000, text: HIGH }, { after: 0 }]
+  await start($)
+  await submit($, 'fix the login')
+  const s = step($, 'medium')
+  await w.clock.advance(3_000)
+  await w.clock.advance(1_000)
+  await s
+  expect(w.efforts).toEqual(['high'])
+})
+
+test('two hung calls let the prompt go after 8 s and log a timeout', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answers = [{ after: 0 }, { after: 0 }]
+  await start($)
+  await submit($, 'fix the login')
+  const s = step($, 'medium')
+  await w.clock.advance(3_000)
+  await w.clock.advance(5_000)
+  await s
+  expect(w.efforts).toEqual(['medium'])
+  expect(w.logs.length).toBe(1)
+  expect(w.logs[0]!.includes('classify: classifier timed out after 8 s (two tries)')).toBe(true)
+})
+
+test('calls cut by an Esc before 8 s are not logged as a timeout', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answers = [{ after: 4_000, cut: true }, { after: 1_000, cut: true }]
+  await start($)
+  await submit($, 'fix the login')
+  const s = step($, 'medium')
+  await w.clock.advance(3_000)
+  await w.clock.advance(1_000)
+  await s
+  expect(w.efforts).toEqual(['medium'])
+  expect(w.logs.length).toBe(1)
+  expect(w.logs[0]!.includes('classify: classifier gave no answer: aborted')).toBe(true)
+})
+
 test('a stale pick is dropped', async ($, on) => {
   const w = world(on)
   let answer!: (r: string) => void

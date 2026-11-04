@@ -6,6 +6,10 @@
   ran on the old pick (Fable included) with no label in the footer, and its first switch line
   named the wrong "was". A new chat now starts with nothing held, and a pick still on its way when
   it starts is dropped. A compacted chat keeps its hold.
+- Fixed: the classifier call often hung on a chat's first prompt, and the prompt then waited 10
+  seconds for nothing. A second call now starts when the first has not answered in 3 seconds, the
+  first answer of the two is used, and the wait is 8 seconds at most. The log says "timed out
+  after 8 s" for a real timeout instead of "aborted".
 
 ## 0.4.1 — 2026-11-04
 

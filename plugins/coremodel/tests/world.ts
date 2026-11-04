@@ -6,6 +6,14 @@ import type { ConfigRow, On } from 'claude-code'
 // `reply` the person's answer to the question (null = dismissed); `row` the config menu's effort row.
 export type World = {
   answer: string | Error | { isAnswered: false } | Promise<string>
+  /**
+   * Per-call answers, taken in order before `answer`: a text at once, or one that comes `after` ms
+   * on the mocked clock; with no text the call hangs until its own timeoutMs cuts it, or until
+   * `after` ms when `cut` (an Esc on the turn).
+   */
+  answers: (string | { after: number; text?: string; cut?: boolean })[]
+  /** The timeoutMs of each classifier call. */
+  timeouts: (number | undefined)[]
   /** One answer for every question, or a queue answered in order (an empty queue dismisses). */
   reply: string | null | Promise<string | null> | (string | null)[]
   questions: string[]
@@ -40,6 +48,8 @@ export function row(value = 'Medium', isLocked = false): ConfigRow {
 export function world(on: On, store: Record<string, unknown> = {}): World {
   const w: World = {
     answer: '{"level":"high","why":"auth bug"}',
+    answers: [],
+    timeouts: [],
     reply: null,
     questions: [],
     headers: [],
@@ -90,7 +100,14 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
   on('model.complete', async (_, e) => {
     w.model.push(e.model)
     w.prompts.push(e.prompt)
-    const a = await w.answer
+    w.timeouts.push(e.timeoutMs)
+    const next = w.answers.shift()
+    if (typeof next === 'object') {
+      await w.clock.sleep(next.text === undefined && !next.cut ? (e.timeoutMs ?? 10_000) : next.after)
+      if (next.text === undefined) return { value: { isAnswered: false, reason: 'aborted', usage: {} } } as never
+      return { value: { isAnswered: true, text: next.text, usage: {} } } as never
+    }
+    const a = next ?? (await w.answer)
     if (a instanceof Error) throw a
     if (typeof a !== 'string') return { value: { isAnswered: false, reason: 'api-error', status: null } } as never
     return { value: { isAnswered: true, text: a, usage: {} } } as never

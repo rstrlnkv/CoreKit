@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, ModelCompleteResult, Register } from 'claude-code'
 
 import type { Band, Level, Mark, Stats } from '../types'
 import { buildPrompt, parseAnswer, type Pick, toLevel } from './classifier'
@@ -16,6 +16,10 @@ const CLASSIFIERS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5' } a
 const MODES: readonly Mode[] = ['suggest', 'auto', 'off']
 const LOG_KEEP = 20_000
 const BAND_MS = 15_000
+// The classifier answers in about 2 s; the whole pick waits CLASSIFY_MS at most, and a second
+// call starts when the first has not answered in HEDGE_MS.
+const CLASSIFY_MS = 8_000
+const HEDGE_MS = 3_000
 
 // Module variables start over on a reload; what must outlive one is in $.state or $.store.
 // Bumped on every prompt, so a pick for an older prompt is dropped.
@@ -142,6 +146,23 @@ async function announce($: EngineInterface, change: Mark, undo: Band['undo']) {
   })().catch(err => log($, 'band', err))
 }
 
+/** The first call that answers; when none does, the last failure (a call that throws counts as one). */
+function firstAnswered(calls: Promise<ModelCompleteResult>[]): Promise<ModelCompleteResult> {
+  return new Promise((resolve, reject) => {
+    let left = calls.length
+    const failed = (settle: () => void) => {
+      left -= 1
+      if (left === 0) settle()
+    }
+    for (const c of calls) {
+      c.then(
+        r => (r.isAnswered ? resolve(r) : failed(() => resolve(r))),
+        err => failed(() => reject(err)),
+      )
+    }
+  })
+}
+
 async function classify($: EngineInterface, text: string, now: Level | '', model: string) {
   const messages = await $.session.messages()
   let lastReply = ''
@@ -152,14 +173,25 @@ async function classify($: EngineInterface, text: string, now: Level | '', model
       break
     }
   }
-  const r = await $.model.complete({
-    model,
-    prompt: buildPrompt({ prompt: text, lastReply, now }),
-    maxTokens: 120,
-    effort: 'low',
-    timeoutMs: 10_000,
-  })
-  if (!r.isAnswered) throw new Error(`classifier gave no answer: ${r.reason}`)
+  const prompt = buildPrompt({ prompt: text, lastReply, now })
+  const ask = (timeoutMs: number, stop: AbortController) =>
+    $.model.complete({ model, prompt, maxTokens: 120, effort: 'low', timeoutMs }, { signal: stop.signal })
+  // A call sometimes hangs with no reply (seen on a chat's first prompt, beside the title request):
+  // a second one starts after HEDGE_MS, the first answer of the two is used, the other is cut.
+  const first = new AbortController()
+  const second = new AbortController()
+  const began = await $.clock.now()
+  const a = ask(CLASSIFY_MS, first)
+  const early = await Promise.race([a, $.clock.sleep(HEDGE_MS).then(() => null, () => null)])
+  const r = early ?? (await firstAnswered([a, ask(CLASSIFY_MS - HEDGE_MS, second)]))
+  first.abort()
+  second.abort()
+  if (!r.isAnswered) {
+    // An Esc on the turn cuts both calls too, sooner: only the full wait is a timeout.
+    const waited = (await $.clock.now()) - began
+    if (!early && r.reason === 'aborted' && waited >= CLASSIFY_MS) throw new Error(`classifier timed out after ${CLASSIFY_MS / 1000} s (two tries)`)
+    throw new Error(`classifier gave no answer: ${r.reason}`)
+  }
   const pick = parseAnswer(r.text)
   if (!pick) throw new Error(`classifier answer not readable: ${r.text.slice(0, 200)}`)
   return pick
