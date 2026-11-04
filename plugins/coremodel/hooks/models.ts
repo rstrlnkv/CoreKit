@@ -41,6 +41,15 @@ export function parseModels(setting: unknown): ModelKey[] {
   return picked.length ? picked : [...LADDER]
 }
 
+/** The words of the `models` setting that name no model (a typo), as typed. */
+export function unknownModels(setting: unknown): string[] {
+  if (typeof setting !== 'string') return []
+  return setting
+    .split(',')
+    .map(w => w.trim())
+    .filter(w => w !== '' && toModel(w) === '')
+}
+
 /**
  * What a switch to `to` costs once, in dollars at API prices: the chat is written to the new
  * model's cache. Null when the chat size is unknown.

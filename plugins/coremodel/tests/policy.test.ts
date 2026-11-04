@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { Level } from '../types'
+import { unknownModels } from '../hooks/models'
 import { decide, decideModel, effortOptions, isCostlyLevel, keepFirst, modelOptions, texts, uiLang } from '../hooks/policy'
 
 const pick = (level: Level | 'keep') => ({ level, why: '' })
@@ -49,6 +50,20 @@ test('texts name the level in each language', () => {
   for (const w of ['High', 'Medium', 'auth bug']) expect(line.includes(w)).toBe(true)
   expect(texts('en').label('xhigh')).toBe('Effort XHigh')
   expect(texts('ru').label('high')).toBe('Усилие High')
+})
+
+test('the effort question says an Extra high, a High', () => {
+  expect(texts('en').question('xhigh', 'x')).toContain('an Extra high effort task')
+  expect(texts('en').question('high', 'x')).toContain('a High effort task')
+  expect(texts('en').question('max', 'x')).toContain('a Max effort task')
+})
+
+test('unknownModels lists the words the ladder does not know', () => {
+  expect(unknownModels('hauki, sonnet, opus')).toEqual(['hauki'])
+  expect(unknownModels('haiku,sonnet')).toEqual([])
+  expect(unknownModels('')).toEqual([])
+  expect(unknownModels(undefined)).toEqual([])
+  expect(unknownModels('gpt, ,Opus')).toEqual(['gpt'])
 })
 
 test('back names the level to go back to', () => {

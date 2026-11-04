@@ -18,7 +18,8 @@ whole chat again at full price. So:
 - **Later** CoreModel only offers a **stronger** model, always with a question that names the cost,
   for example "Switch to Opus (many files)? The chat is read again once: ≈ 100k tokens, about
   $0.50 at API prices". It never offers a weaker model mid-chat: the re-read would eat the saving.
-- **Fable** always asks first.
+- **Fable** always asks first. A question about Fable, Extra high or Max lists **Keep** first, so
+  an Enter typed while it pops up never takes the costly choice.
 
 ## Modes
 
@@ -57,6 +58,8 @@ session lets go of both.
 
 If your plan does not include a model the plugin picked, the turn fails once; CoreModel then stops
 using that model for the session and says so in the pane. Remove it from the `models` setting.
+A word in `models` that names no model (a typo such as `hauki`) is shown in the pane and written to
+the log once per session; that model is simply never picked.
 
 ## Commands
 

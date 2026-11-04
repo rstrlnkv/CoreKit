@@ -3,7 +3,7 @@ import type { EngineInterface, ModelCompleteResult, Register } from 'claude-code
 
 import type { Band, Level, Mark, Stats } from '../types'
 import { buildPrompt, parseAnswer, type Pick, toLevel } from './classifier'
-import { LADDER, MODELS, type ModelKey, parseModels, switchUsd, toModel } from './models'
+import { LADDER, MODELS, type ModelKey, parseModels, switchUsd, toModel, unknownModels } from './models'
 import { decide, decideModel, effortOptions, isCostlyLevel, keepFirst, type Lang, type Mode, modelOptions, texts, uiLang } from './policy'
 
 const PLUGIN = 'coremodel'
@@ -76,6 +76,8 @@ async function syncOverride($: EngineInterface): Promise<void> {
 /** Lets go of the held level: the chat runs at the menu's level again. */
 export async function releaseLevel($: EngineInterface): Promise<void> {
   hold = null
+  // The pane reads `seen`: after a release it is the menu's level, not the one just let go.
+  seen = toLevel(asked) || seen
   await syncOverride($)
 }
 
@@ -88,6 +90,7 @@ export async function releaseModel($: EngineInterface): Promise<void> {
 /** Lets go of both parts (off, Release, a new session). */
 export async function releaseHold($: EngineInterface): Promise<void> {
   hold = null
+  seen = toLevel(asked) || seen
   modelHold = null
   await syncOverride($)
 }
@@ -238,7 +241,8 @@ async function runPick(
     if (pick.model) models[pick.model] += 1
     return { ...s, picks: { ...s.picks, [named]: s.picks[named] + 1 }, models, last: { level: named, why: pick.why, ...(pick.model ? { model: pick.model } : {}) } }
   })
-  const kept = () => count($, s => ({ ...s, kept: s.kept + 1 }))
+  // A named pick the person did not take stays the last pick, marked so the pane does not show it as applied.
+  const kept = () => count($, s => ({ ...s, kept: s.kept + 1, last: named && s.last ? { ...s.last, declined: true } : s.last }))
   if (pick.level === 'keep') return kept()
   const level = pick.level
 
@@ -298,22 +302,22 @@ async function runPick(
 }
 
 /** Sets the mode as `/coremodel <mode>` does; returns the reply. */
-export async function setMode($: EngineInterface, options: { mode?: unknown }, arg: Mode | 'on'): Promise<string> {
+export async function setMode($: EngineInterface, options: { mode?: unknown; pickModel?: unknown }, arg: Mode | 'on'): Promise<string> {
   let text: string
   if (arg === 'auto' || arg === 'suggest') {
     await $.store.set('mode', arg)
     await $.store.set('lastMode', arg)
-    text = `CoreModel: ${arg}. ${arg === 'auto' ? 'Levels change by themselves; xhigh and max still ask first.' : 'Every change of level asks first.'}`
+    text = texts('en').modeSet(arg, options.pickModel !== 'off')
   } else if (arg === 'off') {
     await $.store.set('mode', 'off')
     await releaseHold($)
     await update($, band, () => null)
-    text = 'CoreModel is off. /coremodel on turns it back on.'
+    text = 'Off. /coremodel on turns it back on.'
   } else {
     const last = await $.store.get('lastMode')
     const mode: Mode = last === 'auto' || last === 'suggest' ? last : options.mode === 'auto' ? 'auto' : 'suggest'
     await $.store.set('mode', mode)
-    text = `CoreModel is on: ${mode}.`
+    text = `On: ${mode}.`
   }
   $.ui.invalidate('ui.render')
   return text
@@ -422,11 +426,13 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     unavailable.clear()
+    const typos = unknownModels(options.models)
+    if (typos.length) await log($, 'models', `unknown in the setting: ${typos.join(', ')} (use haiku, sonnet, opus, fable)`)
     // A new session, or a reload of this module, starts with no held level: drop what $.state kept.
     await newChat($)
     await $.command.register({
       name: 'coremodel',
-      description: 'CoreModel: show the real effort level, set the mode (auto, suggest, off, on), or open the pane (panel)',
+      description: 'CoreModel: show what the chat runs at, set the mode (auto, suggest, off, on), or open the pane (panel)',
       argumentHint: '[auto|suggest|off|on|panel]',
     })
     return next(e)
@@ -437,7 +443,7 @@ export const register: Register = (on, options) => {
     if (arg === 'auto' || arg === 'suggest' || arg === 'off' || arg === 'on') return { text: await setMode($, options, arg) }
     if (arg === 'panel') {
       const r = await $.ui.open({ id: PLUGIN, title: 'CoreModel' })
-      return { text: r.isPlaced ? 'CoreModel pane is open.' : `CoreModel pane is waiting: ${r.reason}` }
+      return { text: r.isPlaced ? 'The pane is open.' : `The pane is waiting: ${r.reason}` }
     }
     const mode = await currentMode($, options)
     const level = hold?.level ?? seen
@@ -452,7 +458,7 @@ export const register: Register = (on, options) => {
     }
     return {
       text: [
-        `CoreModel: ${mode}.`,
+        `Mode: ${mode}.`,
         `This chat runs at: ${level ? texts('en').levelName(level) : 'unknown yet'}${hold ? ' (held by the plugin; the menu still shows your own setting)' : ''}.`,
         'Type /coremodel auto, suggest, off, on or panel.',
       ].join('\n'),
@@ -502,6 +508,9 @@ export const register: Register = (on, options) => {
           <Text dimColor>{t.now}</Text>
           <Text bold>{t.nowPair(pickOn ? nowModel : '', nowLevel)}</Text>
           {held || heldModel ? <Text dimColor>{menu ? `${t.heldBy} · ${menu}` : t.heldBy}</Text> : null}
+          {unknownModels(options.models).length ? (
+            <Text key="typo" color="warning">{t.unknownModels(unknownModels(options.models))}</Text>
+          ) : null}
           {[...unavailable].map(m => (
             <Text key={`unavailable-${m}`} color="warning">{t.unavailable(m)}</Text>
           ))}
@@ -548,7 +557,7 @@ export const register: Register = (on, options) => {
         <Box key="last" flexDirection="column">
           {s?.last ? (
             <>
-              <Text dimColor>{`${t.lastPick} · ${t.nowPair(pickOn && s.last.model ? s.last.model : '', s.last.level)}`}</Text>
+              <Text dimColor>{`${t.lastPick} · ${t.nowPair(pickOn && s.last.model ? s.last.model : '', s.last.level)}${s.last.declined ? ` · ${t.notApplied}` : ''}`}</Text>
               {s.last.why ? <Text>{s.last.why}</Text> : null}
             </>
           ) : (

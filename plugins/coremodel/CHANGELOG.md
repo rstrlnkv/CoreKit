@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.3 — 2026-11-05
+
+- A question about Fable, Extra high or Max lists **Keep** first: a question can pop up while the
+  next message is being typed, and the Enter that sends it takes the first option.
+- A long prompt (over 4000 characters) goes to the classifier as its first and last 2000
+  characters, not only the head: the error or the question of a pasted log is usually at the end.
+- The mid-chat model question names the reason and the one-time cost in dollars ("Switch to Opus
+  (many files)? The chat is read again once: ≈ 40k tokens, about $0.20 at API prices"). The
+  "~500 ordinary replies" figure and "replies are cheap again" are gone: the first scared more than
+  it told, the second is false for Opus and Fable.
+- A word in the `models` setting that names no model ("hauki") is shown in the pane and written to
+  the log once per session.
+- The pane shows the menu's level at once after **Back to the menu's choice**, and marks the last
+  pick "not applied" when you kept what you had.
+- `/coremodel` replies no longer repeat "CoreModel" after the engine's own prefix and speak of the
+  model and level, not only the level; the setting descriptions say the same. "an Extra high
+  effort task".
+
 ## 0.4.2 — 2026-11-04
 
 - Fixed: a model and level CoreModel held survived `/clear`, `/resume` and a fork, so the new chat

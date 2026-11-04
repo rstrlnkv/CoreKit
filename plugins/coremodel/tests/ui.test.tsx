@@ -424,7 +424,8 @@ test('the pane counts kept prompts', async ($, on) => {
   await switchTo($, w, 'keep', 'medium', 'ok')
   expect(await has($, /^High 1$/)).toBe(true)
   expect(await has($, /^Left as it was: 2$/)).toBe(true)
-  expect(await has($, /^Last pick · High$/)).toBe(true)
+  // The person answered Keep, so the last pick is shown as not applied.
+  expect(await has($, /^Last pick · High · not applied$/)).toBe(true)
 })
 
 const SPIN = { plugin: 'coremodel', component: 'Spinner', props: { word: 'Thinking', message: null, suffix: '…', mode: 'thinking' } } as const
@@ -458,7 +459,8 @@ test('/coremodel with no argument asks for the mode', async ($, on) => {
   await start($)
   const text = await run($, '')
   expect(w.asked.at(-1)).toEqual(['auto', 'suggest', 'off'])
-  expect(text).toContain('CoreModel: auto.')
+  expect(text).toContain('Mode: auto. Switches by itself')
+  expect(text.startsWith('CoreModel')).toBe(false)
   await switchTo($, w, 'high', 'medium')
   expect(w.asked.length).toBe(1)
 })
@@ -469,7 +471,7 @@ test('a dismissed mode question changes nothing', async ($, on) => {
   await start($)
   const text = await run($, '')
   expect(w.asked.length).toBe(1)
-  expect(text).toContain('CoreModel: suggest.')
+  expect(text).toContain('Mode: suggest.')
   w.reply = 'Keep Medium'
   await switchTo($, w, 'high', 'medium')
   expect(w.asked.length).toBe(2)
@@ -725,4 +727,73 @@ test('with pickModel off the pane shows no model buttons or model counts', { opt
   expect(await ui.find({ type: 'Text', text: /Fable/ })).toBe(undefined)
   expect((await ui.find({ type: 'Text', text: /^High$/ })) !== undefined).toBe(true)
   await ui.unmount()
+})
+
+// Small things from the live check.
+test('after Back the pane shows the menu level at once', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  expect(await has($, /^Sonnet · High$/)).toBe(true)
+  await pressPane($, 'release')
+  expect(await has($, /^Sonnet · Medium$/)).toBe(true)
+  expect(await has($, /^Sonnet · High$/)).toBe(false)
+})
+
+test('a pick the person kept is marked not applied in the pane', async ($, on) => {
+  const w = world(on)
+  w.reply = 'Keep Medium'
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  expect(await has($, /^Last pick · High · not applied$/)).toBe(true)
+  w.reply = 'High (recommended)'
+  await switchTo($, w, 'high', 'medium')
+  expect(await has($, /^Last pick · High$/)).toBe(true)
+})
+
+test('a not applied pick reads in Russian too', async ($, on) => {
+  const w = world(on)
+  w.reply = 'Оставить «Среднее»'
+  await start($)
+  await switchTo($, w, 'high', 'medium', 'почини авторизацию')
+  expect(await has($, /^Последний выбор · Высокое · не применён$/)).toBe(true)
+})
+
+test('an unknown word in models is shown in the pane and logged once', { options: { models: 'hauki, sonnet, opus' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  expect(await has($, /models setting.*hauki/)).toBe(true)
+  expect(w.logs.length).toBe(1)
+  expect(w.logs[0]!.includes('hauki')).toBe(true)
+  // Haiku never became one of the choices: the typo dropped it.
+  const ui = await pane($)
+  expect(await ui.find({ type: 'Button', key: 'model-haiku' })).toBe(undefined)
+  expect(await ui.find({ type: 'Button', key: 'model-sonnet' })).not.toBe(undefined)
+  await ui.unmount()
+})
+
+test('a correct models setting shows no warning', { options: { models: 'haiku, sonnet' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  expect(await has($, /models setting/)).toBe(false)
+  expect(w.logs.length).toBe(0)
+})
+
+test('the models warning is in Russian after a Russian prompt', { options: { models: 'hauki, sonnet' } }, async ($, on) => {
+  const w = world(on)
+  w.reply = null
+  await start($)
+  await switchTo($, w, 'high', 'medium', 'почини авторизацию')
+  expect(await has($, /В настройке models неизвестно: «hauki»/)).toBe(true)
+})
+
+test('/coremodel replies speak of the pair, not only the level', async ($, on) => {
+  world(on)
+  await start($)
+  expect(await run($, 'auto')).toContain('asks before Fable, Extra high, Max')
+  expect(await run($, 'suggest')).toContain('Every switch asks first')
+  expect(await run($, 'off')).toBe('Off. /coremodel on turns it back on.')
+  expect(await run($, 'on')).toMatch(/^On: (auto|suggest)\.$/)
+  expect(await run($, 'panel')).toBe('The pane is open.')
 })

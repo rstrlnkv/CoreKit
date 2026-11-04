@@ -127,7 +127,7 @@ export function texts(lang: Lang) {
     question: (l: Level, why: string) =>
       ru
         ? `Похоже, задаче нужно усилие «${n(l)}»${why ? `: ${why}` : ''}. Переключить, пока Claude не начал?`
-        : `This looks like a ${n(l)} effort task${why ? `: ${why}` : ''}. Switch before Claude starts?`,
+        : `This looks like ${l === 'xhigh' ? 'an' : 'a'} ${n(l)} effort task${why ? `: ${why}` : ''}. Switch before Claude starts?`,
     effortHeader: ru ? 'Усилие' : 'Effort',
     levelOption: (l: Level, recommended: boolean) => `${n(l)}${recommended ? (ru ? ' (советую)' : ' (recommended)') : ''}`,
     modelHeader: ru ? 'Модель' : 'Model',
@@ -164,6 +164,17 @@ export function texts(lang: Lang) {
     modeName: (m: Mode) => MODE_NAMES[lang][m],
     modeHint: (m: Mode, pickModel: boolean) => (m === 'auto' && !pickModel ? AUTO_EFFORT_HINT[lang] : MODE_HINTS[lang][m]),
     lastPick: ru ? 'Последний выбор' : 'Last pick',
+    notApplied: ru ? 'не применён' : 'not applied',
+    unknownModels: (words: string[]) =>
+      ru
+        ? `В настройке models неизвестно: ${words.map(w => `«${w}»`).join(', ')} (нужно haiku, sonnet, opus, fable)`
+        : `In the models setting, unknown: ${words.map(w => `"${w}"`).join(', ')} (use haiku, sonnet, opus, fable)`,
+    modeSet: (mode: 'auto' | 'suggest', pickModel: boolean) => {
+      if (mode === 'suggest') return 'Mode: suggest. Every switch asks first.'
+      return pickModel
+        ? 'Mode: auto. Switches by itself; asks before Fable, Extra high, Max and a model change mid-chat.'
+        : 'Mode: auto. Switches the level by itself; asks before Extra high and Max.'
+    },
     session: ru ? 'За сессию' : 'This session',
     kept: (k: number) => (ru ? `Уровень не меняли: ${k}` : `Left as it was: ${k}`),
     release: ru ? 'Вернуть как в меню' : "Back to the menu's choice",

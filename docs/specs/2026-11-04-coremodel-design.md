@@ -111,7 +111,7 @@ about $0.50 at API prices."
   tokens to Opus: 100k × $4 × 1.25 / 1M = $0.50. Under a cent it reads "< $0.01".
 - Unknown tokens: "Чат один раз перечитается заново, это стоит токенов." / "The chat is read
   again once, which costs tokens."
-- Numbers are rounded: thousands as "тыс." / "k", replies to a whole number, never below 1.
+- Numbers are rounded: thousands as "тыс." / "k", dollars to the cent.
 
 ## 6. Settings
 

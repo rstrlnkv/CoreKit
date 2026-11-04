@@ -32,7 +32,7 @@ export type Stats = {
   /** Prompts whose level stayed: a keep pick, the same level, a Keep answer or a dismissed question. */
   kept: number
   /** The last readable pick. */
-  last: { level: Level; why: string; model?: ModelKey } | null
+  last: { level: Level; why: string; model?: ModelKey; /** The person kept what they had. */ declined?: boolean } | null
   /** Readable picks per model; absent in counts stored before 0.4.0. */
   models?: Record<ModelKey, number>
   /** How many marks were placed; the next mark's id is `mark-<marks + 1>`. */

@@ -1,7 +1,7 @@
 {
   "name": "coremodel",
   "displayName": "CoreModel",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Picks the model and the effort level each prompt needs, for code and office work; asks before Fable, xhigh or max, and names the token cost of a model switch mid-chat.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",
@@ -13,7 +13,7 @@
     "mode": {
       "type": "string",
       "title": "Mode",
-      "description": "suggest: ask before every change of level. auto: change by itself, but ask before xhigh and max. off: do nothing.",
+      "description": "suggest: ask before every switch of model or level. auto: switch by itself, but ask before Fable, xhigh, max and a model change mid-chat. off: do nothing.",
       "options": [
         "suggest",
         "auto",
@@ -24,7 +24,7 @@
     "classifier": {
       "type": "string",
       "title": "Classifier model",
-      "description": "The model that reads each prompt and picks the level: sonnet (more accurate) or haiku (faster, cheaper).",
+      "description": "The model that reads each prompt and picks the model and level: sonnet (more accurate) or haiku (faster, cheaper).",
       "options": [
         "haiku",
         "sonnet"
