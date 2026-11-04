@@ -125,6 +125,17 @@ does not depend on `corecrew`:
 ```
 Details: plugins/coreeffort/README.md.
 
+## `coreopinion` (a third plugin)
+
+`coreopinion` lets Claude ask OpenAI's GPT, through the Codex CLI in a read-only sandbox, for a
+second opinion or a review (`/coreopinion:second-opinion`), and shows GPT's answer next to
+Claude's own assessment. Only Claude edits, after your yes. It needs the Codex CLI signed in with
+a ChatGPT plan and does not depend on the other plugins:
+```
+/plugin install coreopinion@corekit
+```
+Details: plugins/coreopinion/README.md.
+
 ## Known limitations
 - Auto-triggering competes with other planning skills (e.g. Superpowers' brainstorming). Start it
   explicitly with `/corecrew:new-project`, or add to `~/.claude/CLAUDE.md`:
