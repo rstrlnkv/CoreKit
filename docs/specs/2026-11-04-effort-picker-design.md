@@ -128,9 +128,12 @@ Since 0.2.0 the plugin is `coreeffort` (brand CoreEffort), command `/coreeffort`
    ("· High") so the line shows what the chat really runs at. Checked first (§7.3): if the row's
    own effort already shows the held level, nothing is added; if it shows the menu's level, the
    hook adds the held one through `suffix`.
+   Checked 2026-11-04 in the terminal (owner): the line names the menu's level, so the hook adds
+   the held one.
 5. **`/coreeffort` with no argument asks** (`$.ui.ask`): "CoreEffort: <mode>. Chat runs at:
    <level>." with the options `auto`, `suggest`, `off`; a dismissed question changes nothing.
    `/coreeffort auto|suggest|off|on|panel` keep working as text commands.
+   Checked 2026-11-04 in the terminal: a question asked from a `command.run` hook shows.
 
 The question before `xhigh` and `max` (§4.3) stays the app's own question (`$.ui.ask`); the
 plugin draws no buttons of its own for it.
