@@ -304,6 +304,17 @@ assert_contains "$P/docs/INDEX.md" "гайд app.md"
 assert_eq "$(git -C "$F" status --porcelain)" "" "code repo dirty"
 grep -q '^- my-proj — .* — My-Proj/$' "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md line keeps the folder's case"
 bash "$WC" "$P" >/dev/null 2>&1 && pass || fail "wiki-check (non-ASCII): $(bash "$WC" "$P" 2>&1)"
+# --from typed in another letter case (a case-insensitive disk): accepted; paths keep the case on disk
+F="$SANDBOX/Projects/Case-App"; mkrepo "$F"
+if [ -d "$SANDBOX/projects/case-app/.git" ]; then
+  assert_exit 0 bash "$AD" --from "$SANDBOX/projects/case-app"
+  assert_eq "$(last_line "$OUT")" "open: $F" "last line (--from in another case)"
+  grep -qxF -- '- case-app — Adopted existing project — Case-App/' "$CORE_DIR/PROJECTS.md" && pass \
+    || fail "PROJECTS.md entry lacks the on-disk case: $(cat "$CORE_DIR/PROJECTS.md")"
+  assert_eq "$(readlink "$F/CLAUDE.local.md")" "$CORE_DIR/case-app/CLAUDE.md" "link (--from in another case)"
+else
+  echo "  note: case-sensitive disk, --from letter-case check skipped"
+fi
 # a Cyrillic folder name: refused (it is not a project name, and --name cannot rename the folder)
 F="$SANDBOX/Projects/Мой проект"; mkrepo "$F"
 refuses "invalid project name 'Мой проект' (rename the folder)" --from "$F"

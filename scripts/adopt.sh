@@ -89,7 +89,7 @@ load_settings
 
 # --- Refusals. Read-only; order as listed in the header.
 { [ -d "$FROM" ] && [ -d "$FROM/.git" ]; } || refuse "not a git repo"
-FROM="$(cd -P "$FROM" && pwd)"
+FROM="$(canon_dir "$FROM")"   # symlinks resolved, letter case as on disk (not as typed)
 git -C "$FROM" rev-parse --verify -q HEAD >/dev/null 2>&1 || refuse "not a git repo"
 [ -z "$(git -C "$FROM" status --porcelain 2>&1)" ] || refuse "uncommitted changes"
 # The old layout: exactly <Core>/<name>/code of a project folder in the Core. Anything else in the Core
