@@ -471,3 +471,13 @@ test('a pane pick made after the menu moved still holds', async ($, on) => {
   await step($, 'low', 1)
   expect(w.efforts.at(-1)).toBe('high')
 })
+
+test('the pane button rows wrap in a narrow pane', async ($, on) => {
+  world(on)
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await pane($, surface)
+    for (const key of ['modes', 'levels']) expect((await ui.find({ type: 'Box', key }))?.props.flexWrap).toBe('wrap')
+    await ui.unmount()
+  }
+})

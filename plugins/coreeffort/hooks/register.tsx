@@ -294,7 +294,7 @@ export const register: Register = (on, options) => {
     }
     return (
       <Box flexDirection="column">
-        <Box>
+        <Box key="modes" flexWrap="wrap">
           {MODES.map(m => (
             <Button key={`mode-${m}`} label={m === mode ? `● ${m}` : m} onPress={act('mode', () => setMode($, options, m))} />
           ))}
@@ -306,7 +306,7 @@ export const register: Register = (on, options) => {
         {s ? <Text dimColor>{t.session}</Text> : null}
         {s ? LEVELS.filter(l => s.picks[l] > 0).map(l => <Text>{`${t.levelName(l)} ${s.picks[l]}`}</Text>) : null}
         {s && s.kept > 0 ? <Text>{`${t.kept} ${s.kept}`}</Text> : null}
-        <Box>
+        <Box key="levels" flexWrap="wrap">
           {held ? <Button key="release" label={t.release} onPress={act('release', () => paneChoice($, null))} /> : null}
           {LEVELS.map(l => (
             <Button key={`level-${l}`} label={t.levelName(l)} onPress={act('level', () => paneChoice($, l))} />
