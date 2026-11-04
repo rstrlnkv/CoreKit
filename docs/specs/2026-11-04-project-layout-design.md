@@ -59,14 +59,14 @@ itself is never a project.
 
 ## 4. Finding the project from a path (`lib.sh`)
 `project_of <path>` (replaces today's check "inside `<Core>/<project>/`"):
-1. Canonical path (`canon_dir`). If it is inside `<Core>`: a project only when it is under
-   `<Core>/<name>/code/` (old layout, §6) — print `<name>`, mark old layout; otherwise not a project.
+1. Canonical path (`canon_dir`). Inside `<Core>`: today's rule (a top-level folder with
+   `CLAUDE.md` or `code/`, not `standards`/`knowledge`/dot-folders) — print `<name>`.
 2. Otherwise take the first path component under `<Projects>` as `<Name>`; none → not a project.
    This covers worktrees under `<Name>/.claude/worktrees/<w>/` without calling git.
 3. `<name>` = lower case of `<Name>`; a project when `<Core>/<name>/CLAUDE.md` exists.
-Hooks stay git-free and network-free. New helpers: `projects_dir` (parent of `CORE_DIR`),
-`code_root <name>` (`<Projects>/<Name>`, found by a case-insensitive match of the folder; two
-matches → error "two folders differ only in case"), `core_project <name>` (`<Core>/<name>`).
+Hooks stay git-free and network-free. New helpers: `PROJECTS_DIR` (set by `load_settings`, parent of
+`CORE_DIR`), `code_dir_of <name>` (the folder in `<Projects>` whose lower-case name is `<name>`, else
+`<Core>/<name>/code`; two case-only matches → error "two folders differ only in case"), `layout_of <name>` (`new` | `old`).
 `_locate.sh` (save, undo-step, stop-remind) uses git as today for the main checkout of a
 worktree, then the same rule instead of "parent folder named `code` inside the Core repo".
 
@@ -112,7 +112,7 @@ when inside `<Name>/.claude/worktrees/<w>/`, else `<Projects>/<Name>`. Old layou
   project, worktrees included. Paths are compared after resolving symlinks, so an edit through
   `CLAUDE.local.md` lands in Core and is allowed. Messages say "the code folder", not `code/`.
 - `guard-secrets.sh`, `one-suite.sh`, `stop-remind.sh`: same, through the new `project_of`.
-- git hooks: unchanged blocked patterns, plus `CLAUDE.local.md`.
+- git hooks: unchanged (`blocked-patterns` already blocks `CLAUDE.local.md`).
 
 ## 6. Migration
 - `.coredev` `schema: 2`. `setup-core.sh` on schema 1 only bumps the schema and adds missing
@@ -150,16 +150,15 @@ If check 1 fails outright, stop and revisit L4 with the owner before going on.
 
 ## 9. What changes
 **scripts/**
-- `lib.sh`: `project_of` per §4; new `projects_dir`, `code_root`, `core_project`; `projects_entry`
-  line format; `valid_project_name` reserved names; CLI `project-of <path>`, `code-root <name>`.
+- `lib.sh`: `project_of` per §4; new `PROJECTS_DIR`, `code_dir_of`, `layout_of`, `link_local_claude`; `projects_entry`
+  line format; `valid_project_name` reserved names; CLI `project-of <path>`, `code-dir <name>`, `layout <name>`.
 - `_locate.sh`: locate by §4; error texts without `Core/<name>/code`.
 - `adopt.sh`: §5.2 (no move except old layout; refuse outside `<Projects>`; rules into
   `CLAUDE.md`; symlink; `settings.local.json`); header comment.
-- `install-hooks.sh`: code repo from `code_root`, not `<P>/code`.
-- `wiki-check.sh`: code root from `code_root`; changed pages given as `<Core>/<name>/docs/…` or
-  `docs/…` relative to the Core project folder (no `../docs/` form).
+- `install-hooks.sh`: code repo from `code_dir_of`, not `<P>/code`.
+- `wiki-check.sh`: changed pages may also be given as `<Core>/<name>/docs/…` (absolute); `docs/…` and
+  `../docs/…` keep working; `release.md` passes `docs/…`.
 - `setup-core.sh`: schema 2; Core `README.md` template text.
-- `git-hooks/blocked-patterns`: add `CLAUDE.local.md`.
 
 **hooks/**: `session-start.sh` (symlink, hook paths, old-layout line), `guard-code.sh` (§5.4),
 `guard-secrets.sh`, `one-suite.sh`, `stop-remind.sh` (new `project_of`), `messages.sh` (texts
