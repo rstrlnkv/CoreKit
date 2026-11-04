@@ -44,12 +44,30 @@ test('buildPrompt keeps $-patterns and placeholders in the person text verbatim'
 
 test('buildPrompt cuts the prompt and the reply and names an unknown level', () => {
   const out = buildPrompt({ prompt: 'p'.repeat(5000), lastReply: 'r'.repeat(1000), now: '' })
-  expect(out.includes('p'.repeat(4000))).toBe(true)
-  expect(out.includes('p'.repeat(4001))).toBe(false)
+  expect(out.includes('p'.repeat(2000))).toBe(true)
+  expect(out.includes('p'.repeat(2001))).toBe(false)
   expect(out.includes('r'.repeat(600))).toBe(true)
   expect(out.includes('r'.repeat(601))).toBe(false)
   expect(out.includes('The chat runs at: unknown')).toBe(true)
   for (const w of ['low', 'medium', 'high', 'xhigh', 'max', 'keep']) expect(out.includes(w)).toBe(true)
+})
+
+// The point of a long prompt (the error, the question) is often at its end: keep both ends.
+test('buildPrompt keeps the head and the tail of a long prompt', () => {
+  const long = `${'a'.repeat(2500)}MIDDLE${'b'.repeat(2500)}END`
+  const out = buildPrompt({ prompt: long, lastReply: '', now: 'high' })
+  expect(out.includes('a'.repeat(2000))).toBe(true)
+  expect(out.includes('a'.repeat(2001))).toBe(false)
+  expect(out.includes('b'.repeat(1997) + 'END')).toBe(true)
+  expect(out.includes('MIDDLE')).toBe(false)
+  expect(out.includes('[…]')).toBe(true)
+})
+
+test('buildPrompt leaves a prompt of 4000 characters or less whole', () => {
+  const edge = `${'x'.repeat(3990)}THE END`
+  const out = buildPrompt({ prompt: edge, lastReply: '', now: 'high' })
+  expect(out.includes(edge)).toBe(true)
+  expect(out.includes('[…]')).toBe(false)
 })
 
 test('why loses a trailing period, so the question never shows two', () => {

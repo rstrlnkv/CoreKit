@@ -63,6 +63,15 @@ For "keep", name the model the work needs anyway.
 Answer with JSON only: {"level": "low|medium|high|xhigh|max|keep", "model": "haiku|sonnet|opus|fable", "why": "the reason in at most 12 plain words, in the language of the prompt"}`
 // TEMPLATE-END
 
+const PROMPT_MAX = 4000
+const PROMPT_SIDE = 2000
+
+/** A long prompt keeps its head and its tail: the error or the question is often at the end. */
+function cutMiddle(text: string): string {
+  if (text.length <= PROMPT_MAX) return text
+  return `${text.slice(0, PROMPT_SIDE)}\n[…]\n${text.slice(-PROMPT_SIDE)}`
+}
+
 /** The model prompt for one pick. The person's text is spliced in, never read as a pattern. */
 export function buildPrompt(i: { prompt: string; lastReply: string; now: Level | '' }): string {
   const fill = (s: string, ph: string, v: string) => s.split(ph).join(v)
@@ -70,7 +79,7 @@ export function buildPrompt(i: { prompt: string; lastReply: string; now: Level |
   let out = fill(TEMPLATE, '{{NOW}}', i.now || 'unknown')
   const [head, tail] = out.split('{{REPLY}}') as [string, string]
   const [mid, end] = tail.split('{{PROMPT}}') as [string, string]
-  out = head + (i.lastReply.slice(0, 600) || '(none, this is the first prompt)') + mid + i.prompt.slice(0, 4000) + end
+  out = head + (i.lastReply.slice(0, 600) || '(none, this is the first prompt)') + mid + cutMiddle(i.prompt) + end
   return out
 }
 
