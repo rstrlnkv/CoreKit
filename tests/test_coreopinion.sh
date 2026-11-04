@@ -77,6 +77,59 @@ git -C "$R" add -A
 specs="${spec_line#git diff HEAD --name-only -- . }"
 got="$(cd "$R" && eval "set -- $specs" && git diff HEAD --name-only -- . "$@" | LC_ALL=C sort | tr '\n' ';')"
 assert_eq "$got" "ok.txt;sub/app.sh;" "the exclusion pathspec keeps only non-secret files"
+# 0.2.0: the exclusion pathspec also covers cloud, package-manager and infra secrets
+R2="$SANDBOX/secrets2"; mkdir -p "$R2/.aws" "$R2/sub" "$R2/k"
+git -C "$R2" init -q; printf 'x\n' > "$R2/ok.txt"; git -C "$R2" add ok.txt; git -C "$R2" commit -qm init
+for f in .npmrc sub/.netrc .pypirc .git-credentials prod.tfvars a.auto.tfvars terraform.tfstate terraform.tfstate.backup \
+         app.jks release.keystore AuthKey_X.p8 my-secret.txt SECRETS.md api_token.txt tokens.json kubeconfig k/kubeconfig-prod \
+         db.kdbx .aws/config .aws/credentials gcp-service-account.json service_account_key.json sa-serviceaccount.json ok.txt; do
+  printf 'changed\n' >> "$R2/$f"
+done
+git -C "$R2" add -A
+got="$(cd "$R2" && eval "set -- $specs" && git diff HEAD --name-only -- . "$@" | LC_ALL=C sort | tr '\n' ';')"
+assert_eq "$got" "ok.txt;" "the widened pathspec drops cloud/infra/package secrets"
+# untracked files go through the same pathspec: the skill has an ls-files line for them
+ut_line="$(grep -m1 '^git ls-files --others --exclude-standard -- \. ' "$S")"
+assert_eq "${ut_line:+found}" "found" "SKILL.md filters untracked files with the same pathspec"
+R3="$SANDBOX/untracked"; mkdir -p "$R3"; git -C "$R3" init -q
+for f in new.sh .npmrc deploy.tfvars my-token.txt note.md; do printf 'x\n' > "$R3/$f"; done
+got="$(cd "$R3" && eval "set -- $specs" && git ls-files --others --exclude-standard -- . "$@" | LC_ALL=C sort | tr '\n' ';')"
+assert_eq "$got" "new.sh;note.md;" "untracked secrets are filtered"
+# named files are checked with the same pathspec
+nm_line="$(grep -m1 '^git ls-files --cached --others --exclude-standard -- <named' "$S")"
+assert_eq "${nm_line:+found}" "found" "SKILL.md checks user-named files against the pathspec"
+# a repo with no commits: the diff base is the empty tree, an error is not 'nothing to review'
+assert_contains "$S" 'git hash-object -t tree /dev/null'
+assert_contains "$S" 'is not "nothing to review"'
+R4="$SANDBOX/nocommit"; mkdir -p "$R4"; git -C "$R4" init -q; printf 'x\n' > "$R4/a.sh"; git -C "$R4" add a.sh
+got="$(cd "$R4" && git diff "$(git hash-object -t tree /dev/null)" --name-only | tr '\n' ';')"
+assert_eq "$got" "a.sh;" "empty-tree base lists staged files in a repo without commits"
+# the user confirms the file list before anything is sent
+assert_contains "$S" 'wait for the'
+assert_contains "$S" 'Nothing is sent before'
+# what read-only really confines: honest wording, narrowed profile, user config off
+assert_contains "$S" 'default_permissions='
+assert_contains "$S" '--ignore-user-config'
+assert_contains "$S" 'web_search="disabled"'
+assert_contains "$S" '":project_roots"'
+assert_not_contains "$S" 'GPT can read the project but'
+assert_not_contains "$P/README.md" 'GPT can read the project but'
+assert_contains "$P/README.md" 'whole disk'
+assert_contains "$P/README.md" 'codex sandbox'
+# the -C path never goes through shell parsing: it is read from a file
+assert_not_contains "$S" '-C "<project dir>"'
+assert_contains "$S" '-C "$(cat "$T/dir")"'
+run_line="$(grep -m1 '^codex exec ' "$S")"
+assert_eq "${run_line:+found}" "found" "SKILL.md has a codex exec line"
+BAD="$SANDBOX/we ird\"\$(touch PWNED)\`touch PWNED2\`dir"; mkdir -p "$BAD"
+T2="$SANDBOX/T2"; mkdir -p "$T2"; printf '%s' "$BAD" > "$T2/dir"; printf 'p\n' > "$T2/prompt.md"
+mkdir -p "$SANDBOX/stub"; printf '#!/bin/sh\nprintf "%%s\\n" "$@" > "$STUB_ARGS"\n' > "$SANDBOX/stub/codex"; chmod +x "$SANDBOX/stub/codex"
+( cd "$SANDBOX" && export STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" T="$T2" && eval "$run_line" >/dev/null 2>&1 )
+assert_eq "$([ -e "$SANDBOX/PWNED" ] || [ -e "$SANDBOX/PWNED2" ] && echo ran || echo safe)" "safe" "a hostile project path runs nothing"
+assert_contains "$SANDBOX/args.txt" 'PWNED'
+# cleanup happens whatever the run does: one trap line, run block ends by printing the answer
+assert_contains "$S" "trap 'rm -rf \"\$T\"' EXIT HUP INT TERM"
+assert_contains "$S" 'cat "$T/answer.md"'
 # a 429 is not always the plan's limit: the skill quotes the error instead of guessing
 assert_contains "$S" 'quote the error line'
 assert_not_contains "$S" '`429`, `quota`): the ChatGPT plan'"'"'s Codex limit'

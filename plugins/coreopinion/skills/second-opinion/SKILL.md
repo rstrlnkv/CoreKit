@@ -26,58 +26,111 @@ If `codex` is not found, stop and tell the user:
 
 Do not try to install or sign in for them.
 
-## 2. Build the material
+## 2. Build the material, then ask before anything is sent
 
 **Never send secrets, and never read them yourself.** Secret files are `.env` and `.env.*`, key
-and certificate files (`*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`), files
-with `credentials` in the name, and anything under `~/.ssh`. So **list paths first, then read
-only the allowed ones**, always through this exclusion pathspec (call it `<EXCLUDE>` below):
+and certificate files (`*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.p8`, `*.jks`, `*.keystore`,
+`id_rsa*`, `id_ed25519*`, `*.kdbx`), files with `credentials`, `secret` or `token` in the name,
+`.npmrc`, `.netrc`, `.pypirc`, `.git-credentials`, `*.tfvars`, `*.tfstate`, `kubeconfig`, `.aws/*`,
+service-account JSON files, and anything under `~/.ssh`. So **list paths first, then read only
+the allowed ones**, always through this exclusion pathspec (call it `<EXCLUDE>` below). It
+applies to the diff, to untracked files and to files the user names:
 
 ```bash
-git diff HEAD --name-only -- . ':(exclude)*.env' ':(exclude)*.env.*' ':(exclude)*.pem' ':(exclude)*.key' ':(exclude)*.p12' ':(exclude)*.pfx' ':(exclude)*id_rsa*' ':(exclude)*id_ed25519*' ':(exclude)*credentials*'
+git diff HEAD --name-only -- . ':(exclude)*.env' ':(exclude)*.env.*' ':(exclude)*.pem' ':(exclude)*.key' ':(exclude)*.p12' ':(exclude)*.pfx' ':(exclude)*id_rsa*' ':(exclude)*id_ed25519*' ':(exclude,icase)*credentials*' ':(exclude)*.npmrc' ':(exclude)*.netrc' ':(exclude)*.pypirc' ':(exclude)*.git-credentials' ':(exclude)*.tfvars' ':(exclude)*.tfstate' ':(exclude)*.tfstate.*' ':(exclude)*.jks' ':(exclude)*.keystore' ':(exclude)*.p8' ':(exclude,icase)*secret*' ':(exclude,icase)*token*' ':(exclude,icase)*kubeconfig*' ':(exclude)*.kdbx' ':(exclude)*.aws/*' ':(exclude,icase)*service?account*.json' ':(exclude,icase)*serviceaccount*.json'
+```
+
+Untracked files and user-named files go through the same pathspec (replace `<named paths>` with
+the paths the user named):
+
+```bash
+git ls-files --others --exclude-standard -- . ':(exclude)*.env' ':(exclude)*.env.*' ':(exclude)*.pem' ':(exclude)*.key' ':(exclude)*.p12' ':(exclude)*.pfx' ':(exclude)*id_rsa*' ':(exclude)*id_ed25519*' ':(exclude,icase)*credentials*' ':(exclude)*.npmrc' ':(exclude)*.netrc' ':(exclude)*.pypirc' ':(exclude)*.git-credentials' ':(exclude)*.tfvars' ':(exclude)*.tfstate' ':(exclude)*.tfstate.*' ':(exclude)*.jks' ':(exclude)*.keystore' ':(exclude)*.p8' ':(exclude,icase)*secret*' ':(exclude,icase)*token*' ':(exclude,icase)*kubeconfig*' ':(exclude)*.kdbx' ':(exclude)*.aws/*' ':(exclude,icase)*service?account*.json' ':(exclude,icase)*serviceaccount*.json'
+git ls-files --cached --others --exclude-standard -- <named paths> ':(exclude)*.env' ':(exclude)*.env.*' ':(exclude)*.pem' ':(exclude)*.key' ':(exclude)*.p12' ':(exclude)*.pfx' ':(exclude)*id_rsa*' ':(exclude)*id_ed25519*' ':(exclude,icase)*credentials*' ':(exclude)*.npmrc' ':(exclude)*.netrc' ':(exclude)*.pypirc' ':(exclude)*.git-credentials' ':(exclude)*.tfvars' ':(exclude)*.tfstate' ':(exclude)*.tfstate.*' ':(exclude)*.jks' ':(exclude)*.keystore' ':(exclude)*.p8' ':(exclude,icase)*secret*' ':(exclude,icase)*token*' ':(exclude,icase)*kubeconfig*' ':(exclude)*.kdbx' ':(exclude)*.aws/*' ':(exclude,icase)*service?account*.json' ':(exclude,icase)*serviceaccount*.json'
 ```
 
 Pick the smallest material that answers the question:
 
-1. **What the user named** — files, a function, a question, a plan. Use that, unless it is a
-   secret file: then say you will not send it.
+1. **What the user named** — files, a function, a question, a plan. Check each named path with
+   the named-files command above. A path it does not list is a secret file (or missing, or git-ignored): say you will not send it.
 2. **Otherwise the uncommitted work** (unstaged and staged together): the paths with the command
    above, then `git diff HEAD --stat -- . <EXCLUDE>`, then `git diff HEAD -- . <EXCLUDE>`. Never a
-   bare `git diff HEAD`. Check `git status --short` for new untracked files the change needs;
-   add the relevant ones that are not secret files.
+   bare `git diff HEAD`. New untracked files the change needs come from the untracked command
+   below (never `git status` and a blind add); add only the relevant ones.
+
+   In a repository with no commits `HEAD` does not exist, and the error is not "nothing to
+   review". Use the empty tree as the base instead: `git diff "$(git hash-object -t tree /dev/null)" ...`
+   (staged files), plus the untracked command above.
 3. **If that is empty, the last commit**: `git show --name-only --format= HEAD` to see the
    paths, then `git show HEAD -- . <EXCLUDE>`.
-4. Nothing to review at all: say so and stop.
+4. Nothing to review at all: say so and stop. A git error is not "nothing to review": quote the
+   error and stop.
 
 If a path you skipped matters to the review, tell the user it was left out and why. If a line in
 the material still looks like a token, password or private key, replace its value with
 `<redacted>`.
 
 Keep it focused: a large diff (over ~1500 lines) — ask the user which part matters, or send
-`--stat` plus the key hunks; GPT can open the files in the project itself.
+`--stat` plus the key hunks.
+
+### Ask first
+
+Nothing is sent before the user says yes. Show the user, in plain words:
+
+- the list of files that go to GPT (the paths from the commands above, with the line count),
+  and that the diff text is pasted into the prompt;
+- the paths that were left out as secrets;
+- that GPT, running in the Codex sandbox, can also open other files of the project folder on its
+  own (see step 3 for what it cannot read), and that all of it goes to OpenAI.
+
+Then wait for the user's yes. Only the user's answer in chat counts. If they remove or add a
+path, redo the list and ask again.
 
 ## 3. Ask GPT
 
-Make a temp folder: `mktemp -d` (note the path; call it `$T` below). Write the prompt to
-`$T/prompt.md` with your file tool. The prompt holds:
+Make a temp folder: `mktemp -d` (note the path; call it `$T` below). With your file tool write
+two files into it: `$T/prompt.md` and `$T/dir` (the project folder path and nothing else, no
+newline needed: the path is read from this file so it is never parsed by the shell). The prompt
+holds:
 
 - the role: "You are a senior reviewer giving a second opinion. You are in a read-only sandbox:
   do not try to change files or run commands that change anything. Do not open `.env` files,
   key files or `~/.ssh`.";
 - what the user wants (their own words) and a short note on the project;
-- the material from step 2;
+- the material the user approved in step 2;
 - the answer format: findings ordered by severity, each with `file:line`, what is wrong and why,
   and a concrete fix; then a one-line overall verdict; say plainly when there is nothing
   serious; answer in <the user's language>.
 
-Run it from the project folder, with a Bash timeout of 300000 ms (5 minutes):
+Run it in **one** Bash call with a timeout of 300000 ms (5 minutes). Put the real `$T` path in
+the first line. The `trap` removes the temp folder (it holds the diff) however the call ends, so
+the answer and the log tail are printed before the folder goes:
 
 ```bash
-codex exec --sandbox read-only -C "<project dir>" -c model_reasoning_effort=medium --ephemeral --output-last-message "$T/answer.md" - < "$T/prompt.md" > "$T/log.txt" 2>&1; echo "exit=$?"
+T='<the mktemp path>'; trap 'rm -rf "$T"' EXIT HUP INT TERM
+codex exec --ignore-user-config -c 'default_permissions="review"' -c 'permissions.review.filesystem={":minimal"="read", ":project_roots"={"."="read", "**/.env*"="none", "**/*.pem"="none", "**/*.key"="none", "**/*.p12"="none", "**/*.pfx"="none", "**/id_rsa*"="none", "**/id_ed25519*"="none", "**/*credentials*"="none", "**/.npmrc"="none", "**/.netrc"="none", "**/.pypirc"="none", "**/.git-credentials"="none", "**/*.tfvars"="none", "**/*.tfstate*"="none", "**/*.jks"="none", "**/*.keystore"="none", "**/*.p8"="none", "**/*[sS]ecret*"="none", "**/*[tT]oken*"="none", "**/*kubeconfig*"="none", "**/*.kdbx"="none", "**/.aws/**"="none"}}' -c web_search="disabled" -C "$(cat "$T/dir")" -c model_reasoning_effort=medium --ephemeral --output-last-message "$T/answer.md" - < "$T/prompt.md" > "$T/log.txt" 2>&1; echo "exit=$?"
+echo "--- answer"; cat "$T/answer.md"; echo "--- log tail"; tail -n 20 "$T/log.txt"
 ```
 
-- `--sandbox read-only`: GPT can read the project but cannot change a file. Never use another
-  sandbox mode and never a bypass flag.
+- **What this confines.** I checked it with `codex sandbox` (it runs a command under the same
+  sandbox, nothing goes to OpenAI), codex 0.166:
+  - `--sandbox read-only` alone blocks writes and network, but does **not** limit reading: GPT
+    could read the whole disk, including `~/.ssh` and any `.env`. Only the sentence in the
+    prompt would stop it. So this skill does not use it.
+  - The `review` permission profile above gives read access to the project folder, minimal
+    system paths and temp folders, and to nothing else in the user's home. Reads of the secret
+    patterns listed in it are blocked even inside the project (`.env*`, keys, `.npmrc`, ...).
+    It is read-only (no writes) and has no network for commands. A secret file with an
+    unusual name inside the project is still readable, and so is anything in the temp folders.
+  - `--ignore-user-config` leaves out the user's `~/.codex/config.toml`: their MCP servers,
+    plugins and connectors are not started in this run (login still works). `web_search` is off.
+    Codex then uses its own default model; the effort is set on the line.
+  - It is still an outside model reading a real project. Never describe this to the user as
+    "nothing else can be seen".
+- Never use a writable sandbox mode, and never a bypass flag.
+- If codex rejects the profile (a message about `default_permissions` or `permissions` in the
+  log), do not fall back silently: tell the user that the narrow profile did not work and that
+  the only alternative is `--sandbox read-only`, which can read the whole disk; run it only
+  after a new yes.
 - Effort: `-c model_reasoning_effort=medium` by default. Use `-c model_reasoning_effort=high`
   only when the user asks for a deep, detailed or thorough review. (Codex's own default is
   `xhigh`, which is slow and spends the plan's usage fast.)
@@ -129,13 +182,14 @@ do:
   ```
 
   `sandbox.excludedCommands` runs matching commands outside the sandbox (with the user's full
-  access; Codex's own `--sandbox read-only` still applies). The allow rule only skips the
+  access; Codex's own sandbox still applies). The allow rule only skips the
   prompt for `codex exec`. Docs:
   https://code.claude.com/docs/en/sandbox-environments.md#run-commands-outside-the-sandbox-with-excludedcommands
   Do not change the user's settings yourself without their yes. If they ran Claude Code from
   inside Codex's app, start Claude Code from a normal terminal instead.
-- **Timeout** (no answer in 5 minutes): say so; offer a smaller material or `medium` effort.
+- **Timeout** (no answer in 5 minutes): remove `$T` as above, say so; offer a smaller material or `medium` effort.
 - **Exit 0 but empty answer**: say GPT returned nothing; show the last lines of the log.
 - **Anything else**: quote the last few lines of the log and say you do not know the cause.
 
-Delete `$T` when done (`rm -r "$T"`).
+The `trap` already removed `$T`. If the Bash call timed out or was killed, run `rm -rf "$T"` first thing
+(the path you noted), whatever else you do.
