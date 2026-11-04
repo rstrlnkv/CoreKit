@@ -15,8 +15,15 @@ run_rc() { OUT="$(input "$1" | bash "$H" 2>&1)"; RC=$?; }
 mkdir -p "$SANDBOX/elsewhere"
 run_rc "$SANDBOX/elsewhere"
 assert_eq "$RC" "0" "exit code without Core"
-assert_eq "$OUT" "corecrew: Core not found at $CORE_DIR — /corecrew:new-project or /corecrew:task adopt <folder> will set it up" "hint text"
+# the hint is for the person, not for Claude: a systemMessage, not stdout context (docs: plain SessionStart stdout goes to the model)
+assert_eq "$OUT" "{\"systemMessage\":\"corecrew: Core not found at $CORE_DIR — /corecrew:new-project or /corecrew:task adopt <folder> will set it up\"}" "hint text"
 assert_file "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
+# the hint is valid JSON even with a quote and a backslash in the Core path
+if command -v python3 >/dev/null 2>&1; then
+  rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
+  J="$(input "$SANDBOX/elsewhere" | CORE_DIR="$SANDBOX/we\\ird \"q\"" bash "$H" 2>&1)"
+  printf '%s' "$J" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); assert "ird" in d["systemMessage"]' && pass || fail "hint is not valid JSON: $J"
+fi
 assert_file "$CLAUDE_PLUGIN_DATA/tools/VERSION"
 assert_file "$CLAUDE_PLUGIN_DATA/tools/save"
 run_rc "$SANDBOX/elsewhere"
@@ -24,7 +31,7 @@ assert_eq "$RC" "0" "exit code on the second run"; assert_eq "$OUT" "" "hint is 
 # stdin without a cwd falls back to $PWD; empty and broken stdin never fail
 rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
 OUT="$(cd "$SANDBOX/elsewhere" && echo '{"session_id":"s"}' | bash "$H" 2>&1)"; assert_eq "$?" "0" "no cwd: exit"
-case "$OUT" in "corecrew: Core not found at "*) pass ;; *) fail "no cwd: hint expected, got: $OUT" ;; esac
+case "$OUT" in "{\"systemMessage\":\"corecrew: Core not found at "*) pass ;; *) fail "no cwd: hint expected, got: $OUT" ;; esac
 rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
 OUT="$(cd "$SANDBOX/elsewhere" && bash "$H" </dev/null 2>&1)"; assert_eq "$?" "0" "empty stdin: exit"
 OUT="$(printf '{"cwd":"unterminated' | bash "$H" 2>&1)"; assert_eq "$?" "0" "broken JSON: exit"
@@ -98,7 +105,7 @@ echo "$OUT" | grep -qF "$P/docs/INDEX.md" && pass || fail "old Core: project con
 echo "$OUT" | grep -qF "$FIX" && pass || fail "old Core: fix command missing: $OUT"
 echo "$OUT" | grep -qF "Core not found" && fail "old Core in project: hint shown" || pass
 run_rc "$SANDBOX/elsewhere"
-assert_eq "$OUT" "corecrew: Core at $CORE_DIR is not set up — /corecrew:new-project or /corecrew:task adopt <folder> will set it up" "old Core elsewhere: hint says not set up"
+assert_eq "$OUT" "{\"systemMessage\":\"corecrew: Core at $CORE_DIR is not set up — /corecrew:new-project or /corecrew:task adopt <folder> will set it up\"}" "old Core elsewhere: hint says not set up"
 cp "$SANDBOX/corecrew.bak" "$CORE_DIR/.coredev"
 
 # --- git hooks: only an old "new-project hook" is named; shims and a user's own hook are left alone

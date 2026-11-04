@@ -94,15 +94,15 @@ for v in "${VARIANTS[@]}"; do
   rm -rf "$CLAUDE_PLUGIN_DATA/state"
   OUT="$(input "$SANDBOX/elsewhere" | vrun "$v" bash "$H" 2>"$SANDBOX/err")"; RC=$?
   assert_eq "$RC" "0" "session-start hint exit [$v]"; assert_eq "$(cat "$SANDBOX/err")" "" "session-start hint: stderr empty [$v]"
-  check "$v" "core not found" "$OUT" "corecrew: Core not found at $CORE_DIR — /corecrew:new-project or /corecrew:task adopt <folder> will set it up" \
-    "corecrew: Core не найден в $CORE_DIR — /corecrew:new-project или /corecrew:task adopt <folder> создадут его"
+  check "$v" "core not found" "$OUT" "{\"systemMessage\":\"corecrew: Core not found at $CORE_DIR — /corecrew:new-project or /corecrew:task adopt <folder> will set it up\"}" \
+    "{\"systemMessage\":\"corecrew: Core не найден в $CORE_DIR — /corecrew:new-project или /corecrew:task adopt <folder> создадут его\"}"
 done
 mkdir -p "$CORE_DIR"
 for v in en ru; do
   rm -rf "$CLAUDE_PLUGIN_DATA/state"
   OUT="$(input "$SANDBOX/elsewhere" | vrun "$v" bash "$H" 2>&1)"
-  check "$v" "core not set up" "$OUT" "corecrew: Core at $CORE_DIR is not set up — /corecrew:new-project or /corecrew:task adopt <folder> will set it up" \
-    "corecrew: Core в $CORE_DIR не настроен — /corecrew:new-project или /corecrew:task adopt <folder> настроят его"
+  check "$v" "core not set up" "$OUT" "{\"systemMessage\":\"corecrew: Core at $CORE_DIR is not set up — /corecrew:new-project or /corecrew:task adopt <folder> will set it up\"}" \
+    "{\"systemMessage\":\"corecrew: Core в $CORE_DIR не настроен — /corecrew:new-project или /corecrew:task adopt <folder> настроят его\"}"
 done
 # inside a project with spaces, %s, quotes and Cyrillic in the names; no schema; an old hook; session rules; two standards
 PN="my app %s 'q' проект"

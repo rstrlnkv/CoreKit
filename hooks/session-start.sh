@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Claude Code SessionStart hook (startup, resume, clear, compact). Stdout becomes context.
 #  1. refreshes ${CLAUDE_PLUGIN_DATA}/tools (runs everywhere; it only touches the plugin's own folder);
-#  2. Core not set up and the session is not in a project: one hint per machine (marker in state/);
+#  2. Core not set up and the session is not in a project: one hint per machine (marker in state/), shown to the person as a systemMessage;
 #  3. inside a project (<Core>/<project>/ or its code folder beside the Core, worktrees included): project name, docs index, tools, standards,
 #     session rules, layout notes, old git hooks that need re-installing.
 # Outside a project (docs/specs/2026-11-04-project-layout-design.md section 4) it prints nothing else.
@@ -30,8 +30,12 @@ fi
 # 2. No Core yet, session elsewhere: the hint, once per machine.
 if ! core_ready && [ -z "$proj" ]; then
   if [ ! -e "$DATA/state/core-hint-shown" ]; then
-    if [ -d "$CORE_DIR" ]; then printf '%s\n' "$(msg hint_not_set_up "$CORE_DIR")"
-    else printf '%s\n' "$(msg hint_not_found "$CORE_DIR")"; fi
+    # For the person, once: a systemMessage. Plain stdout would go to the model only, and the marker
+    # below would then mark a hint nobody read.
+    if [ -d "$CORE_DIR" ]; then hint="$(msg hint_not_set_up "$CORE_DIR")"
+    else hint="$(msg hint_not_found "$CORE_DIR")"; fi
+    hint="$(printf '%s' "$hint" | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | LC_ALL=C tr '\n\r\t' '   ')"
+    printf '{"systemMessage":"%s"}\n' "$hint"
     { mkdir -p "$DATA/state" && : > "$DATA/state/core-hint-shown"; } 2>/dev/null
   fi
   exit 0
