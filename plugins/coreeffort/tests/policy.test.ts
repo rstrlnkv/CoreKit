@@ -55,3 +55,11 @@ test('back names the level to go back to', () => {
   expect(texts('en').back('low').includes('Low')).toBe(true)
   expect(texts('ru').back('low').includes('Низкое')).toBe(true)
 })
+
+test('mark points up or down by level and says it in the prompt language', () => {
+  expect(texts('en').mark('high', 'low', 'x').startsWith('↑')).toBe(true)
+  expect(texts('en').mark('low', 'high', 'x').startsWith('↓')).toBe(true)
+  expect(texts('en').mark('medium', '', 'x').startsWith('↑')).toBe(true)
+  expect(texts('en').mark('high', 'low', 'auth bug').includes('Effort: High (was Low) · auth bug')).toBe(true)
+  expect(texts('ru').mark('high', 'low', 'x').includes('Усилие')).toBe(true)
+})

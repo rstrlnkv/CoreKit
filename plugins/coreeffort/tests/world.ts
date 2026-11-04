@@ -15,6 +15,8 @@ export type World = {
   set: unknown[]
   logs: string[]
   efforts: (string | number | undefined)[]
+  placed: string[]
+  opened: unknown[]
   clock: ReturnType<typeof mock.clock>
 }
 
@@ -42,6 +44,8 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     set: [],
     logs: [],
     efforts: [],
+    placed: [],
+    opened: [],
     clock: mock.clock(on),
   }
   mock.store(on, store)
@@ -50,6 +54,14 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
   mock.env(on, { HOME: '/fake-home' })
   on('command.register', (_, e) => ({ value: { command: e.name } }) as never)
   on('ui.status', () => ({ value: undefined }) as never)
+  on('ui.place', (_, e) => {
+    w.placed.push((e as { id: string }).id)
+    return { value: { isPlaced: true } } as never
+  })
+  on('ui.open', (_, e) => {
+    w.opened.push(e)
+    return { value: { isPlaced: true } } as never
+  })
   on('ui.invalidate', () => ({ value: undefined }) as never)
   on('session.messages', () => ({ value: w.lastReply ? [{ role: 'assistant', text: w.lastReply, toolUses: [] }] : [] }) as never)
   on('fs.exists', () => ({ value: false }) as never)

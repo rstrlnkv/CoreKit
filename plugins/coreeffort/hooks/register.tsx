@@ -1,13 +1,16 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Band, Level } from '../types'
+import type { Band, Level, Stats } from '../types'
 import { buildPrompt, parseAnswer, toLevel } from './classifier'
 import { decide, type Lang, type Mode, texts, uiLang } from './policy'
 
 const PLUGIN = 'coreeffort'
 const band = atom({ plugin: 'coreeffort', key: 'band' } as const, null)
 const override = atom({ plugin: 'coreeffort', key: 'override' } as const, null)
+const marks = atom({ plugin: 'coreeffort', key: 'marks' } as const, {})
+const stats = atom({ plugin: 'coreeffort', key: 'stats' } as const, null)
+const NO_STATS: Stats = { picks: { low: 0, medium: 0, high: 0, xhigh: 0, max: 0 }, kept: 0, last: null, marks: 0 }
 const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5' } as const
 const MODES: readonly Mode[] = ['suggest', 'auto', 'off']
 const LOG_KEEP = 20_000
@@ -55,6 +58,23 @@ export async function applyLevel($: EngineInterface, level: Level, base: string)
 export async function releaseHold($: EngineInterface): Promise<void> {
   hold = null
   await update($, override, () => null)
+}
+
+/** Updates this session's counts, starting from zeros. */
+export async function count($: EngineInterface, f: (s: Stats) => Stats): Promise<void> {
+  await update($, stats, cur => f(cur ?? NO_STATS))
+}
+
+/** A row in the transcript for an applied switch. Its id comes from $.state, so a reload never reuses one. */
+async function placeMark($: EngineInterface, level: Level, from: Level | '', why: string, lang: Lang) {
+  let n = 0
+  await count($, s => {
+    n = s.marks + 1
+    return { ...s, marks: n }
+  })
+  const id = `mark-${n}`
+  await update($, marks, cur => ({ ...cur, [id]: { level, from, why, lang } }))
+  await $.ui.place({ id })
 }
 
 async function announce($: EngineInterface, level: Level, from: Level | '', why: string, lang: Lang, undo: Band['undo']) {
@@ -133,6 +153,11 @@ async function runPick($: EngineInterface, options: { mode?: unknown; classifier
   }
   await applyLevel($, level, base)
   await announce($, level, now, pick.why, h.lang, undo)
+  try {
+    await placeMark($, level, now, pick.why, h.lang)
+  } catch (err) {
+    await log($, 'mark', err)
+  }
 }
 
 export const register: Register = (on, options) => {
@@ -214,6 +239,14 @@ export const register: Register = (on, options) => {
     const level = await read($, override)
     if (!level) return next(e)
     return next({ ...e, props: { ...e.props, modes: [...e.props.modes, texts(lastLang).label(level)] } })
+  })
+
+  on('ui.render', { component: 'Placed' }, async ($, e, next) => {
+    if (e.props.plugin !== PLUGIN) return next(e)
+    const m = (await read($, marks))[e.props.id]
+    if (!m) return next(e)
+    const { Text } = $.ui.resolve(e)
+    return <Text dimColor>{texts(m.lang).mark(m.level, m.from, m.why)}</Text>
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

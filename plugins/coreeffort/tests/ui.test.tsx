@@ -202,3 +202,54 @@ test('undo after the menu moved does nothing', { options: { mode: 'auto' } }, as
   await step($, 'low', 2)
   expect(w.efforts.at(-1)).toBe('low')
 })
+
+function placed(id: string, plugin = 'coreeffort') {
+  return { plugin: 'coreeffort', component: 'Placed', props: { id, plugin } } as const
+}
+
+test('each applied switch places one mark', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  on('ui.render', { component: 'Placed' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>engine</Text>
+  })
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await switchTo($, w, 'keep', 'medium', 'ok')
+  await switchTo($, w, 'low', 'medium', 'rename it')
+  expect(w.placed).toEqual(['mark-1', 'mark-2'])
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ ...placed('mark-2'), surface })
+    expect((await ui.find({ type: 'Text', text: /↓ Effort: Low \(was High\)/ })) !== undefined).toBe(true)
+    await ui.unmount()
+  }
+})
+
+test('a placed row of another plugin is left alone', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  on('ui.render', { component: 'Placed' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>engine</Text>
+  })
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  const ui = await $.ui.mount({ ...placed('mark-1', 'other'), surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /engine/ })) !== undefined).toBe(true)
+  await ui.unmount()
+})
+
+test('mark ids stay unique across a session restart', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await start($)
+  await switchTo($, w, 'low', 'medium', 'rename it')
+  expect(w.placed).toEqual(['mark-1', 'mark-2'])
+  const ui = await $.ui.mount({ ...placed('mark-1'), surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /Effort: High/ })) !== undefined).toBe(true)
+  await ui.unmount()
+})

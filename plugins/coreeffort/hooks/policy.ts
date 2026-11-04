@@ -23,6 +23,8 @@ export function uiLang(text: string): Lang {
   return /[Ѐ-ӿ]{3,}/.test(text) ? 'ru' : 'en'
 }
 
+const ORDER: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
+
 const NAMES: Record<Lang, Record<Level, string>> = {
   en: { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' },
   ru: { low: 'Низкое', medium: 'Среднее', high: 'Высокое', xhigh: 'Очень высокое', max: 'Максимальное' },
@@ -46,6 +48,11 @@ export function texts(lang: Lang) {
     keep: (now: Level | '') =>
       now ? (ru ? `Оставить «${n(now)}»` : `Keep ${n(now)}`) : ru ? 'Оставить как есть' : 'Keep it as it is',
     applied: (l: Level, from: Level | '', why: string) =>
+      (ru ? `Усилие: ${n(l)}` : `Effort: ${n(l)}`) +
+      (from ? (ru ? ` (было ${n(from)})` : ` (was ${n(from)})`) : '') +
+      (why ? ` · ${why}` : ''),
+    mark: (l: Level, from: Level | '', why: string) =>
+      `${from && ORDER.indexOf(from) > ORDER.indexOf(l) ? '↓' : '↑'} ` +
       (ru ? `Усилие: ${n(l)}` : `Effort: ${n(l)}`) +
       (from ? (ru ? ` (было ${n(from)})` : ` (was ${n(from)})`) : '') +
       (why ? ` · ${why}` : ''),
