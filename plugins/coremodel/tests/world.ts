@@ -32,6 +32,8 @@ export type World = {
   efforts: (string | number | undefined)[]
   placed: string[]
   opened: unknown[]
+  /** Ids closed with $.ui.close. */
+  closed: string[]
   clock: ReturnType<typeof mock.clock>
 }
 
@@ -68,6 +70,7 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     efforts: [],
     placed: [],
     opened: [],
+    closed: [],
     clock: mock.clock(on),
   }
   mock.store(on, store)
@@ -84,6 +87,12 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
   on('ui.open', (_, e) => {
     w.opened.push(e)
     return { value: { isPlaced: true } } as never
+  })
+  // A pane is up while opens outnumber closes.
+  on('ui.panes', () => ({ value: w.opened.length > w.closed.length ? [{ id: 'coremodel', title: 'CoreModel', isShown: true, isFocused: false, isPlaced: true }] : [] }) as never)
+  on('ui.close', (_, e) => {
+    w.closed.push((e as { id: string }).id)
+    return { value: undefined } as never
   })
   on('ui.invalidate', () => ({ value: undefined }) as never)
   on('session.messages', () => ({ value: w.lastReply ? [{ role: 'assistant', text: w.lastReply, toolUses: [] }] : [] }) as never)

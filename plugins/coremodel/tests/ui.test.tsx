@@ -278,6 +278,51 @@ async function pressPane($: Eng, key: string) {
   await ui.unmount()
 }
 
+test('the footer carries a button that opens and closes the pane without the chat', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  const closed = w.closed
+  engineFooter(on)
+  w.row = null
+  await start($)
+  for (const surface of SURFACES) {
+    const before = w.opened.length
+    let ui = await $.ui.mount({ ...MODE, surface })
+    const btn = await ui.find({ type: 'Button', key: 'pane' })
+    expect(String(btn?.props.label)).toBe('CoreModel')
+    expect(btn?.props.variant).toBe(undefined)
+    // The engine's own mode labels stay beside it.
+    expect((await ui.find({ type: 'Text', text: /default/ })) !== undefined).toBe(true)
+    await ui.press({ key: 'pane' })
+    await ui.unmount()
+    expect(w.opened.length).toBe(before + 1)
+    expect(w.opened[before]).toEqual({ id: 'coremodel', title: 'CoreModel' })
+    // Open now: the button is marked and a second press closes it.
+    ui = await $.ui.mount({ ...MODE, surface })
+    expect((await ui.find({ type: 'Button', key: 'pane' }))?.props.variant).toBe('primary')
+    await ui.press({ key: 'pane' })
+    await ui.unmount()
+    expect(closed).toEqual(['coremodel'])
+    // Close it for the next surface.
+    closed.length = 0
+    w.opened.length = 0
+  }
+  expect(w.prompts.length).toBe(0)
+})
+
+test('the footer button shows beside a held level too', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ ...MODE, surface })
+    expect((await ui.find({ type: 'Text', text: /Effort High/ })) !== undefined).toBe(true)
+    expect((await ui.find({ type: 'Button', key: 'pane' })) !== undefined).toBe(true)
+    await ui.unmount()
+  }
+})
+
 test('/coremodel panel opens the pane', async ($, on) => {
   const w = world(on)
   await start($)
@@ -291,13 +336,16 @@ test('the pane shows mode, level, last pick and counts', { options: { mode: 'aut
   await start($)
   await switchTo($, w, 'high', 'medium')
   for (const surface of SURFACES) {
-    expect(await has($, /^Now$/, surface)).toBe(true)
+    expect(await has($, /^Now in the chat$/, surface)).toBe(true)
     expect(await has($, /^Sonnet · High$/, surface)).toBe(true)
     expect(await has($, /^held by CoreModel · in the menu: Medium \(yours\)$/, surface)).toBe(true)
-    expect(await has($, /^Last pick · High$/, surface)).toBe(true)
+    expect(await has($, /^Last pick$/, surface)).toBe(true)
     expect(await has($, /^auth bug$/, surface)).toBe(true)
     expect(await has($, /^High 1$/, surface)).toBe(true)
-    expect(await has($, /^▇+$/, surface)).toBe(true)
+    expect(await has($, /^High · applied$/, surface)).toBe(true)
+    expect(await has($, /▇/, surface)).toBe(false)
+    expect(await has($, /^Model$/, surface)).toBe(true)
+    expect(await has($, /^Level$/, surface)).toBe(true)
     expect(await has($, /Switches by itself, asks before Fable/, surface)).toBe(true)
     const ui = await pane($, surface)
     const auto = await ui.find({ type: 'Button', key: 'mode-auto' })
@@ -317,10 +365,14 @@ test('the pane speaks Russian after a Russian prompt', { options: { mode: 'auto'
   w.row = null
   await start($)
   await switchTo($, w, 'high', 'medium', 'почини авторизацию')
-  expect(await has($, /^Сейчас$/)).toBe(true)
+  expect(await has($, /^Сейчас в чате$/)).toBe(true)
   expect(await has($, /^Sonnet · Высокое$/)).toBe(true)
   expect(await has($, /^держит CoreModel · в меню: Среднее \(ваше\)$/)).toBe(true)
   expect(await has($, /^Режим$/)).toBe(true)
+  expect(await has($, /^Модель$/)).toBe(true)
+  expect(await has($, /^Уровень$/)).toBe(true)
+  expect(await has($, /^Последний выбор$/)).toBe(true)
+  expect(await has($, /^Высокое · применён$/)).toBe(true)
   expect(await has($, /Меняет сам, спрашивает перед Fable/)).toBe(true)
   const ui = await pane($)
   expect(String((await ui.find({ type: 'Button', key: 'mode-suggest' }))?.props.label)).toBe('Подсказывать')
@@ -425,7 +477,7 @@ test('the pane counts kept prompts', async ($, on) => {
   expect(await has($, /^High 1$/)).toBe(true)
   expect(await has($, /^Left as it was: 2$/)).toBe(true)
   // The person answered Keep, so the last pick is shown as not applied.
-  expect(await has($, /^Last pick · High · not applied$/)).toBe(true)
+  expect(await has($, /^High · not applied$/)).toBe(true)
 })
 
 const SPIN = { plugin: 'coremodel', component: 'Spinner', props: { word: 'Thinking', message: null, suffix: '…', mode: 'thinking' } } as const
@@ -521,7 +573,7 @@ test('the pane button rows wrap in a narrow pane', async ($, on) => {
   await start($)
   for (const surface of SURFACES) {
     const ui = await pane($, surface)
-    for (const key of ['modes', 'levels']) expect((await ui.find({ type: 'Box', key }))?.props.flexWrap).toBe('wrap')
+    for (const key of ['models', 'modes', 'levels']) expect((await ui.find({ type: 'Box', key }))?.props.flexWrap).toBe('wrap')
     await ui.unmount()
   }
 })
@@ -704,7 +756,7 @@ test('pane counts per model', { options: { mode: 'auto' } }, async ($, on) => {
   expect(await has($, /^Opus 1$/)).toBe(true)
   expect(await has($, /^Opus · High$/)).toBe(true)
   expect(await has($, /^held by CoreModel · in the menu: Sonnet · Medium \(yours\)$/)).toBe(true)
-  expect(await has($, /^Last pick · Opus · High$/)).toBe(true)
+  expect(await has($, /^Opus · High · applied$/)).toBe(true)
   const ui = await pane($)
   expect((await ui.find({ type: 'Button', key: 'model-opus' }))?.props.variant).toBe('primary')
   expect((await ui.find({ type: 'Button', key: 'model-sonnet' }))?.props.variant).toBe(undefined)
@@ -786,10 +838,10 @@ test('a pick the person kept is marked not applied in the pane', async ($, on) =
   w.reply = 'Keep Medium'
   await start($)
   await switchTo($, w, 'high', 'medium')
-  expect(await has($, /^Last pick · High · not applied$/)).toBe(true)
+  expect(await has($, /^High · not applied$/)).toBe(true)
   w.reply = 'High (recommended)'
   await switchTo($, w, 'high', 'medium')
-  expect(await has($, /^Last pick · High$/)).toBe(true)
+  expect(await has($, /^High · applied$/)).toBe(true)
 })
 
 test('a not applied pick reads in Russian too', async ($, on) => {
@@ -797,7 +849,7 @@ test('a not applied pick reads in Russian too', async ($, on) => {
   w.reply = 'Оставить «Среднее»'
   await start($)
   await switchTo($, w, 'high', 'medium', 'почини авторизацию')
-  expect(await has($, /^Последний выбор · Высокое · не применён$/)).toBe(true)
+  expect(await has($, /^Высокое · не применён$/)).toBe(true)
 })
 
 test('an unknown word in models is shown in the pane and logged once', { options: { models: 'hauki, sonnet, opus' } }, async ($, on) => {

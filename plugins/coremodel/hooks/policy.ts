@@ -156,7 +156,10 @@ export function texts(lang: Lang) {
       ru
         ? `CoreModel: ${mode}. Чат работает на: ${l ? n(l) : 'пока неизвестно'}. Какой режим?`
         : `CoreModel: ${mode}. Chat runs at: ${l ? n(l) : 'unknown yet'}. Which mode?`,
-    now: ru ? 'Сейчас' : 'Now',
+    now: ru ? 'Сейчас в чате' : 'Now in the chat',
+    paneModel: ru ? 'Модель' : 'Model',
+    paneLevel: ru ? 'Уровень' : 'Level',
+    pickApplied: ru ? 'применён' : 'applied',
     nowPair: (m: ModelKey | '', l: Level | '') =>
       [m ? MODELS[m].name : '', l ? n(l) : ''].filter(Boolean).join(' · ') || (ru ? 'пока неизвестно' : 'unknown yet'),
     heldBy: ru ? 'держит CoreModel' : 'held by CoreModel',
