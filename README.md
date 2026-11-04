@@ -102,13 +102,18 @@ Say "new project" (or run `/corecrew:new-project`) and Claude:
 ```
 ~/Projects/Core/              one PRIVATE repo with the internal docs of all your projects
   .coredev, PROJECTS.md, standards/, knowledge/
-  my-app/CLAUDE.md, docs/, .claude/rules/
-  my-app/code/                the code — its own repo, can be public
+  my-app/CLAUDE.md, docs/     private files of the project (<Core>/<name>/)
+~/Projects/my-app/            the code (<Projects>/<name> in the docs) — its own repo, can be public
+  CLAUDE.local.md             gitignored link to Core/my-app/CLAUDE.md
 ```
-Claude Code is launched in `my-app/code/`; it still reads `CLAUDE.md` and rules from the folder
-above. Internal files never sit inside the code repo, so publishing the code cannot leak them.
-Five safety layers: separate folders, `.gitignore`, pre-commit and pre-push hooks in the code
-repo, and a Core pre-push hook that refuses to push unless the GitHub repo is private.
+`<Projects>` is the folder that holds the Core. Launch Claude Code in the code folder
+(`~/Projects/my-app`): it reads the private `CLAUDE.md` through the `CLAUDE.local.md` link, which
+session start makes and repairs. Rules live in `CLAUDE.md`. Internal files never sit inside the
+code repo, so publishing the code cannot leak them. Five safety layers: separate folders,
+`.gitignore`, pre-commit and pre-push hooks in the code repo, and a Core pre-push hook that
+refuses to push unless the GitHub repo is private. Projects made by 0.4 and older keep the code
+in `<Core>/<name>/code/`; they work as before, and `/corecrew:task adopt <Core>/<name>/code`
+moves one to the new layout.
 
 Claude runs the plugin's `save` tool to commit code and docs together as one step, and `undo-step`
 to revert the last step in both (with `git revert`, history kept). Nothing is copied into your

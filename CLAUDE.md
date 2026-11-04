@@ -4,7 +4,9 @@ Claude Code skills, published as the `corecrew` plugin in the `corekit` marketpl
 (the public GitHub repo `CoreKit`).
 The main skill is `new-project`: an interview, stack and architecture analysis, and a project
 skeleton whose internal docs live in a private repo (`~/Projects/Core/<project>/`) while the
-code lives in a separate nested repo (`<project>/code/`).
+code lives in its own repo beside the Core (`~/Projects/<Name>/`); the private `CLAUDE.md` is
+loaded through a gitignored `CLAUDE.local.md` link in the code folder. Layout spec:
+docs/specs/2026-11-04-project-layout-design.md (old projects keep `<Core>/<name>/code/`).
 
 Requirements source: docs/specs/2026-11-03-coredev-design.md (read before changing the
 plugin) and docs/specs/2026-11-02-new-project-design.md (the `new-project` skill). Plans: docs/plans/.

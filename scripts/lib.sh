@@ -4,7 +4,7 @@
 # load_settings sets: CORE_DIR, CORE_NAME, ATTRIBUTION, MODEL_PROFILE, APP_ID_PREFIX.
 
 # The Core layout schema this plugin version writes and expects (the one place it is defined).
-COREDEV_SCHEMA=1
+COREDEV_SCHEMA=2
 
 # expand_home <path> — a leading ~ or ~/ becomes $HOME.
 expand_home() {

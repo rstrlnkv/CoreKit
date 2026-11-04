@@ -9,6 +9,8 @@ updated: 2026-11-03
 
 # `coredev` plugin — design spec
 
+Layout superseded by docs/specs/2026-11-04-project-layout-design.md
+
 ## 1. Goal
 
 One Claude Code plugin, `coredev`, in the `corekit` marketplace (repo `rstrlnkv/CoreKit`), that

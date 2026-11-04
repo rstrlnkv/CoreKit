@@ -74,7 +74,7 @@ echo "$OUT" | grep -qxF 'Rule two: "quote" and \ backslash.' && pass || fail "se
 printf 'Last rule, no newline' > "$CORE_DIR/session-rules.md"; printf 'schema: 0\n' > "$CORE_DIR/.coredev"
 run_rc "$C"; echo "$OUT" | grep -qxF 'Last rule, no newline' && pass || fail "rules without final newline run into the next line: $OUT"
 echo "$OUT" | grep -q '^Layout note' && pass || fail "layout note missing after rules: $OUT"
-printf 'schema: 1\n' > "$CORE_DIR/.coredev"
+printf 'schema: 2\n' > "$CORE_DIR/.coredev"
 rm "$CORE_DIR/session-rules.md"
 run_rc "$C"; echo "$OUT" | grep -qF "Rule one" && fail "rules shown without file" || pass
 
@@ -85,9 +85,11 @@ printf 'app-id-prefix: com.example\n' > "$CORE_DIR/.coredev"          # no schem
 run_rc "$C"; echo "$OUT" | grep -qF "$FIX" && pass || fail "no schema: fix command missing: $OUT"
 printf 'schema: 0\n' > "$CORE_DIR/.coredev"                           # lower schema
 run_rc "$C"; echo "$OUT" | grep -qF "$FIX" && pass || fail "schema 0: fix command missing: $OUT"
-printf 'schema: 1\n' > "$CORE_DIR/.coredev"
+printf 'schema: 1\n' > "$CORE_DIR/.coredev"                           # schema 1: layout note
+run_rc "$C"; echo "$OUT" | grep -qF "$FIX" && pass || fail "schema 1: fix command missing: $OUT"
+printf 'schema: 2\n' > "$CORE_DIR/.coredev"
 run_rc "$C"; echo "$OUT" | grep -qF "setup-core.sh" && fail "note at the current schema: $OUT" || pass
-printf 'schema: 2\n' > "$CORE_DIR/.coredev"                           # newer Core than the plugin: no note
+printf 'schema: 3\n' > "$CORE_DIR/.coredev"                           # newer Core than the plugin: no note
 run_rc "$C"; echo "$OUT" | grep -qF "setup-core.sh" && fail "note for a newer schema: $OUT" || pass
 # a 0.1.x Core (no .coredev at all): Core counts as not set up, but a session in a project gets context + note
 rm "$CORE_DIR/.coredev"

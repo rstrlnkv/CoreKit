@@ -14,7 +14,7 @@ for f in .gitignore README.md PROJECTS.md standards/README.md knowledge/README.m
   assert_file "$CORE_DIR/$f"
 done
 assert_dir "$CORE_DIR/.git"
-assert_eq "$(head -1 "$CORE_DIR/.coredev")" "schema: 1" ".coredev first line"
+assert_eq "$(head -1 "$CORE_DIR/.coredev")" "schema: 2" ".coredev first line"
 assert_eq "$(git -C "$CORE_DIR" rev-list --count HEAD)" "1" "commit count"
 assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "Set up Core" "commit subject"
 assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "worktree dirty after setup"
@@ -71,7 +71,7 @@ before=$(tree_sum "$CORE_DIR/bin"; tree_sum "$CORE_DIR/hooks"; tree_sum "$CORE_D
 assert_exit 0 bash "$SC" "$CORE_DIR"
 assert_eq "$(tree_sum "$CORE_DIR/bin"; tree_sum "$CORE_DIR/hooks"; tree_sum "$CORE_DIR/app")" "$before" "0.1.x files changed"
 assert_eq "$(cat "$CORE_DIR/PROJECTS.md")" "- app" "PROJECTS.md changed"
-assert_file "$CORE_DIR/.coredev"; assert_eq "$(head -1 "$CORE_DIR/.coredev")" "schema: 1"
+assert_file "$CORE_DIR/.coredev"; assert_eq "$(head -1 "$CORE_DIR/.coredev")" "schema: 2"
 echo "$OUT" | grep -qxF "skipped ./.git" && pass || fail ".git not skipped"
 git -C "$CORE_DIR" show --name-only --format= HEAD | grep -q '^bin/' && fail "commit swept in bin/" || pass
 
@@ -81,7 +81,7 @@ mkdir -p "$CORE_DIR"; printf 'app-id-prefix: com.x\n' > "$CORE_DIR/.coredev"
 core_ready_in "$CORE_DIR" && fail "core_ready true without schema" || pass
 assert_exit 0 bash "$SC" "$CORE_DIR"
 echo "$OUT" | grep -qxF "updated .coredev" && pass || fail "no 'updated .coredev' in: $OUT"
-assert_eq "$(head -1 "$CORE_DIR/.coredev")" "schema: 1" "schema first"
+assert_eq "$(head -1 "$CORE_DIR/.coredev")" "schema: 2" "schema first"
 assert_eq "$(sed -n 2p "$CORE_DIR/.coredev")" "app-id-prefix: com.x" "prefix kept"
 assert_eq "$(wc -l < "$CORE_DIR/.coredev" | tr -d ' ')" "2" ".coredev lines"
 assert_eq "$(CORE_DIR="$CORE_DIR" bash "$SCRIPTS/lib.sh" get app-id-prefix)" "com.x" "prefix via lib"
@@ -95,10 +95,29 @@ assert_eq "$(cat "$CORE_DIR/.coredev")" "app-id-prefix: com.x" "dry run changed 
 
 # --- later schema numbers count as ready and are kept
 new_sandbox
-mkdir -p "$CORE_DIR"; printf 'schema: 2\n' > "$CORE_DIR/.coredev"
+mkdir -p "$CORE_DIR"; printf 'schema: 3\n' > "$CORE_DIR/.coredev"
 assert_exit 0 bash "$SC" "$CORE_DIR"
-echo "$OUT" | grep -qxF "skipped .coredev" && pass || fail ".coredev schema 2 not skipped"
-assert_eq "$(cat "$CORE_DIR/.coredev")" "schema: 2" "schema 2 rewritten"
+echo "$OUT" | grep -qxF "skipped .coredev" && pass || fail ".coredev schema 3 not skipped"
+assert_eq "$(cat "$CORE_DIR/.coredev")" "schema: 3" "schema 3 rewritten"
+
+# --- schema 1 Core: only the schema line changes; .gitignore stays byte-identical
+new_sandbox
+assert_exit 0 bash "$SC" "$CORE_DIR"
+printf 'schema: 1\napp-id-prefix: com.x\n' > "$CORE_DIR/.coredev"
+printf 'my-own-line\n' >> "$CORE_DIR/.gitignore"
+gi_before="$(cat "$CORE_DIR/.gitignore")"
+assert_exit 0 bash "$SC" "$CORE_DIR"
+echo "$OUT" | grep -qxF "updated .coredev" && pass || fail "schema 1 not updated: $OUT"
+assert_eq "$(head -1 "$CORE_DIR/.coredev")" "schema: 2" "schema 1 -> 2"
+assert_eq "$(sed -n 2p "$CORE_DIR/.coredev")" "app-id-prefix: com.x" "prefix kept on upgrade"
+assert_eq "$(cat "$CORE_DIR/.gitignore")" "$gi_before" ".gitignore changed on upgrade"
+assert_exit 0 bash "$SC" "$CORE_DIR"
+echo "$OUT" | grep -qxF "skipped .coredev" && pass || fail "second run not skipped: $OUT"
+# dry run on a schema 1 Core changes nothing
+printf 'schema: 1\n' > "$CORE_DIR/.coredev"
+assert_exit 0 bash "$SC" "$CORE_DIR" --dry-run
+echo "$OUT" | grep -qxF "would update .coredev" && pass || fail "dry run: $OUT"
+assert_eq "$(cat "$CORE_DIR/.coredev")" "schema: 1" "dry run changed .coredev"
 
 # --- core_dir with a space and Cyrillic; ~ expands; CORE_DIR env is not needed
 new_sandbox

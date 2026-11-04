@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.0 — 2026-11-04
+- New projects keep their code beside the Core, in `<Projects>/<Name>` (Projects is the folder
+  that holds the Core, for example `~/Projects/MyApp`). Private files stay in `<Core>/<name>/`.
+  Launch Claude Code in the code folder.
+- Session start makes and repairs `CLAUDE.local.md` in the code folder, a gitignored link to
+  `<Core>/<name>/CLAUDE.md`, so the private instructions load there. A real file or a link that
+  points elsewhere is never overwritten; the session start says what to fix.
+- Project rules move into `CLAUDE.md`: there is no `.claude/rules/` template any more.
+- `/corecrew:task adopt` keeps the repo where it is. It adds `.worktreeinclude`, folds tracked
+  `.claude/rules/` into `CLAUDE.md`, warns about nested `CLAUDE.md` files, and moves only
+  old-layout `<Core>/<name>/code` folders (to `<Projects>/<Name>`).
+- `guard-code` guards the code folder beside the Core, as it did `<Core>/<name>/code`.
+- Core schema 2: a schema 1 Core gets one layout note at session start; the setup command changes
+  only the schema line of `.coredev`.
+- Existing projects keep working in the old layout. To move one, run
+  `/corecrew:task adopt <Core>/<name>/code` for each old project.
+
 ## 0.4.0 — 2026-11-04
 - `AGENTS.md` (the agent-instructions file Codex, Cursor and other tools read) is now an internal
   file, like `CLAUDE.md`: `guard-code` blocks writing it at any depth under `<Core>/<project>/code/`

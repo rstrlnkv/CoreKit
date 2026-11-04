@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Creates or completes the Core skeleton: a git repo with .gitignore, README.md, PROJECTS.md,
-# standards/README.md, knowledge/README.md and .coredev ("schema: 1"). Run it again any time:
+# standards/README.md, knowledge/README.md and .coredev ("schema: 2"). Run it again any time:
 # existing files are never overwritten (a user's README.md or PROJECTS.md stays as it is) and
 # nothing is deleted. It never creates a GitHub repo.
 # Usage: bash setup-core.sh [<core_dir>] [--dry-run]
 #   <core_dir> defaults to $CORE_DIR, then the plugin option core_dir (see lib.sh).
 # Output, one line per item: created|skipped <item>, would create|would update <item> (dry run),
-#   updated .coredev (the file existed without "schema:" — e.g. only "app-id-prefix:" — so
-#   "schema: 1" is put first and the other lines are kept as they were).
+#   updated .coredev (the file existed without "schema:" — e.g. only "app-id-prefix:" — or with an older
+#   schema number, so
+#   "schema: N" is put first and the other lines are kept as they were).
 # Setup files that are not committed yet are committed as "Set up Core" (a failed commit is
 # retried on the next run); only setup-owned files, nothing else in the repo. Git must know the
 # user's name and email; if not, the run stops first with the commands to set them.
@@ -27,10 +28,18 @@ done
 [ -z "$ARG" ] || CORE_DIR="$ARG"
 load_settings
 
+# schema_old — true when .coredev holds a schema number below this plugin's (core_ready is true).
+schema_old() {
+  local sv; sv="$(coredev_get schema | tr -d '[:space:]')"
+  case "$sv" in ""|*[!0-9]*) return 1 ;; esac
+  [ "$sv" -lt "$COREDEV_SCHEMA" ]
+}
+
 # need_work — true when a run is not a no-op (something to create or update).
 need_work() {
   [ -d "$CORE_DIR/.git" ] || return 0
   core_ready || return 0
+  ! schema_old || return 0
   local f
   for f in .gitignore README.md PROJECTS.md standards/README.md knowledge/README.md; do
     [ -e "$CORE_DIR/$f" ] || return 0
@@ -59,9 +68,9 @@ put "$TPL/PROJECTS.md"         "$CORE_DIR/PROJECTS.md" copy || exit 1
 put "$TPL/standards-README.md" "$CORE_DIR/standards/README.md" copy || exit 1
 put "$TPL/knowledge-README.md" "$CORE_DIR/knowledge/README.md" copy || exit 1
 
-# .coredev: "schema: 1" first; lines already there (e.g. app-id-prefix) follow.
+# .coredev: "schema: 2" first; lines already there (e.g. app-id-prefix) follow.
 F="$CORE_DIR/.coredev"
-if core_ready; then
+if core_ready && ! schema_old; then
   echo "skipped .coredev"
 else
   if [ -f "$F" ]; then verb=update; done_word=updated; else verb=create; done_word=created; fi

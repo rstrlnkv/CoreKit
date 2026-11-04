@@ -118,14 +118,14 @@ Project docs index: $P/docs/INDEX.md
 Save a finished step: bash \"$COREDEV_TOOLS/save\" \"<message>\"; undo the last step: bash \"$COREDEV_TOOLS/undo-step\"
 Standards: a, b
 Session rules ($CORE_DIR/session-rules.md):
-Layout note: this Core has layout schema none, the plugin expects 1. Bring it up to date (adds only what is missing): bash \"$ROOT/scripts/setup-core.sh\" \"$CORE_DIR\"
+Layout note: this Core has layout schema none, the plugin expects 2. Bring it up to date (adds only what is missing): bash \"$ROOT/scripts/setup-core.sh\" \"$CORE_DIR\"
 Old git hooks from an older version: $P/code/.git/hooks/pre-commit. Replace them with: bash \"$ROOT/scripts/install-hooks.sh\" \"$P\"" \
 "corecrew: вы в проекте Core \"$PN\" (Core: $CORE_DIR)
 Индекс документации проекта: $P/docs/INDEX.md
 Сохранить завершённый шаг: bash \"$COREDEV_TOOLS/save\" \"<message>\"; отменить последний шаг: bash \"$COREDEV_TOOLS/undo-step\"
 Стандарты: a, b
 Правила сессии ($CORE_DIR/session-rules.md):
-Заметка о структуре: структура этого Core — версия не указана, плагину нужна 1. Обновите её (добавится только недостающее): bash \"$ROOT/scripts/setup-core.sh\" \"$CORE_DIR\"
+Заметка о структуре: структура этого Core — версия не указана, плагину нужна 2. Обновите её (добавится только недостающее): bash \"$ROOT/scripts/setup-core.sh\" \"$CORE_DIR\"
 Найдены старые git-хуки от прошлой версии: $P/code/.git/hooks/pre-commit. Замените их командой: bash \"$ROOT/scripts/install-hooks.sh\" \"$P\""
   case "$OUT" in *"):"$'\n'"rule one"$'\n'"rule two"$'\n'*) pass ;; *) fail "session rules text not printed verbatim [$v]: $OUT" ;; esac
 done

@@ -9,6 +9,8 @@ updated: 2026-11-02
 
 # `new-project` skill — design spec
 
+Layout superseded by docs/specs/2026-11-04-project-layout-design.md
+
 ## 1. Goal
 When the user asks to start a new project, Claude runs an interview, analyzes platforms,
 stack and architecture, agrees every decision with the user, and scaffolds the project to one
