@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Checks tools and paths before creating a project.
+# Checks tools and paths before creating a project (with --name: <Core>/<name> and a folder named
+# <name> in any letter case beside the Core must both be free).
 # Usage: bash preflight.sh [--name <name>]   Env: CORE_DIR overrides the plugin option core_dir
 # Prints "OK|WARN|FAIL <check> [hint]" lines; exits 1 if any FAIL.
 . "$(dirname "$0")/../../../scripts/lib.sh"
@@ -26,7 +27,18 @@ non_ascii "$HOME" && warn "home-path — '$HOME' has non-Latin characters; Andro
 non_ascii "$CORE_DIR" && warn "core-path — '$CORE_DIR' has non-Latin characters; Android/Flutter builds may fail" || ok "core-path"
 
 if [ -n "$NAME" ]; then
-  if [ -e "$CORE_DIR/$NAME" ]; then bad "name-local — folder $CORE_DIR/$NAME already exists"
+  # Both places must be free: <Core>/<name> and, beside the Core, a folder whose lower-case name is <name>
+  # (the code repo goes to <Projects>/<name>; spec section 5.1).
+  taken=""
+  [ -e "$CORE_DIR/$NAME" ] && taken="$CORE_DIR/$NAME"
+  if [ -z "$taken" ]; then
+    for d in "$PROJECTS_DIR"/*; do
+      { [ -e "$d" ] || [ -L "$d" ]; } || continue
+      [ "$d" = "$CORE_DIR" ] && continue
+      [ "$(lc "$(basename "$d")")" = "$NAME" ] && { taken="$d"; break; }
+    done
+  fi
+  if [ -n "$taken" ]; then bad "name-local — folder $taken already exists"
   else ok "name-local"; fi
   if [ $GH_AUTH_OK -eq 1 ]; then
     if gh repo view "$NAME" >/dev/null 2>&1; then bad "name-github — a GitHub repository '$NAME' already exists"

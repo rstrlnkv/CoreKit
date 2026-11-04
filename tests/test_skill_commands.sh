@@ -49,4 +49,7 @@ c="$(grep -n 'lib.sh" core-dir' "$NP" | head -1 | cut -d: -f1)"; r="$(grep -n 'l
 assert_eq "$(grep -c 'user_config.core_dir' "$NP")" "2" "new-project: user_config.core_dir only in Settings and the core-dir command"
 assert_contains "$NP" 'gh repo create <CoreName> --private --source "<Core>" --push'
 assert_contains "$NP" 'setup-core.sh" "<Core>"'
+# scaffold's exit 2 "target exists": a folder of that name beside the Core is never touched
+assert_contains "$NP" '`target exists: <path>`'
+assert_contains "$NP" '/corecrew:task adopt <path>'
 finish

@@ -36,6 +36,14 @@ echo "$OUT" | grep -q '^WARN' && pass || fail "no ASCII warning"
 mkdir -p "$CORE_DIR/taken-app"
 assert_exit 1 bash "$PF" --name taken-app
 
+# a folder beside the Core with that name, in any letter case -> FAIL (the code repo goes there)
+mkdir -p "$SANDBOX/Projects/Beside-App"
+assert_exit 1 bash "$PF" --name beside-app
+echo "$OUT" | grep -qF "FAIL name-local — folder $SANDBOX/Projects/Beside-App already exists" && pass || fail "no beside-the-Core FAIL: $OUT"
+mkdir -p "$SANDBOX/Projects/plain-app"
+assert_exit 1 bash "$PF" --name plain-app
+echo "$OUT" | grep -qF "$SANDBOX/Projects/plain-app already exists" && pass || fail "no FAIL for plain-app: $OUT"
+
 # existing GitHub repo -> FAIL
 GH_REPO_EXISTS=1 assert_exit 1 bash "$PF" --name gh-taken
 echo "$OUT" | grep -q 'GitHub' && pass || fail "no GitHub reason"

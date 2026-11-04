@@ -79,7 +79,10 @@ Never ask the user to pick a stack.
 **2. Name.** Propose a name (Latin, lowercase, hyphens, 3–40 chars) and a one-sentence purpose
 in English. Get approval (the app id prefix is not needed yet; it is asked in stage 4). `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/scripts/preflight.sh" --name <name>` — stop if taken. Then
 `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/scripts/scaffold.sh" --name <name> --purpose "<purpose>"` creates the folders, both git
-repos and the docs skeleton. Fill `docs/brief.md` with the answers (English), set
+repos and the docs skeleton. If scaffold exits 2 with `target exists: <path>`, a folder of that
+name already sits beside the Core and is not a corecrew project: it is never touched. Say so in
+plain words and let the user choose: another name (run preflight again), or, if that folder is an
+existing project of theirs, `/corecrew:task adopt <path>` instead of a new project. Fill `docs/brief.md` with the answers (English), set
 `stage: interviewed`.
 
 **3. Analysis.** Follow `references/analysis.md` and `references/stacks.md`: constraints → 2–3
