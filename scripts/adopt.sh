@@ -16,7 +16,7 @@
 #   git does not know your name and email (...)
 # Only files git tracks are copied and removed; ignored files stay in <Core>/<n>/code untouched.
 # Exit 1 (nothing deleted; the message says where the files are): a failed mv after the commit.
-# Steps: copy CLAUDE.md, docs/ and .claude/ (not settings.local.json, not worktrees/, not
+# Steps: copy CLAUDE.md, AGENTS.md, docs/ and .claude/ (not settings.local.json, not worktrees/, not
 # --public-docs paths) into a temp folder in the Core; add the wiki map and the pages the
 # new-project templates have that are missing, the check: line and public-docs: line; give
 # copied pages that lack wiki front matter the missing fields. Then one commit in the repo
@@ -105,7 +105,7 @@ done <<< "$PUB_LIST"
 
 # Only files git tracks are copied and removed; ignored and untracked files stay in code/ as
 # they are (so nothing private ends up in the Core's git).
-TRACKED="$(git -C "$FROM" -c core.quotepath=false ls-files -- CLAUDE.md docs .claude)"
+TRACKED="$(git -C "$FROM" -c core.quotepath=false ls-files -- CLAUDE.md AGENTS.md docs .claude)"
 COPY=""; PUBKEEP=""; NCOPY=0; NPUB=0; NSTAY=0
 REMOVE=()
 while IFS= read -r f; do
@@ -131,7 +131,7 @@ elif [ -r "$TPL/code/gitignore-common" ]; then
   envstar=0
   while IFS= read -r l; do
     l="${l%$'\r'}"
-    case "$l" in CLAUDE*|.claude/*|docs/superpowers/*|.env*|'!.env'*) ;; *) continue ;; esac
+    case "$l" in CLAUDE*|AGENTS.md|.claude/*|docs/superpowers/*|.env*|'!.env'*) ;; *) continue ;; esac
     case "$l" in
       '!'*) if [ "$envstar" -eq 0 ] && gi_has "$l"; then continue; fi ;;
       *) if gi_has "$l"; then continue; fi ;;
@@ -152,7 +152,7 @@ while IFS= read -r line; do
     120000*) refuse "symlink: $f -> $(readlink "$FROM/$f"); replace it with a file first" ;;
     160000*) refuse "submodule: $f; adopt cannot move it" ;;
   esac
-done <<< "$(git -C "$FROM" -c core.quotepath=false ls-files -s -- CLAUDE.md docs .claude \
+done <<< "$(git -C "$FROM" -c core.quotepath=false ls-files -s -- CLAUDE.md AGENTS.md docs .claude \
   | awk -F'\t' '$1 ~ /^(120000|160000) / { print substr($1, 1, 6) "\t" substr($0, index($0, "\t") + 1) }')"
 
 # The move must be a rename: the folder (and its parent) and the Core must share a file system.
@@ -196,7 +196,7 @@ if [ "$DRY" -eq 1 ]; then
   show "add to code/.gitignore (in the same commit):" "$GI_ADD"
   [ "$GI_SKIP" -eq 0 ] || echo "warning: .gitignore is not a plain file; add the corecrew ignore lines to it yourself"
   show "stays in code (public docs):" "$PUBKEEP"
-  IGN="$(cd "$FROM" && for t in CLAUDE.md docs .claude; do
+  IGN="$(cd "$FROM" && for t in CLAUDE.md AGENTS.md docs .claude; do
     { [ -e "$t" ] || [ -L "$t" ]; } && find "$t" -path .claude/worktrees -prune -o \( -type f -o -type l \) -print
   done | LC_ALL=C sort | LC_ALL=C comm -23 - <(printf '%s\n' "$TRACKED" | LC_ALL=C sort))"
   show "stays in code (ignored by git):" "$IGN"

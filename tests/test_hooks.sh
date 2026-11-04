@@ -23,11 +23,11 @@ try_commit() {  # try_commit <path> ; force-add past .gitignore to test the hook
   git -C "$C" commit -q -m "add $1" >/dev/null 2>&1; local rc=$?
   git -C "$C" reset -q 2>/dev/null; return $rc
 }
-for bad in CLAUDE.md sub/CLAUDE.local.md .claude/x.json .env .env.local docs/superpowers/plan.md a.pem k.key; do
+for bad in CLAUDE.md sub/CLAUDE.local.md AGENTS.md sub/AGENTS.md agents.md .claude/x.json .env .env.local docs/superpowers/plan.md a.pem k.key; do
   try_commit "$bad" && fail "commit allowed: $bad" || pass
   rm -rf "$C/$bad"
 done
-for ok in .env.example .env.sample .env.template sub/.env.sample src/main.dart docs/README.md; do
+for ok in .env.example .env.sample .env.template sub/.env.sample src/main.dart docs/README.md MYAGENTS.md AGENTS.md.bak; do
   try_commit "$ok" && pass || fail "commit blocked: $ok"
 done
 # blocked commit message names the file

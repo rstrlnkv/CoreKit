@@ -7,7 +7,7 @@ No crew, no tester: only you and the script. Talk to the user in plain words; ne
 `adopt.sh` before "ok".
 
 1. **Inspect** `<folder>` (resolve it to an absolute path; `~` counts as home). Look at
-   its name, `CLAUDE.md`, `docs/`, `.claude/` and the top level of the repo. Never open `.env`
+   its name, `CLAUDE.md`, `AGENTS.md`, `docs/`, `.claude/` and the top level of the repo. Never open `.env`
    files or `~/.ssh`.
 2. **Plan.** Run `CORE_DIR="<Core>" bash "<scripts>/adopt.sh" --from "<folder>" --dry-run`
    (add `--name <n>` when the folder name is not a valid project name: 3-40 lowercase Latin

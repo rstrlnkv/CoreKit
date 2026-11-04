@@ -1,4 +1,5 @@
 (^|/)CLAUDE(\.local)?\.md$
+(^|/)AGENTS\.md$
 ^\.claude/
 ^docs/superpowers/
 (^|/)\.env$
