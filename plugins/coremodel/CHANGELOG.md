@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.4 — 2026-11-05
+
+Races and edges found by a read-only audit.
+
+- A prompt waiting for its pick is dropped when it can no longer be the next turn's: the submit was
+  refused, the turn ended before its first request (Esc), or another kind of prompt took the turn.
+  A prompt queued behind a running turn still keeps its pick.
+- A prompt sent before the engine's SessionStart for /clear, /resume or a fork keeps its pick; the
+  switch rows of the old chat are cleared with it (a module reload keeps them).
+- A request with no effort (a model without it) is no longer asked about a level, and no
+  "Effort: High" is shown for something never put on the request.
+- A pane press (level, model, Release) or Back made while the classifier or a question runs is
+  newer than the pick: the late pick is dropped instead of overriding it.
+- `model_not_found` from a subagent no longer drops the main chat's held model.
+- A classifier call that fails outright (a 529, a throw) before 3 s is tried once more at once; a
+  failed hedge timer no longer fires the second call early.
+- An answer whose reason contains `}` is readable.
+- The "not available" note names the `models` setting only when the setting lists the model.
+
 ## 0.4.3 — 2026-11-05
 
 - A question about Fable, Extra high or Max lists **Keep** first: a question can pop up while the

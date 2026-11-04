@@ -853,3 +853,57 @@ test('a model without effort shows no level in the applied line', { options: { m
   await ui.unmount()
   expect(await has($, /^Opus$/)).toBe(true)
 })
+
+test('a subagent failing with model_not_found does not drop the held model', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'medium')
+  await $.classic.StopFailure({ error: 'model_not_found', agent_id: 'a1' } as never)
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+  expect(await has($, /not available/)).toBe(false)
+})
+
+async function waitForQuestion(w: World) {
+  for (let i = 0; w.asked.length === 0; i += 1) {
+    if (i > 500) throw new Error('the question was never asked')
+    await w.clock.settle()
+  }
+}
+
+test('a level pressed in the pane while a question is open is not overridden by the late answer', async ($, on) => {
+  const w = world(on)
+  w.row = null
+  let answer!: (r: string) => void
+  w.reply = new Promise<string>(r => (answer = r))
+  await start($)
+  await submit($, 'fix the login')
+  const first = step($, 'medium')
+  await waitForQuestion(w)
+  await pressPane($, 'level-low')
+  answer('High (recommended)')
+  await first
+  await step($, 'medium', 1)
+  expect(w.efforts.at(-1)).toBe('low')
+})
+
+test('Release pressed in the pane while the classifier runs is not overridden by the late pick', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  let answer!: (r: string) => void
+  w.answer = new Promise<string>(r => (answer = r))
+  await submit($, 'now fix the typo')
+  const second = step($, 'medium', 0)
+  for (let i = 0; w.model.length < 2; i += 1) {
+    if (i > 500) throw new Error('the classifier was never asked')
+    await w.clock.settle()
+  }
+  await pressPane($, 'release')
+  answer('{"level":"low","why":"typo"}')
+  await second
+  await step($, 'medium', 1)
+  expect(w.efforts.at(-1)).toBe('medium')
+})

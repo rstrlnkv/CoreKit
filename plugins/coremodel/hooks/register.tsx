@@ -25,6 +25,9 @@ const HEDGE_MS = 3_000
 // Bumped on every prompt, so a pick for an older prompt is dropped.
 let gen = 0
 let nextBand = 1
+// Bumped when the person changes the hold themselves (a pane press, Back): a pick that began
+// earlier is dropped, so its late answer never overrides their newer choice.
+let touched = 0
 // The prompt waiting for its pick at the turn's first request. `turn` is the turn that was
 // running when it was typed (it waits in the queue behind that turn); absent when the chat was idle.
 let held: { text: string; gen: number; lang: Lang; turn?: string } | null = null
@@ -234,6 +237,7 @@ async function runPick(
   baseModel: string,
   hasEffort: boolean,
 ) {
+  const began = touched
   const mode = await currentMode($, options)
   if (mode === 'off') return
   const t = texts(h.lang)
@@ -256,7 +260,7 @@ async function runPick(
     }
   }
   // The person may have turned the plugin off while the classifier ran.
-  const stale = async () => h.gen !== gen || (await currentMode($, options)) === 'off'
+  const stale = async () => h.gen !== gen || touched !== began || (await currentMode($, options)) === 'off'
   if (await stale()) return
   const named = pick.level === 'keep' ? null : pick.level
   await count($, s => {
@@ -353,6 +357,7 @@ export async function setMode($: EngineInterface, options: { mode?: unknown; pic
  * goes, and the hold takes the menu's level from the next request as its base.
  */
 async function paneChoice($: EngineInterface, level: Level | null): Promise<void> {
+  touched += 1
   if (level) await applyLevel($, level, '')
   else await releaseHold($)
   await update($, band, () => null)
@@ -363,6 +368,7 @@ async function paneChoice($: EngineInterface, level: Level | null): Promise<void
  * the press itself is their yes, so no other question follows.
  */
 async function paneModel($: EngineInterface, key: ModelKey): Promise<void> {
+  touched += 1
   const nowModel = modelHold?.key ?? toModel(seenModel)
   if (key === nowModel) return
   const isEmpty = !(await $.session.messages()).some(m => m.role === 'assistant')
@@ -455,7 +461,8 @@ export const register: Register = (on, options) => {
   // A model the account cannot use: the turn fails with model_not_found, naming no model, so the
   // held one is the one refused. Drop it for this session, once, instead of failing every request.
   on('classic.StopFailure', async ($, e, next) => {
-    if (e.error === 'model_not_found' && modelHold) {
+    // A subagent's failure says nothing about the main chat's model.
+    if (e.error === 'model_not_found' && modelHold && e.agent_id === undefined) {
       const key = modelHold.key
       unavailable.add(key)
       await releaseModel($)
@@ -654,6 +661,7 @@ export const register: Register = (on, options) => {
       // An old band, or a part the person already changed: their own choice stands.
       const cur = await read($, band)
       if (!cur || cur.id !== b.id || !undo) return
+      touched += 1
       if (undo.model && b.model && modelHold?.key === b.model) {
         if (undo.model === 'release') await releaseModel($)
         else await applyModel($, undo.model, modelHold.base)
