@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
-# Builds the end-to-end fixture <core_dir>/test-coredev/ (spec section 16): a tiny project with a
-# planted bug, to try "/corecrew:task fix: ..." on.
-#   Core side: CLAUDE.md with "check: bash tests/run.sh", a wiki that passes wiki-check.sh (made
-#              from the new-project templates), docs/knowledge/, a PROJECTS.md line.
-#   code/:     its own git repo on main with add.sh (add <a> <b> prints the sum, except that a
-#              wrong branch for an odd <b> prints the product: "add 2 3" prints 6, "add 2 2" is
-#              right) and tests/run.sh (checks only "add 2 2" -> 4), one commit.
+# Builds the end-to-end fixture test-coredev (spec section 16): a tiny project with a planted bug,
+# to try "/corecrew:task fix: ..." on. New layout: the code lives beside the Core.
+#   Core side: <core_dir>/test-coredev/ with CLAUDE.md ("check: bash tests/run.sh"), a wiki that
+#              passes wiki-check.sh (made from the new-project templates), docs/knowledge/, and a
+#              PROJECTS.md line "- test-coredev — <purpose> — test-coredev/".
+#   Code side: <Projects>/test-coredev/ (Projects = the folder holding the Core), its own git repo
+#              on main with add.sh (add <a> <b> prints the sum, except that a wrong branch for an
+#              odd <b> prints the product: "add 2 3" prints 6, "add 2 2" is right) and tests/run.sh
+#              (checks only "add 2 2" -> 4), one commit; .gitignore, .claude/settings.local.json,
+#              .worktreeinclude, and CLAUDE.local.md, a symlink to the private CLAUDE.md.
 # The git hook shims are installed and the Core gets one commit, "Add test-coredev fixture".
 # Usage: bash make-test-coredev.sh <core_dir>
-# Output: "created ..." lines; the last line is the path of code/.
+# Output: "created ..." lines; the last line is the path of the code folder (<Projects>/test-coredev).
 # Exit:   0 built; 1 a step failed (or git does not know who you are); 2 refused, nothing changed
-#         (no argument, the Core is not set up, or <core_dir>/test-coredev already exists).
-# Only test-coredev/ and its line in PROJECTS.md are written; the rest of the Core is left alone.
+#         (no argument, the Core is not set up, or <core_dir>/test-coredev or
+#         <Projects>/test-coredev already exists).
+# Only test-coredev/ in both places and the line in PROJECTS.md are written; the rest is left alone.
 set -u
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 TPL="$ROOT_DIR/skills/new-project/templates"
@@ -25,12 +29,13 @@ CORE_DIR="$1"
 load_settings
 NAME="test-coredev"
 P="$CORE_DIR/$NAME"
-C="$P/code"
+C="$PROJECTS_DIR/$NAME"
 PURPOSE="Tiny fixture for the end-to-end check of corecrew: adds two numbers."
 DATE="$(date +%Y-%m-%d)"
 
 { core_ready && [ -d "$CORE_DIR/.git" ]; } || refuse "Core is not set up at $CORE_DIR (nothing was created)"
 { [ -e "$P" ] || [ -L "$P" ]; } && refuse "$P already exists (nothing was changed)"
+{ [ -e "$C" ] || [ -L "$C" ]; } && refuse "$C already exists (nothing was changed)"
 if ! git -C "$CORE_DIR" var GIT_AUTHOR_IDENT >/dev/null 2>&1 || ! git -C "$CORE_DIR" var GIT_COMMITTER_IDENT >/dev/null 2>&1; then
   echo "Git does not know who you are yet, so the fixture cannot save its commits. Run:" >&2
   echo "  git config --global user.name \"Your Name\"" >&2
@@ -74,7 +79,7 @@ updated: $DATE
 \`bash add.sh <a> <b>\` prints the sum of two whole numbers.
 
 ## Check
-\`bash tests/run.sh\` in \`code/\` prints \`ALL TESTS PASSED\` when it holds.
+\`bash tests/run.sh\` in the code folder prints \`ALL TESTS PASSED\` when it holds.
 EOF
 tmp="$P/docs/INDEX.md.tmp.$$"
 awk '{ print } /^- features\// { print "- [features/add.md](features/add.md) — what add.sh does." }' \
@@ -109,10 +114,13 @@ else
 fi
 EOF
 put "$TPL/code/gitignore-common" "$C/.gitignore" copy || die "could not write .gitignore"
+put "$TPL/code/settings.local.json.tmpl" "$C/.claude/settings.local.json" || die "could not write .claude/settings.local.json"
+put "$TPL/code/worktreeinclude" "$C/.worktreeinclude" copy || die "could not write .worktreeinclude"
+link_local_claude "$C" "$P" || die "could not link CLAUDE.local.md"
 git -C "$C" add -A && git -C "$C" commit -q -m "Initial commit" || die "could not make the first commit in $C"
 echo "created $(rel_core "$C") commit: Initial commit"
 
-# --- hooks (shims in code/ and in the Core)
+# --- hooks (shims in the code repo and in the Core)
 RC=0
 if [ -n "${COREDEV_TOOLS:-}" ]; then HOOK_ARGS=(--tools "$COREDEV_TOOLS"); else HOOK_ARGS=(); fi
 if CORE_DIR="$CORE_DIR" bash "$ROOT_DIR/scripts/install-hooks.sh" "$P" ${HOOK_ARGS[@]+"${HOOK_ARGS[@]}"} >/dev/null; then
@@ -123,7 +131,7 @@ else
 fi
 
 # --- PROJECTS.md line and the Core commit (only test-coredev/ and PROJECTS.md)
-projects_entry "$NAME" "$PURPOSE" "$NAME/code/" || die "could not write PROJECTS.md"
+projects_entry "$NAME" "$PURPOSE" "$NAME/" || die "could not write PROJECTS.md"
 if git -C "$CORE_DIR" add -- "$NAME" PROJECTS.md && git -C "$CORE_DIR" commit -q -m "Add test-coredev fixture" -- "$NAME" PROJECTS.md >/dev/null 2>&1; then
   echo "created Core commit: Add test-coredev fixture"
 else

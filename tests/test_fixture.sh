@@ -9,7 +9,7 @@ state() { tree_sum "$1"; git -C "$1" rev-parse HEAD 2>&1; git -C "$1" status --p
 
 # --- success
 new_sandbox; setup_core
-P="$CORE_DIR/test-coredev"; C="$P/code"
+P="$CORE_DIR/test-coredev"; C="$SANDBOX/Projects/test-coredev"
 assert_exit 0 bash "$B" "$CORE_DIR"
 OUT1="$OUT"
 assert_eq "$(printf '%s\n' "$OUT1" | tail -1)" "$C" "last line is the code folder"
@@ -28,6 +28,13 @@ assert_eq "$(grep -c '^- test-coredev ' "$CORE_DIR/PROJECTS.md")" "1" "PROJECTS.
 assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "Add test-coredev fixture" "Core commit"
 assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "Core dirty after build"
 assert_eq "$(git -C "$CORE_DIR" ls-files | grep -c '^test-coredev/code')" "0" "code files in the Core repo"
+assert_no_file "$P/code"
+assert_eq "$(bash "$SCRIPTS/lib.sh" layout test-coredev)" "new" "layout"
+assert_eq "$(bash "$SCRIPTS/lib.sh" code-dir test-coredev)" "$C" "code dir"
+assert_eq "$(readlink "$C/CLAUDE.local.md")" "$P/CLAUDE.md" "CLAUDE.local.md link"
+assert_contains "$C/.gitignore" "CLAUDE.local.md"
+assert_file "$C/.claude/settings.local.json"; assert_file "$C/.worktreeinclude"
+assert_contains "$CORE_DIR/PROJECTS.md" "— test-coredev/"
 
 # Code side
 assert_eq "$(git -C "$C" rev-list --count HEAD)" "1" "code commits"
@@ -35,6 +42,7 @@ assert_eq "$(git -C "$C" symbolic-ref --short HEAD)" "main" "code branch"
 assert_eq "$(git -C "$C" status --porcelain)" "" "code repo dirty"
 assert_file "$C/add.sh"; assert_file "$C/tests/run.sh"
 assert_no_file "$C/CLAUDE.md"; assert_no_file "$C/docs"
+assert_eq "$(git -C "$C" ls-files | grep -c -e CLAUDE.local.md -e settings.local.json)" "0" "private files tracked"
 assert_exit 0 bash -c "cd '$C' && bash tests/run.sh"
 echo "$OUT" | grep -q 'ALL TESTS PASSED' && pass || fail "run.sh did not print ALL TESTS PASSED: $OUT"
 assert_eq "$(cd "$C" && bash add.sh 2 3)" "6" "planted bug: add 2 3"
@@ -63,10 +71,20 @@ assert_no_file "$CORE_DIR"
 new_sandbox; setup_core
 assert_exit 2 bash "$B"       # no argument
 assert_no_file "$CORE_DIR/test-coredev"
+assert_no_file "$SANDBOX/Projects/test-coredev"
+
+# --- a folder beside the Core in the way: refused, exit 2, nothing changed
+new_sandbox; setup_core
+mkdir -p "$SANDBOX/Projects/test-coredev"; echo mine > "$SANDBOX/Projects/test-coredev/x"
+before="$(state "$CORE_DIR")"
+assert_exit 2 bash "$B" "$CORE_DIR"
+assert_eq "$(state "$CORE_DIR")" "$before" "Core changed on refusal"
+assert_no_file "$CORE_DIR/test-coredev"
+assert_eq "$(ls "$SANDBOX/Projects/test-coredev")" "x" "foreign folder touched"
 
 # --- an existing PROJECTS.md line is kept, not doubled (a folder removed by hand, line left)
 new_sandbox; setup_core
-printf -- '- test-coredev — mine — test-coredev/code/\n' >> "$CORE_DIR/PROJECTS.md"
+printf -- '- test-coredev — mine — test-coredev/\n' >> "$CORE_DIR/PROJECTS.md"
 git -C "$CORE_DIR" add PROJECTS.md; git -C "$CORE_DIR" commit -q -m "line"
 assert_exit 0 bash "$B" "$CORE_DIR"
 assert_eq "$(grep -c '^- test-coredev ' "$CORE_DIR/PROJECTS.md")" "1" "PROJECTS.md line doubled"
@@ -87,5 +105,6 @@ noid() { env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT
 assert_exit 1 noid bash "$B" "$CORE_DIR"
 echo "$OUT" | grep -q 'user.name' && pass || fail "no hint about git identity: $OUT"
 assert_no_file "$CORE_DIR/test-coredev"
+assert_no_file "$SANDBOX/Projects/test-coredev"
 
 finish
