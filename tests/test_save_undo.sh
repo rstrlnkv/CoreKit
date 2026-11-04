@@ -146,4 +146,46 @@ assert_eq "$(git -C "$C" log -1 --format=%s)" "Fix CSV generated with a wrong de
 git -C "$C" log -1 --format=%B | grep -qxF 'Rows generated with the old tool had commas.' && pass || fail "body line with 'generated with' dropped"
 assert_eq "$(git -C "$C" log -1 --format=%B | grep -ciE 'generated with \[claude|generated with a tool|co-authored-by')" "0" "attribution lines left"
 
+# --- new layout: code in <Projects>/Foo beside the Core, docs in <Core>/foo, CLAUDE.local.md symlink
+F="$SANDBOX/Projects/Foo"; mkdir -p "$F" "$CORE_DIR/foo"
+echo "# foo" > "$CORE_DIR/foo/CLAUDE.md"
+git -C "$F" init -q; cp "$ROOT/skills/new-project/templates/code/gitignore-common" "$F/.gitignore"
+ln -s "$CORE_DIR/foo/CLAUDE.md" "$F/CLAUDE.local.md"
+for h in pre-commit pre-push; do printf '#!/bin/sh\nexit 0\n' > "$F/.git/hooks/$h"; chmod +x "$F/.git/hooks/$h"; done
+[ -x "$CORE_DIR/.git/hooks/pre-push" ] || { printf '#!/bin/sh\nexit 0\n' > "$CORE_DIR/.git/hooks/pre-push"; chmod +x "$CORE_DIR/.git/hooks/pre-push"; }
+echo "n1" > "$F/n.txt"; echo "doc1" > "$CORE_DIR/foo/d.md"
+(cd "$F" && bash "$SAVE" "New layout step") > "$SANDBOX/out" 2>&1
+assert_contains "$SANDBOX/out" "saved code"; assert_contains "$SANDBOX/out" "saved docs"
+a=$(step_ids "$F" | head -1); b=$(step_ids "$CORE_DIR" | head -1)
+[ -n "$a" ] && pass || fail "new layout: no Step-Id in code"; assert_eq "$a" "$b" "new layout: Step-Id mismatch"
+git -C "$F" ls-files | grep -q 'CLAUDE.local.md' && fail "symlink committed to code" || pass
+
+# worktree under Projects/Foo/.claude/worktrees
+git -C "$F" worktree add -q .claude/worktrees/w -b w 2>/dev/null
+FW="$F/.claude/worktrees/w"; echo wt > "$FW/wt.txt"
+(cd "$FW" && bash "$SAVE" "New layout worktree") > "$SANDBOX/out" 2>&1
+assert_contains "$SANDBOX/out" "saved code"
+assert_eq "$(git -C "$FW" log -1 --format=%s)" "New layout worktree"
+assert_eq "$(git -C "$F" log -1 --format=%s)" "New layout step" "main branch changed by worktree save"
+
+# CORE_DIR unset: the CLAUDE.local.md symlink finds the Core
+echo "n2" > "$F/n.txt"; echo "doc2" > "$CORE_DIR/foo/d.md"
+(cd "$F" && env -u CORE_DIR -u CLAUDE_PLUGIN_OPTION_CORE_DIR bash "$SAVE" "No env") > "$SANDBOX/out" 2>&1
+assert_contains "$SANDBOX/out" "saved docs"
+assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "No env"
+
+# undo-step reverts both
+(cd "$F" && bash "$UNDO") > "$SANDBOX/out" 2>&1
+assert_eq "$(cat "$F/n.txt")" "n1" "new layout: undo did not restore code"
+assert_eq "$(cat "$CORE_DIR/foo/d.md")" "doc1" "new layout: undo did not restore docs"
+
+# a git repo beside the Core that is not a project
+mkdir -p "$SANDBOX/Projects/Brain"; git -C "$SANDBOX/Projects/Brain" init -q
+(cd "$SANDBOX/Projects/Brain" && bash "$SAVE" "x") > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "1" "save in a non-project repo"
+assert_contains "$SANDBOX/out" "This folder is not a corecrew project (<Projects>/<Name> with <Core>/<name>/CLAUDE.md)."
+mkdir -p "$SANDBOX/plain"
+(cd "$SANDBOX/plain" && bash "$SAVE" "x") > "$SANDBOX/out" 2>&1
+assert_contains "$SANDBOX/out" "Run this inside a project's code folder."
+
 finish
