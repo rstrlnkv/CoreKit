@@ -122,6 +122,8 @@
   blocks bash 4 and GNU-only constructs. Added CLAUDE.md for contributors.
 - Upgrade note: existing docs repos keep their old `Core/bin/` copies; copy the new `save`
   and `stop-remind.sh` from `skills/new-project/core-bin/` there to get the fixes.
+  (Historical: that folder is gone; since 0.2 the tools live in the plugin's `scripts/` and `hooks/` and
+  nothing is copied into the docs repo.)
 
 ## 0.1.0 — 2026-11-03
 - First public release: `new-project` skill (interview, stack and architecture analysis,

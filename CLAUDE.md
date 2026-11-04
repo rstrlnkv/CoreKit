@@ -24,12 +24,16 @@ agents/                engineer tester security verifier localizer designer
 hooks/
   hooks.json           five hooks, explicit timeouts
   session-start.sh one-suite.sh guard-code.sh guard-secrets.sh stop-remind.sh
+  messages.sh          every hook text, in the ui_language setting
 reference/
   wiki.md              wiki rules
   knowledge.md         knowledge format
 scripts/               all machinery, portable bash
   lib.sh               read settings, parse hook JSON without jq, locate <Core> and project
+  _locate.sh           find the plugin root and the Core for scripts run by hand
   setup-core.sh        create or upgrade the Core skeleton
+  install-hooks.sh     install the git hooks into a code repo and the Core
+  sync-tools.sh        sync the tools the Core uses from the plugin
   adopt.sh             move an existing project into the layout
   wiki-check.sh        wiki checks
   check-standard.sh    standard file checks
@@ -37,15 +41,16 @@ scripts/               all machinery, portable bash
   bash-lex.awk, bashlex-*.awk   the Bash tokenizer shared by guard-code and guard-secrets, and their parts
   git-hooks/           pre-commit-code, pre-push-code, pre-push-core, blocked-patterns
 tests/                 bash: lib.sh, test_*.sh, run.sh, fixtures/
-evals/                 trigger evals (new-project)
-plugins/coremodel/    a second plugin (TypeScript hooks module); spec docs/specs/2026-11-04-effort-picker-design.md;
+evals/                 evals.json: two scenario evals for new-project (prompt + expected output), not trigger evals
+docs/migration-*.md    upgrade guides for users of older versions (0.2, 0.3)
+plugins/coremodel/    a second plugin (TypeScript hooks module); spec docs/specs/2026-11-04-coremodel-design.md;
                        own CHANGELOG; tests: `claude plugin test plugins/coremodel` (run by tests/test_coremodel.sh)
 plugins/coreopinion/   a third plugin: skill second-opinion (GPT via `codex exec --sandbox read-only`);
                        own README and CHANGELOG; tests: tests/test_coreopinion.sh
 CHANGELOG.md, README.md
 ```
 No top-level `bin/` (claude.ai and Cowork refuse plugins that have one). Spec section 4.1 is the
-target tree; some parts arrive in later phases of docs/plans/.
+tree this layout follows.
 
 ## Commands
 ```bash

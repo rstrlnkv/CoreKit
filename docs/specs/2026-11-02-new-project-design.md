@@ -11,6 +11,13 @@ updated: 2026-11-02
 
 Layout superseded by docs/specs/2026-11-04-project-layout-design.md
 
+> **Superseded in the tree (history kept below).** Now true: there is no `Core/bin/` and no `install.sh`;
+> `save` and `undo-step` live in the plugin's `scripts/` and nothing is copied into the Core. The
+> Stop hook comes from the plugin's `hooks/hooks.json`, not from `code/.claude/settings.local.json`
+> (the code folder gets no such file). Adopting an existing project is no longer out of scope:
+> `/corecrew:task adopt <folder>` (scripts/adopt.sh) does it. Where this spec and
+> docs/specs/2026-11-03-coredev-design.md or the layout spec disagree, the later one wins.
+
 ## 1. Goal
 When the user asks to start a new project, Claude runs an interview, analyzes platforms,
 stack and architecture, agrees every decision with the user, and scaffolds the project to one
