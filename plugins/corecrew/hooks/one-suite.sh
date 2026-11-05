@@ -17,10 +17,12 @@
 # Env knobs, for tests: ONE_SUITE_PROCS (the process pattern, replaces the default), ONE_SUITE_WAIT
 # (seconds to wait; default 480), ONE_SUITE_GRACE (seconds a turn stays fresh; default 3),
 # ONE_SUITE_TURN (the turn directory).
-# Known limits: the takeover of a stale turn is a look and then a removal, so several waiters that find
-# the same stale turn in the same instant may go together (tried: one atomic rename; it narrows the
-# window but a fresh turn taken by mistake must be put back, which opens another); and the grace of 3 s
-# is short against a permission prompt the person answers slowly, after which a second run may start.
+# Known limits: the grace of 3 s is short against a permission prompt the person answers slowly, after
+# which a second run may start; and the takeover of a stale turn is safe only among hooks that use the
+# lock (a hook killed while it holds a mkdir lock leaves it for 2 s). The takeover is done under a short
+# lock (flock, else mkdir; see stale_take), so waiters that find the same stale turn together no longer
+# go together (tried before: one atomic rename; it only narrowed the window, since a fresh turn taken
+# by mistake had to be put back).
 # The default wait of 480 s must stay under this hook's `timeout` in hooks/hooks.json (Task 19 sets
 # it to 540) and under the stream watchdog, which stops an agent that is silent for 600 s.
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
@@ -105,6 +107,51 @@ running_line() {
   done | head -1
 }
 
+# stale_take — take a stale turn over, under a short lock. Two waiters that find the same stale turn
+# at the same instant must not both remove and re-make it: the second removal would take away the turn
+# the first one has just made, and both go. So the turn is judged again once the lock is held, and only
+# then removed and made anew. Returns 0: the turn is ours, the call goes; 1: it is not ours (it is
+# fresh again, or the lock stayed busy): keep waiting; 2: it cannot be cleared: let the call through.
+stale_take_locked() {
+  local at now; now="$(date +%s)"
+  at="$(cat "$turn/at" 2>/dev/null)"
+  case "$at" in ''|*[!0-9]*)   # a turn made an instant ago has no `at` yet (mkdir, then the write): look again
+    sleep 0.1 2>/dev/null; at="$(cat "$turn/at" 2>/dev/null)"; now="$(date +%s)"
+    case "$at" in ''|*[!0-9]*) at=0 ;; esac ;;
+  esac
+  [ $((now - at)) -ge "$grace" ] || return 1
+  rm -rf "$turn" 2>/dev/null
+  if mkdir "$turn" 2>/dev/null; then echo "$now" > "$turn/at"; return 0; fi
+  # Not made: either a waiter that does not take the lock made it in the instant after the removal (a
+  # fresh turn, not ours: keep waiting), or the stale turn is still there (-L: a dangling symlink) and
+  # cannot be cleared.
+  sleep 0.1 2>/dev/null; at="$(cat "$turn/at" 2>/dev/null)"; now="$(date +%s)"
+  case "$at" in ''|*[!0-9]*) ;; *) [ $((now - at)) -ge "$grace" ] || return 1 ;; esac
+  return 2
+}
+# The lock is flock on a file beside the turn when flock is installed, else a directory made with
+# mkdir. Either is held for a few milliseconds; the wait for it is bounded (5 s; 20 tries of 0.1 s),
+# so the hook never spins. A directory lock still there after 2 s was left by a hook that died: it is
+# broken. A flock that cannot be used (no lock file, flock failed or timed out) falls back to mkdir.
+stale_take() {
+  local rc i=0 ld="$turn.lockd"
+  if command -v flock >/dev/null 2>&1 && ( : >> "$turn.lock" ) 2>/dev/null; then
+    ( flock -x -w 5 9 || exit 3; stale_take_locked; exit $? ) 9>> "$turn.lock" 2>/dev/null
+    rc=$?; [ "$rc" -eq 3 ] || return "$rc"
+  fi
+  while ! mkdir "$ld" 2>/dev/null; do
+    i=$((i + 1))
+    if [ "$i" -gt 20 ]; then
+      rm -rf "$ld" 2>/dev/null; mkdir "$ld" 2>/dev/null && break
+      return 1
+    fi
+    sleep 0.1 2>/dev/null || sleep 1
+  done
+  stale_take_locked; rc=$?
+  rm -rf "$ld" 2>/dev/null
+  return "$rc"
+}
+
 start="$(date +%s)"; running=""; tdir="$(dirname "$turn")"
 while :; do
   running="$(running_line)"
@@ -114,9 +161,7 @@ while :; do
     [ -d "$tdir" ] && [ -w "$tdir" ] || exit 0
     at="$(cat "$turn/at" 2>/dev/null)"; case "$at" in ''|*[!0-9]*) at=0 ;; esac
     if [ $((now - at)) -ge "$grace" ]; then
-      rm -rf "$turn" 2>/dev/null
-      { [ -e "$turn" ] || [ -L "$turn" ]; } && exit 0   # -L: a dangling symlink that stays
-      continue
+      stale_take; case $? in 0|2) exit 0 ;; esac
     fi
   fi
   [ $((now - start)) -ge "$limit" ] && break

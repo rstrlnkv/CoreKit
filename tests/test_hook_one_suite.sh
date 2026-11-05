@@ -235,6 +235,47 @@ done
 stress 8 8 "$SANDBOX/noflock"
 check_stress "stale turn, 8 waiters (no flock on PATH)"
 
+# the lock itself: flock is used when it is installed, mkdir otherwise, and a lock that cannot be had
+# neither hangs the hook nor lets everything through. stale_run <path-dir> — one waiter, stale turn,
+# with PATH=<path-dir>: RC, T (seconds), ERR.
+stale_run() {
+  rm -rf "$SANDBOX/lk"; mkdir -p "$SANDBOX/lk/turn"; echo 1 > "$SANDBOX/lk/turn/at"
+  payload 'swift test' > "$SANDBOX/in"
+  local t0=$SECONDS
+  PATH="$1" ONE_SUITE_PROCS='onesuite-fake[-]none' ONE_SUITE_GRACE=5 ONE_SUITE_WAIT="${2:-1}" ONE_SUITE_TURN="$SANDBOX/lk/turn" \
+    "$(command -v bash)" "$H" < "$SANDBOX/in" >/dev/null 2>"$SANDBOX/err" & local hp=$!
+  ( sleep 12; kill "$hp" 2>/dev/null ) >/dev/null 2>&1 & local wd=$!; disown "$wd" 2>/dev/null
+  wait "$hp"; RC=$?; kill "$wd" 2>/dev/null; T=$((SECONDS - t0)); ERR="$(cat "$SANDBOX/err")"
+}
+REAL_FLOCK="$(command -v flock 2>/dev/null)"
+if [ -n "$REAL_FLOCK" ]; then
+  mkdir -p "$SANDBOX/withflock"; cp -P "$SANDBOX/noflock"/* "$SANDBOX/withflock/"
+  printf '#!/bin/sh\necho "$@" >> "%s/flock.log"\nexec "%s" "$@"\n' "$SANDBOX" "$REAL_FLOCK" > "$SANDBOX/withflock/flock"; chmod +x "$SANDBOX/withflock/flock"
+  rm -f "$SANDBOX/flock.log"; stale_run "$SANDBOX/withflock"
+  assert_eq "$RC" "0" "flock installed: the stale turn is taken"
+  assert_contains "$SANDBOX/flock.log" "-x"
+  assert_no_file "$SANDBOX/lk/turn.lockd"
+  # a flock that fails: the mkdir lock takes over
+  printf '#!/bin/sh\nexit 1\n' > "$SANDBOX/withflock/flock"
+  stale_run "$SANDBOX/withflock"
+  assert_eq "$RC" "0" "flock fails: falls back to the mkdir lock and takes the turn"
+  assert_no_file "$SANDBOX/lk/turn.lockd"
+else
+  pass   # no flock on this machine: only the mkdir path can be run here
+fi
+stale_run "$SANDBOX/noflock"
+assert_eq "$RC" "0" "no flock: the stale turn is taken"
+assert_no_file "$SANDBOX/lk/turn.lockd"
+[ "$(cat "$SANDBOX/lk/turn/at")" -gt 1000000000 ] && pass || fail "no flock: the new turn has no time in it"
+# a mkdir lock left by a hook that died is broken after about 2 s
+rm -rf "$SANDBOX/lk"; mkdir -p "$SANDBOX/lk/turn" "$SANDBOX/lk/turn.lockd"; echo 1 > "$SANDBOX/lk/turn/at"
+payload 'swift test' > "$SANDBOX/in"; t0=$SECONDS
+PATH="$SANDBOX/noflock" ONE_SUITE_PROCS='onesuite-fake[-]none' ONE_SUITE_GRACE=5 ONE_SUITE_WAIT=1 ONE_SUITE_TURN="$SANDBOX/lk/turn" \
+  "$(command -v bash)" "$H" < "$SANDBOX/in" >/dev/null 2>&1; rc=$?; t=$((SECONDS - t0))
+assert_eq "$rc" "0" "a dead hook's mkdir lock is broken and the turn taken"
+[ "$t" -ge 1 ] && [ "$t" -le 8 ] && pass || fail "dead lock: took ${t} s (want 1..8)"
+assert_no_file "$SANDBOX/lk/turn.lockd"
+
 # --- the default process pattern (checked as text: it never touches real processes)
 DEF="$(sed -n "s/^default_procs='\(.*\)'\$/\1/p" "$H")"
 [ -n "$DEF" ] && pass || fail "default_procs line not found in the hook"
