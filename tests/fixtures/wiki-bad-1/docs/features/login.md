@@ -1,10 +1,10 @@
 ---
-title: Login
+type: feature
 description: How a user logs in. Read before changing the login flow.
 files:
   - src/login.sh
 related:
-  - architecture.md
+  - "[[architecture]]"
 ---
 
 # Login

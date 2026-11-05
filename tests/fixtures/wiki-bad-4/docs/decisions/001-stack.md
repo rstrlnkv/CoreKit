@@ -1,7 +1,7 @@
 ---
-title: Stack
+type: decision
+status: active
 description: Why plain bash. Read when asked why not another language.
-status: accepted
 files: []
 related: []
 updated: 2026-11-03

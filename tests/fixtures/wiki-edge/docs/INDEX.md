@@ -1,11 +1,8 @@
----
-title: Docs index
-description: Map.
-status: active
-files: []
-related: []
-updated: 2026-11-03
----
+# wiki-edge wiki
+One line per page; open only the page you need.
 
-- [architecture.md](architecture.md) — headings with odd characters.
-- [features/space page.md](<features/space page.md>) — a page whose name has a space.
+## architecture
+[[architecture]] Quoted: colon, # sign, padded to eighty chars ..................................
+## feature
+[[login]] Login with a Cyrillic heading.
+[[sign in]] Sign-in: a page whose file name has a space # not a comment
