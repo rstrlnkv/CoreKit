@@ -11,6 +11,15 @@
 T="$1"; effort="${2:-medium}"
 case "$T" in ''|/) echo "usage: ask-gpt.sh <temp folder> [medium|high]" >&2; exit 2 ;; esac
 [ -f "$T/prompt.md" ] && [ -f "$T/dir" ] || { echo "ask-gpt.sh: $T/prompt.md or $T/dir is missing" >&2; exit 2; }
+# The folder is removed at the end, so it must be a `mktemp -d` folder (tmp.*) right in the temp
+# folder ($TMPDIR, /tmp): a wrong path, the project say, is refused and left alone.
+t_dir="$(cd "$T" 2>/dev/null && pwd -P)" || exit 2
+t_ok=""
+for r in "${TMPDIR:-/tmp}" /tmp; do
+  r="$(cd "$r" 2>/dev/null && pwd -P)" || continue
+  case "$t_dir" in "$r"/tmp.*) case "${t_dir#"$r"/}" in */*) ;; *) t_ok=1 ;; esac ;; esac
+done
+[ -n "$t_ok" ] || { echo "ask-gpt.sh: $T is not a mktemp -d folder in the temp folder; nothing was run or removed" >&2; exit 2; }
 trap 'rm -rf "$T"' EXIT
 trap 'exit 130' HUP INT TERM   # a signal ends the run; the EXIT trap then cleans up
 case "$effort" in medium|high) ;; *) effort=medium ;; esac

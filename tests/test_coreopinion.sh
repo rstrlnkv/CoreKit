@@ -168,7 +168,7 @@ assert_not_contains "$S" '-C "<project dir>"'
 assert_not_contains "$S" 'codex exec --ignore-user-config'   # one copy of the command: the script's
 mkdir -p "$SANDBOX/stub"; printf '#!/bin/sh\nprintf "%%s\\n" "$@" > "$STUB_ARGS"\necho "GPT says hi" > "$(dirname "$STUB_ARGS")/last"\nfor a; do case "$p" in --output-last-message) echo "GPT says hi" > "$a" ;; esac; p="$a"; done\n' > "$SANDBOX/stub/codex"; chmod +x "$SANDBOX/stub/codex"
 BAD="$SANDBOX/we ird\"\$(touch PWNED)\`touch PWNED2\`dir"; mkdir -p "$BAD"; git -C "$BAD" init -q
-T2="$SANDBOX/T2"; mkdir -p "$T2"; printf '%s' "$BAD" > "$T2/dir"; printf 'p\n' > "$T2/prompt.md"
+T2="$(mktemp -d)"; printf '%s' "$BAD" > "$T2/dir"; printf 'p\n' > "$T2/prompt.md"
 OUT="$(cd "$SANDBOX" && STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$T2" 2>&1)"
 assert_eq "$([ -e "$SANDBOX/PWNED" ] || [ -e "$SANDBOX/PWNED2" ] && echo ran || echo safe)" "safe" "a hostile project path runs nothing"
 assert_contains "$SANDBOX/args.txt" 'PWNED'
@@ -177,19 +177,27 @@ case "$OUT" in *"exit=0"*"--- answer"*"GPT says hi"*"--- log tail"*) pass ;; *) 
 assert_no_file "$T2"   # the temp folder (it holds the diff) is gone after the run
 grep -qx 'model_reasoning_effort=medium' "$SANDBOX/args.txt" && pass || fail "default effort is medium"
 # high on request; anything else falls back to medium
-T3="$SANDBOX/T3"; mkdir -p "$T3"; printf '%s' "$BAD" > "$T3/dir"; printf 'p\n' > "$T3/prompt.md"
+T3="$(mktemp -d)"; printf '%s' "$BAD" > "$T3/dir"; printf 'p\n' > "$T3/prompt.md"
 ( STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$T3" xhigh >/dev/null 2>&1 )
 grep -qx 'model_reasoning_effort=medium' "$SANDBOX/args.txt" && pass || fail "an unknown effort falls back to medium"
 # outside a git repository: the flag, and an empty folder instead of the project
 NR="$SANDBOX/norepo"; mkdir -p "$NR"; printf 'x\n' > "$NR/f.txt"
-T4="$SANDBOX/T4"; mkdir -p "$T4"; printf '%s' "$NR" > "$T4/dir"; printf 'p\n' > "$T4/prompt.md"
+T4="$(mktemp -d)"; printf '%s' "$NR" > "$T4/dir"; printf 'p\n' > "$T4/prompt.md"
 ( STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$T4" >/dev/null 2>&1 )
 assert_contains "$SANDBOX/args.txt" '--skip-git-repo-check'
 assert_eq "$(grep -A1 -x -- '-C' "$SANDBOX/args.txt" | tail -1)" "$T4/empty" "no repo: Codex gets an empty folder"
 # a missing prompt is refused, and the folder is not removed then
-T5="$SANDBOX/T5"; mkdir -p "$T5"
+T5="$(mktemp -d)"
 ( PATH="$SANDBOX/stub:$PATH" bash "$A" "$T5" >/dev/null 2>&1 ); assert_eq "$?" "2" "missing prompt: refused"
-assert_dir "$T5"
+assert_dir "$T5"; rm -rf "$T5"
+# the folder the script removes must be a mktemp folder right in the temp folder: a wrong path (the
+# project, say) that happens to hold prompt.md and dir is refused and left alone
+PRJ="$SANDBOX/proj"; mkdir -p "$PRJ"; printf '%s' "$BAD" > "$PRJ/dir"; printf 'p\n' > "$PRJ/prompt.md"; printf 'keep\n' > "$PRJ/code.sh"
+( PATH="$SANDBOX/stub:$PATH" bash "$A" "$PRJ" >/dev/null 2>&1 ); assert_eq "$?" "2" "not a temp folder: refused"
+assert_file "$PRJ/code.sh"
+TD="$(mktemp -d)"; mkdir -p "$TD/inner"; printf '%s' "$BAD" > "$TD/inner/dir"; printf 'p\n' > "$TD/inner/prompt.md"
+( PATH="$SANDBOX/stub:$PATH" bash "$A" "$TD/inner" >/dev/null 2>&1 ); assert_eq "$?" "2" "a folder inside a temp folder: refused"
+assert_dir "$TD/inner"; rm -rf "$TD"
 # a 429 is not always the plan's limit: the skill quotes the error instead of guessing
 assert_contains "$S" 'quote the error line'
 assert_not_contains "$S" '`429`, `quota`): the ChatGPT plan'"'"'s Codex limit'
