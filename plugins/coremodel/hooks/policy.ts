@@ -89,7 +89,7 @@ const NAMES: Record<Lang, Record<Level, string>> = {
 
 const MODE_NAMES: Record<Lang, Record<Mode, string>> = {
   en: { suggest: 'Suggest', auto: 'Auto', off: 'Off' },
-  ru: { suggest: 'Подсказывать', auto: 'Сам', off: 'Выкл' },
+  ru: { suggest: 'Спрашивать', auto: 'Автоматически', off: 'Выкл' },
 }
 
 // One line under the mode buttons: what the chosen mode does.
@@ -101,7 +101,7 @@ const MODE_HINTS: Record<Lang, Record<Mode, string>> = {
   },
   ru: {
     suggest: 'Спрашивает перед каждой сменой',
-    auto: 'Меняет сам, спрашивает перед Fable, Очень высоким, Максимальным и сменой модели посреди чата',
+    auto: 'Меняет сам, спрашивает перед Fable, уровнями «Очень высокое» и «Максимальное» и перед сменой модели посреди чата',
     off: 'Ничего не меняет',
   },
 }
@@ -109,11 +109,8 @@ const MODE_HINTS: Record<Lang, Record<Mode, string>> = {
 // auto with pickModel off: effort only.
 const AUTO_EFFORT_HINT: Record<Lang, string> = {
   en: 'Changes the level by itself, asks before Extra high and Max',
-  ru: 'Меняет уровень сам, спрашивает перед Очень высоким и Максимальным',
+  ru: 'Меняет уровень сам, спрашивает перед уровнями «Очень высокое» и «Максимальное»',
 }
-
-// The footer slot fits about 14 cells.
-const SHORT: Record<Level, string> = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'XHigh', max: 'Max' }
 
 export function texts(lang: Lang) {
   const n = (l: Level) => NAMES[lang][l]
@@ -154,7 +151,7 @@ export function texts(lang: Lang) {
     inMenu: (l: Level | '') => (ru ? `в меню: ${l ? n(l) : '?'} (ваше)` : `in the menu: ${l ? n(l) : '?'} (yours)`),
     modeQuestion: (mode: Mode, l: Level | '') =>
       ru
-        ? `CoreModel: ${mode}. Чат работает на: ${l ? n(l) : 'пока неизвестно'}. Какой режим?`
+        ? `CoreModel: ${MODE_NAMES.ru[mode]}. Чат работает на уровне: ${l ? n(l) : 'пока неизвестно'}. Какой режим?`
         : `CoreModel: ${mode}. Chat runs at: ${l ? n(l) : 'unknown yet'}. Which mode?`,
     now: ru ? 'Сейчас в чате' : 'Now in the chat',
     paneModel: ru ? 'Модель' : 'Model',
@@ -170,7 +167,7 @@ export function texts(lang: Lang) {
     notApplied: ru ? 'не применён' : 'not applied',
     unknownModels: (words: string[]) =>
       ru
-        ? `В настройке models неизвестно: ${words.map(w => `«${w}»`).join(', ')} (нужно haiku, sonnet, opus, fable)`
+        ? `В настройке models неизвестные названия: ${words.map(w => `«${w}»`).join(', ')} (допустимы haiku, sonnet, opus, fable)`
         : `In the models setting, unknown: ${words.map(w => `"${w}"`).join(', ')} (use haiku, sonnet, opus, fable)`,
     modeSet: (mode: 'auto' | 'suggest', pickModel: boolean) => {
       if (mode === 'suggest') return 'Mode: suggest. Every switch asks first.'
@@ -179,10 +176,9 @@ export function texts(lang: Lang) {
         : 'Mode: auto. Switches the level by itself; asks before Extra high and Max.'
     },
     session: ru ? 'За сессию' : 'This session',
-    kept: (k: number) => (ru ? `Уровень не меняли: ${k}` : `Left as it was: ${k}`),
+    kept: (k: number) => (ru ? `Без изменений: ${k}` : `Left as it was: ${k}`),
     release: ru ? 'Вернуть как в меню' : "Back to the menu's choice",
     noPicks: ru ? 'Пока нет выборов.' : 'No picks yet.',
-    label: (l: Level) => `${ru ? 'Усилие' : 'Effort'} ${SHORT[l]}`,
     // The pair (spec §7). With no model part each falls back to the effort-only text above.
     change: (m: ModelKey | null | undefined, fromM: ModelKey | '' | undefined, l: Level | null, fromL: Level | '', why: string) => {
       if (!m && l) return applied(l, fromL, why)

@@ -143,10 +143,10 @@ Everything of CoreEffort §4.7 stays, showing the pair; texts follow the prompt'
      level highlighted (`variant: 'primary'`); while anything is held, a quiet button "Вернуть как
      в меню" (Release). A model button pressed mid-chat first asks the cost question of §5 (Esc
      cancels); a level button holds at once.
-   - **Режим:** buttons Подсказывать / Сам / Выкл, the current one highlighted, and one line on
+   - **Режим:** buttons Спрашивать / Автоматически / Выкл, the current one highlighted, and one line on
      what it does.
    - **Последний выбор:** "Последний выбор · Opus · Высокое", the why on the next line.
-   - **За сессию:** a short bar and a count per model and per level, then "Уровень не меняли: n".
+   - **За сессию:** a short bar and a count per model and per level, then "Без изменений: n".
 
 ## 8. Layout
 

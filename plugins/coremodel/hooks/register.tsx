@@ -551,7 +551,11 @@ export const register: Register = (on, options) => {
     if (!arg) {
       let answer = ''
       try {
-        answer = await $.ui.ask(texts(lastLang).modeQuestion(mode, level), { options: [...ASK_MODES], header: 'CoreModel' })
+        const t = texts(lastLang)
+        // The words are the keys in English and the mode names in Russian; the answer maps back.
+        const label = (m: Mode) => (lastLang === 'ru' ? t.modeName(m) : m)
+        const picked = await $.ui.ask(t.modeQuestion(mode, level), { options: ASK_MODES.map(label), header: 'CoreModel' })
+        answer = ASK_MODES.find(m => label(m) === picked) ?? ''
       } catch {
         // Dismissed: say where things stand, change nothing.
       }

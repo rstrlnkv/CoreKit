@@ -48,8 +48,6 @@ test('texts name the level in each language', () => {
   expect(texts('ru').keepModel('sonnet')).toBe('Оставить Sonnet')
   const line = texts('en').applied('high', 'medium', 'auth bug')
   for (const w of ['High', 'Medium', 'auth bug']) expect(line.includes(w)).toBe(true)
-  expect(texts('en').label('xhigh')).toBe('Effort XHigh')
-  expect(texts('ru').label('high')).toBe('Усилие High')
 })
 
 test('the effort question says an Extra high, a High', () => {

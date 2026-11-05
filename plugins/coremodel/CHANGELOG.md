@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.11 — 2026-11-05
+
+Russian texts, read through once.
+
+- Mode names: "Подсказывать" said the opposite of what suggest does; it is now "Спрашивать"
+  (asks before every switch), and "Сам" is "Автоматически" (not to be mistaken for the app's own
+  "Авто" label in the footer).
+- The `/coremodel` mode question offered the English words auto / suggest / off in a Russian chat;
+  it now offers the mode names and says "Чат работает на уровне".
+- The auto hints name the levels in quotes («Очень высокое», «Максимальное») instead of bending
+  them mid-sentence.
+- "Уровень не меняли: n" became "Без изменений: n" (it also counts model questions left alone).
+- The models-setting warning reads "неизвестные названия … (допустимы …)".
+- Removed the unused "Усилие High" label that mixed Russian and English.
+
 ## 0.4.10 — 2026-11-05
 
 - Pane: every section keeps its caption one step (`xs`) apart from the buttons or text under it,

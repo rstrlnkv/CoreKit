@@ -373,10 +373,10 @@ test('the pane speaks Russian after a Russian prompt', { options: { mode: 'auto'
   expect(await has($, /^Уровень$/)).toBe(true)
   expect(await has($, /^Последний выбор$/)).toBe(true)
   expect(await has($, /^Высокое · применён$/)).toBe(true)
-  expect(await has($, /Меняет сам, спрашивает перед Fable/)).toBe(true)
+  expect(await has($, /Меняет сам, спрашивает перед Fable, уровнями «Очень высокое» и «Максимальное» и перед сменой модели/)).toBe(true)
   const ui = await pane($)
-  expect(String((await ui.find({ type: 'Button', key: 'mode-suggest' }))?.props.label)).toBe('Подсказывать')
-  expect(String((await ui.find({ type: 'Button', key: 'mode-auto' }))?.props.label)).toBe('Сам')
+  expect(String((await ui.find({ type: 'Button', key: 'mode-suggest' }))?.props.label)).toBe('Спрашивать')
+  expect(String((await ui.find({ type: 'Button', key: 'mode-auto' }))?.props.label)).toBe('Автоматически')
   expect(String((await ui.find({ type: 'Button', key: 'mode-off' }))?.props.label)).toBe('Выкл')
   expect(String((await ui.find({ type: 'Button', key: 'release' }))?.props.label)).toBe('Вернуть как в меню')
   await ui.unmount()
@@ -865,7 +865,7 @@ test('the models warning is in Russian after a Russian prompt', { options: { mod
   w.reply = null
   await start($)
   await switchTo($, w, 'high', 'medium', 'почини авторизацию')
-  expect(await has($, /В настройке models неизвестно: «hauki»/)).toBe(true)
+  expect(await has($, /В настройке models неизвестные названия: «hauki»/)).toBe(true)
 })
 
 test('/coremodel replies speak of the pair, not only the level', async ($, on) => {
@@ -1009,4 +1009,16 @@ test('every pane section keeps its caption apart from what follows', { options: 
     expect((await ui.find({ type: 'Box', key }))?.props.gap).toBe('xs')
   }
   await ui.unmount()
+})
+
+test('the mode question and the kept count read in Russian', async ($, on) => {
+  const w = world(on)
+  w.row = null
+  w.reply = 'Автоматически'
+  await start($)
+  await switchTo($, w, 'keep', 'medium', 'почини авторизацию')
+  const text = await run($, '')
+  expect(w.asked.at(-1)).toEqual(['Автоматически', 'Спрашивать', 'Выкл'])
+  expect(text).toContain('Mode: auto.')
+  expect(await has($, /^Без изменений: 1$/)).toBe(true)
 })
