@@ -1,7 +1,9 @@
 # CoreKit
 
-The `corecrew` Claude Code plugin: develop every project the same way, and keep your standards
-and lessons in one private repo of your own. It lives in the `corekit` marketplace.
+The `corekit` marketplace of Claude Code plugins. The main one is `corecrew`: develop every
+project the same way, and keep your standards and lessons in one private repo of your own. Two
+smaller plugins sit beside it: `coremodel` (picks the model and the effort) and `coreopinion` (a
+second opinion from GPT). Each installs on its own.
 
 ## Install
 
@@ -179,8 +181,12 @@ Details: plugins/coreopinion/README.md.
 ## Development
 ```bash
 bash tests/run.sh        # all tests, no network, prints ALL TESTS PASSED
+claude plugin validate . # the marketplace; also plugins/corecrew, plugins/coremodel, plugins/coreopinion
 ```
-Design spec: `docs/specs/` · implementation plan: `docs/plans/` · scenario evals for `new-project`: `evals/evals.json` (two prompts with the expected result; they are run by hand, not by `tests/run.sh`).
+Design specs: `docs/specs/` · implementation plans: `docs/plans/` · trigger evals (does a skill start
+when it should, and stay silent when it should not): `plugins/corecrew/evals/` and
+`plugins/coreopinion/evals/`, run by hand with `claude plugin eval plugins/corecrew --ablation none --no-publish`
+(real model calls, under a dollar a plugin; not part of `tests/run.sh`).
 
 ## License
 MIT — see [LICENSE](LICENSE).

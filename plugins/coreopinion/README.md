@@ -9,6 +9,8 @@ until you say yes; then Claude makes the change itself.
 
 ## Requirements
 
+- Claude Code 2.1.271 or newer (`claude --version`), as for corecrew: the skill's commands use
+  `${CLAUDE_SKILL_DIR}`.
 - The Codex CLI (`codex --version`), installed with `npm install -g @openai/codex` or
   `brew install codex`.
 - Signed in with a ChatGPT plan (Plus or higher): run `codex login` once in a normal terminal;

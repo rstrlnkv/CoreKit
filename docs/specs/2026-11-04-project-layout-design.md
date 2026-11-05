@@ -1,13 +1,17 @@
 ---
 title: Project layout — code beside Core, private files in Core
 description: Target on-disk layout of a corecrew project (code repo in <Projects>/<Name>, private files in <Core>/<name>), how a session finds its Core folder, what new-project and adopt do, migration from <Core>/<name>/code, and the list of files to change. Read before changing project location logic in scripts, hooks or skills.
-status: approved
+status: implemented (corecrew 0.5.0); section 8 checks are for a live session
 files: [scripts/lib.sh, scripts/_locate.sh, scripts/adopt.sh, scripts/install-hooks.sh, scripts/wiki-check.sh, scripts/setup-core.sh, hooks/, skills/new-project/, skills/task/, reference/wiki.md, tests/]
 related: [docs/specs/2026-11-03-coredev-design.md, docs/specs/2026-11-02-new-project-design.md]
 updated: 2026-11-04
 ---
 
 # Project layout — code beside Core, private files in Core
+
+> **Paths (2026-11-05, corecrew 0.6.0).** The plugin lives in `plugins/corecrew/`: every path in this
+> spec that names `skills/`, `agents/`, `hooks/`, `reference/`, `scripts/` or `.claude-plugin/plugin.json`
+> is relative to that folder. `tests/`, `docs/` and `.claude-plugin/marketplace.json` stay at the repo root.
 
 ## 1. Why
 Today a project's code repo lives inside the private Core, at `<Core>/<name>/code/`, so that

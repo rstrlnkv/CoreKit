@@ -11,6 +11,10 @@ updated: 2026-11-03
 
 Layout superseded by docs/specs/2026-11-04-project-layout-design.md
 
+> **Paths (2026-11-05, corecrew 0.6.0).** The plugin lives in `plugins/corecrew/`: every path in this
+> spec that names `skills/`, `agents/`, `hooks/`, `reference/`, `scripts/` or `.claude-plugin/plugin.json`
+> is relative to that folder. `tests/`, `docs/` and `.claude-plugin/marketplace.json` stay at the repo root.
+
 > **Status note (2026-11-05).** This spec is implemented (corecrew 0.5.x); the `draft` status below is
 > historical. Now true where the text differs: the plugin is called `corecrew`, the second plugin is
 > `coremodel` (docs/specs/2026-11-04-coremodel-design.md); the code lives beside the Core (layout

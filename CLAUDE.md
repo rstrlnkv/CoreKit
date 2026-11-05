@@ -51,7 +51,8 @@ plugins/coremodel/     a second plugin (TypeScript hooks module); spec docs/spec
 plugins/coreopinion/   a third plugin: skill second-opinion (GPT via `codex exec` with a narrow read-only
                        permission profile, in scripts/ask-gpt.sh); own README and CHANGELOG; tests: tests/test_coreopinion.sh;
                        trigger evals in evals/ like corecrew's
-tests/                 bash: lib.sh ($PLUGIN is plugins/corecrew), test_*.sh, run.sh, fixtures/
+tests/                 bash: lib.sh ($PLUGIN is plugins/corecrew), test_*.sh, run.sh, fixtures/;
+                       test_docs_paths.sh checks that every repo path a README names exists
 docs/migration-*.md    upgrade guides for users of older versions (0.2, 0.3)
 CHANGELOG.md, README.md   corecrew's changelog and the repo README
 ```

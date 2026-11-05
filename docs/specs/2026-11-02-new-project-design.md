@@ -11,6 +11,10 @@ updated: 2026-11-02
 
 Layout superseded by docs/specs/2026-11-04-project-layout-design.md
 
+> **Paths (2026-11-05, corecrew 0.6.0).** The plugin lives in `plugins/corecrew/`: every path in this
+> spec that names `skills/`, `agents/`, `hooks/`, `reference/`, `scripts/` or `.claude-plugin/plugin.json`
+> is relative to that folder. `tests/`, `docs/` and `.claude-plugin/marketplace.json` stay at the repo root.
+
 > **Superseded in the tree (history kept below).** Now true: there is no `Core/bin/` and no `install.sh`;
 > `save` and `undo-step` live in the plugin's `scripts/` and nothing is copied into the Core. The
 > Stop hook comes from the plugin's `hooks/hooks.json`, not from `code/.claude/settings.local.json`

@@ -87,6 +87,8 @@ The pane is tighter and easier to scan.
 
 Races and edges found by a read-only audit.
 
+- A **CoreModel** button in the footer opens and closes the pane without a chat command, so a
+  running turn is not interrupted (`/coremodel panel` still does the same).
 - A prompt waiting for its pick is dropped when it can no longer be the next turn's: the submit was
   refused, the turn ended before its first request (Esc), or another kind of prompt took the turn.
   A prompt queued behind a running turn still keeps its pick.
