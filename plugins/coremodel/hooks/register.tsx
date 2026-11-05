@@ -401,7 +401,7 @@ const xml = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 
 // The session counts as one drawing: a share bar per model and one stacked bar for the levels.
 // An image on the desktop cannot read the theme, so it draws on a neutral track and mid-grey text.
-function statsSvg(models: { key: string; name: string; n: number }[], levels: { name: string; n: number }[]) {
+function statsSvg(models: { key: string; name: string; n: number }[], levels: { name: string; n: number }[], LEVELS_CAPTION: string) {
   const W = 304
   const X = 64
   const BAR = 200
@@ -419,19 +419,21 @@ function statsSvg(models: { key: string; name: string; n: number }[], levels: { 
   if (levels.length) {
     const total = levels.reduce((a, l) => a + l.n, 0)
     let x = X
+    rows.push(`<text x="0" y="${y + 11}" font-size="12" fill="#888780">${xml(LEVELS_CAPTION)}</text>`)
     levels.forEach((l, i) => {
       const w = i === levels.length - 1 ? X + BAR - x : Math.max(2, Math.floor((l.n / total) * BAR))
       rows.push(`<rect x="${x}" y="${y + 3}" width="${w}" height="8" fill="${LEVEL_SHADES[i % LEVEL_SHADES.length]}"/>`)
       x += w
     })
-    y += 20
-    rows.push(`<text x="0" y="${y - 9}" font-size="12" fill="#888780">${xml(levels.map(l => `${l.name} ${l.n}`).join(' · '))}</text>`)
+    y += 24
+    rows.push(`<text x="${X}" y="${y}" font-size="11" fill="#888780">${xml(levels.map(l => `${l.name} ${l.n}`).join(' · '))}</text>`)
     y += 4
   }
   return { height: y, source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${y}" width="${W}" height="${y}">${rows.join('')}</svg>` }
 }
 
-const RULE = '─'.repeat(60)
+const RULE = '─'.repeat(40)
+const HAIRLINE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1" width="1000" height="1" preserveAspectRatio="none"><rect width="1000" height="1" fill="#888780" fill-opacity="0.3"/></svg>'
 
 export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
@@ -606,6 +608,8 @@ export const register: Register = (on, options) => {
     const modelMax = Math.max(1, ...modelCounts.map(m => s?.models?.[m] ?? 0))
     const levelMax = Math.max(1, ...levelCounts.map(l => s?.picks[l] ?? 0))
     const nameW = Math.max(0, ...modelCounts.map(m => MODELS[m].name.length), ...levelCounts.map(l => t.levelName(l).length))
+    const rule = (key: string) =>
+      Svg ? <Svg key={key} source={HAIRLINE} alt="" height={1} /> : <Text key={key} dimColor wrap="truncate-end">{RULE}</Text>
     const usageRow = (name: string, n: number, max: number) => `${name.padEnd(nameW)}  ${'█'.repeat(Math.max(1, Math.round((n / max) * 12)))} ${n}`
     return (
       <Box flexDirection="column" gap="sm">
@@ -620,7 +624,7 @@ export const register: Register = (on, options) => {
             <Text key={`unavailable-${m}`} color="warning">{t.unavailable(m, namedInSetting(options.models, m))}</Text>
           ))}
         </Box>
-        <Text key="d1" dimColor wrap="truncate-end">{RULE}</Text>
+        {rule("d1")}
         {pickOn && allowed.length ? (
           <Box key="choose-model" flexDirection="column">
             <Text dimColor>{t.paneModel}</Text>
@@ -636,7 +640,7 @@ export const register: Register = (on, options) => {
             </Box>
           </Box>
         ) : null}
-        <Box key="choose" flexDirection="column">
+        <Box key="choose" flexDirection="column" gap="xs">
           <Text dimColor>{t.paneLevel}</Text>
           <Box key="levels" flexWrap="wrap" gap="xs">
             {LEVELS.map(l => (
@@ -654,7 +658,7 @@ export const register: Register = (on, options) => {
             </Box>
           ) : null}
         </Box>
-        <Text key="d2" dimColor wrap="truncate-end">{RULE}</Text>
+        {rule("d2")}
         <Box key="mode" flexDirection="column">
           <Text dimColor>{t.mode}</Text>
           <Box key="modes" flexWrap="wrap" gap="xs">
@@ -669,7 +673,7 @@ export const register: Register = (on, options) => {
           </Box>
           <Text dimColor>{t.modeHint(mode, pickOn)}</Text>
         </Box>
-        <Text key="d3" dimColor wrap="truncate-end">{RULE}</Text>
+        {rule("d3")}
         <Box key="last" flexDirection="column">
           <Text dimColor>{t.lastPick}</Text>
           {s?.last ? (
@@ -681,7 +685,7 @@ export const register: Register = (on, options) => {
             <Text>{t.noPicks}</Text>
           )}
         </Box>
-        <Text key="d4" dimColor wrap="truncate-end">{RULE}</Text>
+        {rule("d4")}
         {modelCounts.length > 0 || levelCounts.length > 0 || (s && s.kept > 0) ? (
           <Box key="session" flexDirection="column">
             <Text dimColor>{t.session}</Text>
@@ -689,7 +693,7 @@ export const register: Register = (on, options) => {
               (() => {
                 const models = modelCounts.map(m => ({ key: m, name: MODELS[m].name, n: s?.models?.[m] ?? 0 }))
                 const levels = levelCounts.map(l => ({ name: t.levelName(l), n: s?.picks[l] ?? 0 }))
-                const d = statsSvg(models, levels)
+                const d = statsSvg(models, levels, t.paneLevel)
                 const alt = [...models.map(m => `${m.name} ${m.n}`), ...levels.map(l => `${l.name} ${l.n}`)].join(', ')
                 return <Svg key="stats" source={d.source} alt={alt} width={304} height={d.height} />
               })()

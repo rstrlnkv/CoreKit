@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.7 — 2026-11-05
+
+- Desktop: the section rules are a one-pixel drawing across the whole pane (the text rule was cut
+  off with "…"); the terminal keeps a shorter text rule.
+- The levels bar in the session drawing has its own caption on the left and a legend under it
+  that no longer overlaps the bar.
+- "Release" sits one gap below the level buttons instead of touching them.
+
 ## 0.4.6 — 2026-11-05
 
 - On the desktop (and VS Code, mobile) the session counts are one drawing: a share bar per model
