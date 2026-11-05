@@ -85,6 +85,10 @@ calling GitHub.
   tests/test_isolation.sh checks it). Never run `git config --global`/`--system` or write to
   `~/.claude`, `~/.codex` or the real `~/Projects` from a test or an agent; for a manual check
   use `GIT_CONFIG_GLOBAL=$(mktemp)`.
+- **Risky code:** a script that moves or deletes user files (adopt, undo-step, save) needs a
+  test of the failure path: a failed step leaves the user's files as they were
+  (tests/test_adopt.sh does this). A guard or blocker needs a test that a legitimate action
+  passes. A hook never polls in a tight loop: wait with `sleep` and a limit, as one-suite.sh does.
 - **Releases:** bump `version` in plugins/corecrew/.claude-plugin/plugin.json and add an entry to
   CHANGELOG.md (newest first, `## X.Y.Z — YYYY-MM-DD`) in the same change.
 - After any change run `bash tests/run.sh` and `claude plugin validate .` (and the plugin you changed).
