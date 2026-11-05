@@ -18,11 +18,11 @@
 # (seconds to wait; default 480), ONE_SUITE_GRACE (seconds a turn stays fresh; default 3),
 # ONE_SUITE_TURN (the turn directory).
 # Known limits: the grace of 3 s is short against a permission prompt the person answers slowly, after
-# which a second run may start; and the takeover of a stale turn is safe only among hooks that use the
-# lock (a hook killed while it holds a mkdir lock leaves it for 2 s). The takeover is done under a short
-# lock (flock, else mkdir; see stale_take), so waiters that find the same stale turn together no longer
-# go together (tried before: one atomic rename; it only narrowed the window, since a fresh turn taken
-# by mistake had to be put back).
+# which a second run may start; and a mkdir lock left by a hook that was killed while holding it is
+# broken by the next waiter only after 2 s. The takeover of a stale turn runs under a short lock
+# (flock, else mkdir; see stale_take), so waiters that find the same stale turn together no longer go
+# together (tried before: one atomic rename; it only narrowed the window, since a fresh turn taken by
+# mistake had to be put back).
 # The default wait of 480 s must stay under this hook's `timeout` in hooks/hooks.json (Task 19 sets
 # it to 540) and under the stream watchdog, which stops an agent that is silent for 600 s.
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0

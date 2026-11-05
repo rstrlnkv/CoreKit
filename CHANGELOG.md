@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.6 — 2026-11-05
+- The one-suite hook no longer lets several test runs through when many waiters (8 in the stress
+  test) find the same stale turn at the same instant. The takeover now runs under a short lock
+  (`flock` when installed, else a `mkdir` lock), judges the turn again once it holds the lock, and
+  never spins (the wait for the lock is bounded). This replaces the "known limit" named in 0.6.3.
 ## 0.6.5 — 2026-11-05
 - New skill `/corecrew:ship [patch|minor|major|<version>]`: releases the current branch through the
   `release` path of `/corecrew:task`, checks that the tests left the global git config unchanged,
