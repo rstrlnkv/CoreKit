@@ -95,9 +95,26 @@ R3="$SANDBOX/untracked"; mkdir -p "$R3"; git -C "$R3" init -q
 for f in new.sh .npmrc deploy.tfvars my-token.txt note.md; do printf 'x\n' > "$R3/$f"; done
 got="$(cd "$R3" && eval "set -- $specs" && git ls-files --others --exclude-standard -- . "$@" | LC_ALL=C sort | tr '\n' ';')"
 assert_eq "$got" "new.sh;note.md;" "untracked secrets are filtered"
-# named files are checked with the same pathspec
-nm_line="$(grep -m1 '^git ls-files --cached --others --exclude-standard -- <named' "$S")"
-assert_eq "${nm_line:+found}" "found" "SKILL.md checks user-named files against the pathspec"
+# named files go through scripts/allowed-files.sh. `git ls-files -- <files in one folder> <excludes>`
+# is wrong both ways (git 2.54): plain excludes list nothing, glob excludes let secrets through.
+AF="$P/skills/second-opinion/scripts/allowed-files.sh"
+assert_file "$AF"
+assert_contains "$S" 'scripts/allowed-files.sh'
+assert_not_contains "$S" '-- <named paths>'
+R6="$SANDBOX/named"; mkdir -p "$R6/plugins/x/hooks" "$R6/sub/.aws" "$R6/sp ace" "$R6/new"; git -C "$R6" init -q; git -C "$R6" config core.ignorecase true
+for f in plugins/x/hooks/g.sh plugins/x/hooks/h.sh plugins/x/hooks/.env sub/prod.env sub/Credentials.json sub/.aws/config sub/app.sh README.md "sp ace/f.md"; do printf 'x\n' > "$R6/$f"; done
+git -C "$R6" add -A; git -C "$R6" commit -qm init
+printf 'x\n' > "$R6/new/untracked.sh"; printf 'x\n' > "$R6/new/.env.local"
+af() { (cd "$R6${2:+/$2}" && eval "bash \"\$AF\" $1") | LC_ALL=C sort | tr '\n' ';'; }
+assert_eq "$(af 'plugins/x/hooks/g.sh')" "plugins/x/hooks/g.sh;" "one nested file"
+assert_eq "$(af 'plugins/x/hooks/g.sh plugins/x/hooks/h.sh plugins/x/hooks/.env')" "plugins/x/hooks/g.sh;plugins/x/hooks/h.sh;" "files in one folder: the secret dropped"
+assert_eq "$(af 'plugins/x/hooks/.env')" "" "a named secret alone: nothing"
+assert_eq "$(af 'sub sub/prod.env')" "sub/app.sh;" "a folder: its allowed files only"
+assert_eq "$(af './new/ README.md')" "README.md;new/untracked.sh;" "untracked and ./ prefixed"
+assert_eq "$(af '"sp ace/f.md"')" "sp ace/f.md;" "a path with a space"
+assert_eq "$(af 'x/hooks/g.sh' plugins)" "x/hooks/g.sh;" "from a subfolder, relative to it"
+assert_eq "$(af 'missing.txt')" "" "a missing path: nothing"
+(cd "$SANDBOX" && bash "$AF" a >/dev/null 2>&1); assert_eq "$?" "3" "outside a git repository: exit 3"
 # a repo with no commits: the diff base is the empty tree, an error is not 'nothing to review'
 assert_contains "$S" 'git hash-object -t tree /dev/null'
 assert_contains "$S" 'is not "nothing to review"'

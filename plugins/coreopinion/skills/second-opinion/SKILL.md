@@ -1,7 +1,7 @@
 ---
 name: second-opinion
 description: Use when the user wants a second opinion or an outside review from OpenAI's GPT through the Codex CLI — phrases like "second opinion", "ask ChatGPT", "ask GPT", "ask Codex", "review with GPT", "what would GPT say", "второе мнение", "спроси GPT", "спроси ChatGPT". GPT only reads and answers; Claude shows its answer with Claude's own assessment and makes any change itself, only after the user approves.
-allowed-tools: Bash(bash ${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh *)
+allowed-tools: Bash(bash ${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh *), Bash(bash ${CLAUDE_SKILL_DIR}/scripts/allowed-files.sh *)
 ---
 
 # Second opinion from GPT
@@ -41,18 +41,26 @@ applies to the diff, to untracked files and to files the user names:
 git diff HEAD --name-only -- . ':(exclude)*.env' ':(exclude)*.env.*' ':(exclude)*.pem' ':(exclude)*.key' ':(exclude)*.p12' ':(exclude)*.pfx' ':(exclude)*id_rsa*' ':(exclude)*id_ed25519*' ':(exclude,icase)*credentials*' ':(exclude)*.npmrc' ':(exclude)*.netrc' ':(exclude)*.pypirc' ':(exclude)*.git-credentials' ':(exclude)*.tfvars' ':(exclude)*.tfstate' ':(exclude)*.tfstate.*' ':(exclude)*.jks' ':(exclude)*.keystore' ':(exclude)*.p8' ':(exclude,icase)*secret*' ':(exclude,icase)*token*' ':(exclude,icase)*kubeconfig*' ':(exclude)*.kdbx' ':(exclude)*.aws/*' ':(exclude,icase)*service?account*.json' ':(exclude,icase)*serviceaccount*.json'
 ```
 
-Untracked files and user-named files go through the same pathspec (replace `<named paths>` with
-the paths the user named):
+Untracked files go through the same pathspec:
 
 ```bash
 git ls-files --others --exclude-standard -- . ':(exclude)*.env' ':(exclude)*.env.*' ':(exclude)*.pem' ':(exclude)*.key' ':(exclude)*.p12' ':(exclude)*.pfx' ':(exclude)*id_rsa*' ':(exclude)*id_ed25519*' ':(exclude,icase)*credentials*' ':(exclude)*.npmrc' ':(exclude)*.netrc' ':(exclude)*.pypirc' ':(exclude)*.git-credentials' ':(exclude)*.tfvars' ':(exclude)*.tfstate' ':(exclude)*.tfstate.*' ':(exclude)*.jks' ':(exclude)*.keystore' ':(exclude)*.p8' ':(exclude,icase)*secret*' ':(exclude,icase)*token*' ':(exclude,icase)*kubeconfig*' ':(exclude)*.kdbx' ':(exclude)*.aws/*' ':(exclude,icase)*service?account*.json' ':(exclude,icase)*serviceaccount*.json'
-git ls-files --cached --others --exclude-standard -- <named paths> ':(exclude)*.env' ':(exclude)*.env.*' ':(exclude)*.pem' ':(exclude)*.key' ':(exclude)*.p12' ':(exclude)*.pfx' ':(exclude)*id_rsa*' ':(exclude)*id_ed25519*' ':(exclude,icase)*credentials*' ':(exclude)*.npmrc' ':(exclude)*.netrc' ':(exclude)*.pypirc' ':(exclude)*.git-credentials' ':(exclude)*.tfvars' ':(exclude)*.tfstate' ':(exclude)*.tfstate.*' ':(exclude)*.jks' ':(exclude)*.keystore' ':(exclude)*.p8' ':(exclude,icase)*secret*' ':(exclude,icase)*token*' ':(exclude,icase)*kubeconfig*' ':(exclude)*.kdbx' ':(exclude)*.aws/*' ':(exclude,icase)*service?account*.json' ':(exclude,icase)*serviceaccount*.json'
 ```
+
+Files and folders the user names go through the skill's own script (it prints the ones that may be
+sent; each path in single quotes):
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/allowed-files.sh" '<path>' '<path>'
+```
+
+Never check named paths with `git ls-files -- <paths> <EXCLUDE>`: when the paths share one folder,
+git ignores or misreads the excludes and may list a secret.
 
 Pick the smallest material that answers the question:
 
-1. **What the user named** — files, a function, a question, a plan. Check each named path with
-   the named-files command above. A path it does not list is a secret file (or missing, or git-ignored): say you will not send it.
+1. **What the user named** — files, a function, a question, a plan. Check the named paths with
+   the named-files script above. A path it does not list is a secret file (or missing, or git-ignored): say you will not send it.
 2. **Otherwise the uncommitted work** (unstaged and staged together): the paths with the command
    above, then `git diff HEAD --stat -- . <EXCLUDE>`, then `git diff HEAD -- . <EXCLUDE>`. Never a
    bare `git diff HEAD`. New untracked files the change needs come from the untracked command
