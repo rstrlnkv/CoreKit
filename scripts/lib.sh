@@ -2,6 +2,7 @@
 # Settings come from plugin options (CLAUDE_PLUGIN_OPTION_*) and from <Core>/.coredev
 # (lines "key: value"). The settings file is read, never executed.
 # load_settings sets: CORE_DIR, CORE_NAME, ATTRIBUTION, MODEL_PROFILE, APP_ID_PREFIX.
+# (ui_language is read by hooks/messages.sh through opt_value.)
 
 # The Core layout schema this plugin version writes and expects (the one place it is defined).
 COREDEV_SCHEMA=2

@@ -9,7 +9,8 @@ loaded through a gitignored `CLAUDE.local.md` link in the code folder. Layout sp
 docs/specs/2026-11-04-project-layout-design.md (old projects keep `<Core>/<name>/code/`).
 
 Requirements source: docs/specs/2026-11-03-coredev-design.md (read before changing the
-plugin) and docs/specs/2026-11-02-new-project-design.md (the `new-project` skill). Plans: docs/plans/.
+plugin; its layout part is superseded by the layout spec above) and
+docs/specs/2026-11-02-new-project-design.md (the `new-project` skill). Plans: docs/plans/.
 
 ## Layout
 ```
@@ -44,7 +45,8 @@ tests/                 bash: lib.sh, test_*.sh, run.sh, fixtures/
 evals/                 evals.json: two scenario evals for new-project (prompt + expected output), not trigger evals
 docs/migration-*.md    upgrade guides for users of older versions (0.2, 0.3)
 plugins/coremodel/    a second plugin (TypeScript hooks module); spec docs/specs/2026-11-04-coremodel-design.md;
-                       own CHANGELOG; tests: `claude plugin test plugins/coremodel` (run by tests/test_coremodel.sh)
+                       own CHANGELOG; tests: `claude plugin test plugins/coremodel` (run by tests/test_coremodel.sh;
+                       without the `claude` CLI it is skipped and run.sh names it after PASSED)
 plugins/coreopinion/   a third plugin: skill second-opinion (GPT via `codex exec` with a narrow read-only permission profile);
                        own README and CHANGELOG; tests: tests/test_coreopinion.sh
 CHANGELOG.md, README.md

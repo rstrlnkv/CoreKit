@@ -1,5 +1,7 @@
 # Project layout (code beside Core) Implementation Plan
 
+> **Historical (done).** Shipped in corecrew 0.5.0. The checkboxes below were never ticked; the tree and docs/specs/2026-11-04-project-layout-design.md win where they differ.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A corecrew project's code repo lives in `<Projects>/<Name>` and only its private files in `<Core>/<name>`; every script, hook and skill finds the project that way, and `adopt` stops moving repos.

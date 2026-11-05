@@ -1,7 +1,7 @@
 ---
 title: CoreKit refactor — run plan for an unattended session
 description: Ordered plan to audit and clean corecrew and the shared docs while the owner is away; what to touch, what to leave to the parallel plugin session, stop rules, and the report.
-status: approved — starts when phase G opens (all four sub-sessions finished)
+status: done — results in 2026-11-05-refactor-report.md
 updated: 2026-11-05
 ---
 

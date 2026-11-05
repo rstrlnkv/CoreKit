@@ -1,5 +1,7 @@
 # coremodel Implementation Plan
 
+> **Historical (done).** Shipped as coremodel 0.4.0 and refined through 0.4.x (see plugins/coremodel/CHANGELOG.md). The checkboxes below were never ticked; the tree and the spec docs/specs/2026-11-04-coremodel-design.md win where they differ.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn the `coreeffort` plugin (0.3.0) into `coremodel` (0.4.0), which picks a model as well as the effort for each main-chat prompt, holds the pair, and names the token cost of a mid-chat model switch.

@@ -33,7 +33,7 @@ claude plugin uninstall effort-picker@corekit
 
 Settings belong to a plugin name, so the new plugins start with the defaults.
 `/plugin` → Installed → corecrew → Configure options: `core_dir`, `attribution`,
-`model_profile`, `ui_language`. For coremodel: `mode`, `classifier`.
+`model_profile`, `ui_language`. For coremodel: `mode`, `classifier`, `models`, `pickModel`.
 
 ### Step 3. Re-install the git hooks
 
@@ -54,5 +54,5 @@ Commands are `/corecrew:new-project`, `/corecrew:task`, `/corecrew:new-standard`
 
 ### Step 5. Restart Claude Code
 
-Quit and start `claude` again. In a project's `code/` folder, check that `/corecrew:task` is
+Quit and start `claude` again. In a project's code folder, check that `/corecrew:task` is
 listed and that the session start shows no note about old git hooks.
