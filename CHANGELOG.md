@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.1 — 2026-11-05
+- The read-only checkers' rule, after an independent review: it follows `cd` (a relative write
+  after a cd to an unknown folder is refused), looks into `$(...)` and backticks, and also refuses
+  `find -delete`/`-exec`, `xargs rm`, `sort -o`, downloads and unpacking into the current folder,
+  `ln`, more git changes (`branch <name>`, `config <key> <value>`, `remote add`, `fetch`,
+  `--output`), and any command it cannot read whole or when the check itself fails. Reads it wrongly
+  refused now pass: `git tag -l`, `git stash list`, `git worktree list`, `perl -Ilib`, `chmod -R u+w /tmp/x`.
+- The six agents' descriptions are 120 characters at most and say /corecrew:task calls them: they
+  are listed to the model in every session, project or not (about 500 characters less each turn).
+- Trigger evals in `plugins/corecrew/evals/` (`claude plugin eval`): new-project starts for a new
+  app in Russian or English and stays silent for a feature or a Jira project. The old scenario
+  `evals/evals.json` is gone.
+- Tests: the wiki fixtures keep their CLAUDE.md as `CLAUDE.md.in`, so the repo tracks no internal
+  file but its own CLAUDE.md.
+
 ## 0.6.0 — 2026-11-05
 - The plugin lives in `plugins/corecrew/` of the repo (the marketplace now points there). An install
   copies only the plugin, not the repo's docs, tests and the two other plugins. The name, the

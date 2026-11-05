@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 — 2026-11-05
+
+- The permission profile names `credentials`, `kubeconfig`, `secret`, `token` and service-account
+  files in any letter case, as the send filter does (macOS matched them anyway; Linux is case-sensitive).
+- An interrupted run ends at once; the temp folder is still removed.
+- Trigger evals in `evals/`: the skill starts for "ask GPT" and "second opinion from ChatGPT" and
+  stays silent for a plain review.
+
 ## 0.2.1 — 2026-11-05
 
 - The Codex permission profile now blocks every secret the send filter drops: `prod.env`,

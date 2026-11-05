@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.13 — 2026-11-05
+
+- Cleanup, no change in behaviour: dead exports, a text only the tests used, unused cache-read
+  prices and two tests of a config-row path the plugin no longer has.
+
 ## 0.4.12 — 2026-11-05
 
 - Questions: the model first, then the effort, each with the recommended choice first (before, a

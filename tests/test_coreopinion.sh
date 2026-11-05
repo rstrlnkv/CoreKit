@@ -11,7 +11,7 @@ S="$P/skills/second-opinion/SKILL.md"
 assert_file "$PJ"
 assert_contains "$PJ" '"name": "coreopinion"'
 assert_contains "$PJ" '"displayName": "CoreOpinion"'
-assert_contains "$PJ" '"version": "0.2.1"'
+assert_contains "$PJ" '"version": "0.2.2"'
 assert_contains "$PJ" '"license": "MIT"'
 # author, homepage and repository: the same lines as coremodel's (the handle stays out of tests)
 CE="$ROOT/plugins/coremodel/.claude-plugin/plugin.json"
@@ -184,7 +184,7 @@ assert_contains "$P/README.md" '/coreopinion:second-opinion'
 assert_contains "$P/README.md" 'read-only'
 assert_contains "$P/README.md" 'excludedCommands'
 assert_file "$P/CHANGELOG.md"
-assert_eq "$(grep -m1 '^## ' "$P/CHANGELOG.md" | cut -c1-9)" '## 0.2.1 ' "coreopinion CHANGELOG first entry"
+assert_eq "$(grep -m1 '^## ' "$P/CHANGELOG.md" | cut -c1-9)" '## 0.2.2 ' "coreopinion CHANGELOG first entry"
 assert_contains "$ROOT/README.md" '/plugin install coreopinion@corekit'
 assert_contains "$ROOT/README.md" 'plugins/coreopinion/README.md'
 assert_contains "$ROOT/CLAUDE.md" 'plugins/coreopinion/'
