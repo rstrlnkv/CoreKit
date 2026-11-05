@@ -27,7 +27,9 @@ for r in $ROLES; do
   [ "$(front "$f" | wc -l | tr -d ' ')" = "6" ] && pass || fail "$r.md frontmatter is not six one-line keys"
   assert_eq "$(front "$f" | sed -n 's/^name: //p')" "$r" "$r.md name"
   d="$(front "$f" | sed -n 's/^description: //p')"
-  [ -n "$d" ] && [ "${#d}" -le 200 ] && pass || fail "$r.md description missing or over 200 chars (${#d})"
+  # the description is listed to the main model in every session, project or not: short, and it says who calls the agent
+  [ -n "$d" ] && [ "${#d}" -le 120 ] && pass || fail "$r.md description missing or over 120 chars (${#d})"
+  case "$d" in *"/corecrew:task"*) pass ;; *) fail "$r.md description does not say /corecrew:task calls it" ;; esac
   case "$d" in *": "*|*" #"*) fail "$r.md description has ': ' or ' #' (breaks a plain YAML scalar)";; *) pass;; esac
   assert_eq "$(front "$f" | sed -n 's/^model: //p')" "sonnet" "$r.md model"
   assert_eq "$(front "$f" | sed -n 's/^disallowedTools: //p')" "Agent" "$r.md disallowedTools"

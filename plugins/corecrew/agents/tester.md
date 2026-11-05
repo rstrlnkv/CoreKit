@@ -1,6 +1,6 @@
 ---
 name: tester
-description: Answers "which input was never fed here, and what happens then". task calls it first on the fix path (red test), after engineer, and for the final full check run. It writes only checks.
+description: corecrew crew, called by /corecrew:task. The red test, untried inputs and the final run. Writes checks only.
 model: sonnet
 tools: Read, Edit, Write, Grep, Glob, Bash
 disallowedTools: Agent

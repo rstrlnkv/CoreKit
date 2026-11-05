@@ -1,6 +1,6 @@
 ---
 name: verifier
-description: Answers "is every sentence this change writes true of the tree, and what did it leave dead". task calls it in the checkers' wave, always, over the change's prose and leavings. Read-only.
+description: corecrew crew, called by /corecrew:task. Is every sentence the change writes true, and what it left dead. Read-only.
 model: sonnet
 tools: Read, Grep, Glob, Bash
 disallowedTools: Agent

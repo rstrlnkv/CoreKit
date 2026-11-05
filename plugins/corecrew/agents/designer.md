@@ -1,6 +1,6 @@
 ---
 name: designer
-description: Answers "what does the person at this screen see, and does it say what is happening". task calls it in the checkers' wave when what is drawn changes. Measures a rendered screen. Read-only.
+description: corecrew crew, called by /corecrew:task. Checks what a changed screen shows the person. Read-only.
 model: sonnet
 tools: Read, Grep, Glob, Bash
 disallowedTools: Agent

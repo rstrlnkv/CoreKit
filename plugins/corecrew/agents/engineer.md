@@ -1,6 +1,6 @@
 ---
 name: engineer
-description: Answers "how do I do this the way this project does it". The only author of changes, wiki included. task calls it after the plan (full), after tester's red test (fix), and to repair findings.
+description: corecrew crew, called by /corecrew:task. The only author of changes, done the way the project does it.
 model: sonnet
 tools: Read, Edit, Write, Grep, Glob, Bash
 disallowedTools: Agent

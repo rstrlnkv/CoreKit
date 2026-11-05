@@ -1,6 +1,6 @@
 ---
 name: security
-description: Answers "what can this damage and what can it reach". task calls it in the checkers' wave when deletion, permissions, running foreign code, updating or the network is touched. Read-only.
+description: corecrew crew, called by /corecrew:task. What a change can damage or reach. Read-only.
 model: sonnet
 tools: Read, Grep, Glob, Bash
 disallowedTools: Agent

@@ -1,6 +1,6 @@
 ---
 name: localizer
-description: Answers "what will the person read in their own language". task calls it in the checkers' wave when user-visible text changes, before designer. Reads text back from the built artifact. Read-only.
+description: corecrew crew, called by /corecrew:task. Checks user-visible text in each language. Read-only.
 model: sonnet
 tools: Read, Grep, Glob, Bash
 disallowedTools: Agent
