@@ -19,7 +19,8 @@
 
 MSG_KEYS="sync_failed hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
 session_rules schema_none run_starting layout_note old_hooks guard_code_blocked guard_code_public secrets_blocked secrets_ask
-local_link_created local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind"
+local_link_created local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind
+readonly_agent"
 
 # _msg_text <lang> <key> — sets MSG_T to the text, or to nothing when there is none. Keep the keys and
 # the en:/ru: branches in step with MSG_KEYS.
@@ -52,6 +53,8 @@ _msg_text() {
     ru:layout_note) MSG_T='Заметка о структуре: структура этого Core — версия @1, плагину нужна @2. Обновите её (добавится только недостающее): bash "@3" "@4"' ;;
     en:old_hooks) MSG_T='Old git hooks from an older version: @1. Replace them with: bash "@2" "@3"' ;;
     ru:old_hooks) MSG_T='Найдены старые git-хуки от прошлой версии: @1. Замените их командой: bash "@2" "@3"' ;;
+    en:readonly_agent) MSG_T='corecrew: @1 is a read-only checker and must not change anything (@2). Write logs and scratch files under @3; report a needed change for engineer to make.' ;;
+    ru:readonly_agent) MSG_T='corecrew: @1 только читает и ничего не меняет (@2). Журналы и черновики пишите в @3; нужное изменение передайте engineer.' ;;
     en:guard_code_blocked) MSG_T='corecrew: @1 is an internal file and must not live in the code folder. Write it to @2 instead.' ;;
     ru:guard_code_blocked) MSG_T='corecrew: @1 — внутренний файл, ему не место в папке кода. Запишите его в @2.' ;;
     en:guard_code_public) MSG_T='Docs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in @1.' ;;

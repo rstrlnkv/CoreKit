@@ -138,6 +138,7 @@ Inside a Core project (the Core folder, or the code folder beside it) and nowher
   For Bash it is a best-effort check, not a sandbox: it does not see `python -c`, `node -e`, `find -exec`, `git show REV:.env`, `dd` or `curl -F @.env`.
   Treat it as a seat belt against accidents, not as protection from a determined program.
 - **Code guard** refuses to write `CLAUDE.md`, `AGENTS.md`, `docs/` and `.claude/` into the code folder, which may be public; they belong in the Core.
+- **Read-only checkers**: the designer, localizer, security and verifier agents may change nothing but the temp folders. Their Bash writes, removals, in-place edits and git changes are refused, wherever they run.
 - **One suite at a time** holds a test run while another one runs on the machine, so two suites do not break each other.
 - **Stop** reminds Claude to save a step that is left uncommitted.
 

@@ -127,6 +127,41 @@ check_path() {
   exit 2
 }
 
+# --- The read-only checkers (designer, localizer, security, verifier): their tools leave out Write and
+# Edit, and in Bash they may change nothing but the temp folders. The hook input names the agent
+# (agent_type) inside a subagent, so this holds wherever the agent runs, in a project or not.
+# A temp folder that holds a project (a test sandbox) is still that project.
+ro_agent() {
+  local a; a="$(json_str "$in" agent_type)"
+  case "$a" in corecrew:*) a="${a#corecrew:}" ;; *:*) return 1 ;; esac
+  case "$a" in designer|localizer|security|verifier) printf '%s\n' "$a" ;; *) return 1 ;; esac
+}
+in_temp() {   # in_temp <absolute path>
+  local r
+  for r in "${TMPDIR:-/tmp}" /tmp /private/tmp /var/folders /private/var/folders; do
+    r="$(canon_dir "$r")"
+    case "$1" in "$r"|"$r"/*) project_of "$1" >/dev/null 2>&1 && return 1; return 0 ;; esac
+  done
+  return 1
+}
+if [ "$tool" = Bash ] && agent="$(ro_agent)"; then
+  cmd="$(json_str "$in" command)"
+  [ -n "$cmd" ] || exit 0
+  load_settings
+  TAB="$(printf '\t')"
+  found="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r' '\002 ' \
+    | LC_ALL=C awk -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-readonly.awk" 2>/dev/null)"
+  while IFS="$TAB" read -r kind a; do
+    case "$kind" in
+      X) what="$a" ;;
+      P) resolve_abs "$a"; in_temp "$ABS" && continue; what="$ABS" ;;
+      *) continue ;;
+    esac
+    printf '%s\n' "$(msg readonly_agent "$agent" "$what" "${TMPDIR:-/tmp}")" >&2
+    exit 2
+  done <<< "$found"
+fi
+
 # --- Write, Edit, MultiEdit, NotebookEdit: one path in the tool input. Any other tool passes.
 case "$tool" in Write|Edit|MultiEdit|NotebookEdit|Bash) ;; *) exit 0 ;; esac
 if [ "$tool" != Bash ]; then
