@@ -149,10 +149,16 @@ export function texts(lang: Lang) {
     applied,
     mark: markLevel,
     inMenu: (l: Level | '') => (ru ? `в меню: ${l ? n(l) : '?'} (ваше)` : `in the menu: ${l ? n(l) : '?'} (yours)`),
-    modeQuestion: (mode: Mode, l: Level | '') =>
+    modeQuestion: (mode: Mode, m: ModelKey | '', l: Level | '') =>
       ru
-        ? `CoreModel: ${MODE_NAMES.ru[mode]}. Чат работает на уровне: ${l ? n(l) : 'пока неизвестно'}. Какой режим?`
-        : `CoreModel: ${mode}. Chat runs at: ${l ? n(l) : 'unknown yet'}. Which mode?`,
+        ? `CoreModel: ${MODE_NAMES.ru[mode]}. Сейчас в чате: ${texts(lang).nowPair(m, l)}. Какой режим?`
+        : `CoreModel: ${mode}. Now in the chat: ${texts(lang).nowPair(m, l)}. Which mode?`,
+    // The /coremodel reply when the mode question is dismissed: where things stand.
+    status: (mode: Mode, m: ModelKey | '', l: Level | '', held: boolean) =>
+      (ru
+        ? [`Режим: «${MODE_NAMES.ru[mode]}».`, `Сейчас в чате: ${texts(lang).nowPair(m, l)}${held ? ' (держит CoreModel; в меню по-прежнему ваш выбор)' : ''}.`, 'Команды: /coremodel auto, suggest, off, on или panel.']
+        : [`Mode: ${mode}.`, `Now in the chat: ${texts(lang).nowPair(m, l)}${held ? ' (held by CoreModel; the menu still shows your own choice)' : ''}.`, 'Type /coremodel auto, suggest, off, on or panel.']
+      ).join('\n'),
     now: ru ? 'Сейчас в чате' : 'Now in the chat',
     paneModel: ru ? 'Модель' : 'Model',
     paneLevel: ru ? 'Уровень' : 'Level',
@@ -169,12 +175,14 @@ export function texts(lang: Lang) {
       ru
         ? `В настройке models неизвестные названия: ${words.map(w => `«${w}»`).join(', ')} (допустимы haiku, sonnet, opus, fable)`
         : `In the models setting, unknown: ${words.map(w => `"${w}"`).join(', ')} (use haiku, sonnet, opus, fable)`,
-    modeSet: (mode: 'auto' | 'suggest', pickModel: boolean) => {
-      if (mode === 'suggest') return 'Mode: suggest. Every switch asks first.'
-      return pickModel
-        ? 'Mode: auto. Switches by itself; asks before Fable, Extra high, Max and a model change mid-chat.'
-        : 'Mode: auto. Switches the level by itself; asks before Extra high and Max.'
-    },
+    modeSet: (mode: 'auto' | 'suggest', pickModel: boolean) =>
+      ru
+        ? `Режим: «${MODE_NAMES.ru[mode]}». ${mode === 'auto' && !pickModel ? AUTO_EFFORT_HINT.ru : MODE_HINTS.ru[mode]}.`
+        : `Mode: ${mode}. ${mode === 'auto' && !pickModel ? AUTO_EFFORT_HINT.en : MODE_HINTS.en[mode]}.`,
+    modeOff: ru ? 'CoreModel выключен. Включить снова: /coremodel on.' : 'Off. /coremodel on turns it back on.',
+    modeOn: (mode: Mode) => (ru ? `Включён: «${MODE_NAMES.ru[mode]}».` : `On: ${mode}.`),
+    paneOpen: ru ? 'Панель открыта.' : 'The pane is open.',
+    paneWaiting: (reason: string) => (ru ? `Панель ждёт: ${reason}` : `The pane is waiting: ${reason}`),
     session: ru ? 'За сессию' : 'This session',
     kept: (k: number) => (ru ? `Без изменений: ${k}` : `Left as it was: ${k}`),
     release: ru ? 'Вернуть как в меню' : "Back to the menu's choice",
@@ -204,6 +212,7 @@ export function texts(lang: Lang) {
       ru
         ? `Модель ${MODELS[m].name} недоступна — ${listed ? 'уберите её из настройки models' : 'CoreModel больше не выберет её в этой сессии'}`
         : `${MODELS[m].name} is not available — ${listed ? 'remove it from the models setting' : 'CoreModel will not pick it again this session'}`,
-    checking: ru ? 'подбираю усилие…' : 'checking effort…',
+    checking: ru ? 'подбираю модель и усилие…' : 'checking model and effort…',
+    checkingEffort: ru ? 'подбираю усилие…' : 'checking effort…',
   }
 }

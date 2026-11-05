@@ -29,7 +29,7 @@ export type Mark = { level: Level | null; from: Level | ''; model?: ModelKey | n
 export type Stats = {
   /** Readable picks per level. */
   picks: Record<Level, number>
-  /** Prompts whose level stayed: a keep pick, the same level, a Keep answer or a dismissed question. */
+  /** Prompts left as they were: a keep pick, the same pair, a Keep answer, a dismissed question or a model question left alone. */
   kept: number
   /** The last readable pick. */
   last: { level: Level; why: string; model?: ModelKey; /** The person kept what they had. */ declined?: boolean } | null
@@ -43,7 +43,7 @@ declare module 'claude-code' {
   interface PluginState {
     'coremodel': {
       band: Band | null
-      /** The level put on every main-chat request when the effort setting could not take it. */
+      /** The held pair the drawings read: the model and level put on every main-chat request, or null. */
       override: { model: ModelKey | null; level: Level | null } | null
       /** The transcript rows placed for switches, by row id. */
       marks: Record<string, Mark>

@@ -242,7 +242,7 @@ async function runPick(
   if (mode === 'off') return
   const t = texts(h.lang)
   try {
-    await $.ui.status(t.checking)
+    await $.ui.status(options.pickModel !== 'off' ? t.checking : t.checkingEffort)
   } catch {
     // The status line is a nicety.
   }
@@ -340,17 +340,17 @@ export async function setMode($: EngineInterface, options: { mode?: unknown; pic
   if (arg === 'auto' || arg === 'suggest') {
     await $.store.set('mode', arg)
     await $.store.set('lastMode', arg)
-    text = texts('en').modeSet(arg, options.pickModel !== 'off')
+    text = texts(lastLang).modeSet(arg, options.pickModel !== 'off')
   } else if (arg === 'off') {
     await $.store.set('mode', 'off')
     await releaseHold($)
     await update($, band, () => null)
-    text = 'Off. /coremodel on turns it back on.'
+    text = texts(lastLang).modeOff
   } else {
     const last = await $.store.get('lastMode')
     const mode: Mode = last === 'auto' || last === 'suggest' ? last : options.mode === 'auto' ? 'auto' : 'suggest'
     await $.store.set('mode', mode)
-    text = `On: ${mode}.`
+    text = texts(lastLang).modeOn(mode)
   }
   $.ui.invalidate('ui.render')
   return text
@@ -515,7 +515,7 @@ export const register: Register = (on, options) => {
       $.ui.invalidate('ui.render')
     }
     return next(e)
-  })
+ }).catch(($, e, next) => next(e))
 
   // /clear, /resume and a fork start another chat in this process, and session.start does not run
   // for them; the module's own variables would carry the hold into the new chat. A compacted chat
@@ -523,7 +523,7 @@ export const register: Register = (on, options) => {
   on('classic.SessionStart', async ($, e, next) => {
     if (e.source === 'clear' || e.source === 'resume' || e.source === 'fork') await newChat($, true)
     return next(e)
-  })
+ }).catch(($, e, next) => next(e))
 
   on('session.start', async ($, e, next) => {
     unavailable.clear()
@@ -544,30 +544,26 @@ export const register: Register = (on, options) => {
     if (arg === 'auto' || arg === 'suggest' || arg === 'off' || arg === 'on') return { text: await setMode($, options, arg) }
     if (arg === 'panel') {
       const r = await $.ui.open({ id: PLUGIN, title: 'CoreModel' })
-      return { text: r.isPlaced ? 'The pane is open.' : `The pane is waiting: ${r.reason}` }
+      return { text: r.isPlaced ? texts(lastLang).paneOpen : texts(lastLang).paneWaiting(r.reason) }
     }
     const mode = await currentMode($, options)
     const level = hold?.level ?? seen
+    // pickModel off: the level only, as everywhere else (spec §6).
+    const model = options.pickModel !== 'off' ? modelHold?.key ?? toModel(seenModel) : ''
+    const t = texts(lastLang)
     if (!arg) {
       let answer = ''
       try {
-        const t = texts(lastLang)
         // The words are the keys in English and the mode names in Russian; the answer maps back.
         const label = (m: Mode) => (lastLang === 'ru' ? t.modeName(m) : m)
-        const picked = await $.ui.ask(t.modeQuestion(mode, level), { options: ASK_MODES.map(label), header: 'CoreModel' })
+        const picked = await $.ui.ask(t.modeQuestion(mode, model, level), { options: ASK_MODES.map(label), header: 'CoreModel' })
         answer = ASK_MODES.find(m => label(m) === picked) ?? ''
       } catch {
         // Dismissed: say where things stand, change nothing.
       }
       if ((ASK_MODES as readonly string[]).includes(answer)) return { text: await setMode($, options, answer as Mode) }
     }
-    return {
-      text: [
-        `Mode: ${mode}.`,
-        `This chat runs at: ${level ? texts('en').levelName(level) : 'unknown yet'}${hold ? ' (held by the plugin; the menu still shows your own setting)' : ''}.`,
-        'Type /coremodel auto, suggest, off, on or panel.',
-      ].join('\n'),
-    }
+    return { text: t.status(mode, model, level, !!(hold || modelHold)) }
   })
 
   // The app's menu shows the person's own setting; the footer slot beside it names a held level.
@@ -608,7 +604,7 @@ export const register: Register = (on, options) => {
     const heldModel = pair?.model ?? null
     const s = await read($, stats)
     const allowed = parseModels(options.models).filter(k => !unavailable.has(k))
-    // pickModel off: effort only, as CoreEffort was (spec §6).
+    // pickModel off: effort only (spec §6).
     const pickOn = options.pickModel !== 'off'
     const act = (what: string, f: () => Promise<unknown>) => () => {
       f().catch(err => log($, what, err))

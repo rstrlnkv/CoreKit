@@ -627,6 +627,42 @@ async function switchPair($: Eng, w: World, model: string, level: string, why = 
   await step($, 'medium')
 }
 
+test('/coremodel names the model and the level, in the prompt language', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  w.reply = 'nothing'   // the mode question is dismissed: the reply says where things stand
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  const en = await run($, '')
+  expect(en).toContain('Opus · High')
+  expect(en).toContain('held by CoreModel')
+  w.answer = '{"level":"high","model":"opus","why":"x"}'
+  await submit($, 'почини авторизацию')
+  await step($, 'high', 1, undefined, 'claude-opus-5-5')
+  const ru = await run($, '')
+  expect(ru).toContain('Opus · Высокое')
+  expect(ru).toContain('/coremodel auto')
+  expect(ru).not.toContain('This chat runs at')
+  // the mode replies follow the same language
+  expect(await run($, 'suggest')).toContain('Режим: «Спрашивать»')
+  expect(await run($, 'off')).toContain('/coremodel on')
+  expect(await run($, 'off')).not.toContain('Off.')
+  expect(await run($, 'on')).toContain('Включён')
+})
+
+test('/coremodel with pickModel off names the level only', { options: { mode: 'auto', pickModel: 'off' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  w.reply = 'nothing'
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  const out = await run($, '')
+  expect(out).toContain('High')
+  expect(out).not.toContain('Sonnet')
+})
+
 test('switch line names both parts', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   engineFooter(on)
@@ -872,7 +908,7 @@ test('/coremodel replies speak of the pair, not only the level', async ($, on) =
   world(on)
   await start($)
   expect(await run($, 'auto')).toContain('asks before Fable, Extra high, Max')
-  expect(await run($, 'suggest')).toContain('Every switch asks first')
+  expect(await run($, 'suggest')).toContain('Asks before every switch')
   expect(await run($, 'off')).toBe('Off. /coremodel on turns it back on.')
   expect(await run($, 'on')).toMatch(/^On: (auto|suggest)\.$/)
   expect(await run($, 'panel')).toBe('The pane is open.')
@@ -1019,6 +1055,6 @@ test('the mode question and the kept count read in Russian', async ($, on) => {
   await switchTo($, w, 'keep', 'medium', 'почини авторизацию')
   const text = await run($, '')
   expect(w.asked.at(-1)).toEqual(['Автоматически', 'Спрашивать', 'Выкл'])
-  expect(text).toContain('Mode: auto.')
+  expect(text).toContain('Режим: «Автоматически»')
   expect(await has($, /^Без изменений: 1$/)).toBe(true)
 })

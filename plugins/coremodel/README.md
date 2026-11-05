@@ -88,7 +88,7 @@ the log once per session; that model is simply never picked.
 - `mode`: `suggest`, `auto` or `off` (default `suggest`). `/coremodel` wins over it.
 - `classifier`: `sonnet` (default, the more accurate) or `haiku` (faster, cheaper).
 - `models`: which models CoreModel may pick, comma-separated (default `haiku,sonnet,opus,fable`).
-- `pickModel`: `on` (default) or `off`. With `off` it picks the effort only, as CoreEffort did.
+- `pickModel`: `on` (default) or `off`. With `off` it picks the effort level only and never changes the model.
 
 ## Install
 
@@ -105,8 +105,8 @@ Claude Code's early-access plugin API, which can change between releases.
 One short classifier call per prompt you type (at most 120 output tokens), through your own
 Claude Code account; it adds about 1 to 3 seconds before Claude starts. When the call has not
 answered in 3 seconds a second one is sent and the first answer is used; after 8 seconds the
-prompt goes on unchanged. Slash commands and messages that do not come from the prompt box are
-never checked. Errors are written to `~/.claude/mods-logs/coremodel.log` and never block the
+prompt goes on unchanged. Slash commands and messages that come neither from the prompt box nor from Remote Control
+(the phone or the web) are never checked. Errors are written to `~/.claude/mods-logs/coremodel.log` and never block the
 prompt.
 
 ## Credits

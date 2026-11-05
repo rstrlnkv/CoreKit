@@ -86,7 +86,7 @@ Asked in this order, each only when needed; a dismissed question keeps that part
   used `/model`); the effort part as today. Each part releases on its own.
 - A model without effort (`e.effort` absent) gets no effort; no error.
 - Session start, `/coremodel off`, and Release in the pane drop both parts.
-- Subagent requests, slash commands and non-composer prompts are never touched.
+- Subagent requests, slash commands and prompts from neither the composer nor Remote Control (`bridge`) are never touched.
 
 ### 4.5 A model the account cannot use
 When a request on a held model fails because the model is not available (the turn ends with an
@@ -101,7 +101,7 @@ names no model, so the model held at that moment is the one dropped.
 ## 5. The cost line
 
 Mid-chat model questions say why the model is suggested and what the switch costs, once, in the
-prompt's language (changed in 0.4.2; the "~N ordinary replies" figure scared more than it told, and
+prompt's language (changed in 0.4.3; the "~N ordinary replies" figure scared more than it told, and
 "replies are cheap again" is false when the new model is Opus or Fable):
 "Перейти на Opus (много файлов)? Чат один раз перечитается заново: ≈ 100 тыс. токенов, около
 $0,50 по ценам API." / "Switch to Opus (many files)? The chat is read again once: ≈ 100k tokens,
@@ -170,7 +170,7 @@ marketplace entry, root README section, CLAUDE.md layout and `.gitignore` paths 
 - `pickModel: off` behaves as CoreEffort 0.3.0 (its tests keep passing).
 - UI on `terminal` and `desktop`: switch line with both parts, undo restoring both, marks, footer,
   working line, pane rows and the cost question from a model button.
-- Cost line: the §5 example gives "~50"; rounding; Russian and English.
+- Cost line: the §5 example gives "≈ 100k tokens, about $0.50"; rounding; Russian and English.
 
 ### 9.2 Classifier quality (manual)
 `quality.sh` gets an expected model per prompt: typo fix → haiku; `git rebase --onto` question →

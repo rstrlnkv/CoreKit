@@ -78,8 +78,8 @@ test('mark points up or down by level and says it in the prompt language', () =>
 })
 
 test('the mode question ends as a question', () => {
-  expect(texts('en').modeQuestion('auto', 'high').endsWith('?')).toBe(true)
-  expect(texts('ru').modeQuestion('auto', '').endsWith('?')).toBe(true)
+  expect(texts('en').modeQuestion('auto', 'opus', 'high').endsWith('?')).toBe(true)
+  expect(texts('ru').modeQuestion('auto', '', '').endsWith('?')).toBe(true)
 })
 
 test('decideModel follows the spec rules', () => {

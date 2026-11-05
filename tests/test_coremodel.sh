@@ -9,5 +9,8 @@ if ! command -v claude >/dev/null 2>&1; then
 fi
 assert_dir "$P"
 assert_exit 0 claude plugin validate "$P"
+# every gating hook has a .catch: a hook that throws must not stop the chat's own handling
+V="$(claude plugin validate "$P" 2>&1)"
+printf '%s' "$V" | grep -q "gating hook without .catch" && fail "gating hook without .catch: $(printf '%s' "$V" | grep "without .catch")" || pass
 assert_exit 0 claude plugin test "$P"
 finish

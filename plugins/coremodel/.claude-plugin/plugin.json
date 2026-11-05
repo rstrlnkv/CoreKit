@@ -40,7 +40,7 @@
     "pickModel": {
       "type": "string",
       "title": "Pick the model",
-      "description": "on: pick the model and the effort. off: pick the effort only, as CoreEffort did.",
+      "description": "on: pick the model and the effort. off: pick the effort level only, never the model.",
       "options": [
         "on",
         "off"
