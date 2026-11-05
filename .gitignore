@@ -4,3 +4,12 @@
 .superpowers/
 plugins/coremodel/.claude-plugin/types/
 plugins/coremodel/tsconfig.json
+# corecrew: internal Claude files and secrets stay out of this repo
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+.claude/
+docs/superpowers/
+!.env.example
+!.env.sample
+!.env.template
