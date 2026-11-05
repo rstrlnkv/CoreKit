@@ -127,7 +127,8 @@ if command -v codex >/dev/null 2>&1 && codex sandbox --help >/dev/null 2>&1; the
   secrets='.env prod.env app.env.local sub/.env.prod key.pem server.key cert.p12 cert.pfx id_rsa id_ed25519.pub Credentials.txt
            .npmrc sub/.netrc .pypirc .git-credentials prod.tfvars terraform.tfstate terraform.tfstate.backup app.jks release.keystore
            AuthKey_X.p8 my-secret.txt SECRETS.md api_token.txt kubeconfig k/kubeconfig-prod db.kdbx .aws/config
-           gcp-service-account.json service_account_key.json sa-serviceaccount.json'
+           gcp-service-account.json service_account_key.json sa-serviceaccount.json
+           Credentials.json KubeConfig ServiceAccount.json API_TOKEN.txt MY_SECRET.md'
   for f in $secrets ok.txt; do printf 'x\n' > "$R5/$f"; done
   if ( cd "$R5" && codex sandbox -c 'default_permissions="review"' -c "$profile" cat ok.txt >/dev/null 2>&1 ); then
     open=""

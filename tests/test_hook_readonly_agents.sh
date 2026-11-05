@@ -44,7 +44,49 @@ refused $V 'git stash'
 refused $V 'git branch -D old'
 refused $V 'bash -c "rm src/a.txt"'
 refused $V "echo x > /opt/ro-elsewhere.txt"   # outside the temp folders
+# the bypasses a first review found: cd, substitutions, cut-off parsing, other writers
+refused $V 'cd src && rm a.txt'
+refused $V 'cd src && echo x > a.txt'
+refused $V 'cd "$HOME" && rm a.txt'                 # an unknown folder: a relative write is refused
+refused $V 'echo "$(rm src/a.txt)"'
+refused $V 'echo $(touch src/b.txt)'
+refused $V 'x="`touch src/b.txt`"'
+refused $V 'echo "x<<"y""; rm src/a.txt'           # the tokenizer stops reading: refused, not passed
+big=""; i=0; while [ $i -lt 101 ]; do big="$big echo n > /tmp/ro-n$i;"; i=$((i + 1)); done
+refused $V "$big rm src/a.txt"                      # past the cap of 100 findings
+refused $V 'find . -name x -delete'
+refused $V 'find src -exec rm {} +'
+refused $V 'xargs rm < /tmp/list'
+refused $V 'sort -o src/s.txt src/a.txt'
+refused $V 'curl -o src/f https://example.com/f'
+refused $V 'curl -O https://example.com/f'
+refused $V 'wget https://example.com/f'
+refused $V 'tar xf /tmp/a.tar'
+refused $V 'unzip /tmp/a.zip'
+refused $V 'ln -s /tmp/x /tmp/l'                    # a link can lead a later write anywhere
+refused $V 'git branch newb'
+refused $V 'git branch -f main HEAD'
+refused $V 'git config user.name x'
+refused $V 'git remote add o https://example.com/r.git'
+refused $V 'git fetch'
+refused $V 'git diff --output=src/d.txt'
+refused $V 'git tag v1'
+refused $V 'git stash push'
+refused $V 'git -C . commit -m x'
 # reading, tests, logs under the temp folders
+allowed $V 'cd /tmp && echo x > ro-log.txt'          # cd to a known folder: judged there
+allowed $V 'cd src && cat a.txt && ls'
+allowed $V 'git tag && git tag -l && git stash list && git worktree list && git submodule status'
+allowed $V 'git apply --check /tmp/p.diff && git notes list && git remote -v && git branch -a && git branch --list'
+allowed $V 'git config --get user.name && git config -l && git config user.name'
+allowed $V 'git -C /tmp/ro-clone checkout -b x'
+allowed $V 'git clone . /tmp/ro-copy'
+allowed $V 'perl -Ilib -MList::Util -e 1'
+allowed $V 'chmod -R u+w /tmp/d'
+allowed $V 'curl -s https://example.com && curl -o /tmp/f https://example.com/f && wget -qO- https://example.com'
+allowed $V 'unzip -l /tmp/a.zip && tar tf /tmp/a.tar && tar xf /tmp/a.tar -C /tmp/x'
+allowed $V 'sort src/a.txt | uniq -c && find src -name "*.txt"'
+allowed $V 'xargs grep -n x < /tmp/list'
 allowed $V 'cat src/a.txt'
 allowed $V 'git status --short && git diff && git log --oneline -3 && git branch'
 allowed $V "sed -n 1,5p src/a.txt"
@@ -65,6 +107,12 @@ allowed corecrew:tester 'rm -f src/a.txt'
 allowed other:verifier 'rm -f src/a.txt'
 allowed Explore 'echo x > src/a.txt'
 allowed "" 'rm -f src/a.txt'
+# a broken checker refuses instead of letting everything through (it fails closed for these agents)
+BP="$SANDBOX/broken-plugin"; mkdir -p "$BP"; cp -R "$PLUGIN/hooks" "$PLUGIN/scripts" "$BP/"
+printf 'BEGIN { this is not awk\n' > "$BP/scripts/bashlex-readonly.awk"
+OLDH="$H"; H="$BP/hooks/guard-code.sh"
+run_as $V 'ls'; assert_eq "$RC" "2" "broken checker: refused"
+H="$OLDH"
 # messages in Russian
 CLAUDE_PLUGIN_OPTION_UI_LANGUAGE=ru run_as $V 'rm -f src/a.txt'
 case "$ERR" in *"только читает"*) pass ;; *) fail "ru message: $ERR" ;; esac

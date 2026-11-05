@@ -149,8 +149,10 @@ if [ "$tool" = Bash ] && agent="$(ro_agent)"; then
   [ -n "$cmd" ] || exit 0
   load_settings
   TAB="$(printf '\t')"
+  # A checker that cannot run refuses: these agents should change nothing, so unknown is no.
   found="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r' '\002 ' \
-    | LC_ALL=C awk -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-readonly.awk" 2>/dev/null)"
+    | LC_ALL=C awk -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-readonly.awk" 2>/dev/null)" \
+    || found="X${TAB}a command this check could not read"
   while IFS="$TAB" read -r kind a; do
     case "$kind" in
       X) what="$a" ;;

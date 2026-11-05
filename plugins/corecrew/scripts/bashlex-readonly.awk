@@ -2,78 +2,216 @@
 # would change. Used with scripts/bash-lex.awk (the tokenizer):
 #   awk -f bash-lex.awk -f bashlex-readonly.awk
 # Prints one line per finding:
-#   P\t<path>   a path the command writes, makes, moves to or removes (redirect targets included)
-#   X\t<what>   a change with no path to judge: git that changes the repo, sed -i, perl -i, patch
-# A path that holds $ ` * ? [ { is not printed (it cannot be judged here); /dev/... is never a change.
+#   P\t<path>   a path the command writes, makes, moves to or removes (redirect targets included);
+#               relative to the folder a literal cd moved to, or to the hook's cwd
+#   X\t<what>   a change with no path to judge: git that changes the repo, an in-place edit, ln,
+#               find -delete/-exec, xargs with a writer, a download or unpack into the current folder,
+#               a relative write after a cd to an unknown folder, a command this pass could not read whole
+# It fails closed where guard-code fails open: these agents should change nothing, so what cannot be
+# judged is a finding. A path that holds $ ` * ? [ { cannot be judged and is not printed (a write to
+# "$TMPDIR/log" is the usual case). Programs a command runs (a build, python -c, node -e) are not seen.
 
 BEGIN {
   CAP = 100; BADCH = "$`*?[{\t\002"
-  split("tee touch mkdir cp mv rm rmdir ln install rsync truncate unlink shred chmod chown dd git sed gsed perl patch cd pushd popd", T, " ")
+  split("tee touch mkdir cp mv rm rmdir ln install rsync truncate unlink shred chmod chown dd git sed gsed perl patch find xargs sort curl wget tar unzip cd pushd popd", T, " ")
   for (k in T) TRACK[T[k]] = 1
-  # git subcommands that change the work tree, the index, refs or a remote
-  split("add commit push pull reset checkout switch restore stash merge rebase cherry-pick revert am apply rm mv clean init clone worktree tag notes submodule gc prune update-index update-ref", G, " ")
+  # commands that change files whatever their arguments, when xargs or find -exec runs them
+  split("rm rmdir mv cp touch mkdir tee ln chmod chown truncate unlink shred install rsync dd patch sed perl git sh bash zsh", W, " ")
+  for (k in W) WRITER[W[k]] = 1
+  # git subcommands that always change the work tree, the index, refs or a remote
+  split("add commit push pull reset checkout switch restore merge rebase cherry-pick revert am rm mv clean init fetch gc prune update-index update-ref replace filter-branch", G, " ")
   for (k in G) GITW[G[k]] = 1
-  # git options that take a value as the next word
   split("-C -c --git-dir --work-tree --namespace", GO, " "); for (k in GO) GITOPT[GO[k]] = 1
+  cdbase = ""; cdunk = 0
 }
-function classify(b) {
-  if (b == "cd" || b == "pushd" || b == "popd") cdseen = 1
-  return (b in TRACK) ? b : "?"
-}
+function classify(b) { return (b in TRACK) ? b : "?" }
 function on_out(w) { path(w) }
 function on_in(w) { }
-function on_subst(w) { }
+# on_subst(w) — a $(...) or backtick body inside double quotes is a command line too: queue it
+function on_subst(w,   n, p, c, depth, st, q) {
+  n = length(w); p = 1
+  while (p <= n) {
+    c = substr(w, p, 1)
+    if (c == "$" && substr(w, p + 1, 1) == "(") {
+      st = p + 2; depth = 1; p = st
+      while (p <= n && depth > 0) {
+        c = substr(w, p, 1)
+        if (c == "(") depth++
+        else if (c == ")") depth--
+        p++
+      }
+      enqueue(depth == 0 ? substr(w, st, p - 1 - st) : substr(w, st))
+    } else if (c == "`") {
+      q = index(substr(w, p + 1), "`")
+      if (q == 0) { enqueue(substr(w, p + 1)); p = n + 1 }
+      else { enqueue(substr(w, p + 1, q - 1)); p += q + 1 }
+    } else p++
+  }
+}
+END { if (nomore || capped) printf "X\t%s\n", "a command this check could not read whole" }
 function out(kind, a) {
-  if (ne >= CAP) { full = 1; return }
+  if (ne >= CAP) { capped = 1; full = 1; return }
   ne++; printf "%s\t%s\n", kind, a
 }
-function path(a,   q) {
-  if (a == "" || index(a, "/dev/") == 1) return
-  if (cdseen && substr(a, 1, 1) != "/" && a != "~" && index(a, "~/") != 1) return   # after cd a relative path is unknown
-  for (q = 1; q <= length(BADCH); q++) if (index(a, substr(BADCH, q, 1))) return
+function judgeable(a,   q) {
+  for (q = 1; q <= length(BADCH); q++) if (index(a, substr(BADCH, q, 1))) return 0
+  return 1
+}
+function abs_(a) { return substr(a, 1, 1) == "/" || a == "~" || index(a, "~/") == 1 }
+function path(a) {
+  if (a == "" || a == "-" || index(a, "/dev/") == 1) return
+  if (!judgeable(a)) return
+  if (!abs_(a)) {
+    if (cdunk) { out("X", "a write after cd to a folder this check cannot know: " a); return }
+    if (cdbase != "") a = cdbase "/" a
+  }
   out("P", a)
 }
-function finalize(   k, a, dd, last, sub_, skip) {
-  if (cmd == "?" || cmd == "" || cmd == "cd" || cmd == "pushd" || cmd == "popd") return
-  if (cmd == "git") {
-    skip = 0
+# cd <dir>: a literal folder becomes the base of later relative paths; anything else makes it unknown
+function do_cd(   k, a) {
+  a = ""
+  for (k = 1; k <= na; k++) if (substr(args[k], 1, 1) != "-" || args[k] == "-") { a = args[k]; break }
+  if (cmd != "cd" || a == "" || a == "-" || !judgeable(a)) { cdunk = 1; return }
+  if (abs_(a)) { cdbase = a; cdunk = 0 }
+  else if (!cdunk) cdbase = (cdbase == "" ? a : cdbase "/" a)
+}
+# nonopt(n) — the n-th word that is not an option
+function nonopt(n,   k, c) {
+  c = 0
+  for (k = 1; k <= na; k++) if (substr(args[k], 1, 1) != "-") { c++; if (c == n) return args[k] }
+  return ""
+}
+function has(re,   k) { for (k = 1; k <= na; k++) if (args[k] ~ re) return 1; return 0 }
+# after(opt) — the word after an option given as its own word, or the value of --opt=value / -oVALUE
+function after(short, long,   k, a) {
+  for (k = 1; k <= na; k++) {
+    a = args[k]
+    if ((short != "" && a == short) || (long != "" && a == long)) return (k < na ? args[k + 1] : "")
+    if (long != "" && index(a, long "=") == 1) return substr(a, length(long) + 2)
+    if (short != "" && length(a) > 2 && index(a, short) == 1 && substr(a, 2, 1) != "-") return substr(a, 3)
+  }
+  return "\001"
+}
+function do_git(   k, a, skip, sub_, gc, rest, nn, ch) {
+  skip = 0; sub_ = ""; gc = ""
+  for (k = 1; k <= na; k++) {
+    a = args[k]
+    if (skip) { if (args[k - 1] == "-C") gc = a; skip = 0; continue }
+    if (a in GITOPT) { skip = 1; continue }
+    if (substr(a, 1, 1) == "-") continue
+    sub_ = a; break
+  }
+  rest = ""; nn = 0
+  for (k = k + 1; k <= na; k++) { rest = rest " " args[k]; if (substr(args[k], 1, 1) != "-") nn++ }
+  if (sub_ == "") return
+  if (rest ~ /(^| )--output(=| |$)/) { out("X", "git " sub_ " --output"); return }
+  if (sub_ == "clone") { if (nn >= 2) path(nonopt_after(sub_, 2)); else out("X", "git clone into the current folder"); return }
+  ch = 0
+  if (sub_ in GITW) ch = 1
+  else if (sub_ == "branch") ch = (rest ~ / -(d|D|m|M|c|C|f|u)( |$)| --(delete|move|copy|force|set-upstream-to|unset-upstream|edit-description)/) || (nn > 0 && rest !~ / (-l|--list|-a|--all|-r|--remotes|--contains|--no-contains|--merged|--no-merged|--points-at|--show-current)( |$)/)
+  else if (sub_ == "tag") ch = nn > 0 && rest !~ / (-l|--list|-n[0-9]*|--contains|--no-contains|--merged|--no-merged|--points-at|-v|--verify)( |$)/
+  else if (sub_ == "stash") ch = rest !~ /^ (list|show)( |$)/
+  else if (sub_ == "worktree") ch = rest !~ /^ list( |$)/
+  else if (sub_ == "submodule") ch = rest != "" && rest !~ /^ (status|summary)( |$)/
+  else if (sub_ == "notes") ch = rest != "" && rest !~ /^ (list|show)( |$)/
+  else if (sub_ == "remote") ch = rest != "" && rest !~ /^ (-v|--verbose|show|get-url)( |$)/
+  else if (sub_ == "apply") ch = rest !~ / --(check|stat|numstat|summary)( |$)/
+  else if (sub_ == "config") ch = rest ~ / --(unset|unset-all|add|replace-all|rename-section|remove-section|edit)( |$)| -e( |$)/ || (nn >= 2 && rest !~ / --(get|get-all|get-regexp|list)( |$)| -l( |$)/)
+  if (!ch) return
+  # git -C <folder>: the change happens there; a temp folder is fine
+  if (gc != "") path(gc "/.")
+  else out("X", "git " sub_)
+}
+# nonopt_after(sub, n) — the n-th non-option word after the git subcommand
+function nonopt_after(s, n,   k, c, seen) {
+  c = 0; seen = 0
+  for (k = 1; k <= na; k++) {
+    if (!seen) { if (args[k] == s) seen = 1; continue }
+    if (substr(args[k], 1, 1) != "-") { c++; if (c == n) return args[k] }
+  }
+  return ""
+}
+function finalize(   k, a, dd, last, v, first, m) {
+  if (cmd == "?" || cmd == "") return
+  if (cmd == "cd" || cmd == "pushd" || cmd == "popd") { do_cd(); return }
+  if (cmd == "git") { do_git(); return }
+  if (cmd == "ln") { out("X", "ln (a link can lead a later write anywhere)"); return }
+  if (cmd == "patch") { out("X", "patch"); return }
+  if (cmd == "sed" || cmd == "gsed") {
+    for (k = 1; k <= na; k++) if (args[k] ~ /^-[A-Za-z]*i/ || index(args[k], "--in-place") == 1) { out("X", cmd " -i"); return }
+    return
+  }
+  if (cmd == "perl") {
     for (k = 1; k <= na; k++) {
       a = args[k]
-      if (skip) { skip = 0; continue }
-      if (a in GITOPT) { skip = 1; continue }
-      if (substr(a, 1, 1) == "-") continue
-      sub_ = a; break
+      if (a ~ /^-[eE]/) return                     # the code starts: no more options
+      if (a ~ /^-[MImx]/) continue                 # -MModule, -Ilib: their letters are names
+      if (a ~ /^-[A-Za-z]*i/) { out("X", "perl -i"); return }
     }
-    if (sub_ in GITW) { out("X", "git " sub_); return }
-    if (sub_ == "branch")
-      for (k = k + 1; k <= na; k++) if (args[k] ~ /^-(d|D|m|M|c|C)$|^--(delete|move|copy|force)$/) { out("X", "git branch " args[k]); return }
     return
   }
-  if (cmd == "sed" || cmd == "gsed" || cmd == "perl") {
-    for (k = 1; k <= na; k++) if (args[k] ~ /^-[A-Za-z]*i/ || args[k] ~ /^--in-place/) { out("X", cmd " -i"); return }
+  if (cmd == "find") {
+    if (has("^-(delete|exec|execdir|ok|okdir|fprint|fprint0|fprintf|fls)$")) out("X", "find with -delete or -exec")
     return
   }
-  if (cmd == "patch") { out("X", "patch"); return }
+  if (cmd == "xargs") {
+    for (k = 1; k <= na; k++) {
+      a = args[k]
+      if (a ~ /^-[IdEnLPsa]$/ || a ~ /^--(replace|delimiter|eof|max-args|max-lines|max-procs|max-chars|arg-file)$/) { k++; continue }
+      if (substr(a, 1, 1) == "-") continue
+      m = a; sub(/.*\//, "", m)
+      if (m in WRITER) out("X", "xargs " m)
+      return
+    }
+    return
+  }
+  if (cmd == "sort") { v = after("-o", "--output"); if (v != "\001") path(v); return }
+  if (cmd == "curl") {
+    v = after("-o", "--output"); if (v != "\001") path(v)
+    if (has("^(-O|--remote-name|--remote-name-all|-J|--remote-header-name)$") || has("^-[A-Za-z]*O[A-Za-z]*$")) out("X", "curl -O (a download into the current folder)")
+    return
+  }
+  if (cmd == "wget") {
+    v = after("-O", "--output-document")
+    if (v == "\001") for (k = 1; k <= na; k++) if (args[k] ~ /^-[A-Za-z]*O-$/) v = "-"
+    if (v == "-") return
+    if (v != "\001") { path(v); return }
+    v = after("-P", "--directory-prefix"); if (v != "\001") { path(v); return }
+    out("X", "wget (a download into the current folder)"); return
+  }
+  if (cmd == "tar") {
+    first = (na >= 1 && substr(args[1], 1, 1) != "-") ? args[1] : ""; m = ""   # the old style: letters first
+    if (has("^(-[A-Za-z]*x[A-Za-z]*|--extract|--get)$") || (first ~ /^[A-Za-z]*x[A-Za-z]*$/ && first !~ /\./)) m = "x"
+    else if (has("^(-[A-Za-z]*[cru][A-Za-z]*|--create|--append|--update)$") || (first ~ /^[A-Za-z]*[cru][A-Za-z]*$/ && first !~ /\./)) m = "c"
+    if (m == "x") { v = after("-C", "--directory"); if (v != "\001") path(v); else out("X", "tar x (unpacks into the current folder)") }
+    if (m == "c") { v = after("-f", "--file"); if (v != "\001") path(v); else out("X", "tar c") }
+    return
+  }
+  if (cmd == "unzip") {
+    if (has("^-[A-Za-z]*[ltvZ][A-Za-z]*$")) return
+    v = after("-d", ""); if (v != "\001") path(v); else out("X", "unzip (unpacks into the current folder)")
+    return
+  }
   if (cmd == "dd") {
     for (k = 1; k <= na; k++) if (index(args[k], "of=") == 1) path(substr(args[k], 4))
     return
   }
-  # cp, mv, ln, install, rsync: the destination (the last word that is not an option)
-  if (cmd == "cp" || cmd == "mv" || cmd == "ln" || cmd == "install" || cmd == "rsync") {
+  # cp, mv, install, rsync: the destination (the last word that is not an option); mv also its sources
+  if (cmd == "cp" || cmd == "mv" || cmd == "install" || cmd == "rsync") {
     last = ""; dd = 0
     for (k = 1; k <= na; k++) { a = args[k]; if (!dd && a == "--") { dd = 1; continue }; if (!dd && substr(a, 1, 1) == "-") continue; last = a }
     if (last != "") path(last)
-    if (cmd == "mv") for (k = 1; k <= na; k++) { a = args[k]; if (a != last && substr(a, 1, 1) != "-") path(a) }   # the sources go too
+    if (cmd == "mv") for (k = 1; k <= na; k++) { a = args[k]; if (a != last && substr(a, 1, 1) != "-") path(a) }
     return
   }
   # tee touch mkdir rm rmdir truncate unlink shred chmod chown: every word that is not an option
-  dd = 0
+  # (chmod and chown: after the mode or owner word; truncate: after the size)
+  dd = 0; first = (cmd == "chmod" || cmd == "chown") ? 1 : 0
   for (k = 1; k <= na && !full; k++) {
     a = args[k]
     if (!dd && a == "--") { dd = 1; continue }
-    if (!dd && substr(a, 1, 1) == "-") continue
-    if ((cmd == "chmod" || cmd == "chown") && k == 1) continue   # the mode or owner
-    if (cmd == "truncate" && args[k - 1] ~ /^-s$/) continue
+    if (!dd && substr(a, 1, 1) == "-" && a !~ /^-[rwxXst]+$/) { if (cmd == "truncate" && (a == "-s" || a == "--size")) k++; continue }
+    if (first) { first = 0; continue }
     path(a)
   }
 }

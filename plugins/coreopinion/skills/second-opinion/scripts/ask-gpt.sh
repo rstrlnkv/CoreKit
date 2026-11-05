@@ -11,7 +11,8 @@
 T="$1"; effort="${2:-medium}"
 case "$T" in ''|/) echo "usage: ask-gpt.sh <temp folder> [medium|high]" >&2; exit 2 ;; esac
 [ -f "$T/prompt.md" ] && [ -f "$T/dir" ] || { echo "ask-gpt.sh: $T/prompt.md or $T/dir is missing" >&2; exit 2; }
-trap 'rm -rf "$T"' EXIT HUP INT TERM
+trap 'rm -rf "$T"' EXIT
+trap 'exit 130' HUP INT TERM   # a signal ends the run; the EXIT trap then cleans up
 case "$effort" in medium|high) ;; *) effort=medium ;; esac
 dir="$(cat "$T/dir")"
 # Outside a git repository Codex refuses to start without the flag; GPT then gets an empty folder.
@@ -19,7 +20,7 @@ extra=""
 if ! git -C "$dir" rev-parse --git-dir >/dev/null 2>&1; then
   mkdir -p "$T/empty"; dir="$T/empty"; extra="--skip-git-repo-check"
 fi
-profile='permissions.review.filesystem={":minimal"="read", ":project_roots"={"."="read", "**/.env*"="none", "**/*.env"="none", "**/*.env.*"="none", "**/*.pem"="none", "**/*.key"="none", "**/*.p12"="none", "**/*.pfx"="none", "**/id_rsa*"="none", "**/id_ed25519*"="none", "**/*credentials*"="none", "**/.npmrc"="none", "**/.netrc"="none", "**/.pypirc"="none", "**/.git-credentials"="none", "**/*.tfvars"="none", "**/*.tfstate*"="none", "**/*.jks"="none", "**/*.keystore"="none", "**/*.p8"="none", "**/*[sS]ecret*"="none", "**/*[tT]oken*"="none", "**/*kubeconfig*"="none", "**/*.kdbx"="none", "**/.aws/**"="none", "**/*service?account*.json"="none", "**/*serviceaccount*.json"="none"}}'
+profile='permissions.review.filesystem={":minimal"="read", ":project_roots"={"."="read", "**/.env*"="none", "**/*.env"="none", "**/*.env.*"="none", "**/*.pem"="none", "**/*.key"="none", "**/*.p12"="none", "**/*.pfx"="none", "**/id_rsa*"="none", "**/id_ed25519*"="none", "**/*[cC]redentials*"="none", "**/*CREDENTIALS*"="none", "**/.npmrc"="none", "**/.netrc"="none", "**/.pypirc"="none", "**/.git-credentials"="none", "**/*.tfvars"="none", "**/*.tfstate*"="none", "**/*.jks"="none", "**/*.keystore"="none", "**/*.p8"="none", "**/*[sS]ecret*"="none", "**/*SECRET*"="none", "**/*[tT]oken*"="none", "**/*TOKEN*"="none", "**/*[kK]ube[cC]onfig*"="none", "**/*KUBECONFIG*"="none", "**/*.kdbx"="none", "**/.aws/**"="none", "**/*[sS]ervice?[aA]ccount*.json"="none", "**/*[sS]ervice[aA]ccount*.json"="none", "**/*SERVICE?ACCOUNT*.json"="none"}}'
 # shellcheck disable=SC2086
 codex exec --ignore-user-config -c 'default_permissions="review"' -c "$profile" -c web_search="disabled" \
   -C "$dir" -c model_reasoning_effort="$effort" --ephemeral $extra \
