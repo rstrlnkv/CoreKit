@@ -1,0 +1,78 @@
+# Labelled prompts for tests/quality.sh: set|levels|models|prompt|last reply
+# set: tune (the template may be tuned on it) or hold (checked only at the end, never tuned on).
+# levels, models: the answers that count as right, the best first, separated by /; * = any.
+# prompt, last reply: \n is a new line; - as the reply means none (the first prompt of a chat).
+# No | inside a field.
+
+# Approvals and answers to Claude: keep, unless a new task rides along.
+tune|keep|*|да, давай|-
+tune|keep|*|ок, делай вариант 2|Есть два пути: 1) быстрый патч в одном файле; 2) вынести проверку прав в middleware для всех роутов. Какой выбрать?
+tune|keep|*|продолжай|Сделал 3 из 8 шагов миграции. Продолжить?
+tune|keep/low|*|поправь|Нашёл опечатку recieve в трёх местах. Поправить?
+hold|keep|*|go ahead|Plan: migrate all 14 services from REST to gRPC, update the clients, run the full suite. Shall I start?
+tune|high/medium|opus/sonnet|да, и заодно почини падающий тест в auth_test.go|Готово: кнопка добавлена, тесты зелёные. Что-нибудь ещё?
+hold|medium/high|sonnet/opus|нет, не так. сделай через очередь, а не через cron|Я добавил задачу в cron, которая раз в минуту рассылает письма.
+hold|high|opus|почини|Нашёл причину: при параллельных запросах токен обновляется дважды, и второй запрос уходит с уже недействительным токеном. Исправление затронет клиент, сервер и кэш.
+
+# Low: quick, mechanical, easy to check.
+tune|low|haiku|почини опечатку в README|-
+tune|low|haiku|что делает git rebase --onto?|-
+tune|low|haiku|переименуй переменную usrNm в userName в utils.py|-
+tune|low|haiku|запусти тесты|-
+tune|low|haiku|поменяй порт в docker-compose с 3000 на 8080|-
+tune|low|haiku|how do I undo the last git commit but keep the changes?|-
+tune|low|haiku|fix: the year in the footer is wrong, it is hardcoded in Footer.tsx|-
+tune|low|haiku|```\nfunction add(a, b) { return a - b }\n```\nбаг?|-
+tune|low|haiku/sonnet|подумай хорошенько, как назвать эту функцию: она берёт список заказов и возвращает сумму по каждому клиенту|-
+hold|low|haiku/sonnet|what does this error mean: TypeError: Cannot read properties of undefined (reading 'map')|-
+hold|low|haiku|закоммить это с нормальным сообщением|-
+tune|low|haiku/sonnet|перепиши это письмо клиенту повежливее|-
+tune|low|haiku|накидай 10 идей названий для кофейни|-
+hold|low|haiku|translate into German: We are pleased to confirm your order. It will ship on Monday.|-
+hold|low|haiku|сделай краткое содержание этой статьи в трёх пунктах|-
+
+# Length is not difficulty: long but rule-following.
+tune|low|haiku|Замени во всех этих строках http:// на https://\napi_url = http://api.example.com\ncdn_url = http://cdn.example.com\nauth_url = http://auth.example.com\nstatic_url = http://static.example.com\nmedia_url = http://media.example.com\nhooks_url = http://hooks.example.com\nlogs_url = http://logs.example.com\nmetrics_url = http://metrics.example.com\nsearch_url = http://search.example.com\nmail_url = http://mail.example.com\nchat_url = http://chat.example.com\nfiles_url = http://files.example.com|-
+
+# Medium: ordinary work with a clear path.
+tune|medium|sonnet|добавь кнопку экспорта в CSV на страницу отчётов|-
+tune|medium|sonnet|напиши тесты для функции parseDate в date.ts|-
+tune|medium|sonnet|напиши скрипт, который переименует все фото в папке по дате съёмки|-
+tune|medium/low|sonnet/haiku|обнови README: опиши новые флаги --dry-run и --verbose|-
+tune|medium|sonnet|сделай протокол встречи из этой расшифровки: решения, ответственные, сроки|-
+hold|medium/low|sonnet/haiku|add a /health endpoint like the other endpoints in server.go|-
+hold|medium|sonnet/haiku|write this week's status report in our usual format from these notes|-
+hold|medium/low|sonnet/haiku|напиши пост для телеграм-канала о запуске новой версии|-
+
+# A light model with more effort, a strong model with less: the two ladders are separate.
+tune|medium/low|haiku/sonnet|проставь аннотации типов во всех функциях utils.py|-
+tune|low/medium|opus/sonnet|что нам лучше взять под журнал событий, Postgres или Mongo? нагрузка 5k записей в секунду, коротко|-
+hold|high|sonnet/opus|прогони миграцию базы на проде строго по runbook из docs/runbook.md|-
+
+# A short prompt that hides a lot of work.
+tune|high|opus|почини авторизацию, после логина кидает на 500|-
+tune|high|opus|ускорь главную страницу, она грузится 8 секунд|-
+tune|high|opus|тесты иногда падают, разберись|-
+tune|high|opus|CI падает примерно в каждом пятом прогоне, вот хвост лога:\nfatal error: concurrent map writes\ngoroutine 48 [running]:\nmain.(*Cache).Set(0xc000120000, {0x6b2f40, 0x5}, {0x5d1a20, 0xc0001a2010})\n\t/app/cache.go:41 +0x8c\nmain.worker(0xc000120000, 0x3)\n\t/app/worker.go:27 +0x1b4\ncreated by main.main\n\t/app/main.go:19 +0x9e\nпочему?|-
+hold|high/xhigh|opus|make the app work offline|-
+
+# High: a hidden mistake is costly or the path is unclear.
+tune|high|opus|проверь договор аренды на риски, 12 страниц|-
+tune|high|opus|сделай ревью этого PR: изменения в оплате и возвратах|-
+tune|high|opus|сверь выручку в отчёте из 1С с банковской выпиской за квартал и найди расхождения|-
+tune|high/xhigh|opus/fable|отрефактори модуль платежей и мигрируй базу на новую схему|-
+tune|high|opus/sonnet|удали из базы всех пользователей, которые не заходили больше года|-
+hold|high|opus|спроектируй схему БД для мультиарендного SaaS с биллингом|-
+hold|high|opus|почему упали продажи в октябре? вот выгрузка из CRM и из аналитики|-
+hold|high|opus|rotate the leaked AWS key and purge it from the git history|-
+
+# Xhigh: long, hard, critical and handed over to run alone.
+tune|xhigh|fable|сделай с нуля приложение-трекер привычек на SwiftUI, план утверждён, работай сам|-
+tune|xhigh|fable/opus|проведи полный аудит безопасности бэкенда перед запуском, исправь найденное и отчитайся в конце|-
+tune|high/xhigh|opus/fable|сделай презентацию для инвесторов на 12 слайдов по нашей финансовой модели, она должна быть безупречной, встреча завтра|-
+hold|xhigh|fable/opus|Migrate the whole codebase from JavaScript to TypeScript in strict mode, all 300 files. I'm away until tomorrow, keep going until CI is green.|-
+hold|xhigh|fable/opus|собери подробный отчёт о рынке электросамокатов в ЕС по двадцати с лишним источникам, с цифрами и ссылками, к утру|-
+
+# Max: only when the prompt asks for the deepest work and says it is critical.
+tune|max|fable|это критично: от расчёта зависит запуск спутника. проверь формулы орбитальной механики в модуле navigation максимально тщательно, думай как можно глубже|-
+hold|max|fable|Use maximum effort, this is critical: review the cryptographic protocol implementation in /crypto for any flaw.|-
