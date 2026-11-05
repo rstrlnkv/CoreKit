@@ -81,6 +81,7 @@ If you come from 0.1.x (`corekit`), follow [docs/migration-0.2.md](docs/migratio
 | `/corecrew:task <task>` | Runs a task through the crew of agents |
 | `/corecrew:task release <version>` | Prepares a release: version, changelog and the other release postconditions |
 | `/corecrew:task adopt <folder>` | Brings an existing project into the Core layout |
+| `/corecrew:ship [patch\|minor\|major\|<version>]` | Releases the current branch, then, after your yes, fast-forwards `main` to it and pushes |
 | `/corecrew:new-standard` | Writes a new standard into your Core |
 
 ## Settings

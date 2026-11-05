@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.5 — 2026-11-05
+- New skill `/corecrew:ship [patch|minor|major|<version>]`: releases the current branch through the
+  `release` path of `/corecrew:task`, checks that the tests left the global git config unchanged,
+  then, after your explicit yes, fast-forwards `main` to the branch and pushes it. Never forces.
+
 ## 0.6.4 — 2026-11-05
 - An icon for the plugin (and for coremodel and coreopinion): the directory listing wants one, and
   `claude plugin validate` no longer warns. Sources in `docs/icons/`.
