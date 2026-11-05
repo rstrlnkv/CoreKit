@@ -852,23 +852,63 @@ test('/coremodel recheck brings back a model dropped after model_not_found', { o
   expect(await has($, /Opus is not available/)).toBe(false)
 })
 
-test('the unavailable note does not mention the setting when it is empty', { options: { mode: 'auto', models: '' } }, async ($, on) => {
+test('the unavailable note offers recheck and never sends the person to the models setting', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.row = null
   await start($)
   await switchPair($, w, 'opus', 'medium')
   await $.classic.StopFailure({ error: 'model_not_found' } as never)
-  expect(await has($, /Opus is not available — CoreModel will not pick it again/)).toBe(true)
+  expect(await has($, /Opus is not available — CoreModel will not pick it again this session \(\/coremodel recheck tries again\)/)).toBe(true)
   expect(await has($, /models setting/)).toBe(false)
 })
 
-test('the unavailable note names the models setting when it is set', { options: { mode: 'auto', models: 'sonnet,opus' } }, async ($, on) => {
+test('the unavailable note stays the same when the models setting names the model', { options: { mode: 'auto', models: 'sonnet,opus' } }, async ($, on) => {
   const w = world(on)
   w.row = null
   await start($)
   await switchPair($, w, 'opus', 'medium')
   await $.classic.StopFailure({ error: 'model_not_found' } as never)
-  expect(await has($, /remove it from the models setting/)).toBe(true)
+  expect(await has($, /recheck tries again/)).toBe(true)
+  expect(await has($, /remove it from/)).toBe(false)
+})
+
+test('/coremodel recheck says what CoreModel may pick, in the prompt language', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  w.modelRow = ['default', 'sonnet', 'opus', 'haiku']
+  await start($)
+  expect(await run($, 'recheck')).toBe('Models CoreModel may pick: Haiku, Sonnet, Opus.')
+  w.answer = '{"level":"keep","why":"x"}'
+  await submit($, 'почини авторизацию')
+  await step($, 'medium')
+  expect(await run($, 'recheck')).toBe('Модели, которые может выбрать CoreModel: Haiku, Sonnet, Opus.')
+})
+
+test('/coremodel recheck says when the list is unusable, empty, or the model is not picked', async ($, on) => {
+  const w = world(on)
+  w.row = null
+  w.listThrows = true
+  await start($)
+  expect(await run($, 'recheck')).toContain('could not be used')
+  w.listThrows = false
+  w.modelRow = ['default', 'sonnet', 'opus']
+  w.row = null
+  expect(await run($, 'recheck')).not.toContain('could not be used')
+})
+
+test('/coremodel recheck explains an empty result', { options: { models: 'fable' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  w.modelRow = ['default', 'sonnet', 'opus']
+  await start($)
+  expect(await run($, 'recheck')).toContain('share no model')
+})
+
+test('/coremodel recheck with pickModel off names the effort only', { options: { pickModel: 'off' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  expect(await run($, 'recheck')).toContain('picks the effort only')
 })
 
 test('other failures leave the model alone', { options: { mode: 'auto' } }, async ($, on) => {

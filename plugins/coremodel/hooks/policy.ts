@@ -141,8 +141,8 @@ export function texts(lang: Lang) {
     // The /coremodel reply when the mode question is dismissed: where things stand.
     status: (mode: Mode, m: ModelKey | '', l: Level | '', held: boolean) =>
       (ru
-        ? [`Режим: «${MODE_NAMES.ru[mode]}».`, `Сейчас в чате: ${texts(lang).nowPair(m, l)}${held ? ' (держит CoreModel; в меню по-прежнему ваш выбор)' : ''}.`, 'Команды: /coremodel auto, suggest, off, on или panel.']
-        : [`Mode: ${mode}.`, `Now in the chat: ${texts(lang).nowPair(m, l)}${held ? ' (held by CoreModel; the menu still shows your own choice)' : ''}.`, 'Type /coremodel auto, suggest, off, on or panel.']
+        ? [`Режим: «${MODE_NAMES.ru[mode]}».`, `Сейчас в чате: ${texts(lang).nowPair(m, l)}${held ? ' (держит CoreModel; в меню по-прежнему ваш выбор)' : ''}.`, 'Команды: /coremodel auto, suggest, off, on, panel или recheck.']
+        : [`Mode: ${mode}.`, `Now in the chat: ${texts(lang).nowPair(m, l)}${held ? ' (held by CoreModel; the menu still shows your own choice)' : ''}.`, 'Type /coremodel auto, suggest, off, on, panel or recheck.']
       ).join('\n'),
     now: ru ? 'Сейчас в чате' : 'Now in the chat',
     paneModel: ru ? 'Модель' : 'Model',
@@ -193,10 +193,21 @@ export function texts(lang: Lang) {
     },
     switchModel: (m: ModelKey) => (ru ? `Перейти на ${MODELS[m].name}` : `Switch to ${MODELS[m].name}`),
     cancel: ru ? 'Отмена' : 'Cancel',
-    unavailable: (m: ModelKey, listed = false) =>
+    unavailable: (m: ModelKey) =>
       ru
-        ? `Модель ${MODELS[m].name} недоступна — ${listed ? 'уберите её из настройки models' : 'CoreModel больше не выберет её в этой сессии'}`
-        : `${MODELS[m].name} is not available — ${listed ? 'remove it from the models setting' : 'CoreModel will not pick it again this session'}`,
+        ? `Модель ${MODELS[m].name} недоступна — CoreModel больше не выберет её в этой сессии (/coremodel recheck попробует снова)`
+        : `${MODELS[m].name} is not available — CoreModel will not pick it again this session (/coremodel recheck tries again)`,
+    // /coremodel recheck: what CoreModel may pick now. `usable` is false when the account's list could not be used.
+    recheck: (names: string[], usable: boolean, pickModel: boolean) => {
+      if (!pickModel) return ru ? 'pickModel выключен: CoreModel выбирает только усилие.' : 'pickModel is off: CoreModel picks the effort only.'
+      if (!names.length)
+        return ru
+          ? 'Выбирать нечего: список моделей аккаунта и настройка models не имеют общих моделей. Поправьте настройку models.'
+          : "Nothing to pick: the account's model list and the models setting share no model. Change the models setting."
+      const head = ru ? `Модели, которые может выбрать CoreModel: ${names.join(', ')}.` : `Models CoreModel may pick: ${names.join(', ')}.`
+      if (usable) return head
+      return head + (ru ? ' Список моделей аккаунта прочитать не удалось, поэтому ничего не отфильтровано.' : " The account's model list could not be used, so nothing was filtered.")
+    },
     checking: ru ? 'подбираю модель и усилие…' : 'checking model and effort…',
     checkingEffort: ru ? 'подбираю усилие…' : 'checking effort…',
   }

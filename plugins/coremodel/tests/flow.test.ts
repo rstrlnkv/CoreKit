@@ -772,15 +772,35 @@ test('a model that becomes available later is offered from the next pick, no res
   expect(w.models.at(-1)).toBe('claude-fable-5-1')
 })
 
-test('the models setting still limits what the account lists', { options: { mode: 'auto', models: 'sonnet,opus' } }, async ($, on) => {
+test('the models setting and the account list both apply (their intersection)', { options: { mode: 'auto', models: 'sonnet,opus,fable' } }, async ($, on) => {
   const w = world(on)
-  w.modelRow = WITH_FABLE
+  w.modelRow = ['default', 'sonnet', 'fable', 'haiku']   // the account lacks Opus; the setting lacks Haiku
+  await start($)
+  w.answer = '{"level":"medium","model":"opus","why":"x"}'   // in the setting, not in the account
+  await submit($, 'review the design')
+  await step($, 'medium')
+  w.answer = '{"level":"medium","model":"haiku","why":"x"}'   // in the account, not in the setting
+  await submit($, 'say hi')
+  await step($, 'medium')
+  expect(w.asked.length).toBe(0)
+  expect(w.models).toEqual(['claude-sonnet-5-5', 'claude-sonnet-5-5'])
+  w.answer = '{"level":"medium","model":"fable","why":"x"}'   // in both: applied (auto asks for Fable)
+  w.reply = ['Fable (recommended)']
+  await submit($, 'build everything')
+  await step($, 'medium')
+  expect(w.models.at(-1)).toBe('claude-fable-5-1')
+})
+
+test('an unreadable settings list filters nothing', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.listThrows = true
   w.answer = '{"level":"medium","model":"fable","why":"whole app"}'
+  w.reply = ['Fable (recommended)']
   await start($)
   await submit($, 'build the whole app, work alone')
   await step($, 'medium')
-  expect(w.asked.length).toBe(0)
-  expect(w.models).toEqual(['claude-sonnet-5-5'])
+  expect(w.asked.length).toBe(1)
+  expect(w.models).toEqual(['claude-fable-5-1'])
 })
 
 test('a row with no known model, or no row, filters nothing', { options: { mode: 'auto' } }, async ($, on) => {

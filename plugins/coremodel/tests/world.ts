@@ -30,6 +30,8 @@ export type World = {
   row: ConfigRow | null
   /** The /config Model row's choices (null: the row is absent, so nothing is known about the account). */
   modelRow: string[] | null
+  /** config.list rejects (the settings could not be read). */
+  listThrows: boolean
   lastReply: string
   model: string[]
   prompts: string[]
@@ -70,6 +72,7 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     models: [],
     row: row(),
     modelRow: null,
+    listThrows: false,
     lastReply: '',
     model: [],
     prompts: [],
@@ -115,6 +118,7 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
   on('classic.SessionStart', () => ({}) as never)
   on('session.usage', () => ({ value: { startedAt: 0, context: { tokens: w.tokens, window: 1_000_000 }, rateLimits: [] } }) as never)
   on('config.list', () => {
+    if (w.listThrows) throw new Error('settings unreadable')
     const rows: ConfigRow[] = w.row ? [w.row] : []
     if (w.modelRow) rows.push({ key: 'model', label: 'Model', kind: 'choice', value: 'claude-sonnet-5-5', options: w.modelRow, provider: { kind: 'user' } as never, isLocked: false })
     return { value: rows } as never

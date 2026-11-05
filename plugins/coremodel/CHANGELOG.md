@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.17 — 2026-11-05
+
+After an independent review of 0.4.16:
+
+- The "not available" note no longer sends you to the `models` setting (the account's list handles
+  that now); it offers `/coremodel recheck`.
+- `/coremodel recheck` says the same in both languages ("Models CoreModel may pick: …"), and says so
+  when the account's list could not be used, when the list and the `models` setting share no model, and
+  when `pickModel` is off. Its text lives with the others in `texts()`. The status reply and the command
+  description name `recheck`.
+- Tests: an unreadable settings list, the intersection of the list and `models`, an empty result.
+
 ## 0.4.16 — 2026-11-05
 
 - The models an account can use are read from the `/config` Model row (the list `/model` shows), before

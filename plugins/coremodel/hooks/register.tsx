@@ -436,10 +436,6 @@ async function paneModel($: EngineInterface, key: ModelKey): Promise<void> {
 }
 
 /** True when the `models` setting names `key` itself; an empty setting means all four without naming any. */
-function namedInSetting(setting: unknown, key: ModelKey): boolean {
-  return typeof setting === 'string' && setting.split(',').some(w => toModel(w) === key)
-}
-
 const ASK_MODES: readonly Mode[] = ['auto', 'suggest', 'off']
 const LEVELS: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
@@ -579,7 +575,7 @@ export const register: Register = (on, options) => {
     await newChat($, false)
     await $.command.register({
       name: 'coremodel',
-      description: 'CoreModel: show what the chat runs at, set the mode (auto, suggest, off, on), or open the pane (panel)',
+      description: 'CoreModel: show what the chat runs at, set the mode (auto, suggest, off, on), or open the pane (panel); recheck reads the account\'s model list again',
       argumentHint: '[auto|suggest|off|on|panel|recheck|probe]',
     })
     return next(e)
@@ -597,8 +593,8 @@ export const register: Register = (on, options) => {
       unavailable.clear()
       await refreshListed($)
       $.ui.invalidate('ui.render')
-      const names = allowedModels(options.models).map(k => MODELS[k].name).join(', ')
-      return { text: lastLang === 'ru' ? `Доступные модели: ${names}.` : `Models CoreModel may pick: ${names}.` }
+      const names = allowedModels(options.models).map(k => MODELS[k].name)
+      return { text: texts(lastLang).recheck(names, listed !== null, options.pickModel !== 'off') }
     }
     if (arg === 'probe') {
       // What /config offers, for finding out whether it lists the models this account can use. Reads
@@ -700,7 +696,7 @@ export const register: Register = (on, options) => {
             <Text key="typo" color="warning">{t.unknownModels(unknownModels(options.models))}</Text>
           ) : null}
           {[...unavailable].map(m => (
-            <Text key={`unavailable-${m}`} color="warning">{t.unavailable(m, namedInSetting(options.models, m))}</Text>
+            <Text key={`unavailable-${m}`} color="warning">{t.unavailable(m)}</Text>
           ))}
         </Box>
         {rule("d1")}
