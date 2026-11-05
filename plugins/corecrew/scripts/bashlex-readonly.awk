@@ -2,11 +2,12 @@
 # would change. Used with scripts/bash-lex.awk (the tokenizer):
 #   awk -f bash-lex.awk -f bashlex-readonly.awk
 # Prints one line per finding:
-#   P\t<path>   a path the command writes, makes, moves to or removes (redirect targets included);
-#               relative to the folder a literal cd moved to, or to the hook's cwd
+#   P\t<path>   a path the command writes, makes, moves to or removes (redirect targets included;
+#               a cp/mv into a folder also gives <folder>/<source name>); relative to the hook's cwd
 #   X\t<what>   a change with no path to judge: git that changes the repo, an in-place edit, ln,
 #               find -delete/-exec, xargs with a writer, a download or unpack into the current folder,
-#               a relative write after a cd to an unknown folder, a command this pass could not read whole
+#               sed w or -f, git push / global config / --git-dir, a relative write after any cd,
+#               a command this pass could not read whole
 # It fails closed where guard-code fails open: these agents should change nothing, so what cannot be
 # judged is a finding. A path that holds $ ` * ? [ { cannot be judged and is not printed (a write to
 # "$TMPDIR/log" is the usual case). Programs a command runs (a build, python -c, node -e) are not seen.
@@ -22,7 +23,7 @@ BEGIN {
   split("add commit push pull reset checkout switch restore merge rebase cherry-pick revert am rm mv clean init fetch gc prune update-index update-ref replace filter-branch", G, " ")
   for (k in G) GITW[G[k]] = 1
   split("-C -c --git-dir --work-tree --namespace", GO, " "); for (k in GO) GITOPT[GO[k]] = 1
-  cdbase = ""; cdunk = 0
+  cdunk = 0
 }
 function classify(b) { return (b in TRACK) ? b : "?" }
 function on_out(w) { path(w) }
@@ -62,19 +63,13 @@ function path(a) {
   if (a == "" || a == "-" || index(a, "/dev/") == 1) return
   if (!judgeable(a)) return
   if (!abs_(a)) {
-    if (cdunk) { out("X", "a write after cd to a folder this check cannot know: " a); return }
-    if (cdbase != "") a = cdbase "/" a
+    if (cdunk) { out("X", "a relative write after cd (write to an absolute temp path instead): " a); return }
   }
   out("P", a)
 }
-# cd <dir>: a literal folder becomes the base of later relative paths; anything else makes it unknown
-function do_cd(   k, a) {
-  a = ""
-  for (k = 1; k <= na; k++) if (substr(args[k], 1, 1) != "-" || args[k] == "-") { a = args[k]; break }
-  if (cmd != "cd" || a == "" || a == "-" || !judgeable(a)) { cdunk = 1; return }
-  if (abs_(a)) { cdbase = a; cdunk = 0 }
-  else if (!cdunk) cdbase = (cdbase == "" ? a : cdbase "/" a)
-}
+# cd, pushd, popd: from here the folder of a relative path is unknown. Tracking it is not safe:
+# `(cd /tmp); rm x` and `cd /tmp | rm x` run rm where the command started.
+function do_cd() { cdunk = 1 }
 # nonopt(n) — the n-th word that is not an option
 function nonopt(n,   k, c) {
   c = 0
@@ -104,6 +99,10 @@ function do_git(   k, a, skip, sub_, gc, rest, nn, ch) {
   rest = ""; nn = 0
   for (k = k + 1; k <= na; k++) { rest = rest " " args[k]; if (substr(args[k], 1, 1) != "-") nn++ }
   if (sub_ == "") return
+  # what reaches beyond the repo -C names: a remote, the user's or system config, another git dir
+  if (sub_ == "push" || sub_ == "worktree" && rest !~ /^ list( |$)/) { out("X", "git " sub_); return }
+  if (sub_ == "config" && rest ~ / --(global|system|file)( |=|$)| -f( |$)/) { out("X", "git config outside the repo"); return }
+  for (k = 1; k <= na; k++) if (args[k] ~ /^--(git-dir|work-tree)(=|$)/) { out("X", "git " args[k]); return }
   if (rest ~ /(^| )--output(=| |$)/) { out("X", "git " sub_ " --output"); return }
   if (sub_ == "clone") { if (nn >= 2) path(nonopt_after(sub_, 2)); else out("X", "git clone into the current folder"); return }
   ch = 0
@@ -131,14 +130,20 @@ function nonopt_after(s, n,   k, c, seen) {
   }
   return ""
 }
-function finalize(   k, a, dd, last, v, first, m) {
+function finalize(   k, a, dd, last, v, first, m, q, c) {
   if (cmd == "?" || cmd == "") return
   if (cmd == "cd" || cmd == "pushd" || cmd == "popd") { do_cd(); return }
   if (cmd == "git") { do_git(); return }
   if (cmd == "ln") { out("X", "ln (a link can lead a later write anywhere)"); return }
   if (cmd == "patch") { out("X", "patch"); return }
   if (cmd == "sed" || cmd == "gsed") {
-    for (k = 1; k <= na; k++) if (args[k] ~ /^-[A-Za-z]*i/ || index(args[k], "--in-place") == 1) { out("X", cmd " -i"); return }
+    for (k = 1; k <= na; k++) {
+      a = args[k]
+      if (a ~ /^-[A-Za-z]*i/ || index(a, "--in-place") == 1) { out("X", cmd " -i"); return }
+      if (a ~ /^-[A-Za-z]*f$/ || index(a, "--file") == 1) { out("X", cmd " -f (a script this check cannot read)"); return }
+      # the w command and the s///w flag write a file: "w out", "1w out", "p;w out", "s/a/b/w out"
+      if (substr(a, 1, 1) != "-" && a ~ /(^|[;{}\/0-9$])[ \t]*[wW][ \t]+[^ \t]/) { out("X", cmd " w (writes a file)"); return }
+    }
     return
   }
   if (cmd == "perl") {
@@ -167,8 +172,23 @@ function finalize(   k, a, dd, last, v, first, m) {
   }
   if (cmd == "sort") { v = after("-o", "--output"); if (v != "\001") path(v); return }
   if (cmd == "curl") {
-    v = after("-o", "--output"); if (v != "\001") path(v)
-    if (has("^(-O|--remote-name|--remote-name-all|-J|--remote-header-name)$") || has("^-[A-Za-z]*O[A-Za-z]*$")) out("X", "curl -O (a download into the current folder)")
+    for (k = 1; k <= na; k++) {
+      a = args[k]
+      if (a ~ /^--(output|dump-header|cookie-jar|trace|trace-ascii|stderr|libcurl)$/) { if (k < na) path(args[++k]); continue }
+      if (a ~ /^--(output|dump-header|cookie-jar|trace|trace-ascii|stderr|libcurl)=/) { v = a; sub(/^[^=]*=/, "", v); path(v); continue }
+      if (a ~ /^--(remote-name|remote-name-all|output-dir|remote-header-name)(=|$)/) { out("X", "curl " a " (a download into the current folder)"); continue }
+      if (a ~ /^--/ || a !~ /^-./) continue
+      # a group of short options (-sSLo FILE, -sSLoFILE): letters up to the first that takes a value
+      for (q = 2; q <= length(a); q++) {
+        c = substr(a, q, 1)
+        if (c == "o" || c == "D" || c == "c") {
+          v = substr(a, q + 1); if (v == "" && k < na) v = args[++k]
+          path(v); break
+        }
+        if (c == "O") { out("X", "curl -O (a download into the current folder)"); break }
+        if (index("AbCdeEFHKmPQrtTuUwxXyYz", c)) { if (q == length(a)) k++; break }
+      }
+    }
     return
   }
   if (cmd == "wget") {
@@ -201,6 +221,14 @@ function finalize(   k, a, dd, last, v, first, m) {
     last = ""; dd = 0
     for (k = 1; k <= na; k++) { a = args[k]; if (!dd && a == "--") { dd = 1; continue }; if (!dd && substr(a, 1, 1) == "-") continue; last = a }
     if (last != "") path(last)
+    # a destination folder: the file lands at <folder>/<source name>, which may be a link elsewhere
+    dd = 0
+    if (last != "") for (k = 1; k <= na; k++) {
+      a = args[k]; if (!dd && a == "--") { dd = 1; continue }; if (!dd && substr(a, 1, 1) == "-") continue
+      if (a == last) continue
+      v = a; sub(/\/+$/, "", v); sub(/.*\//, "", v)
+      if (v != "" && v != "." && v != "..") path(last "/" v)
+    }
     if (cmd == "mv") for (k = 1; k <= na; k++) { a = args[k]; if (a != last && substr(a, 1, 1) != "-") path(a) }
     return
   }

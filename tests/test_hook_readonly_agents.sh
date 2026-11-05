@@ -73,8 +73,30 @@ refused $V 'git diff --output=src/d.txt'
 refused $V 'git tag v1'
 refused $V 'git stash push'
 refused $V 'git -C . commit -m x'
+# the second opinion's findings: cd scope, git -C escapes, cp through a link, sed w, grouped curl options
+refused $V '(cd /tmp); rm src/a.txt'
+refused $V 'cd /tmp | rm src/a.txt'
+refused $V 'cd /tmp && echo x > ro-log.txt'              # after any cd a relative write is refused
+refused $V 'git -C /tmp/review config --global user.name x'
+refused $V 'git -C /tmp/review push origin main'
+refused $V 'git -C /tmp/review --git-dir=.git add -A'
+refused $V 'git -C /tmp/review worktree add /tmp/w'
+ln -s "$C/src/a.txt" "$TMPD/ro-link-a.txt" 2>/dev/null
+refused $V "cp src/ro-link-a.txt $TMPD"                  # the file lands on a link that leads into the project
+rm -f "$TMPD/ro-link-a.txt"
+refused $V "sed -n 'w src/out.txt' src/a.txt"
+refused $V "sed 's/a/b/w src/out.txt' src/a.txt"
+refused $V 'sed -f /tmp/script.sed src/a.txt'
+refused $V 'curl -sSLo src/out.txt https://example.com/f'
+refused $V 'curl -sSLosrc/out.txt https://example.com/f'
+refused $V 'curl -sO https://example.com/f'
+refused $V 'curl -D src/h.txt https://example.com'
+refused $V 'curl -c src/jar.txt https://example.com'
 # reading, tests, logs under the temp folders
-allowed $V 'cd /tmp && echo x > ro-log.txt'          # cd to a known folder: judged there
+allowed $V "cp src/a.txt $TMPD/ro-copy.txt && cp src/a.txt $TMPD/"
+allowed $V "sed -n 's/w/x/p' src/a.txt && sed -n '/warn/p' src/a.txt"
+allowed $V 'curl -sSLo /tmp/out.txt https://example.com/f && curl -XPOST -H "X-O: 1" https://example.com'
+allowed $V 'git -C /tmp/review commit -qm x && git -C /tmp/review config user.name x'
 allowed $V 'cd src && cat a.txt && ls'
 allowed $V 'git tag && git tag -l && git stash list && git worktree list && git submodule status'
 allowed $V 'git apply --check /tmp/p.diff && git notes list && git remote -v && git branch -a && git branch --list'
