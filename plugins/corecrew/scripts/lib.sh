@@ -394,11 +394,15 @@ git_init() {
 project_docs_manifest() {
   cat <<'EOF'
 CLAUDE.md.tmpl|CLAUDE.md
-docs/INDEX.md.tmpl|docs/INDEX.md
 docs/brief.md.tmpl|docs/brief.md
 docs/architecture.md.tmpl|docs/architecture.md
 docs/decisions/001-stack-and-architecture.md.tmpl|docs/decisions/001-stack-and-architecture.md
+docs/wiki.base|docs/wiki.base
+docs/obsidian-app.json|docs/.obsidian/app.json
+docs/obsidian-gitignore|docs/.obsidian/.gitignore
 mkdir|docs/features
+mkdir|docs/specs
+mkdir|docs/plans
 mkdir|docs/knowledge
 EOF
 }

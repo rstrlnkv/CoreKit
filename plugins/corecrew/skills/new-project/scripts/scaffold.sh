@@ -47,6 +47,13 @@ fi
 
 # Project docs (the Core itself comes from setup-core.sh)
 put_project_docs "$TPL" "$P" || exit 1
+# docs/INDEX.md is generated from the pages' front matter (same path form as the lines above)
+if [ "$DRY" -eq 1 ]; then
+  if [ -f "$P/docs/INDEX.md" ]; then echo "skipped $(rel_core "$P")/docs/INDEX.md"; else echo "would create $(rel_core "$P")/docs/INDEX.md"; fi
+else
+  R="$(rel_core "$P")"
+  bash "$ROOT_DIR/scripts/wiki-index.sh" "$P" | sed "s|^\([a-z]*\) docs/|\1 $R/docs/|" || exit 1
+fi
 
 # Code repo, beside the Core
 mkdir_p "$K"

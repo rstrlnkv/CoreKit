@@ -27,10 +27,13 @@ check: <set after scaffolding>
   Claude runs it; its path is printed at session start, or `<plugin>/scripts/save`).
   To publish: `save "<message>" --push`. `undo-step` reverts the last step in both repos,
   including knowledge and standards edits made in that step.
-- After changing a feature, update its page in `{{PROJECT_DIR}}/docs/features/` and its `updated` field;
-  a new page gets a map line in `{{PROJECT_DIR}}/docs/INDEX.md`.
-- A new architectural decision gets a new file `{{PROJECT_DIR}}/docs/decisions/NNN-<slug>.md` and a map line.
-- Put specs and plans (e.g. from Superpowers) in `{{PROJECT_DIR}}/docs/superpowers/`, not in the code repo.
+- After changing a feature, update its page in `{{PROJECT_DIR}}/docs/features/` and its `updated` field.
+  After adding or changing any page, run corecrew's `wiki-index.sh {{PROJECT_DIR}}` (it rewrites
+  `{{PROJECT_DIR}}/docs/INDEX.md`; path: `<plugin>/scripts/wiki-index.sh`, printed at session start
+  like `save`). Never write map lines by hand.
+- A new architectural decision gets a new file `{{PROJECT_DIR}}/docs/decisions/NNN-<slug>.md`.
+- Put specs in `{{PROJECT_DIR}}/docs/specs/` and plans in `{{PROJECT_DIR}}/docs/plans/`, not in the code repo.
+- Links between wiki pages are wikilinks: `[[page-name]]`, `[[page-name#Heading]]`.
 - The wiki is `{{PROJECT_DIR}}/docs/`, one wiki for every worktree. Edit it by that absolute path
   from any worktree; `save` run in the worktree commits the wiki with the worktree's code.
 - Tests (`**/test/**`, `**/tests/**`, `*_test.*`, `*.test.*`): write the failing test first, watch it

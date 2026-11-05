@@ -21,6 +21,14 @@ assert_contains "$P/CLAUDE.md" "check: bash tests/run.sh"
 assert_file "$P/docs/INDEX.md"; assert_dir "$P/docs/knowledge"
 assert_exit 0 bash "$WC" "$P"
 assert_eq "$OUT" "" "wiki-check output"
+# typed front matter, generated INDEX listing the feature page, Obsidian vault files
+head -3 "$P/docs/features/add.md" | grep -qx 'type: feature' && pass || fail "add.md: type: feature is not first"
+grep -q '^title:' "$P/docs/features/add.md" && fail "add.md has title:" || pass
+assert_exit 0 bash "$SCRIPTS/wiki-index.sh" "$P" --check
+assert_eq "$OUT" "" "wiki-index --check output"
+assert_contains "$P/docs/INDEX.md" "[[add]]"
+assert_file "$P/docs/wiki.base"; assert_file "$P/docs/.obsidian/app.json"; assert_file "$P/docs/.obsidian/.gitignore"
+grep -rl '^title:' "$P/docs" --include='*.md' >/dev/null 2>&1 && fail "a fixture page has title:" || pass
 grep -l '^files:' "$P"/docs/features/*.md >/dev/null 2>&1 && pass || fail "no feature page with files:"
 grep -rq -e '^  - add.sh$' -e "^files: \\[add.sh\\]$" "$P/docs/features" && pass || fail "no page lists add.sh"
 assert_contains "$CORE_DIR/PROJECTS.md" "- test-coredev — "
