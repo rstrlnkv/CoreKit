@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.3 — 2026-11-05
+
+- Files you name were refused as secrets whenever they lay in one folder (a single file in a
+  subfolder was enough): `git ls-files -- <files> <excludes>` lists nothing then, and with glob
+  excludes it even lets a secret through (git 2.54, macOS). Named files now go through the skill's
+  own `scripts/allowed-files.sh`, which picks them from the full allowed list.
+- `ask-gpt.sh` runs and removes only a `mktemp -d` folder right in the temp folder; a wrong path
+  (the project, say) is refused and left alone. Before, it would have been deleted.
+
 ## 0.2.2 — 2026-11-05
 
 - The permission profile names `credentials`, `kubeconfig`, `secret`, `token` and service-account

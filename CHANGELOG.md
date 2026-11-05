@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.2 — 2026-11-05
+- The read-only checkers' rule, after a second opinion from GPT: any `cd` ends relative writes
+  (`(cd /tmp); rm x` and `cd /tmp | rm x` run rm where the command started, so the folder is not
+  tracked; write logs to an absolute temp path); `git push`, `git config --global`/`--system`/`--file`,
+  `--git-dir`/`--work-tree` and `git worktree add` are refused even with `-C` into a temp folder;
+  `cp`/`mv` into a folder also judge `<folder>/<file name>`, which may be a link into the project;
+  `sed` with a `w` command or `-f`, and grouped curl options (`-sSLo FILE`, `-D`, `-c`) are judged.
+
 ## 0.6.1 — 2026-11-05
 - The read-only checkers' rule, after an independent review: it follows `cd` (a relative write
   after a cd to an unknown folder is refused), looks into `$(...)` and backticks, and also refuses
