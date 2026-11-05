@@ -112,6 +112,29 @@ assert_contains "$S" 'default_permissions='
 assert_contains "$S" '--ignore-user-config'
 assert_contains "$S" 'web_search="disabled"'
 assert_contains "$S" '":project_roots"'
+# the profile blocks, inside the project, every secret the send filter drops (README promises it).
+# Checked for real with `codex sandbox` (local, nothing goes to OpenAI) where codex is installed.
+profile="$(grep -o "permissions.review.filesystem={.*}}'" "$S" | head -1 | sed "s/'\$//")"
+assert_eq "${profile:+found}" "found" "SKILL.md has the review permission profile"
+if command -v codex >/dev/null 2>&1 && codex sandbox --help >/dev/null 2>&1; then
+  R5="$SANDBOX/profile"; mkdir -p "$R5/.aws" "$R5/sub" "$R5/k"; git -C "$R5" init -q
+  secrets='.env prod.env app.env.local sub/.env.prod key.pem server.key cert.p12 cert.pfx id_rsa id_ed25519.pub Credentials.txt
+           .npmrc sub/.netrc .pypirc .git-credentials prod.tfvars terraform.tfstate terraform.tfstate.backup app.jks release.keystore
+           AuthKey_X.p8 my-secret.txt SECRETS.md api_token.txt kubeconfig k/kubeconfig-prod db.kdbx .aws/config
+           gcp-service-account.json service_account_key.json sa-serviceaccount.json'
+  for f in $secrets ok.txt; do printf 'x\n' > "$R5/$f"; done
+  if ( cd "$R5" && codex sandbox -c 'default_permissions="review"' -c "$profile" cat ok.txt >/dev/null 2>&1 ); then
+    open=""
+    for f in $secrets; do
+      ( cd "$R5" && codex sandbox -c 'default_permissions="review"' -c "$profile" cat "$f" >/dev/null 2>&1 ) && open="$open $f"
+    done
+    assert_eq "${open:-none}" "none" "the codex profile blocks every secret the filter drops"
+  else
+    echo "  note: codex sandbox cannot read an ordinary file here (nested sandbox?), the profile is not run"
+  fi
+else
+  echo "  note: codex not installed, the profile is not run"
+fi
 assert_not_contains "$S" 'GPT can read the project but'
 assert_not_contains "$P/README.md" 'GPT can read the project but'
 assert_contains "$P/README.md" 'whole disk'

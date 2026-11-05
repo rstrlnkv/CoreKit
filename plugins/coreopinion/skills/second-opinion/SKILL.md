@@ -65,6 +65,10 @@ Pick the smallest material that answers the question:
 4. Nothing to review at all: say so and stop. A git error is not "nothing to review": quote the
    error and stop.
 
+Outside a git repository (`git rev-parse` fails with "not a git repository") the filter cannot
+check files, so no file is sent: only the user's own question or text goes, and GPT gets no
+project folder to read. Say so when the user named files.
+
 If a path you skipped matters to the review, tell the user it was left out and why. If a line in
 the material still looks like a token, password or private key, replace its value with
 `<redacted>`.
@@ -107,7 +111,7 @@ the answer and the log tail are printed before the folder goes:
 
 ```bash
 T='<the mktemp path>'; trap 'rm -rf "$T"' EXIT HUP INT TERM
-codex exec --ignore-user-config -c 'default_permissions="review"' -c 'permissions.review.filesystem={":minimal"="read", ":project_roots"={"."="read", "**/.env*"="none", "**/*.pem"="none", "**/*.key"="none", "**/*.p12"="none", "**/*.pfx"="none", "**/id_rsa*"="none", "**/id_ed25519*"="none", "**/*credentials*"="none", "**/.npmrc"="none", "**/.netrc"="none", "**/.pypirc"="none", "**/.git-credentials"="none", "**/*.tfvars"="none", "**/*.tfstate*"="none", "**/*.jks"="none", "**/*.keystore"="none", "**/*.p8"="none", "**/*[sS]ecret*"="none", "**/*[tT]oken*"="none", "**/*kubeconfig*"="none", "**/*.kdbx"="none", "**/.aws/**"="none"}}' -c web_search="disabled" -C "$(cat "$T/dir")" -c model_reasoning_effort=medium --ephemeral --output-last-message "$T/answer.md" - < "$T/prompt.md" > "$T/log.txt" 2>&1; echo "exit=$?"
+codex exec --ignore-user-config -c 'default_permissions="review"' -c 'permissions.review.filesystem={":minimal"="read", ":project_roots"={"."="read", "**/.env*"="none", "**/*.env"="none", "**/*.env.*"="none", "**/*.pem"="none", "**/*.key"="none", "**/*.p12"="none", "**/*.pfx"="none", "**/id_rsa*"="none", "**/id_ed25519*"="none", "**/*credentials*"="none", "**/.npmrc"="none", "**/.netrc"="none", "**/.pypirc"="none", "**/.git-credentials"="none", "**/*.tfvars"="none", "**/*.tfstate*"="none", "**/*.jks"="none", "**/*.keystore"="none", "**/*.p8"="none", "**/*[sS]ecret*"="none", "**/*[tT]oken*"="none", "**/*kubeconfig*"="none", "**/*.kdbx"="none", "**/.aws/**"="none", "**/*service?account*.json"="none", "**/*serviceaccount*.json"="none"}}' -c web_search="disabled" -C "$(cat "$T/dir")" -c model_reasoning_effort=medium --ephemeral --output-last-message "$T/answer.md" - < "$T/prompt.md" > "$T/log.txt" 2>&1; echo "exit=$?"
 echo "--- answer"; cat "$T/answer.md"; echo "--- log tail"; tail -n 20 "$T/log.txt"
 ```
 
@@ -136,7 +140,8 @@ echo "--- answer"; cat "$T/answer.md"; echo "--- log tail"; tail -n 20 "$T/log.t
   `xhigh`, which is slow and spends the plan's usage fast.)
 - `-` reads the prompt from stdin; `--output-last-message` writes only GPT's final answer to
   `$T/answer.md`; `--ephemeral` keeps no Codex session on disk.
-- Outside a git repository add `--skip-git-repo-check`.
+- Outside a git repository add `--skip-git-repo-check`, make an empty folder `$T/empty` and write
+  its path into `$T/dir`, so GPT has no files to open.
 
 Tell the user it is running and may take 10–60 seconds, sometimes more.
 

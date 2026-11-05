@@ -45,7 +45,7 @@ evals/                 evals.json: two scenario evals for new-project (prompt + 
 docs/migration-*.md    upgrade guides for users of older versions (0.2, 0.3)
 plugins/coremodel/    a second plugin (TypeScript hooks module); spec docs/specs/2026-11-04-coremodel-design.md;
                        own CHANGELOG; tests: `claude plugin test plugins/coremodel` (run by tests/test_coremodel.sh)
-plugins/coreopinion/   a third plugin: skill second-opinion (GPT via `codex exec --sandbox read-only`);
+plugins/coreopinion/   a third plugin: skill second-opinion (GPT via `codex exec` with a narrow read-only permission profile);
                        own README and CHANGELOG; tests: tests/test_coreopinion.sh
 CHANGELOG.md, README.md
 ```
