@@ -341,7 +341,7 @@ test('the pane shows mode, level, last pick and counts', { options: { mode: 'aut
     expect(await has($, /^held by CoreModel · in the menu: Medium \(yours\)$/, surface)).toBe(true)
     expect(await has($, /^Last pick$/, surface)).toBe(true)
     expect(await has($, /^auth bug$/, surface)).toBe(true)
-    expect(await has($, /^High +█+ 1$/, surface)).toBe(true)
+    expect(await has($, /^High +█+ 1$/, surface)).toBe(surface === 'terminal')
     expect(await has($, /^High · applied$/, surface)).toBe(true)
     expect(await has($, /▇/, surface)).toBe(false)
     expect(await has($, /^Model$/, surface)).toBe(true)
@@ -474,7 +474,7 @@ test('the pane counts kept prompts', async ($, on) => {
   await start($)
   await switchTo($, w, 'high', 'medium')
   await switchTo($, w, 'keep', 'medium', 'ok')
-  expect(await has($, /^High +█+ 1$/)).toBe(true)
+  expect(await has($, /^High +█+ 1$/, 'terminal')).toBe(true)
   expect(await has($, /^Left as it was: 2$/)).toBe(true)
   // The person answered Keep, so the last pick is shown as not applied.
   expect(await has($, /^High · not applied$/)).toBe(true)
@@ -753,7 +753,7 @@ test('pane counts per model', { options: { mode: 'auto' } }, async ($, on) => {
   w.row = null
   await start($)
   await switchPair($, w, 'opus', 'high')
-  expect(await has($, /^Opus +█+ 1$/)).toBe(true)
+  expect(await has($, /^Opus +█+ 1$/, 'terminal')).toBe(true)
   expect(await has($, /^Opus · High$/)).toBe(true)
   expect(await has($, /^held by CoreModel · in the menu: Sonnet · Medium \(yours\)$/)).toBe(true)
   expect(await has($, /^Opus · High · applied$/)).toBe(true)
@@ -958,4 +958,23 @@ test('Release pressed in the pane while the classifier runs is not overridden by
   await second
   await step($, 'medium', 1)
   expect(w.efforts.at(-1)).toBe('medium')
+})
+
+test('on the desktop the session counts are one drawing, on the terminal text bars', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  const ui = await pane($, 'desktop')
+  const svg = await ui.find({ type: 'Svg' })
+  expect(svg).not.toBe(undefined)
+  expect(String(svg?.props.source)).toMatch(/^<svg /)
+  expect(String(svg?.props.source)).toContain('Opus')
+  expect(String(svg?.props.source)).toContain('High')
+  expect(String(svg?.props.alt)).toMatch(/Opus 1/)
+  await ui.unmount()
+  const tui = await pane($, 'terminal')
+  expect(await tui.find({ type: 'Svg' })).toBe(undefined)
+  await tui.unmount()
+  expect(await has($, /█/, 'desktop')).toBe(false)
 })

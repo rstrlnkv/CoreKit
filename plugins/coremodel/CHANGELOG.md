@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.6 — 2026-11-05
+
+- On the desktop (and VS Code, mobile) the session counts are one drawing: a share bar per model
+  and one stacked bar for the levels, with a text alternative. The terminal keeps the text bars.
+  The drawing is an image that cannot read the theme, so it uses a neutral track and mid-grey text.
+
 ## 0.4.5 — 2026-11-05
 
 The pane is tighter and easier to scan.

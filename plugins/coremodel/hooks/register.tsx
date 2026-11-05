@@ -394,6 +394,43 @@ function namedInSetting(setting: unknown, key: ModelKey): boolean {
 const ASK_MODES: readonly Mode[] = ['auto', 'suggest', 'off']
 const LEVELS: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
+const MODEL_COLOR: Record<string, string> = { haiku: '#1D9E75', sonnet: '#378ADD', opus: '#7F77DD', fable: '#D4537E' }
+const LEVEL_SHADES = ['#B5D4F4', '#85B7EB', '#378ADD', '#185FA5', '#0C447C']
+
+const xml = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+// The session counts as one drawing: a share bar per model and one stacked bar for the levels.
+// An image on the desktop cannot read the theme, so it draws on a neutral track and mid-grey text.
+function statsSvg(models: { key: string; name: string; n: number }[], levels: { name: string; n: number }[]) {
+  const W = 304
+  const X = 64
+  const BAR = 200
+  const rows: string[] = []
+  const maxM = Math.max(1, ...models.map(m => m.n))
+  let y = 0
+  for (const m of models) {
+    const w = Math.max(6, Math.round((m.n / maxM) * BAR))
+    rows.push(`<text x="0" y="${y + 11}" font-size="12" fill="#888780">${xml(m.name)}</text>`)
+    rows.push(`<rect x="${X}" y="${y + 3}" width="${BAR}" height="8" rx="4" fill="#888780" fill-opacity="0.25"/>`)
+    rows.push(`<rect x="${X}" y="${y + 3}" width="${w}" height="8" rx="4" fill="${MODEL_COLOR[m.key] ?? '#378ADD'}"/>`)
+    rows.push(`<text x="${W}" y="${y + 11}" font-size="12" fill="#888780" text-anchor="end">${m.n}</text>`)
+    y += 20
+  }
+  if (levels.length) {
+    const total = levels.reduce((a, l) => a + l.n, 0)
+    let x = X
+    levels.forEach((l, i) => {
+      const w = i === levels.length - 1 ? X + BAR - x : Math.max(2, Math.floor((l.n / total) * BAR))
+      rows.push(`<rect x="${x}" y="${y + 3}" width="${w}" height="8" fill="${LEVEL_SHADES[i % LEVEL_SHADES.length]}"/>`)
+      x += w
+    })
+    y += 20
+    rows.push(`<text x="0" y="${y - 9}" font-size="12" fill="#888780">${xml(levels.map(l => `${l.name} ${l.n}`).join(' · '))}</text>`)
+    y += 4
+  }
+  return { height: y, source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${y}" width="${W}" height="${y}">${rows.join('')}</svg>` }
+}
+
 const RULE = '─'.repeat(60)
 
 export const register: Register = (on, options) => {
@@ -545,7 +582,9 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PLUGIN }, async ($, e) => {
-    const { Box, Button, Text } = $.ui.resolve(e)
+    const ui = $.ui.resolve(e)
+    const { Box, Button, Text } = ui
+    const Svg = e.surface === 'terminal' ? undefined : (ui as { Svg?: typeof Box }).Svg
     const t = texts(lastLang)
     const mode = await currentMode($, options)
     const pair = await read($, override)
@@ -646,12 +685,24 @@ export const register: Register = (on, options) => {
         {modelCounts.length > 0 || levelCounts.length > 0 || (s && s.kept > 0) ? (
           <Box key="session" flexDirection="column">
             <Text dimColor>{t.session}</Text>
-            {modelCounts.map(m => (
-              <Text key={`count-${m}`}>{usageRow(MODELS[m].name, s?.models?.[m] ?? 0, modelMax)}</Text>
-            ))}
-            {levelCounts.map(l => (
-              <Text key={`count-${l}`}>{usageRow(t.levelName(l), s?.picks[l] ?? 0, levelMax)}</Text>
-            ))}
+            {Svg ? (
+              (() => {
+                const models = modelCounts.map(m => ({ key: m, name: MODELS[m].name, n: s?.models?.[m] ?? 0 }))
+                const levels = levelCounts.map(l => ({ name: t.levelName(l), n: s?.picks[l] ?? 0 }))
+                const d = statsSvg(models, levels)
+                const alt = [...models.map(m => `${m.name} ${m.n}`), ...levels.map(l => `${l.name} ${l.n}`)].join(', ')
+                return <Svg key="stats" source={d.source} alt={alt} width={304} height={d.height} />
+              })()
+            ) : (
+              <>
+                {modelCounts.map(m => (
+                  <Text key={`count-${m}`}>{usageRow(MODELS[m].name, s?.models?.[m] ?? 0, modelMax)}</Text>
+                ))}
+                {levelCounts.map(l => (
+                  <Text key={`count-${l}`}>{usageRow(t.levelName(l), s?.picks[l] ?? 0, levelMax)}</Text>
+                ))}
+              </>
+            )}
             {s && s.kept > 0 ? <Text dimColor>{t.kept(s.kept)}</Text> : null}
           </Box>
         ) : null}
