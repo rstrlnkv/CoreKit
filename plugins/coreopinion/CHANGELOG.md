@@ -5,6 +5,10 @@
 - The Codex permission profile now blocks every secret the send filter drops: `prod.env`,
   `app.env.local` and service-account JSON files were readable by GPT inside the project, though
   the README said otherwise. Checked with `codex sandbox`; the test runs it where Codex is installed.
+- One question instead of two: the Codex run lives in the skill's own script
+  (`scripts/ask-gpt.sh`), which the skill pre-approves, so your yes to the file list is the only
+  question; no allow rule in your settings is needed. A sandbox exclusion, if you use Claude Code's
+  sandbox, now names the script.
 - Outside a git repository the skill sends only the user's own question or text, with an empty
   folder for Codex, instead of an unreachable flag note.
 

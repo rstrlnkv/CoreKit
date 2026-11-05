@@ -1,7 +1,7 @@
 {
   "name": "corecrew",
   "displayName": "CoreCrew",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "description": "Develop every project the same way: start a new app from an interview, run tasks with a crew of agents, keep standards and lessons in your own private Core repo.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",

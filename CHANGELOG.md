@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.5.3 — 2026-11-05
+## 0.6.0 — 2026-11-05
+- The plugin lives in `plugins/corecrew/` of the repo (the marketplace now points there). An install
+  copies only the plugin, not the repo's docs, tests and the two other plugins. The name, the
+  settings and the plugin data folder stay the same: an update needs nothing from you.
+- The read-only checkers (designer, localizer, security, verifier) can change nothing but the temp
+  folders: a hook refuses their Bash writes, removals, in-place edits and git changes, wherever they
+  run. Before, only their instructions said so.
 - The session-start hook also runs when a session is forked, so a fork gets the project context too.
 - A quick test suite re-run at once (fix one line, run again) no longer waits about 10 s: the
   one-suite hook's grace is 3 s and it checks every second.

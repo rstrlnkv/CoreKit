@@ -2,6 +2,11 @@
 
 ## 0.4.12 — 2026-11-05
 
+- Questions: the model first, then the effort, each with the recommended choice first (before, a
+  Fable, Extra high or Max question put Keep first). When both are asked, the effort question ends
+  with "← Back to the model". A level typed under Other ("max", "Максимальное") counts. The
+  platform allows a plugin one question per dialog, and a hook may not wait long on buttons of its
+  own, so the two stay separate questions.
 - `/coremodel` names the model as well as the level ("Now in the chat: Opus · High"), as the
   README said, and with `pickModel: off` the level only.
 - `/coremodel` replies (status, mode set, off, on, pane) follow the language of the last prompt;
