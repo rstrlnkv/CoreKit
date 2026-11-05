@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.5 — 2026-11-05
+
+The pane is tighter and easier to scan.
+
+- Buttons of a row sit close together (`xs` gap) and sections are closer (`sm`); the Model and
+  Level captions are separate sections, so a caption no longer touches the row above.
+- A thin rule separates the Model, Mode, Last pick and Session blocks.
+- Session counts are bars, scaled to the most used model and the most used level.
+
 ## 0.4.4 — 2026-11-05
 
 Races and edges found by a read-only audit.

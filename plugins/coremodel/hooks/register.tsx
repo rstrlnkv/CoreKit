@@ -394,6 +394,8 @@ function namedInSetting(setting: unknown, key: ModelKey): boolean {
 const ASK_MODES: readonly Mode[] = ['auto', 'suggest', 'off']
 const LEVELS: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
+const RULE = '─'.repeat(60)
+
 export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
     if (e.origin.kind !== 'composer' && e.origin.kind !== 'bridge') {
@@ -562,8 +564,12 @@ export const register: Register = (on, options) => {
     const menu = heldModel ? t.inMenuPair(toModel(seenModel), menuLevel) : menuLevel ? t.inMenu(menuLevel) : ''
     const modelCounts = pickOn && s?.models ? LADDER.filter(m => s.models![m] > 0) : []
     const levelCounts = s ? LEVELS.filter(l => s.picks[l] > 0) : []
+    const modelMax = Math.max(1, ...modelCounts.map(m => s?.models?.[m] ?? 0))
+    const levelMax = Math.max(1, ...levelCounts.map(l => s?.picks[l] ?? 0))
+    const nameW = Math.max(0, ...modelCounts.map(m => MODELS[m].name.length), ...levelCounts.map(l => t.levelName(l).length))
+    const usageRow = (name: string, n: number, max: number) => `${name.padEnd(nameW)}  ${'█'.repeat(Math.max(1, Math.round((n / max) * 12)))} ${n}`
     return (
-      <Box flexDirection="column" gap="md">
+      <Box flexDirection="column" gap="sm">
         <Box key="now" flexDirection="column">
           <Text dimColor>{t.now}</Text>
           <Text bold>{t.nowPair(pickOn ? nowModel : '', nowLevel)}</Text>
@@ -575,20 +581,25 @@ export const register: Register = (on, options) => {
             <Text key={`unavailable-${m}`} color="warning">{t.unavailable(m, namedInSetting(options.models, m))}</Text>
           ))}
         </Box>
-        <Box key="choose" flexDirection="column">
-          {pickOn && allowed.length ? <Text dimColor>{t.paneModel}</Text> : null}
-          <Box key="models" flexWrap="wrap">
-            {(pickOn ? allowed : []).map(m => (
-              <Button
-                key={`model-${m}`}
-                label={MODELS[m].name}
-                variant={m === nowModel ? 'primary' : undefined}
-                onPress={act('model', () => paneModel($, m))}
-              />
-            ))}
+        <Text key="d1" dimColor wrap="truncate-end">{RULE}</Text>
+        {pickOn && allowed.length ? (
+          <Box key="choose-model" flexDirection="column">
+            <Text dimColor>{t.paneModel}</Text>
+            <Box key="models" flexWrap="wrap" gap="xs">
+              {allowed.map(m => (
+                <Button
+                  key={`model-${m}`}
+                  label={MODELS[m].name}
+                  variant={m === nowModel ? 'primary' : undefined}
+                  onPress={act('model', () => paneModel($, m))}
+                />
+              ))}
+            </Box>
           </Box>
+        ) : null}
+        <Box key="choose" flexDirection="column">
           <Text dimColor>{t.paneLevel}</Text>
-          <Box key="levels" flexWrap="wrap">
+          <Box key="levels" flexWrap="wrap" gap="xs">
             {LEVELS.map(l => (
               <Button
                 key={`level-${l}`}
@@ -604,9 +615,10 @@ export const register: Register = (on, options) => {
             </Box>
           ) : null}
         </Box>
+        <Text key="d2" dimColor wrap="truncate-end">{RULE}</Text>
         <Box key="mode" flexDirection="column">
           <Text dimColor>{t.mode}</Text>
-          <Box key="modes" flexWrap="wrap">
+          <Box key="modes" flexWrap="wrap" gap="xs">
             {MODES.map(m => (
               <Button
                 key={`mode-${m}`}
@@ -618,6 +630,7 @@ export const register: Register = (on, options) => {
           </Box>
           <Text dimColor>{t.modeHint(mode, pickOn)}</Text>
         </Box>
+        <Text key="d3" dimColor wrap="truncate-end">{RULE}</Text>
         <Box key="last" flexDirection="column">
           <Text dimColor>{t.lastPick}</Text>
           {s?.last ? (
@@ -629,11 +642,16 @@ export const register: Register = (on, options) => {
             <Text>{t.noPicks}</Text>
           )}
         </Box>
+        <Text key="d4" dimColor wrap="truncate-end">{RULE}</Text>
         {modelCounts.length > 0 || levelCounts.length > 0 || (s && s.kept > 0) ? (
           <Box key="session" flexDirection="column">
             <Text dimColor>{t.session}</Text>
-            {modelCounts.length ? <Text key="count-models">{modelCounts.map(m => `${MODELS[m].name} ${s?.models?.[m] ?? 0}`).join(' · ')}</Text> : null}
-            {levelCounts.length ? <Text key="count-levels">{levelCounts.map(l => `${t.levelName(l)} ${s?.picks[l] ?? 0}`).join(' · ')}</Text> : null}
+            {modelCounts.map(m => (
+              <Text key={`count-${m}`}>{usageRow(MODELS[m].name, s?.models?.[m] ?? 0, modelMax)}</Text>
+            ))}
+            {levelCounts.map(l => (
+              <Text key={`count-${l}`}>{usageRow(t.levelName(l), s?.picks[l] ?? 0, levelMax)}</Text>
+            ))}
             {s && s.kept > 0 ? <Text dimColor>{t.kept(s.kept)}</Text> : null}
           </Box>
         ) : null}
