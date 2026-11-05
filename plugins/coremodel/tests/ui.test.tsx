@@ -474,7 +474,8 @@ test('the pane counts kept prompts', async ($, on) => {
   await start($)
   await switchTo($, w, 'high', 'medium')
   await switchTo($, w, 'keep', 'medium', 'ok')
-  expect(await has($, /^High +█+ 1$/, 'terminal')).toBe(true)
+  // Prompts the person kept are not counted as picks.
+  expect(await has($, /^High +█+/, 'terminal')).toBe(false)
   expect(await has($, /^Left as it was: 2$/)).toBe(true)
   // The person answered Keep, so the last pick is shown as not applied.
   expect(await has($, /^High · not applied$/)).toBe(true)
@@ -977,4 +978,22 @@ test('on the desktop the session counts are one drawing, on the terminal text ba
   expect(await tui.findAll({ type: 'Svg' })).toHaveLength(0)
   await tui.unmount()
   expect(await has($, /█/, 'desktop')).toBe(false)
+})
+
+test('session counts follow what was applied, not what the classifier asked for', async ($, on) => {
+  const w = world(on)
+  w.row = null
+  w.answer = '{"level":"high","model":"opus","why":"x"}'
+  w.reply = [null, 'High (recommended)']
+  await start($)
+  await submit($, 'fix the login')
+  await step($, 'medium')
+  const ui = await pane($, 'desktop')
+  const alt = String((await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt)).join('|'))
+  expect(alt).toContain('High 1')
+  expect(alt).not.toContain('Opus')
+  await ui.unmount()
+  const tui = await pane($, 'terminal')
+  expect(await tui.find({ type: 'Text', text: /^Opus/ })).toBe(undefined)
+  await tui.unmount()
 })

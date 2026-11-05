@@ -263,12 +263,8 @@ async function runPick(
   const stale = async () => h.gen !== gen || touched !== began || (await currentMode($, options)) === 'off'
   if (await stale()) return
   const named = pick.level === 'keep' ? null : pick.level
-  await count($, s => {
-    if (!named) return s
-    const models = { ...NO_STATS.models!, ...s.models }
-    if (pick.model) models[pick.model] += 1
-    return { ...s, picks: { ...s.picks, [named]: s.picks[named] + 1 }, models, last: { level: named, why: pick.why, ...(pick.model ? { model: pick.model } : {}) } }
-  })
+  // The pick is remembered as asked; the counts wait for what was applied below.
+  await count($, s => (named ? { ...s, last: { level: named, why: pick.why, ...(pick.model ? { model: pick.model } : {}) } } : s))
   // A named pick the person did not take stays the last pick, marked so the pane does not show it as applied.
   const kept = () => count($, s => ({ ...s, kept: s.kept + 1, last: named && s.last ? { ...s.last, declined: true } : s.last }))
   if (pick.level === 'keep') return kept()
@@ -321,6 +317,14 @@ async function runPick(
   if (levelTo && action === 'apply' && now) parts.level = now === toLevel(base) ? 'release' : now
   if (modelTo) await applyModel($, modelTo, baseModel)
   if (levelTo) await applyLevel($, levelTo, base)
+  await count($, s => {
+    const models = { ...NO_STATS.models!, ...s.models }
+    if (modelTo) models[modelTo] += 1
+    const picks = levelTo ? { ...s.picks, [levelTo]: s.picks[levelTo] + 1 } : s.picks
+    const last = s.last ? { ...s.last, level: levelTo ?? s.last.level, ...(modelTo ? { model: modelTo } : { model: undefined }) } : s.last
+    if (last && !modelTo) delete last.model
+    return { ...s, picks, models, last }
+  })
   const change: Mark = { level: levelTo, from: levelTo ? now : '', model: modelTo, fromModel: modelTo ? nowModel : '', why: pick.why, lang: h.lang }
   await announce($, change, parts.model || parts.level ? parts : null)
   try {
@@ -433,7 +437,7 @@ function statsSvg(models: { key: string; name: string; n: number }[], levels: { 
 }
 
 const RULE = '─'.repeat(40)
-const HAIRLINE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 304 1" width="304" height="1"><rect width="304" height="1" fill="#888780" fill-opacity="0.45"/></svg>'
+const HAIRLINE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2000 1" width="2000" height="1" preserveAspectRatio="none"><rect width="2000" height="1" fill="#888780" fill-opacity="0.45"/></svg>'
 
 export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
@@ -609,7 +613,7 @@ export const register: Register = (on, options) => {
     const levelMax = Math.max(1, ...levelCounts.map(l => s?.picks[l] ?? 0))
     const nameW = Math.max(0, ...modelCounts.map(m => MODELS[m].name.length), ...levelCounts.map(l => t.levelName(l).length))
     const rule = (key: string) =>
-      Svg ? <Svg key={key} source={HAIRLINE} alt="separator" width={304} height={1} /> : <Text key={key} dimColor wrap="truncate-end">{RULE}</Text>
+      Svg ? <Svg key={key} source={HAIRLINE} alt="separator" height={1} /> : <Text key={key} dimColor wrap="truncate-end">{RULE}</Text>
     const usageRow = (name: string, n: number, max: number) => `${name.padEnd(nameW)}  ${'█'.repeat(Math.max(1, Math.round((n / max) * 12)))} ${n}`
     return (
       <Box flexDirection="column" gap="sm">
@@ -689,7 +693,7 @@ export const register: Register = (on, options) => {
         {modelCounts.length > 0 || levelCounts.length > 0 || (s && s.kept > 0) ? (
           <Box key="session" flexDirection="column">
             <Text dimColor>{t.session}</Text>
-            {Svg ? (
+            {Svg && (modelCounts.length > 0 || levelCounts.length > 0) ? (
               (() => {
                 const models = modelCounts.map(m => ({ key: m, name: MODELS[m].name, n: s?.models?.[m] ?? 0 }))
                 const levels = levelCounts.map(l => ({ name: t.levelName(l), n: s?.picks[l] ?? 0 }))

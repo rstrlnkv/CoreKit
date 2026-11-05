@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.9 — 2026-11-05
+
+- The session counts follow what was applied, not what the classifier asked for: a model or level
+  the person declined (or a prompt left as it was) is no longer counted, and the last pick shows
+  only the applied model.
+- Desktop: with only "Left as it was" to show, the pane no longer fails to draw (an empty
+  drawing was refused).
+- Desktop: the section rule has no fixed width, so it can take the pane's.
+
 ## 0.4.8 — 2026-11-05
 
 - Desktop: the section rule is a drawing of the pane's own width (304 px), as the session drawing
