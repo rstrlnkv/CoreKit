@@ -173,6 +173,13 @@ t0=$(date +%s); ONE_SUITE_GRACE=3 ONE_SUITE_WAIT=20 run_hook 'swift test'; t=$((
 assert_eq "$RC" "0" "a turn past its grace is taken by the next waiter"
 [ "$t" -ge 1 ] && [ "$t" -lt 15 ] && pass || fail "stale turn: waited ${t} s"
 expect 0 "after the run ends: allowed" 'swift test'
+# the default grace is short: a quick suite re-run at once (fix one line, run again) waits a moment,
+# not 10 s. A run that was let through shows among the processes well within it.
+rm -rf "$ONE_SUITE_TURN"
+( unset ONE_SUITE_GRACE; ONE_SUITE_WAIT=20; export ONE_SUITE_WAIT; run_hook 'swift test'; exit $RC ); assert_eq "$?" "0" "default grace: the first run goes"
+t0=$(date +%s); ( unset ONE_SUITE_GRACE; ONE_SUITE_WAIT=20; export ONE_SUITE_WAIT; run_hook 'swift test'; exit $RC ); rc=$?; t=$(( $(date +%s) - t0 ))
+assert_eq "$rc" "0" "default grace: a re-run at once goes"
+[ "$t" -le 4 ] && pass || fail "default grace: a re-run at once waited ${t} s"
 # knobs that are not numbers fall back to the defaults instead of hanging or failing
 rm -rf "$ONE_SUITE_TURN"
 ONE_SUITE_WAIT=abc ONE_SUITE_GRACE=x expect 0 "bad knob values: still decides" 'swift test'

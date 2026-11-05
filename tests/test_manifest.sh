@@ -67,7 +67,7 @@ WIRED="$(awk '
   /"command":/ { c = $0; sub(/.*\/hooks\//, "", c); sub(/\\".*/, "", c) }
   /"timeout":/ { t = $0; gsub(/[^0-9]/, "", t); print ev "|" m "|" c "|" t }
 ' "$H")"
-want_wired="SessionStart|startup|resume|clear|compact|session-start.sh|30
+want_wired="SessionStart|startup|resume|clear|compact|fork|session-start.sh|30
 PreToolUse|Bash|one-suite.sh|540
 PreToolUse|Write|Edit|MultiEdit|NotebookEdit|Bash|guard-code.sh|15
 PreToolUse|Read|Grep|Glob|Edit|MultiEdit|Write|NotebookEdit|Bash|guard-secrets.sh|15

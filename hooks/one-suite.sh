@@ -15,7 +15,7 @@
 # through.
 #
 # Env knobs, for tests: ONE_SUITE_PROCS (the process pattern, replaces the default), ONE_SUITE_WAIT
-# (seconds to wait; default 480), ONE_SUITE_GRACE (seconds a turn stays fresh; default 10),
+# (seconds to wait; default 480), ONE_SUITE_GRACE (seconds a turn stays fresh; default 3),
 # ONE_SUITE_TURN (the turn directory).
 # The default wait of 480 s must stay under this hook's `timeout` in hooks/hooks.json (Task 19 sets
 # it to 540) and under the stream watchdog, which stops an agent that is silent for 600 s.
@@ -75,12 +75,14 @@ procs="${ONE_SUITE_PROCS:-$default_procs}"
 # The turn: a directory only one waiter can make. A run that was let through takes a moment to
 # appear among the processes, and without the turn every waiter would see "nothing running" in that
 # moment and start together. A turn older than its grace belongs to a run that has started or never
-# will, and the next waiter takes it. If the turn can be neither made nor cleared (its folder is
+# will, and the next waiter takes it. The grace is short (3 s): a run shows among the processes
+# within a second of being let through, and a quick suite re-run at once should not wait long.
+# If the turn can be neither made nor cleared (its folder is
 # missing or read-only, a stale turn belongs to someone else) waiting cannot help: the call is let
 # through. Every other path through the loop below reaches the limit check and the sleep.
 turn="${ONE_SUITE_TURN:-${TMPDIR:-/tmp}/corecrew-one-suite.turn}"
-grace="${ONE_SUITE_GRACE:-10}"; limit="${ONE_SUITE_WAIT:-480}"
-case "$grace" in ''|*[!0-9]*) grace=10 ;; esac
+grace="${ONE_SUITE_GRACE:-3}"; limit="${ONE_SUITE_WAIT:-480}"
+case "$grace" in ''|*[!0-9]*) grace=3 ;; esac
 case "$limit" in ''|*[!0-9]*) limit=480 ;; esac
 
 # running_line — the first other process (pid and command line) that matches $procs. A gradlew run
@@ -114,7 +116,7 @@ while :; do
     fi
   fi
   [ $((now - start)) -ge "$limit" ] && break
-  sleep 2
+  sleep 1
 done
 what="$(printf '%s' "${running:-$(msg run_starting)}" | tr -d '\n\r' | cut -c1-120)"
 printf '%s\n' "$(msg one_suite_wait "$limit" "$what")" >&2

@@ -4,10 +4,8 @@
 # once per set of changes, so it stays quiet while Claude waits for the user's approval.
 # Inert outside a project (docs/specs/2026-11-04-project-layout-design.md section 4: <Core>/<project>/ or
 # its code folder beside the Core): a repo with the same shape elsewhere passes.
-# _locate.sh sits next to this file (old copies in <Core>/bin) or under ../scripts in the plugin;
-# `save` sits next to _locate.sh.
-D="$(dirname "$0")"
-[ -f "$D/_locate.sh" ] || D="$D/../scripts"
+# _locate.sh, lib.sh and `save` sit under ../scripts in the plugin.
+D="$(dirname "$0")/../scripts"
 . "$D/_locate.sh"
 . "$D/lib.sh" 2>/dev/null || exit 0   # json_str, load_settings, project_of; next to _locate.sh
 . "$(dirname "$0")/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
