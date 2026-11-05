@@ -184,6 +184,57 @@ assert_eq "$rc" "0" "default grace: a re-run at once goes"
 rm -rf "$ONE_SUITE_TURN"
 ONE_SUITE_WAIT=abc ONE_SUITE_GRACE=x expect 0 "bad knob values: still decides" 'swift test'
 
+# --- the takeover of a stale turn: of many waiters that find the same stale turn in the same instant,
+# exactly one goes (they used to remove and re-make it one after another, each taking the turn the
+# previous one had just made). stress <rounds> <waiters> [path-dir] runs the rounds side by side, each
+# with its own turn, every hook held on a fifo until all are started, then released together. An empty
+# or missing path-dir keeps the real PATH. RCS = one line per round: the exit codes of its waiters.
+# The process pattern never matches anything (the [-] keeps pgrep's own command line out of it), so the
+# parallel hooks do not see each other as a running suite and all refuse.
+stress() {
+  local rounds="$1" n="$2" pathdir="${3-}" r i d pids=""
+  rm -rf "$SANDBOX/stress"; mkdir -p "$SANDBOX/stress"; payload 'swift test' > "$SANDBOX/stress/in"
+  for r in $(seq 1 "$rounds"); do
+    d="$SANDBOX/stress/r$r"; mkdir -p "$d/turn"; echo 1 > "$d/turn/at"   # stale: written in 1970
+    for i in $(seq 1 "$n"); do
+      mkfifo "$d/f$i"
+      ( if [ -n "$pathdir" ]; then PATH="$pathdir"; fi
+        ONE_SUITE_PROCS='onesuite-fake[-]none' ONE_SUITE_GRACE=5 ONE_SUITE_WAIT=1 ONE_SUITE_TURN="$d/turn" \
+          "$(command -v bash)" "$H" < "$d/f$i" >/dev/null 2>&1; echo $? > "$d/rc$i" ) &
+      pids="$pids $!"
+    done
+  done
+  for r in $(seq 1 "$rounds"); do for i in $(seq 1 "$n"); do cat "$SANDBOX/stress/in" > "$SANDBOX/stress/r$r/f$i" & done; done
+  wait $pids
+  RCS=""
+  for r in $(seq 1 "$rounds"); do RCS="$RCS$(cat "$SANDBOX/stress/r$r"/rc* | tr '\n' ' ')
+"; done
+}
+# check_stress <label> — every round let exactly one waiter through (exit 0) and refused the rest (exit 2)
+check_stress() {
+  local line bad=0
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    case "$(printf '%s\n' $line | sort | uniq -c | tr -s ' ' | tr '\n' ',')" in
+      " 1 0, 7 2,") ;;
+      *) bad=$((bad + 1)); echo "    round: $line" ;;
+    esac
+  done <<EOF
+$RCS
+EOF
+  [ "$bad" -eq 0 ] && pass || fail "$1: $bad of 8 rounds did not let exactly one of 8 waiters through"
+}
+stress 8 8
+check_stress "stale turn, 8 waiters (real PATH)"
+# the same without flock on PATH: the fallback lock. Only the tools the hook uses are linked in.
+mkdir -p "$SANDBOX/noflock"
+for t in bash cat sed tr grep date sleep mkdir head dirname basename awk rm cut pgrep; do
+  p="$(command -v $t 2>/dev/null)"; [ -n "$p" ] && [ -x "$p" ] && ln -sf "$p" "$SANDBOX/noflock/$t"
+done
+[ ! -e "$SANDBOX/noflock/flock" ] && pass || fail "the no-flock PATH has flock"
+stress 8 8 "$SANDBOX/noflock"
+check_stress "stale turn, 8 waiters (no flock on PATH)"
+
 # --- the default process pattern (checked as text: it never touches real processes)
 DEF="$(sed -n "s/^default_procs='\(.*\)'\$/\1/p" "$H")"
 [ -n "$DEF" ] && pass || fail "default_procs line not found in the hook"
