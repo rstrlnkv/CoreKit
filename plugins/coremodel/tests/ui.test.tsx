@@ -998,3 +998,15 @@ test('footer shows the held pair beside the button', { options: { mode: 'auto' }
     await ui.unmount()
   }
 })
+
+test('every pane section keeps its caption apart from what follows', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  const ui = await pane($, 'desktop')
+  for (const key of ['now', 'choose-model', 'choose', 'mode', 'last', 'session']) {
+    expect((await ui.find({ type: 'Box', key }))?.props.gap).toBe('xs')
+  }
+  await ui.unmount()
+})

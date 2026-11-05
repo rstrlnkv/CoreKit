@@ -407,30 +407,30 @@ const xml = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 // An image on the desktop cannot read the theme, so it draws on a neutral track and mid-grey text.
 function statsSvg(models: { key: string; name: string; n: number }[], levels: { name: string; n: number }[], LEVELS_CAPTION: string) {
   const W = 304
-  const X = 64
+  const X = 72
   const BAR = 200
   const rows: string[] = []
   const maxM = Math.max(1, ...models.map(m => m.n))
-  let y = 0
+  let y = 2
   for (const m of models) {
     const w = Math.max(6, Math.round((m.n / maxM) * BAR))
-    rows.push(`<text x="0" y="${y + 11}" font-size="12" fill="#888780">${xml(m.name)}</text>`)
-    rows.push(`<rect x="${X}" y="${y + 3}" width="${BAR}" height="8" rx="4" fill="#888780" fill-opacity="0.25"/>`)
-    rows.push(`<rect x="${X}" y="${y + 3}" width="${w}" height="8" rx="4" fill="${MODEL_COLOR[m.key] ?? '#378ADD'}"/>`)
-    rows.push(`<text x="${W}" y="${y + 11}" font-size="12" fill="#888780" text-anchor="end">${m.n}</text>`)
-    y += 20
+    rows.push(`<text x="0" y="${y + 13}" font-size="14" fill="#888780">${xml(m.name)}</text>`)
+    rows.push(`<rect x="${X}" y="${y + 5}" width="${BAR}" height="8" rx="4" fill="#888780" fill-opacity="0.25"/>`)
+    rows.push(`<rect x="${X}" y="${y + 5}" width="${w}" height="8" rx="4" fill="${MODEL_COLOR[m.key] ?? '#378ADD'}"/>`)
+    rows.push(`<text x="${W}" y="${y + 13}" font-size="14" fill="#888780" text-anchor="end">${m.n}</text>`)
+    y += 26
   }
   if (levels.length) {
     const total = levels.reduce((a, l) => a + l.n, 0)
     let x = X
-    rows.push(`<text x="0" y="${y + 11}" font-size="12" fill="#888780">${xml(LEVELS_CAPTION)}</text>`)
+    rows.push(`<text x="0" y="${y + 13}" font-size="14" fill="#888780">${xml(LEVELS_CAPTION)}</text>`)
     levels.forEach((l, i) => {
       const w = i === levels.length - 1 ? X + BAR - x : Math.max(2, Math.floor((l.n / total) * BAR))
-      rows.push(`<rect x="${x}" y="${y + 3}" width="${w}" height="8" fill="${LEVEL_SHADES[i % LEVEL_SHADES.length]}"/>`)
+      rows.push(`<rect x="${x}" y="${y + 5}" width="${w}" height="8" fill="${LEVEL_SHADES[i % LEVEL_SHADES.length]}"/>`)
       x += w
     })
-    y += 24
-    rows.push(`<text x="${X}" y="${y}" font-size="11" fill="#888780">${xml(levels.map(l => `${l.name} ${l.n}`).join(' · '))}</text>`)
+    y += 28
+    rows.push(`<text x="${X}" y="${y}" font-size="12" fill="#888780">${xml(levels.map(l => `${l.name} ${l.n}`).join(' · '))}</text>`)
     y += 4
   }
   return { height: y, source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${y}" width="${W}" height="${y}">${rows.join('')}</svg>` }
@@ -623,7 +623,7 @@ export const register: Register = (on, options) => {
     const usageRow = (name: string, n: number, max: number) => `${name.padEnd(nameW)}  ${'█'.repeat(Math.max(1, Math.round((n / max) * 12)))} ${n}`
     return (
       <Box flexDirection="column" gap="sm">
-        <Box key="now" flexDirection="column">
+        <Box key="now" flexDirection="column" gap="xs">
           <Text dimColor>{t.now}</Text>
           <Text bold>{t.nowPair(pickOn ? nowModel : '', nowLevel)}</Text>
           {held || heldModel ? <Text dimColor>{menu ? `${t.heldBy} · ${menu}` : t.heldBy}</Text> : null}
@@ -636,7 +636,7 @@ export const register: Register = (on, options) => {
         </Box>
         {rule("d1")}
         {pickOn && allowed.length ? (
-          <Box key="choose-model" flexDirection="column">
+          <Box key="choose-model" flexDirection="column" gap="xs">
             <Text dimColor>{t.paneModel}</Text>
             <Box key="models" flexWrap="wrap" gap="xs">
               {allowed.map(m => (
@@ -669,7 +669,7 @@ export const register: Register = (on, options) => {
           ) : null}
         </Box>
         {rule("d2")}
-        <Box key="mode" flexDirection="column">
+        <Box key="mode" flexDirection="column" gap="xs">
           <Text dimColor>{t.mode}</Text>
           <Box key="modes" flexWrap="wrap" gap="xs">
             {MODES.map(m => (
@@ -684,7 +684,7 @@ export const register: Register = (on, options) => {
           <Text dimColor>{t.modeHint(mode, pickOn)}</Text>
         </Box>
         {rule("d3")}
-        <Box key="last" flexDirection="column">
+        <Box key="last" flexDirection="column" gap="xs">
           <Text dimColor>{t.lastPick}</Text>
           {s?.last ? (
             <>
@@ -697,7 +697,7 @@ export const register: Register = (on, options) => {
         </Box>
         {rule("d4")}
         {modelCounts.length > 0 || levelCounts.length > 0 || (s && s.kept > 0) ? (
-          <Box key="session" flexDirection="column">
+          <Box key="session" flexDirection="column" gap="xs">
             <Text dimColor>{t.session}</Text>
             {Svg && (modelCounts.length > 0 || levelCounts.length > 0) ? (
               (() => {

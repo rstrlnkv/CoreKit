@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.10 — 2026-11-05
+
+- Pane: every section keeps its caption one step (`xs`) apart from the buttons or text under it,
+  and a hint stands apart from the buttons above it.
+- Session drawing: larger text (14 px rows, 12 px legend) and more room between the rows.
+
 ## 0.4.9 — 2026-11-05
 
 - The session counts follow what was applied, not what the classifier asked for: a model or level
