@@ -395,20 +395,92 @@ test('fable always asks', { options: { mode: 'auto' } }, async ($, on) => {
   expect(w.models).toEqual(['claude-sonnet-5-5'])
 })
 
-// A question can pop up while the person types the next message; their Enter then takes the first
-// option. For a costly pick (Fable, Extra high, Max) that first option is Keep.
-test('the Fable question lists Keep first', { options: { mode: 'auto' } }, async ($, on) => {
+// The model is asked first, then the effort; in each the recommended choice comes first and the
+// current one is there to keep. When both are asked the effort question can go back to the model.
+test('suggest mode asks the model, then the effort, the pick first', async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"high","model":"opus","why":"auth bug"}'
+  w.reply = ['Opus (recommended)', 'High (recommended)']
+  await start($)
+  await submit($, 'fix the login, it throws 500')
+  await step($, 'medium')
+  expect(w.dialogs).toEqual([
+    [['Opus (recommended)', 'Keep Sonnet', 'Fable', 'Haiku']],
+    [['High (recommended)', 'Keep Medium', 'Extra high', '← Back to the model']],
+  ])
+  expect(w.headers).toEqual(['Model', 'Effort'])
+  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+  expect(w.efforts.at(-1)).toBe('high')
+})
+
+test('Back to the model asks the model again, then the effort', async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"high","model":"opus","why":"auth bug"}'
+  w.reply = ['Opus (recommended)', '← Back to the model', 'Keep Sonnet', 'Extra high']
+  await start($)
+  await submit($, 'fix the login')
+  await step($, 'medium')
+  expect(w.headers).toEqual(['Model', 'Effort', 'Model', 'Effort'])
+  expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
+  expect(w.efforts.at(-1)).toBe('xhigh')
+})
+
+test('the effort question alone has no Back and four levels', async ($, on) => {
+  const w = world(on)
+  w.reply = 'High (recommended)'
+  await start($)
+  await submit($, 'fix the login')
+  await step($, 'medium')
+  expect(w.asked).toEqual([['High (recommended)', 'Keep Medium', 'Extra high', 'Low']])
+})
+
+test('a level typed under Other counts, in English or Russian', async ($, on) => {
+  const w = world(on)
+  await start($)
+  w.reply = 'max'
+  await submit($, 'fix the login')
+  await step($, 'medium')
+  w.reply = 'Низкое'
+  await submit($, 'почини вход')
+  await step($, 'medium')
+  expect(w.efforts).toEqual(['max', 'low'])
+})
+
+test('a question left unanswered keeps its part; the other part is applied', async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"high","model":"opus","why":"auth bug"}'
+  w.reply = ['Opus (recommended)', null]
+  await start($)
+  await submit($, 'fix the login')
+  await step($, 'medium')
+  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+  expect(w.efforts.at(-1)).toBe('medium')
+})
+
+test('dismissed questions change nothing', async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"high","model":"opus","why":"auth bug"}'
+  w.reply = null
+  await start($)
+  await submit($, 'fix the login')
+  await step($, 'medium')
+  expect(w.headers).toEqual(['Model', 'Effort'])
+  expect(w.models).toEqual(['claude-sonnet-5-5'])
+  expect(w.efforts).toEqual(['medium'])
+})
+
+test('the Fable question lists the pick first', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.answer = '{"level":"medium","model":"fable","why":"whole app"}'
   w.reply = ['Fable (recommended)']
   await start($)
   await submit($, 'build the whole app, work alone')
   await step($, 'medium')
-  expect(w.asked[0]).toEqual(['Keep Sonnet', 'Fable (recommended)', 'Opus', 'Haiku'])
+  expect(w.asked[0]).toEqual(['Fable (recommended)', 'Keep Sonnet', 'Opus', 'Haiku'])
   expect(w.models).toEqual(['claude-fable-5-1'])
 })
 
-test('the Extra high and Max questions list Keep first', { options: { mode: 'auto' } }, async ($, on) => {
+test('the Extra high and Max questions list the pick first', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.reply = ['Extra high (recommended)', 'Max (recommended)']
   await start($)
@@ -417,10 +489,10 @@ test('the Extra high and Max questions list Keep first', { options: { mode: 'aut
     await submit($, 'build the whole app')
     await step($, 'medium')
   }
-  expect(w.asked[0]).toEqual(['Keep Medium', 'Extra high (recommended)', 'High', 'Max'])
+  expect(w.asked[0]).toEqual(['Extra high (recommended)', 'Keep Medium', 'High', 'Max'])
   // The first answer is held, so the second question's Keep is the held Extra high.
-  expect(w.asked[1]![0]).toBe('Keep Extra high')
-  expect(w.asked[1]).toContain('Max (recommended)')
+  expect(w.asked[1]![0]).toBe('Max (recommended)')
+  expect(w.asked[1]).toContain('Keep Extra high')
 })
 
 test('a plain High question keeps the pick first', async ($, on) => {

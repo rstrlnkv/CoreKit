@@ -63,21 +63,6 @@ export function modelOptions(pick: ModelKey, now: ModelKey | '', allowed: readon
   return nearest(LADDER, pick, now, now && !allowed.includes(now) ? [...allowed, now] : allowed)
 }
 
-/** Levels that cost the most: a question about them never has its pick under Enter. */
-export function isCostlyLevel(l: Level): boolean {
-  return ASK_FIRST.includes(l)
-}
-
-/**
- * The options with `keep` moved to the top when `when` holds. A question can pop up while the
- * person types the next message and their Enter takes the first option: for a costly pick that
- * must be the safe one. Without `keep` among the options nothing moves.
- */
-export function keepFirst<T>(opts: readonly T[], keep: T, when: boolean): T[] {
-  if (!when || !opts.includes(keep)) return [...opts]
-  return [keep, ...opts.filter(o => o !== keep)]
-}
-
 export function effortOptions(pick: Level, now: Level | ''): Level[] {
   return nearest(ORDER, pick, now, ORDER)
 }
@@ -126,6 +111,7 @@ export function texts(lang: Lang) {
         ? `Похоже, задаче нужно усилие «${n(l)}»${why ? `: ${why}` : ''}. Переключить, пока Claude не начал?`
         : `This looks like ${l === 'xhigh' ? 'an' : 'a'} ${n(l)} effort task${why ? `: ${why}` : ''}. Switch before Claude starts?`,
     effortHeader: ru ? 'Усилие' : 'Effort',
+    backToModel: ru ? '← Назад к модели' : '← Back to the model',
     levelOption: (l: Level, recommended: boolean) => `${n(l)}${recommended ? (ru ? ' (советую)' : ' (recommended)') : ''}`,
     modelHeader: ru ? 'Модель' : 'Model',
     modelOption: (m: ModelKey, recommended: boolean) => `${MODELS[m].name}${recommended ? (ru ? ' (советую)' : ' (recommended)') : ''}`,

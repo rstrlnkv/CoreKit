@@ -16,8 +16,13 @@ export type World = {
   answers: (string | { fail: true } | { after: number; text?: string; cut?: boolean })[]
   /** The timeoutMs of each classifier call. */
   timeouts: (number | undefined)[]
-  /** One answer for every question, or a queue answered in order (an empty queue dismisses). */
+  /**
+   * One answer for every question, or a queue answered in order, one entry per question of a dialog
+   * (null leaves that question unanswered; a dialog with no answer at all is dismissed, as is an empty queue).
+   */
   reply: string | null | Promise<string | null> | (string | null)[]
+  /** Every dialog: one label list per question. */
+  dialogs: string[][][]
   questions: string[]
   headers: string[]
   tokens: number | undefined
@@ -56,6 +61,7 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     answers: [],
     timeouts: [],
     reply: null,
+    dialogs: [],
     questions: [],
     headers: [],
     tokens: undefined,
@@ -128,12 +134,17 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
   })
   on('tool.call', { tool: 'AskUserQuestion' }, async (_, e) => {
     const qs = (e as unknown as { questions: { question: string; header?: string; options: { label: string }[] }[] }).questions
-    w.asked.push(qs[0]!.options.map(o => o.label))
-    w.questions.push(qs[0]!.question)
-    w.headers.push(qs[0]!.header ?? '')
-    const r = Array.isArray(w.reply) ? (w.reply.length ? w.reply.shift()! : null) : await w.reply
-    if (r === null) return { deny: 'dismissed' }
-    return { result: { questions: qs, answers: { [qs[0]!.question]: r } } } as never
+    w.dialogs.push(qs.map(q => q.options.map(o => o.label)))
+    const answers: Record<string, string> = {}
+    for (const q of qs) {
+      w.asked.push(q.options.map(o => o.label))
+      w.questions.push(q.question)
+      w.headers.push(q.header ?? '')
+      const r = Array.isArray(w.reply) ? (w.reply.length ? w.reply.shift()! : null) : await w.reply
+      if (r !== null) answers[q.question] = r
+    }
+    if (!Object.keys(answers).length) return { deny: 'dismissed' }
+    return { result: { questions: qs, answers } } as never
   })
   on('turn.step', async function* (_, e) {
     w.efforts.push(e.effort)

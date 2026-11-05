@@ -4,7 +4,7 @@ import type { EngineInterface, ModelCompleteResult, Register } from 'claude-code
 import type { Band, Level, Mark, Stats } from '../types'
 import { buildPrompt, parseAnswer, type Pick, toLevel } from './classifier'
 import { LADDER, MODELS, type ModelKey, parseModels, switchUsd, toModel, unknownModels } from './models'
-import { decide, decideModel, effortOptions, isCostlyLevel, keepFirst, type Lang, type Mode, modelOptions, texts, uiLang } from './policy'
+import { decide, decideModel, effortOptions, type Lang, type Mode, modelOptions, texts, uiLang } from './policy'
 
 const PLUGIN = 'coremodel'
 const band = atom({ plugin: 'coremodel', key: 'band' } as const, null)
@@ -226,6 +226,12 @@ async function classify($: EngineInterface, text: string, now: Level | '', model
   return pick
 }
 
+/** A level named in typed text, in English or Russian; undefined when it names none. */
+function typedLevel(text: string): Level | undefined {
+  const x = text.trim().toLowerCase().replace(/[«»"]/g, '')
+  return toLevel(x) || LEVELS.find(l => texts('en').levelName(l).toLowerCase() === x || texts('ru').levelName(l).toLowerCase() === x)
+}
+
 /** The pick for one prompt, then the switch, the question, or nothing. */
 async function runPick(
   $: EngineInterface,
@@ -275,39 +281,59 @@ async function runPick(
   const isFirst = !(await $.session.messages()).some(m => m.role === 'assistant')
   const mAction = decideModel({ mode, pickModel: options.pickModel !== 'off', isFirst, now: nowModel, pick: pick.model, allowed })
   let modelTo: ModelKey | null = mAction === 'apply' && pick.model ? pick.model : null
+  // A request with no effort has nowhere to put a level: that part is skipped, not asked or marked.
+  const action = hasEffort ? decide(mode, now, pick) : 'none'
+  let levelTo: Level | null = action === 'apply' ? level : null
+
+  // The model first (it decides what the chat costs from here on, spec §4.3), then the effort. In
+  // each question the recommended choice comes first and the current one is there to keep. When both
+  // are asked, the effort question ends with "Back to the model", which asks the model again.
+  let askModel: (() => Promise<void>) | null = null
   if (mAction === 'ask' && pick.model) {
     const to = pick.model
     const tokens = isFirst ? undefined : await chatTokens($)
     const models = modelOptions(to, nowModel, allowed, isFirst)
     // A current model CoreModel does not know still gets its Keep, second, so a question never has one option.
-    const listed: (ModelKey | 'keep')[] = nowModel ? models : [models[0]!, 'keep' as const, ...models.slice(1)].slice(0, 4)
-    const opts = keepFirst(listed, nowModel || 'keep', to === 'fable')
+    const opts: (ModelKey | 'keep')[] = nowModel ? models : [models[0]!, 'keep' as const, ...models.slice(1)].slice(0, 4)
     const labels = opts.map(m => (m === 'keep' ? t.keepCurrent : m === nowModel ? t.keepModel(m) : t.modelOption(m, m === to)))
-    try {
-      const answer = await $.ui.ask(t.modelQuestion(to, switchUsd(tokens, to), tokens, isFirst, pick.why), { options: labels, header: t.modelHeader })
-      const chosen = opts[labels.indexOf(answer)]
-      if (chosen && chosen !== 'keep' && chosen !== nowModel) modelTo = chosen
-    } catch {
-      // A dismissed question keeps the model; the effort is still asked.
+    const question = t.modelQuestion(to, switchUsd(tokens, to), tokens, isFirst, pick.why)
+    askModel = async () => {
+      modelTo = null
+      try {
+        const chosen = opts[labels.indexOf(await $.ui.ask(question, { options: labels, header: t.modelHeader }))]
+        if (chosen && chosen !== 'keep' && chosen !== nowModel) modelTo = chosen
+      } catch {
+        // A dismissed question keeps the model; the effort is still asked.
+      }
     }
+  }
+  if (askModel) {
+    await askModel()
     if (await stale()) return
   }
-
-  // Then the effort.
-  // A request with no effort has nowhere to put a level: that part is skipped, not asked or marked.
-  const action = hasEffort ? decide(mode, now, pick) : 'none'
-  let levelTo: Level | null = action === 'apply' ? level : null
   if (action === 'ask') {
-    const opts = keepFirst(effortOptions(level, now), now as Level, isCostlyLevel(level))
+    // With Back among them the question has room for three levels; any level can still be typed.
+    const opts = effortOptions(level, now).slice(0, askModel ? 3 : 4)
     const labels = opts.map(l => (l === now ? t.keep(now) : t.levelOption(l, l === level)))
-    try {
-      const answer = await $.ui.ask(t.question(level, pick.why), { options: labels, header: t.effortHeader })
-      const chosen = opts[labels.indexOf(answer)]
+    const question = t.question(level, askModel ? '' : pick.why)
+    for (let round = 0; round < 5; round += 1) {
+      let answer = ''
+      try {
+        answer = await $.ui.ask(question, { options: askModel ? [...labels, t.backToModel] : labels, header: t.effortHeader })
+      } catch {
+        // A dismissed question keeps the level.
+      }
+      if (await stale()) return
+      if (askModel && answer === t.backToModel) {
+        await askModel()
+        if (await stale()) return
+        continue
+      }
+      // A level typed under Other counts too, in either language ("max", "Максимальное").
+      const chosen = opts[labels.indexOf(answer)] ?? typedLevel(answer)
       if (chosen && chosen !== now) levelTo = chosen
-    } catch {
-      // A dismissed question keeps the level.
+      break
     }
-    if (await stale()) return
   }
 
   if (!modelTo && !levelTo) return kept()
@@ -460,7 +486,7 @@ export const register: Register = (on, options) => {
     // Refused beneath us: no turn will come of it.
     if (r.drop !== undefined && held === mine) held = null
     return r
-  }).catch(($, e, next) => next(e))
+   }).catch(($, e, next) => next(e))
 
   // A turn that ends with a prompt still waiting (blocked, Esc'd before its first request) leaves
   // nothing for the next turn; only a prompt queued behind this very turn stays.
@@ -515,7 +541,7 @@ export const register: Register = (on, options) => {
       $.ui.invalidate('ui.render')
     }
     return next(e)
- }).catch(($, e, next) => next(e))
+  }).catch(($, e, next) => next(e))
 
   // /clear, /resume and a fork start another chat in this process, and session.start does not run
   // for them; the module's own variables would carry the hold into the new chat. A compacted chat
@@ -523,7 +549,7 @@ export const register: Register = (on, options) => {
   on('classic.SessionStart', async ($, e, next) => {
     if (e.source === 'clear' || e.source === 'resume' || e.source === 'fork') await newChat($, true)
     return next(e)
- }).catch(($, e, next) => next(e))
+  }).catch(($, e, next) => next(e))
 
   on('session.start', async ($, e, next) => {
     unavailable.clear()

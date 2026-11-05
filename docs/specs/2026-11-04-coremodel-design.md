@@ -74,7 +74,13 @@ Asked in this order, each only when needed; a dismissed question keeps that part
    first. Mid-chat it offers the pick and Keep alone, and the text carries the cost line (M4, M5).
    The request's context suffix (`[1m]`) stays on a held model.
 2. Effort (header `Усилие` / `Effort`): the picked level "(recommended)", "Keep <current>", then
-   the neighbouring levels while they fit four options.
+   the neighbouring levels while they fit four options. When the model was asked too, the last
+   option is "← Назад к модели" / "← Back to the model" (it asks the model again, then the effort)
+   and three levels fit. A level typed under Other ("max", "Максимальное") counts.
+In every question the recommended choice is first (0.4.12; before, a Fable, Extra high or Max
+question put Keep first). The platform allows a plugin one question per dialog
+(`$.tool.call` of AskUserQuestion is refused: "that is $.ui.ask"), and a hook may not wait on a
+button of its own longer than its 10 s budget, so the two questions are asked one after the other.
 "Switch, and auto-adjust from now" leaves the questions; `auto` is set in the pane or with
 `/coremodel auto`.
 

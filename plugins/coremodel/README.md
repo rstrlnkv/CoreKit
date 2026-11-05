@@ -18,13 +18,14 @@ whole chat again at full price. So:
 - **Later** CoreModel only offers a **stronger** model, always with a question that names the cost,
   for example "Switch to Opus (many files)? The chat is read again once: ≈ 100k tokens, about
   $0.50 at API prices". It never offers a weaker model mid-chat: the re-read would eat the saving.
-- **Fable** always asks first. A question about Fable, Extra high or Max lists **Keep** first, so
-  an Enter typed while it pops up never takes the costly choice.
+- **Fable** always asks first.
 
 ## Modes
 
 - **suggest** (the default): when a pick differs, Claude waits and asks, the model first, then the
-  effort, each in its own short question ("Opus (recommended)", "Keep Sonnet", …).
+  effort, each in its own short question with the recommended choice first ("Opus (recommended)",
+  "Keep Sonnet", …). The effort question then ends with **← Back to the model**, to change the
+  model answer; a level can also be typed.
 - **auto**: switches the effort among Low, Medium and High by itself, up or down, and the model on
   the first prompt; says so in a line above the prompt, with a **Back to …** button (or the key
   `1`) that undoes what it switched. **It always asks before Extra high, Max or Fable**, and

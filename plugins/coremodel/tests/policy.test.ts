@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Level } from '../types'
 import { unknownModels } from '../hooks/models'
-import { decide, decideModel, effortOptions, isCostlyLevel, keepFirst, modelOptions, texts, uiLang } from '../hooks/policy'
+import { decide, decideModel, effortOptions, modelOptions, texts, uiLang } from '../hooks/policy'
 
 const pick = (level: Level | 'keep') => ({ level, why: '' })
 
@@ -104,14 +104,6 @@ test('options put the pick first, then the current, then the nearest', () => {
   expect(effortOptions('low', '')).toEqual(['low', 'medium', 'high', 'xhigh'])
 })
 
-test('keepFirst moves Keep to the top only for a costly pick', () => {
-  expect(keepFirst(['fable', 'sonnet', 'opus'], 'sonnet', true)).toEqual(['sonnet', 'fable', 'opus'])
-  expect(keepFirst(['opus', 'sonnet'], 'sonnet', false)).toEqual(['opus', 'sonnet'])
-  expect(keepFirst(['opus', 'haiku'], 'sonnet', true)).toEqual(['opus', 'haiku'])
-  expect(isCostlyLevel('xhigh')).toBe(true)
-  expect(isCostlyLevel('max')).toBe(true)
-  expect(isCostlyLevel('high')).toBe(false)
-})
 
 test('the model question names the reason and the one-time cost in the prompt language', () => {
   const ru = texts('ru').modelQuestion('opus', 0.5, 100_000, false, 'много файлов')
