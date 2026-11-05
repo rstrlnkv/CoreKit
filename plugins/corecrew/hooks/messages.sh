@@ -19,7 +19,7 @@
 
 MSG_KEYS="sync_failed hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
 session_rules schema_none run_starting layout_note old_hooks guard_code_blocked guard_code_public secrets_blocked secrets_ask
-local_link_created local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind
+local_link_created agents_link_created local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind
 readonly_agent"
 
 # _msg_text <lang> <key> — sets MSG_T to the text, or to nothing when there is none. Keep the keys and
@@ -65,6 +65,8 @@ _msg_text() {
     ru:secrets_ask) MSG_T='Попросите пользователя проверить значение самому или используйте .env.example.' ;;
     en:local_link_created) MSG_T='corecrew: linked CLAUDE.local.md to @1; restart the session to load it' ;;
     ru:local_link_created) MSG_T='corecrew: CLAUDE.local.md связан с @1; перезапустите сессию, чтобы он загрузился' ;;
+    en:agents_link_created) MSG_T='corecrew: linked AGENTS.md to @1 for tools that read AGENTS.md' ;;
+    ru:agents_link_created) MSG_T='corecrew: AGENTS.md связан с @1 для инструментов, читающих AGENTS.md' ;;
     en:local_link_wrong) MSG_T='corecrew: @1 exists and is not a link to @2, so the private CLAUDE.md is not loaded. Move that file away, then run: ln -s "@2" "@1"' ;;
     ru:local_link_wrong) MSG_T='corecrew: @1 уже существует и не ведёт на @2, поэтому приватный CLAUDE.md не загружается. Уберите этот файл и выполните: ln -s "@2" "@1"' ;;
     en:local_link_failed) MSG_T='corecrew: could not create @1, so the private CLAUDE.md is not loaded. Run: ln -s "@2" "@1"' ;;

@@ -81,6 +81,17 @@ assert_eq "$(cat "$CORE_DIR/ag/AGENTS.md")" "core rules" "Core AGENTS.md changed
 OUT="$(DRY=1 la "$P/Ag" "$CORE_DIR/ag" 2>&1)"; [ $? -eq 1 ] && pass || fail "DRY=1 with Core AGENTS.md did not exit 1"
 echo "$OUT" | grep -q "^would create" && fail "DRY=1 announced a link: $OUT" || pass
 
+# --- no <core_project_dir>/CLAUDE.md: refuse with exit 1 and create nothing (no dangling link)
+ll() { ( source "$LIB"; load_settings; link_local_claude "$@" ); }
+new_sandbox; P="$SANDBOX/Projects"; mkdir -p "$CORE_DIR/nc" "$P/Nc"
+for fn in la ll; do
+  assert_exit 1 $fn "$P/Nc" "$CORE_DIR/nc"
+  [ -e "$P/Nc/AGENTS.md" ] || [ -L "$P/Nc/AGENTS.md" ] || [ -e "$P/Nc/CLAUDE.local.md" ] || [ -L "$P/Nc/CLAUDE.local.md" ] \
+    && fail "$fn made a dangling link" || pass
+  OUT="$(DRY=1 $fn "$P/Nc" "$CORE_DIR/nc" 2>&1)"; [ $? -eq 1 ] && pass || fail "$fn DRY=1 without CLAUDE.md did not exit 1: $OUT"
+  echo "$OUT" | grep -q "^would create" && fail "$fn DRY=1 announced a link: $OUT" || pass
+done
+
 # case clash: only on a case-sensitive disk
 if mkdir "$P/foo" 2>/dev/null && [ -d "$P/Foo/src" ] && [ "$(ls "$P" | grep -ci '^foo$')" -eq 2 ]; then
   assert_exit 3 bash "$LIB" code-dir foo

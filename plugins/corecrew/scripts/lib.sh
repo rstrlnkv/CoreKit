@@ -415,9 +415,11 @@ put_project_docs() {
 
 # link_file_to_claude <code_dir> <core_project_dir> <file name> — make <code_dir>/<file name> a
 # symlink to <core_project_dir>/CLAUDE.md. Prints "created|skipped <path>" ("would create" with DRY=1,
-# nothing written). A real file or a link to somewhere else is never touched: exit 1 with a plain line.
+# nothing written). Exit 1 when the target CLAUDE.md is missing (no dangling link). A real file or a link to somewhere else is never touched: exit 1 with a plain line.
 link_file_to_claude() {
   local link="$1/$3" target="$2/CLAUDE.md"
+  # (a DRY=1 plan for a project folder that is not there yet, as scaffold --dry-run, is let through)
+  if [ ! -f "$target" ] && { [ "${DRY:-0}" -ne 1 ] || [ -d "$2" ]; }; then echo "$target does not exist; nothing to link $3 to" >&2; return 1; fi
   if [ -L "$link" ] && [ "$(readlink "$link")" = "$target" ]; then
     echo "skipped $(rel_core "$link")"; return 0
   fi
@@ -435,7 +437,8 @@ link_file_to_claude() {
 link_local_claude() { link_file_to_claude "$1" "$2" CLAUDE.local.md; }
 
 # link_agents <code_dir> <core_project_dir> — <code_dir>/AGENTS.md links to the private CLAUDE.md, like
-# link_local_claude. Refuses (exit 1) when <core_project_dir>/AGENTS.md exists: it would be shadowed.
+# link_local_claude. Refuses (exit 1) when <core_project_dir>/AGENTS.md exists and the code folder has no AGENTS.md link yet
+# (the link would hide it); an existing link is judged by link_file_to_claude alone.
 link_agents() {
   if [ ! -L "$1/AGENTS.md" ] && [ -e "$2/AGENTS.md" ]; then
     echo "AGENTS.md exists in the Core at $2/AGENTS.md and the link would hide it; fold $2/AGENTS.md into CLAUDE.md, then remove it" >&2
