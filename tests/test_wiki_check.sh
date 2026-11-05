@@ -3,7 +3,10 @@
 source "$(dirname "$0")/lib.sh"
 new_sandbox
 W="$SCRIPTS/wiki-check.sh"
-FX="$ROOT/tests/fixtures"
+# The fixtures keep their CLAUDE.md as CLAUDE.md.in: a tracked CLAUDE.md in this repo would be an
+# internal file to corecrew's own guards. The copy in the sandbox gets the real name back.
+FX="$SANDBOX/fixtures"; cp -R "$ROOT/tests/fixtures" "$FX"
+for f in "$FX"/*/CLAUDE.md.in; do mv "$f" "${f%.in}"; done
 
 # check <fixture> <exact expected output> [args after the project dir...]
 check() {
