@@ -5,7 +5,8 @@
 #   <docs_dir>  the project's docs/ folder.
 #
 # Output: one page per line, relative to <docs_dir> ("features/login.md"), sorted with LC_ALL=C.
-# A page is docs/**/*.md except INDEX.md, knowledge/, standards/, superpowers/ and .obsidian/.
+# A page is docs/**/*.md except INDEX.md and the top-level docs/ folders knowledge/, standards/,
+# superpowers/ and .obsidian/.
 # Exit: 0 listed; 2 usage error (no argument, or the folder does not exist).
 set -u
 [ $# -eq 1 ] && [ -d "$1" ] || { echo "usage: wiki-pages.sh <docs_dir>" >&2; exit 2; }

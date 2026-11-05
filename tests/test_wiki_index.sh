@@ -24,7 +24,7 @@ specs/old-spec.md" "page list"
 assert_exit 2 bash "$P" "$FX/no-such-dir"
 assert_exit 2 bash "$P"
 
-# --- wiki-index.sh: first run creates the exact INDEX
+# --- wiki-index.sh: first run rewrites the old INDEX with the exact content
 WANT="# wiki-index wiki
 One line per page; open only the page you need.
 
@@ -79,7 +79,7 @@ assert_eq "$OUT" "updated docs/INDEX.md" "regenerated"
 assert_contains "$IDX" "[[login]] sign-in with a passkey"
 assert_exit 0 bash "$I" "$FX/wiki-index" --check
 
-# a page without type, or with an unknown type, is not in the INDEX; adding a typed page is
+# adding a typed page makes the INDEX stale
 printf -- '---\ntype: feature\nstatus: active\ndescription: added later\nfiles: []\nrelated: []\nupdated: 2026-11-06\n---\n' > "$FX/wiki-index/docs/features/added.md"
 assert_exit 1 bash "$I" "$FX/wiki-index" --check
 assert_eq "$OUT" "wiki-index: stale" "new page makes it stale"
