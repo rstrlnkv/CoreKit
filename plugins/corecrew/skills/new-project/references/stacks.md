@@ -76,6 +76,11 @@ Names: `<name>` = project name (`my-notes-app`), `<snake>` = `my_notes_app`,
 - **Pitfalls:** in a non-empty folder it prints "Operation cancelled" and **exits 0 creating nothing** —
   always generate in TMP and check the folder exists; a wrong `--template` silently falls back to
   `vanilla-ts`; never use `--immediate` (starts a dev server that never exits).
+- **Verified for real (2026-11-05, Node 26, macOS):** the Generate line above creates the project with no
+  questions (create-vite 9.3.4: React 19, TypeScript 7, Vite 8.3.6, `.oxlintrc.json`, no git folder);
+  `npm install` took about a minute, `npm run build` passed in under a second and wrote `dist/`. A
+  non-empty folder: "Operation cancelled", exit 0, nothing created. An unknown `--template`: exit 0
+  and a `vanilla-ts` project without React. Vite 8 needs Node `^20.19.0 || >=22.12.0`.
 - **Docs:** https://vite.dev/guide/
 
 ## Telegram bot — Python + aiogram 3
@@ -94,5 +99,7 @@ Names: `<name>` = project name (`my-notes-app`), `<snake>` = `my_notes_app`,
 - **Docs:** https://docs.astral.sh/uv/reference/cli/
 
 ## Not verified (check at use)
-Flutter `--platforms` value list; Tauri template/manager value lists; `uv init` behaviour inside
-an existing git repo (we always generate in TMP with `--vcs none`).
+Flutter (`--platforms` value list), SwiftUI/XcodeGen, Tauri (template/manager value lists) and the two
+`uv` recipes have never been run for real: Flutter, XcodeGen, Rust and uv are not installed on the
+owner's Mac. `uv init` behaviour inside an existing git repo is not needed (we always generate in TMP
+with `--vcs none`). Vite has been run (see its section).
