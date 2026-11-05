@@ -4,6 +4,7 @@ filters:
     - 'file.basename != "INDEX"'
     - '!file.path.startsWith("knowledge/")'
     - '!file.path.startsWith("standards/")'
+    - '!file.path.startsWith("superpowers/")'
 views:
   - type: table
     name: Wiki

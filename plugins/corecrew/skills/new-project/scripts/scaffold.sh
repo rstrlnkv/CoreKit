@@ -52,7 +52,11 @@ if [ "$DRY" -eq 1 ]; then
   if [ -f "$P/docs/INDEX.md" ]; then echo "skipped $(rel_core "$P")/docs/INDEX.md"; else echo "would create $(rel_core "$P")/docs/INDEX.md"; fi
 else
   R="$(rel_core "$P")"
-  bash "$ROOT_DIR/scripts/wiki-index.sh" "$P" | sed "s|^\([a-z]*\) docs/|\1 $R/docs/|" || exit 1
+  IDX_OUT="$(bash "$ROOT_DIR/scripts/wiki-index.sh" "$P")" || { echo "wiki-index.sh failed for $P" >&2; exit 1; }
+  while IFS=' ' read -r word rest; do
+    [ -n "$word" ] || continue
+    case "$rest" in docs/*) echo "$word $R/$rest" ;; *) echo "$word${rest:+ $rest}" ;; esac
+  done <<< "$IDX_OUT"
 fi
 
 # Code repo, beside the Core

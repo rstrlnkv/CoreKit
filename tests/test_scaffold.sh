@@ -227,6 +227,25 @@ done
 echo "$OUT" | grep -qxF 'would create ../dry-app/CLAUDE.local.md' && pass || fail "dry-run link line: $OUT"
 echo "$OUT" | grep -qxF 'would create ../dry-app/AGENTS.md' && pass || fail "dry-run AGENTS.md line: $OUT"
 
+# --- wiki-index.sh fails during scaffold: non-zero exit and a plain message, no silent success
+new_sandbox; setup_core
+cp -R "$PLUGIN" "$SANDBOX/plugin-copy"
+printf '#!/usr/bin/env bash\necho "stub: boom" >&2\nexit 2\n' > "$SANDBOX/plugin-copy/scripts/wiki-index.sh"
+OUT="$(bash "$SANDBOX/plugin-copy/skills/new-project/scripts/scaffold.sh" --name idx-fail 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] && pass || fail "scaffold exited 0 although wiki-index.sh failed: $OUT"
+echo "$OUT" | grep -qi 'wiki-index' && pass || fail "scaffold output does not mention wiki-index: $OUT"
+echo "$OUT" | grep -q 'created.*INDEX.md' && fail "scaffold claims INDEX.md was created: $OUT" || pass
+
+# wiki.base leaves out superpowers/ like knowledge/ and standards/
+assert_contains "$SKILL/templates/docs/wiki.base" "superpowers/"
+# the rendered CLAUDE.md names wiki-index.sh by its plugin path and does not say it is printed at session start
+new_sandbox; setup_core
+bash "$S" --name cm-app >/dev/null
+CM="$CORE_DIR/cm-app/CLAUDE.md"
+assert_contains "$CM" "<plugin>/scripts/wiki-index.sh"
+grep -q 'wiki-index.sh.*printed at session start\|printed at session start.*wiki-index' "$CM" && fail "CLAUDE.md says wiki-index.sh is printed at session start" || pass
+sed -n '/wiki-index.sh/,/^- /p' "$CM" | grep -qi 'printed at session start' && fail "CLAUDE.md: wiki-index bullet says printed at session start" || pass
+
 # a purpose with line breaks becomes one line
 new_sandbox; setup_core
 assert_exit 0 bash "$S" --name nl-app --purpose "$(printf 'First line.\r\nSecond line.')"
