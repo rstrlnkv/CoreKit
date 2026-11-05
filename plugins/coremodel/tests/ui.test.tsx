@@ -60,13 +60,13 @@ test('the footer names a held level and leaves the slot alone otherwise', { opti
   await start($)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...MODE, surface })
-    expect(await ui.find({ type: 'Text', text: /Effort High/ })).toBe(undefined)
+    expect(await ui.find({ type: 'Text', text: /High/ })).toBe(undefined)
     await ui.unmount()
   }
   await switchTo($, w, 'high', 'medium')
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...MODE, surface })
-    expect((await ui.find({ type: 'Text', text: /Effort High/ })) !== undefined).toBe(true)
+    expect((await ui.find({ type: 'Text', text: /• High$/ })) !== undefined).toBe(true)
     expect((await ui.find({ type: 'Text', text: /default/ })) !== undefined).toBe(true)
     await ui.unmount()
   }
@@ -317,7 +317,7 @@ test('the footer button shows beside a held level too', { options: { mode: 'auto
   await switchTo($, w, 'high', 'medium')
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...MODE, surface })
-    expect((await ui.find({ type: 'Text', text: /Effort High/ })) !== undefined).toBe(true)
+    expect((await ui.find({ type: 'Text', text: /• High$/ })) !== undefined).toBe(true)
     expect((await ui.find({ type: 'Button', key: 'pane' })) !== undefined).toBe(true)
     await ui.unmount()
   }
@@ -688,19 +688,6 @@ test('a new chat clears the rows of the old chat, a reload keeps them', { option
   expect(await shown()).toBe(false)
 })
 
-test('footer shows the pair', { options: { mode: 'auto' } }, async ($, on) => {
-  const w = world(on)
-  engineFooter(on)
-  w.row = null
-  await start($)
-  await switchPair($, w, 'opus', 'high')
-  for (const surface of SURFACES) {
-    const ui = await $.ui.mount({ ...MODE, surface })
-    expect((await ui.find({ type: 'Text', text: /Opus · High/ })) !== undefined).toBe(true)
-    await ui.unmount()
-  }
-})
-
 test('working line names the pair', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   on('ui.render', { component: 'Spinner' }, ($, e) => {
@@ -996,4 +983,18 @@ test('session counts follow what was applied, not what the classifier asked for'
   const tui = await pane($, 'terminal')
   expect(await tui.find({ type: 'Text', text: /^Opus/ })).toBe(undefined)
   await tui.unmount()
+})
+
+test('footer shows the held pair beside the button', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ ...MODE, surface })
+    expect(String((await ui.find({ type: 'Button', key: 'pane' }))?.props.label)).toBe('CoreModel')
+    expect((await ui.find({ type: 'Text', text: /Opus • High/ })) !== undefined).toBe(true)
+    await ui.unmount()
+  }
 })

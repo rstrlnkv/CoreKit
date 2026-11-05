@@ -197,7 +197,6 @@ export function texts(lang: Lang) {
     },
     backPair: (m: ModelKey | '' | undefined, l: Level | '' | undefined) =>
       m && l ? (ru ? `Вернуть ${MODELS[m].name} · ${n(l)}` : `Back to ${MODELS[m].name} · ${n(l)}`) : m ? (ru ? `Вернуть ${MODELS[m].name}` : `Back to ${MODELS[m].name}`) : l ? back(l) : '',
-    pairLabel: (m: ModelKey | null, l: Level | null) => (m && l ? `${MODELS[m].name} · ${SHORT[l]}` : m ? MODELS[m].name : l ? `${ru ? 'Усилие' : 'Effort'} ${SHORT[l]}` : ''),
     pairSuffix: (m: ModelKey | null, l: Level | null) => [m ? MODELS[m].name : '', l ? n(l) : ''].filter(Boolean).join(' · '),
     inMenuPair: (m: ModelKey | '', l: Level | '') => {
       const what = [m ? MODELS[m].name : '?', l ? n(l) : ''].filter(Boolean).join(' · ')

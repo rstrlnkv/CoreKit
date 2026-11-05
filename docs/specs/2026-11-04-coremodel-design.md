@@ -133,7 +133,7 @@ Everything of CoreEffort §4.7 stays, showing the pair; texts follow the prompt'
    silent switch changed, and only those.
 2. **Marks in the chat:** "↑ Opus · Высокое (было Sonnet · Среднее) · why"; the arrow follows the
    model, or the effort when the model did not change.
-3. **Footer label:** "Opus · High"; one part when only one is held.
+3. **Footer label:** "Opus • High" beside the CoreModel button while anything is held (a part not held is what the chat last showed); one part when only one is known.
 4. **Working line:** "Thinking… · Opus · Высокое" while anything is held.
 5. **Pane "CoreModel"** (`/coremodel panel`), since 0.4.1 in sections spaced apart, top to bottom:
    - **Сейчас:** what the chat runs at, bold ("Opus · Высокое"; the level alone with `pickModel`

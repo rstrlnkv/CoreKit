@@ -571,8 +571,14 @@ export const register: Register = (on, options) => {
   // running turn is not interrupted. It lists the mode labels itself, the engine's first.
   on('ui.render', { component: 'SessionMode' }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
+    const t = texts(lastLang)
     const pair = await read($, override)
-    const modes = pair ? [...e.props.modes, texts(lastLang).pairLabel(pair.model, pair.level)] : [...e.props.modes]
+    // While a model or level is held, its pair is named beside the button; a part that is not held
+    // is what the chat last showed, so the label always has both when both are known.
+    const level = pair ? (pair.level ?? seen) : ''
+    const model = pair && options.pickModel !== 'off' ? (pair.model ?? toModel(seenModel)) : ''
+    const held = [model ? MODELS[model].name : '', level ? t.levelName(level) : ''].filter(Boolean).join(' • ')
+    const modes = held ? [...e.props.modes, held] : [...e.props.modes]
     const isUp = (await $.ui.panes()).some(p => p.id === PLUGIN)
     const toggle = async () => {
       if ((await $.ui.panes()).some(p => p.id === PLUGIN)) await $.ui.close({ id: PLUGIN })

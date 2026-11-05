@@ -5,6 +5,9 @@
 - The session counts follow what was applied, not what the classifier asked for: a model or level
   the person declined (or a prompt left as it was) is no longer counted, and the last pick shows
   only the applied model.
+- Footer: while a model or level is held, the label beside the CoreModel button is the pair
+  "Opus • High" (was "Effort High" for a level alone); a part not held is what the chat last showed,
+  and there is no model part when pickModel is off. The button stays "CoreModel".
 - Desktop: with only "Left as it was" to show, the pane no longer fails to draw (an empty
   drawing was refused).
 - Desktop: the section rule has no fixed width, so it can take the pane's.

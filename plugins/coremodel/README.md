@@ -33,7 +33,7 @@ whole chat again at full price. So:
 
 Every switch also leaves a mark in the chat, such as "↑ Opus · High (was Sonnet · Medium) · why",
 and while the plugin holds a model or level the working line names it ("Thinking… · Opus · High")
-and the footer shows "Opus · High".
+and the footer names the pair beside the CoreModel button ("Opus • High").
 
 The texts are in Russian for a Russian prompt and in English otherwise.
 
@@ -63,7 +63,7 @@ Button rows wrap, so nothing is hidden in a narrow pane.
 
 The plugin puts the chosen model and level on every request of this chat only. It never writes
 your model or effort setting, so other chats and later sessions keep your own defaults. The menus
-therefore keep showing your own settings; the footer shows a label such as **Opus · High**, and
+therefore keep showing your own settings; the footer shows **Opus • High** beside the CoreModel button, and
 `/coremodel` prints what the chat really runs at. Choose a model with `/model` or move the effort
 menu yourself, and the plugin lets go of that part; a new chat (`/clear`, `/resume`) or a new
 session lets go of both.
