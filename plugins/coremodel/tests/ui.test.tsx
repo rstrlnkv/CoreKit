@@ -822,6 +822,36 @@ test('an unavailable model is dropped for the session', { options: { mode: 'auto
   expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
 })
 
+test('the pane offers only the models the account lists', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  w.modelRow = ['default', 'sonnet', 'opus', 'haiku', 'best']
+  await start($)
+  const btn = async (k: string) => {
+    const ui = await pane($)
+    const f = await ui.find({ type: 'Button', key: `model-${k}` })
+    await ui.unmount()
+    return f !== undefined
+  }
+  expect(await btn('sonnet')).toBe(true)
+  expect(await btn('fable')).toBe(false)
+  w.modelRow = ['default', 'sonnet', 'opus', 'haiku', 'fable', 'best']
+  await run($, 'recheck')
+  expect(await btn('fable')).toBe(true)
+})
+
+test('/coremodel recheck brings back a model dropped after model_not_found', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'medium')
+  await $.classic.StopFailure({ error: 'model_not_found', error_details: 'model: claude-opus-5-5' } as never)
+  expect(await has($, /Opus is not available/)).toBe(true)
+  const text = await run($, 'recheck')
+  expect(text).toContain('Opus')
+  expect(await has($, /Opus is not available/)).toBe(false)
+})
+
 test('the unavailable note does not mention the setting when it is empty', { options: { mode: 'auto', models: '' } }, async ($, on) => {
   const w = world(on)
   w.row = null

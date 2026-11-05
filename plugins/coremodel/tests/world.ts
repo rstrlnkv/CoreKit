@@ -28,6 +28,8 @@ export type World = {
   tokens: number | undefined
   models: (string | undefined)[]
   row: ConfigRow | null
+  /** The /config Model row's choices (null: the row is absent, so nothing is known about the account). */
+  modelRow: string[] | null
   lastReply: string
   model: string[]
   prompts: string[]
@@ -67,6 +69,7 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     tokens: undefined,
     models: [],
     row: row(),
+    modelRow: null,
     lastReply: '',
     model: [],
     prompts: [],
@@ -111,7 +114,11 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
   on('classic.StopFailure', () => ({}) as never)
   on('classic.SessionStart', () => ({}) as never)
   on('session.usage', () => ({ value: { startedAt: 0, context: { tokens: w.tokens, window: 1_000_000 }, rateLimits: [] } }) as never)
-  on('config.list', () => ({ value: w.row ? [w.row] : [] }) as never)
+  on('config.list', () => {
+    const rows: ConfigRow[] = w.row ? [w.row] : []
+    if (w.modelRow) rows.push({ key: 'model', label: 'Model', kind: 'choice', value: 'claude-sonnet-5-5', options: w.modelRow, provider: { kind: 'user' } as never, isLocked: false })
+    return { value: rows } as never
+  })
   on('config.set', (_, e) => {
     w.set.push(e)
     return { value: (e as { value: unknown }).value } as never

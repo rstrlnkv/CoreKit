@@ -3,7 +3,7 @@ import type { EngineInterface, ModelCompleteResult, Register } from 'claude-code
 
 import type { Band, Level, Mark, Stats } from '../types'
 import { buildPrompt, parseAnswer, type Pick, toLevel } from './classifier'
-import { LADDER, MODELS, type ModelKey, parseModels, switchUsd, toModel, unknownModels } from './models'
+import { detectModels, LADDER, MODELS, type ModelKey, parseModels, switchUsd, toModel, unknownModels } from './models'
 import { decide, decideModel, effortOptions, type Lang, type Mode, modelOptions, texts, uiLang } from './policy'
 
 const PLUGIN = 'coremodel'
@@ -43,9 +43,27 @@ let seen: Level | '' = ''
 let seenModel = ''
 // Models this account refused in this session (spec §4.5): never picked again until a new session.
 const unavailable = new Set<ModelKey>()
+// The models the account lists in /config (the Model row), read again before every pick and at a new
+// session; null when the row says nothing usable. Never stored: a model that appears later is seen.
+let listed: ModelKey[] | null = null
 // The menu's own effort as the last main-chat request carried it.
 let asked = ''
 let lastLang: Lang = 'en'
+
+/** Reads the /config Model row again; any failure means "no verdict" (nothing is filtered). */
+async function refreshListed($: EngineInterface): Promise<void> {
+  try {
+    const row = (await $.config.list()).find(r => r.key === 'model')
+    listed = detectModels(row?.options)
+  } catch {
+    listed = null
+  }
+}
+
+/** The models CoreModel may pick: the `models` setting, what the account lists, minus those that failed. */
+function allowedModels(setting: unknown): ModelKey[] {
+  return parseModels(setting).filter(k => (listed === null || listed.includes(k)) && !unavailable.has(k))
+}
 
 async function log($: EngineInterface, what: string, err: unknown) {
   try {
@@ -277,7 +295,8 @@ async function runPick(
   const level = pick.level
 
   // The model first (spec §4.3): it decides what the chat costs from here on.
-  const allowed = parseModels(options.models).filter(k => !unavailable.has(k))
+  await refreshListed($)
+  const allowed = allowedModels(options.models)
   const isFirst = !(await $.session.messages()).some(m => m.role === 'assistant')
   const mAction = decideModel({ mode, pickModel: options.pickModel !== 'off', isFirst, now: nowModel, pick: pick.model, allowed })
   let modelTo: ModelKey | null = mAction === 'apply' && pick.model ? pick.model : null
@@ -553,6 +572,7 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     unavailable.clear()
+    await refreshListed($)
     const typos = unknownModels(options.models)
     if (typos.length) await log($, 'models', `unknown in the setting: ${typos.join(', ')} (use haiku, sonnet, opus, fable)`)
     // A new session, or a reload of this module, starts with no held level: drop what $.state kept.
@@ -560,7 +580,7 @@ export const register: Register = (on, options) => {
     await $.command.register({
       name: 'coremodel',
       description: 'CoreModel: show what the chat runs at, set the mode (auto, suggest, off, on), or open the pane (panel)',
-      argumentHint: '[auto|suggest|off|on|panel|probe]',
+      argumentHint: '[auto|suggest|off|on|panel|recheck|probe]',
     })
     return next(e)
   })
@@ -571,6 +591,14 @@ export const register: Register = (on, options) => {
     if (arg === 'panel') {
       const r = await $.ui.open({ id: PLUGIN, title: 'CoreModel' })
       return { text: r.isPlaced ? texts(lastLang).paneOpen : texts(lastLang).paneWaiting(r.reason) }
+    }
+    if (arg === 'recheck') {
+      // Models dropped after model_not_found come back, and the account's list is read again.
+      unavailable.clear()
+      await refreshListed($)
+      $.ui.invalidate('ui.render')
+      const names = allowedModels(options.models).map(k => MODELS[k].name).join(', ')
+      return { text: lastLang === 'ru' ? `Доступные модели: ${names}.` : `Models CoreModel may pick: ${names}.` }
     }
     if (arg === 'probe') {
       // What /config offers, for finding out whether it lists the models this account can use. Reads
@@ -644,7 +672,7 @@ export const register: Register = (on, options) => {
     const held = pair?.level ?? null
     const heldModel = pair?.model ?? null
     const s = await read($, stats)
-    const allowed = parseModels(options.models).filter(k => !unavailable.has(k))
+    const allowed = allowedModels(options.models)
     // pickModel off: effort only (spec §6).
     const pickOn = options.pickModel !== 'off'
     const act = (what: string, f: () => Promise<unknown>) => () => {

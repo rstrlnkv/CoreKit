@@ -727,3 +727,69 @@ test('a model without effort is not asked about a level', async ($, on) => {
   expect(w.asked.length).toBe(0)
   expect(w.efforts).toEqual([undefined])
 })
+
+// The account's own list (the /config Model row) decides which models are offered at all.
+const WITHOUT_FABLE = ['default', 'sonnet', 'opus', 'haiku', 'best', 'sonnet[1m]', 'opus[1m]', 'opusplan']
+const WITH_FABLE = [...WITHOUT_FABLE, 'fable', 'fable[1m]']
+
+test('a model the account does not list is never picked or asked about', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.modelRow = WITHOUT_FABLE
+  w.answer = '{"level":"medium","model":"fable","why":"whole app"}'
+  w.reply = ['Fable (recommended)']
+  await start($)
+  await submit($, 'build the whole app, work alone')
+  await step($, 'medium')
+  expect(w.asked.length).toBe(0)
+  expect(w.models).toEqual(['claude-sonnet-5-5'])
+})
+
+test('a model the account lists is offered as before', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.modelRow = WITH_FABLE
+  w.answer = '{"level":"medium","model":"fable","why":"whole app"}'
+  w.reply = ['Fable (recommended)']
+  await start($)
+  await submit($, 'build the whole app, work alone')
+  await step($, 'medium')
+  expect(w.asked[0]![0]).toBe('Fable (recommended)')
+  expect(w.models).toEqual(['claude-fable-5-1'])
+})
+
+test('a model that becomes available later is offered from the next pick, no restart', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.modelRow = WITHOUT_FABLE
+  w.answer = '{"level":"medium","model":"fable","why":"whole app"}'
+  w.reply = ['Fable (recommended)']
+  await start($)
+  await submit($, 'build the whole app, work alone')
+  await step($, 'medium')
+  expect(w.asked.length).toBe(0)
+  w.modelRow = WITH_FABLE
+  await submit($, 'build the whole app, work alone')
+  await step($, 'medium')
+  expect(w.asked.length).toBe(1)
+  expect(w.models.at(-1)).toBe('claude-fable-5-1')
+})
+
+test('the models setting still limits what the account lists', { options: { mode: 'auto', models: 'sonnet,opus' } }, async ($, on) => {
+  const w = world(on)
+  w.modelRow = WITH_FABLE
+  w.answer = '{"level":"medium","model":"fable","why":"whole app"}'
+  await start($)
+  await submit($, 'build the whole app, work alone')
+  await step($, 'medium')
+  expect(w.asked.length).toBe(0)
+  expect(w.models).toEqual(['claude-sonnet-5-5'])
+})
+
+test('a row with no known model, or no row, filters nothing', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.modelRow = ['default', 'best']
+  w.answer = '{"level":"medium","model":"fable","why":"whole app"}'
+  w.reply = ['Fable (recommended)']
+  await start($)
+  await submit($, 'build the whole app, work alone')
+  await step($, 'medium')
+  expect(w.asked.length).toBe(1)
+})

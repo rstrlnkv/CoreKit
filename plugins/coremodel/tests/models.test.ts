@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { LADDER, MODELS, parseModels, stronger, switchUsd, toModel } from '../hooks/models'
+import { detectModels, LADDER, MODELS, parseModels, stronger, switchUsd, toModel } from '../hooks/models'
 
 test('the ladder and ids follow the spec', () => {
   expect(LADDER).toEqual(['haiku', 'sonnet', 'opus', 'fable'])
@@ -36,4 +36,16 @@ test('models setting is forgiving', () => {
   expect(parseModels('Opus, sonnet,gpt')).toEqual(['sonnet', 'opus'])
   expect(parseModels(undefined)).toEqual(['haiku', 'sonnet', 'opus', 'fable'])
   expect(parseModels('')).toEqual(['haiku', 'sonnet', 'opus', 'fable'])
+})
+
+test('detectModels reads the models the /config Model row offers', () => {
+  // the real row of one account: aliases, 1M variants and the non-model words are all there
+  const all = ['default', 'sonnet', 'opus', 'haiku', 'fable', 'best', 'sonnet[1m]', 'opus[1m]', 'fable[1m]', 'opusplan']
+  expect(detectModels(all)).toEqual(['haiku', 'sonnet', 'opus', 'fable'])
+  expect(detectModels(['default', 'sonnet', 'opus', 'haiku', 'best', 'opusplan'])).toEqual(['haiku', 'sonnet', 'opus'])
+  expect(detectModels(['default', 'Opus[1m]', 'claude-sonnet-5-5'])).toEqual(['sonnet', 'opus'])
+  // nothing recognisable (no row, an empty row, only words that are no model): no verdict, so no filtering
+  expect(detectModels(undefined)).toBe(null)
+  expect(detectModels([])).toBe(null)
+  expect(detectModels(['default', 'best', 'opusplan'])).toBe(null)
 })

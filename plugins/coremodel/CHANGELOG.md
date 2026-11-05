@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.16 — 2026-11-05
+
+- The models an account can use are read from the `/config` Model row (the list `/model` shows), before
+  every pick and at a new session: Fable on a plan without it is never picked or offered, and a model
+  that becomes available later is offered from the next pick with no restart. If the row cannot be
+  read, nothing is filtered. `models` stays as a limit on top.
+- `/coremodel recheck` reads the list again at once and brings back a model dropped after
+  `model_not_found`.
+
 ## 0.4.15 — 2026-11-05
 
 - `/coremodel probe` lists the rows of `/config` with their choices (read only, nothing written). It

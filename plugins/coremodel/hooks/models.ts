@@ -41,6 +41,18 @@ export function parseModels(setting: unknown): ModelKey[] {
   return picked.length ? picked : [...LADDER]
 }
 
+/**
+ * The models an account can use, from the choices of the /config Model row (aliases such as
+ * `sonnet`, `fable[1m]`, ids; words like `default`, `best` and `opusplan` name no model). Null when
+ * the row says nothing usable (absent, empty, no known model): then nothing is filtered.
+ */
+export function detectModels(options: readonly string[] | undefined): ModelKey[] | null {
+  if (!options) return null
+  const found = options.map(o => toModel(o))
+  const keys = LADDER.filter(k => found.includes(k))
+  return keys.length ? keys : null
+}
+
 /** The words of the `models` setting that name no model (a typo), as typed. */
 export function unknownModels(setting: unknown): string[] {
   if (typeof setting !== 'string') return []

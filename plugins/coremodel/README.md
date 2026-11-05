@@ -69,15 +69,23 @@ therefore keep showing your own settings; the footer shows **Opus • High** bes
 menu yourself, and the plugin lets go of that part; a new chat (`/clear`, `/resume`) or a new
 session lets go of both.
 
-If your plan does not include a model the plugin picked, the turn fails once; CoreModel then stops
-using that model for the session and says so in the pane. Remove it from the `models` setting.
-A word in `models` that names no model (a typo such as `hauki`) is shown in the pane and written to
+**Which models are offered.** CoreModel reads the list of models your account can use from the
+Model row of `/config` (the same list `/model` shows), before every pick and at the start of a
+session. A model that is not in it, such as Fable on a plan without it, is never picked or offered.
+When a model becomes available later, it is offered from the next pick: nothing is stored, so
+nothing needs a restart. If the list cannot be read, nothing is filtered. `/coremodel recheck` reads
+it again at once and also brings back a model that was dropped after an error.
+
+If a model the plugin picked still fails (`model_not_found`), the turn fails once; CoreModel then
+stops using that model for the session and says so in the pane (`/coremodel recheck` undoes that).
+The `models` setting is a limit on top of the account's list. A word in `models` that names no model (a typo such as `hauki`) is shown in the pane and written to
 the log once per session; that model is simply never picked.
 
 ## Commands
 
 - `/coremodel` asks which mode to use, showing the current mode and the real level; Esc changes
   nothing.
+- `/coremodel recheck` reads the account's model list again and brings back models dropped after an error.
 - `/coremodel probe` prints what `/config` offers (rows and their choices), to see whether the models
   your account can use are listed there; it changes nothing.
 - `/coremodel panel` opens the pane (the footer button does the same without a chat command).
@@ -90,7 +98,7 @@ the log once per session; that model is simply never picked.
 
 - `mode`: `suggest`, `auto` or `off` (default `suggest`). `/coremodel` wins over it.
 - `classifier`: `sonnet` (default, the more accurate) or `haiku` (faster, cheaper).
-- `models`: which models CoreModel may pick, comma-separated (default `haiku,sonnet,opus,fable`).
+- `models`: a limit on the models CoreModel may pick, comma-separated (default `haiku,sonnet,opus,fable`). It can only narrow what your account lists, never add a model the account does not have.
 - `pickModel`: `on` (default) or `off`. With `off` it picks the effort level only and never changes the model.
 
 ## Install

@@ -1,7 +1,7 @@
 {
   "name": "coremodel",
   "displayName": "CoreModel",
-  "version": "0.4.15",
+  "version": "0.4.16",
   "description": "Picks the model and the effort level each prompt needs, for code and office work; asks before Fable, xhigh or max, and names the token cost of a model switch mid-chat.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",
@@ -34,7 +34,7 @@
     "models": {
       "type": "string",
       "title": "Models",
-      "description": "Which models CoreModel may pick, comma-separated: haiku, sonnet, opus, fable. Remove a model your plan does not include.",
+      "description": "A limit on the models CoreModel may pick, comma-separated: haiku, sonnet, opus, fable. Models your account does not list are never picked anyway.",
       "default": "haiku,sonnet,opus,fable"
     },
     "pickModel": {
