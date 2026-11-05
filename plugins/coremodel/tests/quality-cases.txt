@@ -13,6 +13,12 @@ hold|keep|*|go ahead|Plan: migrate all 14 services from REST to gRPC, update the
 tune|high/medium|opus/sonnet|да, и заодно почини падающий тест в auth_test.go|Готово: кнопка добавлена, тесты зелёные. Что-нибудь ещё?
 hold|medium/high|sonnet/opus|нет, не так. сделай через очередь, а не через cron|Я добавил задачу в cron, которая раз в минуту рассылает письма.
 hold|high|opus|почини|Нашёл причину: при параллельных запросах токен обновляется дважды, и второй запрос уходит с уже недействительным токеном. Исправление затронет клиент, сервер и кэш.
+# Added after the hold set showed the keep rule catching "почини": not seen while tuning.
+hold|medium/high|sonnet/opus|исправь|Причина: в миграции 042 не хватает индекса, поэтому запрос отчёта сканирует всю таблицу.
+hold|keep|*|да|Хотите, я добавлю тест на этот случай?
+hold|keep|*|B|I see three options: A) cache in Redis, B) a materialized view, C) denormalize the table. B looks safest. Which one?
+hold|medium/low|sonnet/haiku|now do the same for Q3 and Q4|Done, the Q2 report is ready in reports/q2.md.
+hold|low|haiku/sonnet|ok, but first explain why step 3 is needed|Plan: 1) back up the database, 2) stop the workers, 3) drain the queue, 4) run the migration, 5) start the workers. Shall I start?
 
 # Low: quick, mechanical, easy to check.
 tune|low|haiku|почини опечатку в README|-

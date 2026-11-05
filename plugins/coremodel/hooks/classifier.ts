@@ -17,29 +17,52 @@ export function toLevel(v: unknown): Level | '' {
 
 // quality.sh cuts the text between the marker lines: keep the template one plain literal.
 // TEMPLATE-START
-export const TEMPLATE = `Pick the effort level Claude Code should spend on one prompt. Claude Code is an agent: it reads files, runs commands and changes code, and it also does office work such as writing, documents and analysis. Effort is how much Claude reads, checks and thinks before it acts, and how much it decides on its own. It is not how capable Claude is. More effort costs time and tokens; too little on hard work means missed bugs and wrong answers.
+export const TEMPLATE = `Pick the effort level and the model for one prompt sent to Claude Code. Claude Code is an agent: it reads files, runs commands and changes code, and it also does office work such as writing, documents and analysis.
 
-Walk down this ladder and take the first rung that fits:
+These are two separate choices:
+- Effort is how much Claude reads, checks and thinks before it acts, and how much it decides on its own. It follows the price of a mistake and how unclear the way forward is. More effort costs time and tokens; too little on hard work means missed bugs and wrong answers.
+- The model is how hard the thinking itself is. Haiku is fast and cheap, Sonnet is the everyday model, Opus is stronger, Fable is the strongest and slowest.
+A hard question with a short answer can take a strong model at low effort. Careful work along a clear path can take a lighter model at high effort.
 
-1. keep: the prompt only approves, answers a question Claude asked, picks an option, or says to carry on (yes, ok, go ahead, do it, option 2, да, давай, продолжай, ок).
-2. low: quick, conversational or mechanical work that is easy to check at a glance, where a mistake is cheap.
+First decide if it is keep. Keep means the prompt brings no new work: it only approves, answers a question Claude asked, picks one of the options Claude offered (even a big one: Claude has weighed it already), or says to carry on (yes, ok, go ahead, do it, option 2, да, давай, продолжай, ок). A bare approval is keep even with no last reply. Keep needs something to answer: when Claude only described a finding and asked nothing, a short command such as "fix it" or "почини" is the work it names, not keep. A question the person asks, or a request for work Claude did not propose, is new work and never keep, even on the first prompt of a chat. When new work rides along with the approval ("да, и ещё почини X"), judge that work.
+
+Otherwise walk down the effort ladder and take the first rung that fits:
+1. low: quick, conversational or mechanical work that is easy to check at a glance, where a mistake is cheap.
    Code: explain a snippet or an error message, rename something, fix a typo, change one line of config or text, run a command, a git step, a question about a tool or a flag.
    Office: brainstorm, rewrite a passage, translate a short text, summarise briefly, sort or tag a list, sketch an outline, answer a simple question.
-3. medium: ordinary work with a clear path. When unsure, choose medium.
+2. medium: ordinary work with a clear path. When unsure, choose medium.
    Code: a contained feature, or a fix whose cause is known, in one or two files; tests for a given function; a small script; documentation; work that follows a pattern the code already has.
    Office: everyday writing, repurposing content, a meeting summary with decisions and next steps, a report in a fixed format, quick research before a call.
-4. high: a hidden mistake would be costly, or the way forward is unclear.
-   Code: a bug whose cause is unknown, failing or flaky tests, changes across many files, refactoring, anything touching security, authentication, payments, data migrations, production deploys, concurrency or deleting data, code review, performance work, designing an API or a schema.
+3. high: a hidden mistake would be costly, or the way forward is unclear.
+   Code: a bug whose cause is unknown, failing or flaky tests, a crash log or a stack trace that asks why, changes across many files, refactoring, anything touching security, authentication, payments, data migrations, production deploys, concurrency or deleting data, code review, performance work, designing an API or a schema.
    Office: reconciling numbers across sources, open-ended analysis (why did sales drop), reviewing a contract for risk, fact-checking, working through long documents, verifying earlier work.
-5. xhigh: a long, hard and critical job handed over to run alone. All three must hold.
+4. xhigh: a long, hard and critical job handed over to run alone. All three must hold.
    Code: a whole feature or app built end to end, a large migration or rewrite, a multi-step plan carried out unattended, a deep security audit.
    Office: a full research report from many sources, a long agreement reviewed before signing, an investor deck that has to be right the first time.
-6. max: only when the prompt itself asks for the deepest, most careful work possible and says it is critical. Otherwise xhigh.
+5. max: only when the prompt itself asks for the deepest, most careful work possible and says it is critical. Otherwise xhigh.
+
+Then pick the model on its own ladder, stopping at the first match:
+- haiku: the answer is known or the work is mechanical: a fact or how-to question, explaining a snippet or an error message, a rename, a typo, a one-line change, a command to run, a short text to write, rewrite or translate.
+- sonnet (also when unsure): ordinary building or writing with a clear path, including careful work that follows written steps.
+- opus: judgement or diagnosis: an unknown cause, a choice between options with trade-offs (even when the answer is short), design, review, risk, many files, analysis across sources.
+- fable: long, critical work handed off to run alone, or the prompt asks for the deepest work and says it is critical.
+For keep, name the model the work needs anyway.
 
 Keep in mind:
 - Length is not difficulty. Long work that only follows rules stays low or medium.
 - A short prompt can hide a lot of work ("fix the login", "почини авторизацию"). Judge what the work needs, not how many words ask for it. Claude's last reply gives the context.
+- Asking Claude to think well about a small thing makes it neither critical nor hard: pick the level and the model the small thing needs.
 - The prompt can be in any language.
+
+Examples:
+- "what does git stash pop do?": low, haiku
+- "в каком файле настраивается логгер?": low, haiku
+- "add pagination to the users list, the same way the orders list has it": medium, sonnet
+- "итоговая сумма в корзине иногда на копейку не сходится": high, opus
+- "Kafka or RabbitMQ for our notifications? one paragraph": low, opus
+- "выкати релиз на прод по чек-листу из DEPLOY.md": high, sonnet
+- "build the whole booking service from the approved spec, work on your own until it is done": xhigh, fable
+- last reply "Run the migration now?", prompt "yes": keep
 
 The chat runs at: {{NOW}}
 
@@ -53,14 +76,7 @@ The prompt:
 {{PROMPT}}
 </prompt>
 
-Also pick the model, on its own ladder, independently of the level: a strong model at low effort and a light model at high effort are both fine. Stop at the first match:
-- haiku: a question, an explanation, a mechanical edit, a short text, a command to run.
-- sonnet (also when unsure): ordinary work with a clear path.
-- opus: a hidden mistake is costly or the path is unclear; many files; analysis across sources.
-- fable: long, critical work handed off to run alone, or the prompt asks for the deepest work.
-For "keep", name the model the work needs anyway.
-
-Answer with JSON only: {"level": "low|medium|high|xhigh|max|keep", "model": "haiku|sonnet|opus|fable", "why": "the reason in at most 12 plain words, in the language of the prompt"}`
+Answer with JSON only, the reason first: {"why": "the deciding reason in at most 12 plain words, in the language of the prompt", "level": "low|medium|high|xhigh|max|keep", "model": "haiku|sonnet|opus|fable"}`
 // TEMPLATE-END
 
 const PROMPT_MAX = 4000

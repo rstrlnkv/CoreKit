@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.5.2 — 2026-11-06
+
+- **The classifier picks the effort and the model more accurately**, Haiku most of all. Its prompt now:
+  - keeps the two choices apart: effort follows the price of a mistake and how unclear the way is, the
+    model follows how hard the thinking is (a trade-off question with a short answer gets a strong model
+    at low effort; a deploy by a checklist gets high effort on Sonnet);
+  - says when "keep" is right: an approval, an answer to Claude's question or a picked option, even a big
+    one. A question the person asks, the first prompt of a chat that asks for work, and "почини" after
+    Claude only described a bug are new work, never keep (Haiku answered keep to "что делает git
+    rebase --onto?" and to "накидай идей");
+  - sends a crash log or stack trace that asks why to high effort on Opus;
+  - shows eight short examples and asks for the reason before the level and the model.
+- Measured on labelled prompts, each asked three times. Before, on 55 prompts: Haiku 143 of 165 right
+  levels (21 off by two rungs or more) and 157 of 165 right models; Sonnet 162 and 159 of 165. After, on
+  those 55 and 5 more written after the tuning: Haiku 180 and 178 of 180, none off by two rungs; Sonnet
+  178 and 176 of 180, where 2 of its misses were calls that gave no answer.
+- `tests/quality.sh` (manual, real model calls) reads the prompts from `tests/quality-cases.txt`, with
+  Claude's last reply where it matters, in a tuning set and a held-out set; it asks each prompt `RUNS`
+  times through a bare `claude -p` (no tools, settings or plugins), counts misses of two rungs or more
+  apart, and cuts a call that hangs after 60 s.
+
 ## 0.5.1 — 2026-11-05
 
 - A pick that names a model you cannot use (your account lacks it, or its switch is off) is no longer

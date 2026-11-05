@@ -109,7 +109,7 @@ i=0
 for s in tune hold; do eval "L_$s=0 M_$s=0 B_$s=0 BL_$s=0 BM_$s=0 T_$s=0"; done
 while IFS='|' read -r set levels models prompt reply; do
   i=$((i + 1))
-  r=1; seen=''; missed=0
+  r=1; seen=''; missed=0; raw=''
   while [ "$r" -le "$runs" ]; do
     got="$(field "$tmp/answer.$i.$r" level)"; gotm="$(field "$tmp/answer.$i.$r" model)"
     gl="$(grade "$got" "$levels")"; gm="$(grade "$gotm" "$models")"
@@ -124,12 +124,15 @@ while IFS='|' read -r set levels models prompt reply; do
     [ "$gm" != ok ] && mark="$mark model-$gm"
     [ -n "$mark" ] && missed=1
     seen="$seen ${got:-?}/${gotm:-?}"
+    # An unreadable answer shows its start: a refusal, an error or a cut call (empty).
+    [ -z "$got" ] && raw="$raw
+     no answer: $(tr '\n' ' ' < "$tmp/answer.$i.$r" | sed -E 's/^(.{0,100}).*$/\1/')"
     r=$((r + 1))
   done
   if [ "$missed" = 1 ]; then
     # sed counts characters where cut counts bytes and splits a Cyrillic letter.
     short="$(printf '%s' "$prompt" | sed -E 's/^(.{0,70}).*$/\1/')"
-    printf 'MISS [%s] %s\n     want %s %s, got%s\n' "$set" "$short" "$levels" "$models" "$seen"
+    printf 'MISS [%s] %s\n     want %s %s, got%s%s\n' "$set" "$short" "$levels" "$models" "$seen" "$raw"
   fi
 done < "$tmp/cases"
 
