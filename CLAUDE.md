@@ -43,13 +43,15 @@ plugins/corecrew/      the corecrew plugin (moved here in 0.6.0; before, the rep
     bash-lex.awk, bashlex-*.awk   the Bash tokenizer shared by guard-code (also the read-only
                        checkers' rule) and guard-secrets, and their parts
     git-hooks/         pre-commit-code, pre-push-code, pre-push-core, blocked-patterns
+  evals/               trigger evals: `claude plugin eval plugins/corecrew --ablation none --no-publish`
+                       (real model calls, about $0.80 a run; not part of tests/run.sh)
 plugins/coremodel/     a second plugin (TypeScript hooks module); spec docs/specs/2026-11-04-coremodel-design.md;
                        own CHANGELOG; tests: `claude plugin test plugins/coremodel` (run by tests/test_coremodel.sh;
                        without the `claude` CLI it is skipped and run.sh names it after PASSED)
 plugins/coreopinion/   a third plugin: skill second-opinion (GPT via `codex exec` with a narrow read-only
-                       permission profile, in scripts/ask-gpt.sh); own README and CHANGELOG; tests: tests/test_coreopinion.sh
+                       permission profile, in scripts/ask-gpt.sh); own README and CHANGELOG; tests: tests/test_coreopinion.sh;
+                       trigger evals in evals/ like corecrew's
 tests/                 bash: lib.sh ($PLUGIN is plugins/corecrew), test_*.sh, run.sh, fixtures/
-evals/                 evals.json: two scenario evals for new-project (prompt + expected output), not trigger evals
 docs/migration-*.md    upgrade guides for users of older versions (0.2, 0.3)
 CHANGELOG.md, README.md   corecrew's changelog and the repo README
 ```

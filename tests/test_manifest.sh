@@ -128,4 +128,18 @@ assert_contains "$M3" 'install-hooks.sh'
 assert_contains "$M3" 'corecrew-corekit'
 assert_contains "$ROOT/README.md" 'docs/migration-0.3.md'
 
+# trigger evals (claude plugin eval): every case has a prompt and a grader; the frontmatter
+# description is quoted (a bare ": " breaks the YAML); results stay out of git
+for pl in corecrew coreopinion; do
+  n=0
+  for c in "$ROOT/plugins/$pl/evals"/*/; do
+    [ -f "$c/prompt.md" ] || continue
+    n=$((n + 1))
+    ls "$c"graders/*.md >/dev/null 2>&1 && pass || fail "$c: no grader"
+    d="$(sed -n 's/^description: //p' "$c/prompt.md" | head -1)"
+    case "$d" in '"'*'"') pass ;; *) fail "$c/prompt.md: description not quoted" ;; esac
+  done
+  [ "$n" -ge 3 ] && pass || fail "$pl: fewer than 3 trigger eval cases ($n)"
+  assert_contains "$ROOT/plugins/$pl/evals/.gitignore" 'results/'
+done
 finish
