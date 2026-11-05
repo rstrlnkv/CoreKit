@@ -184,7 +184,7 @@ Details: plugins/coreopinion/README.md.
 bash tests/run.sh        # all tests, no network, prints ALL TESTS PASSED
 claude plugin validate . # the marketplace; also plugins/corecrew, plugins/coremodel, plugins/coreopinion
 ```
-Design specs: `docs/specs/` · implementation plans: `docs/plans/` · trigger evals (does a skill start
+Design specs and implementation plans are kept private, in the maintainer's Core · trigger evals (does a skill start
 when it should, and stay silent when it should not): `plugins/corecrew/evals/` and
 `plugins/coreopinion/evals/`, run by hand with `claude plugin eval plugins/corecrew --ablation none --no-publish`
 (real model calls, under a dollar a plugin; not part of `tests/run.sh`).
