@@ -73,6 +73,10 @@ assert_contains "$K/.claude/settings.local.json" "\"$P\""
 # the private CLAUDE.md reaches the code folder through a symlink
 [ -L "$K/CLAUDE.local.md" ] && pass || fail "CLAUDE.local.md is not a symlink"
 assert_eq "$(readlink "$K/CLAUDE.local.md")" "$P/CLAUDE.md" "symlink target"
+# the same file is the cross-tool AGENTS.md (M7); the scaffold output names it
+[ -L "$K/AGENTS.md" ] && pass || fail "AGENTS.md is not a symlink"
+assert_eq "$(readlink "$K/AGENTS.md")" "$P/CLAUDE.md" "AGENTS.md target"
+assert_no_file "$P/AGENTS.md"
 # code .gitignore blocks internal files
 for pat in CLAUDE.md CLAUDE.local.md .claude/ docs/superpowers/ .env '*.pem' '*.key' \
            '!.env.example' '!.env.sample' '!.env.template'; do
@@ -93,6 +97,7 @@ assert_contains "$CORE_DIR/PROJECTS.md" "- demo-app — Test app — demo-app/"
 # --- second run changes nothing
 before=$(tree_sum "$CORE_DIR")
 assert_exit 0 bash "$S" --name demo-app --purpose "Test app"
+echo "$OUT" | grep -qxF 'skipped ../demo-app/AGENTS.md' && pass || fail "second run lacks skipped AGENTS.md: $OUT"
 echo "$OUT" | grep -q '^created' && fail "second run created files" || pass
 echo "$OUT" | grep -q '^skipped' && pass || fail "second run printed no skipped lines"
 after=$(tree_sum "$CORE_DIR")
@@ -124,6 +129,27 @@ for tgt in "$SANDBOX/elsewhere.md" "$SANDBOX/no/such/file.md"; do
   assert_eq "$(readlink "$R/CLAUDE.local.md")" "$tgt" "link changed"
 done
 
+# --- a real AGENTS.md in the code folder is kept; the run exits 1 with a plain line
+new_sandbox; setup_core
+OUT="$(bash "$S" --name ag-app 2>&1)"
+echo "$OUT" | grep -qxF 'created ../ag-app/AGENTS.md' && pass || fail "first run lacks created AGENTS.md: $OUT"
+R="$(dirname "$CORE_DIR")/ag-app"
+rm "$R/AGENTS.md"; printf 'mine\n' > "$R/AGENTS.md"
+assert_exit 1 bash "$S" --name ag-app
+echo "$OUT" | grep -qF "AGENTS.md exists and is not a link to $CORE_DIR/ag-app/CLAUDE.md; leave it or remove it yourself" && pass || fail "AGENTS link message: $OUT"
+assert_eq "$(cat "$R/AGENTS.md")" "mine" "real AGENTS.md kept"
+[ -L "$R/AGENTS.md" ] && fail "AGENTS.md file replaced by link" || pass
+# a link elsewhere is kept
+rm -f "$R/AGENTS.md"; echo x > "$SANDBOX/elsewhere.md"; ln -s "$SANDBOX/elsewhere.md" "$R/AGENTS.md"
+assert_exit 1 bash "$S" --name ag-app
+assert_eq "$(readlink "$R/AGENTS.md")" "$SANDBOX/elsewhere.md" "AGENTS.md link changed"
+# a Core AGENTS.md blocks the link and stays; the message names it
+rm -f "$R/AGENTS.md"; printf 'core\n' > "$CORE_DIR/ag-app/AGENTS.md"
+assert_exit 1 bash "$S" --name ag-app
+echo "$OUT" | grep -qF "$CORE_DIR/ag-app/AGENTS.md" && pass || fail "message does not name the Core AGENTS.md: $OUT"
+assert_eq "$(cat "$CORE_DIR/ag-app/AGENTS.md")" "core" "Core AGENTS.md changed"
+[ -e "$R/AGENTS.md" ] || [ -L "$R/AGENTS.md" ] && fail "AGENTS.md linked despite Core copy" || pass
+
 # --- invalid names
 for bad in MyApp "my app" проект 1app a -app app- ; do
   new_sandbox; setup_core
@@ -138,6 +164,7 @@ assert_no_file "$CORE_DIR/dry-app"
 assert_no_file "$(dirname "$CORE_DIR")/dry-app"
 echo "$OUT" | grep -q 'would create' && pass || fail "dry-run printed nothing"
 echo "$OUT" | grep -qxF 'would create ../dry-app/CLAUDE.local.md' && pass || fail "dry-run link line: $OUT"
+echo "$OUT" | grep -qxF 'would create ../dry-app/AGENTS.md' && pass || fail "dry-run AGENTS.md line: $OUT"
 
 # a purpose with line breaks becomes one line
 new_sandbox; setup_core

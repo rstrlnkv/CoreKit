@@ -50,7 +50,8 @@
 # names <Core>/<name>/CLAUDE.md when it still says ../docs/ or `code/` (it is not rewritten).
 # Warnings (plan and report): tracked CLAUDE.md / AGENTS.md / CLAUDE.local.md files that stay in the repo
 # (nested ones, public ones), which corecrew's hooks block changing or adding after adopt.
-# Both: CLAUDE.local.md in the code folder becomes a link to <Core>/<name>/CLAUDE.md;
+# Both: CLAUDE.local.md and AGENTS.md in the code folder become links to <Core>/<name>/CLAUDE.md
+# (AGENTS.md is not linked while <Core>/<name>/AGENTS.md exists: a warning: line asks to fold it);
 # .claude/settings.local.json is created from the template when missing (else left as is, with a
 # warning: line naming the additionalDirectories entry to add when it lacks it); git hook shims are
 # installed; PROJECTS.md gets (or has updated) its line "- <name> — <purpose> — <Name>/"; the Core gets
@@ -630,6 +631,7 @@ fi
 [ "$NNEST" -eq 0 ] || show "$NEST_WARN" "$NEST" >&2
 [ "$STALE" -eq 0 ] || echo "$STALE_WARN" >&2
 link_local_claude "$K" "$P" || echo "warning: $K/CLAUDE.local.md was not linked; make it a link to $P/CLAUDE.md" >&2
+link_agents "$K" "$P" || echo "warning: $K/AGENTS.md was not linked; fold $P/AGENTS.md into CLAUDE.md if it exists, then make AGENTS.md a link to $P/CLAUDE.md" >&2
 case "$SL_STATE" in
   create) put "$TPL/code/settings.local.json.tmpl" "$K/$SL_REL" \
             || echo "warning: could not create $K/$SL_REL; add \"$P\" to permissions.additionalDirectories in it" >&2 ;;

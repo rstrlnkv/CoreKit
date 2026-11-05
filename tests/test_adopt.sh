@@ -104,6 +104,8 @@ assert_no_file "$P/.claude/rules"
 assert_file "$P/docs/a.md"
 [ -L "$F/CLAUDE.local.md" ] && pass || fail "no CLAUDE.local.md link"
 assert_eq "$(readlink "$F/CLAUDE.local.md")" "$P/CLAUDE.md" "link target"
+[ -L "$F/AGENTS.md" ] && pass || fail "no AGENTS.md link"
+assert_eq "$(readlink "$F/AGENTS.md")" "$P/CLAUDE.md" "AGENTS.md link target"
 assert_contains "$F/.claude/settings.local.json" "\"$P\""
 assert_eq "$(cat "$F/.worktreeinclude")" "$(cat "$SKILL/templates/code/worktreeinclude")" ".worktreeinclude from the template"
 echo "$DRY_OUT" | grep -qF ".worktreeinclude" && pass || fail "plan lacks .worktreeinclude: $DRY_OUT"
@@ -653,6 +655,9 @@ echo "$OUT" | grep -qxF "  AGENTS.md" && pass || fail "plan lacks AGENTS.md: $OU
 assert_exit 0 bash "$AD" --from "$F"
 P="$CORE_DIR/ag-app"
 assert_contains "$P/AGENTS.md" "Cross-tool rules."
+# M7: the Core copy blocks the AGENTS.md link; it is kept and a warning names it (adopt goes on)
+echo "$OUT" | grep -q "^warning:.*$P/AGENTS.md" && pass || fail "no warning naming the Core AGENTS.md: $OUT"
+[ -L "$F/AGENTS.md" ] && fail "AGENTS.md linked despite the Core copy" || pass
 assert_no_file "$F/AGENTS.md"
 git -C "$F" show --name-only --format= HEAD | grep -qxF AGENTS.md && pass || fail "repo commit lacks AGENTS.md"
 grep -qxF AGENTS.md "$F/.gitignore" && pass || fail ".gitignore lacks AGENTS.md"
