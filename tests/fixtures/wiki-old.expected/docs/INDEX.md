@@ -7,6 +7,7 @@ One line per page; open only the page you need.
 [[architecture]] How the parts fit together.
 ## feature
 [[login]] Sign-in: users log in with a passphrase and the session lasts a day, then they log in again.
+[[refs]] >
 [[sign in]] The sign-in page.
 ## spec
 [[a]] TODO: describe this page.

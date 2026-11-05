@@ -24,6 +24,15 @@
 #   path it came from) in the enclosing git repo, else today.
 #   A "docs/x.md § H" followed by one . , ; : or ) takes the heading H when "H." is not a heading, the
 #   punctuation stays after the link. A page without a final newline keeps none.
+#   A mid-line reference converts by the longest heading prefix of the rest of the line ("docs/x.md § Layers
+#   for the details." -> "[[x#Layers]] for the details."); no heading matches -> line unchanged and
+#   "warning: <page>: reference to <x> § <rest of the line after §> not converted". The form
+#   `docs/x.md` § H (path in backticks, heading outside) converts like the plain form.
+#   A multi-line description (">" or empty value with indented lines) is kept line for line.
+#   updated: is read from the front matter only (a body line "updated: x" does not count); an empty
+#   updated: gets the commit date like a missing one. "[a|b](page.md)" never becomes [[page|a|b]].
+#   The swap is signal-safe: after TERM at the swap docs/ is back with its content (or the script printed
+#   where the original is); a failing second mv rolls back, exit 1.
 #   Rulings (coordinator): a backtick span whose WHOLE content is one reference `docs/x.md § H` becomes
 #   [[x#H]] (backticks dropped); any other span or fence content stays byte-identical.
 #   Front matter fields outside the six (e.g. stage:) are kept after the six, in original order.
@@ -40,6 +49,7 @@ WANT_OUT="updated docs/architecture.md
 updated docs/brief.md
 updated docs/decisions/001-stack.md
 updated docs/features/login.md
+updated docs/features/refs.md
 updated docs/features/sign in.md
 updated docs/glossary.md
 updated docs/notes/n.md
@@ -51,6 +61,7 @@ created docs/.obsidian/.gitignore
 updated docs/INDEX.md
 warning: login: description over 80 chars
 warning: login: anchor #Missing dropped
+warning: refs: reference to architecture § Nope at all not converted
 warning: sign in: anchor #Nope dropped
 warning: n: set type
 warning: n: status wip"
@@ -136,7 +147,7 @@ new_sandbox
 TODAY="$(date +%F)"
 mkproj "$SANDBOX/plain"
 EXP="$SANDBOX/exp"; cp -R "$FXE" "$EXP"
-for f in $(cd "$EXP" && grep -rlE '2026-02-03|2026-03-04' .); do
+(cd "$EXP" && grep -rlE '2026-02-03|2026-03-04' .) | while IFS= read -r f; do
   sed -e "s/2026-02-03/$TODAY/" -e "s/2026-03-04/$TODAY/" "$EXP/$f" > "$EXP/$f.t" && mv "$EXP/$f.t" "$EXP/$f"
 done
 run "$P"
@@ -191,7 +202,7 @@ run "$P"; fails "plans/b.md exists"
 assert_eq "$(cat "$P/docs/plans/b.md")" "# Mine" "the existing plan was overwritten"
 rm -rf "$P/docs/plans"
 if [ "$(id -u)" != 0 ]; then
-  # the swap cannot happen: the project folder is read-only
+  # the temp folder cannot be created (mktemp in the read-only project folder fails first)
   before="$(snap_all "$P")"; cstat="$(git -C "$CORE" status --porcelain)"
   chmod 555 "$P"
   run "$P"; chmod 755 "$P"; fails "read-only project folder"
@@ -201,6 +212,67 @@ if [ "$(id -u)" != 0 ]; then
   same_tree "$P" "$FXO" "after the failures the project is the fixture"
 else
   echo "  note: running as root, permission failures skipped"
+fi
+
+# --- multi-line description, pipe in a link text, empty updated: (git history: 2026-05-06)
+new_sandbox
+SC="$SANDBOX/sc"; mkdir -p "$SC/small/docs/features"
+printf -- '---\ntype: brief\nstatus: active\ndescription: The brief.\nfiles: []\nrelated: []\nupdated: 2026-01-01\n---\n\n# Brief\n' > "$SC/small/docs/brief.md"
+printf -- '---\ntitle: X\ndescription:\n  Indented one\n  and two.\nstatus: draft\nupdated:\n---\n\n# X\n\nPipe [a|b](../brief.md) here.\nupdated: x\n' > "$SC/small/docs/features/x.md"
+git init -q "$SC" && git -C "$SC" add -A
+GIT_AUTHOR_DATE="2026-05-06T12:00:00 +0000" GIT_COMMITTER_DATE="2026-05-06T12:00:00 +0000" git -C "$SC" commit -q -m one
+run "$SC/small"
+assert_eq "$RC" "0" "small project exit"
+X="$SC/small/docs/features/x.md"
+assert_eq "$(grep -A2 '^description:$' "$X")" "description:
+  Indented one
+  and two." "empty description with indented lines was changed"
+assert_eq "$(grep -c '^updated:' "$X")" "2" "updated: lines (front matter + the body line)"
+assert_eq "$(sed -n '1,/^---$/p;' "$X" | grep '^updated:')" "updated: 2026-05-06" "empty updated: gets the commit date"
+assert_contains "$X" "updated: x"
+grep -qF '[[brief|a|b]]' "$X" && fail "broken alias [[brief|a|b]]: $(cat "$X")" || pass
+grep -q '\[\[brief' "$X" && pass || fail "pipe link was not converted at all: $(cat "$X")"
+
+# --- the swap is signal-safe and rolls back. A PATH stub for mv acts at the swap (the plugin is copied so
+# the stub is the only difference).
+if [ "$(id -u)" != 0 ]; then
+  new_sandbox
+  cp -R "$PLUGIN" "$SANDBOX/plug"; mkdir "$SANDBOX/stub"
+  REALMV="$(command -v mv)"
+  # TERM after the first move of docs/ (docs/ is already in the temp folder then)
+  cat > "$SANDBOX/stub/mv" <<STUB
+#!/bin/bash
+case "\$1" in
+  */docs) if [ ! -e "$SANDBOX/term.done" ]; then : > "$SANDBOX/term.done"; "$REALMV" "\$@"; kill -TERM \$PPID; sleep 1; exit 0; fi ;;
+esac
+exec "$REALMV" "\$@"
+STUB
+  chmod +x "$SANDBOX/stub/mv"
+  mkproj "$SANDBOX/sig"; before="$(tree_sum "$P")"; want_docs="$(tree_sum "$P/docs")"
+  OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$SANDBOX/plug/scripts/wiki-migrate.sh" "$P" 2>"$SANDBOX/err")"; RC=$?; ERR="$(cat "$SANDBOX/err")"
+  [ -e "$SANDBOX/term.done" ] && pass || fail "the mv stub never saw the swap (nothing to test)"
+  if [ -d "$P/docs" ] && [ "$(tree_sum "$P")" = "$before" ]; then pass
+  else
+    # docs/ is gone or changed: the script must have printed where the original is, and it must be whole
+    saved="$(printf '%s\n' "$ERR" | sed -n 's/.* in \(\/[^ ]*\)$/\1/p' | head -1)"
+    if [ -n "$saved" ] && [ -d "$saved" ] && [ "$(tree_sum "$saved")" = "$want_docs" ]; then pass
+    else fail "TERM at the swap lost docs/: rc=$RC err=$ERR; project now: $(ls -A "$P")"; fi
+  fi
+  # the second move fails: docs/ is put back, exit 1
+  cat > "$SANDBOX/stub/mv" <<STUB
+#!/bin/bash
+case "\$2" in
+  */docs) case "\$1" in */old) ;; *) exit 1 ;; esac ;;
+esac
+exec "$REALMV" "\$@"
+STUB
+  mkproj "$SANDBOX/rb"; before="$(snap_all "$P")"
+  OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$SANDBOX/plug/scripts/wiki-migrate.sh" "$P" 2>"$SANDBOX/err")"; RC=$?; ERR="$(cat "$SANDBOX/err")"
+  assert_eq "$RC" "1" "second mv fails: exit"
+  [ -n "$ERR" ] && pass || fail "second mv fails: nothing on stderr"
+  assert_eq "$(snap_all "$P")" "$before" "second mv fails: docs/ not restored"
+else
+  echo "  note: running as root, mv-stub tests skipped"
 fi
 
 finish

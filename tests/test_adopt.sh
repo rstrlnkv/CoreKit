@@ -209,6 +209,18 @@ assert_file "$P/docs/wiki.base"; assert_file "$P/docs/.obsidian/app.json"
 assert_eq "$(git -C "$F" status --porcelain)" "" "code repo dirty (old-format wiki)"
 assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "Core dirty (old-format wiki)"
 
+# --- wiki-migrate fails inside adopt (a move target exists): adopt stops before the repo commit, nothing changes
+new_sandbox; setup_core
+F="$SANDBOX/Projects/mig-fail"; mkdir -p "$F/docs/specs" "$F/docs/superpowers/specs"
+git init -q "$F" && git -C "$F" symbolic-ref HEAD refs/heads/main
+printf '# Mig\n' > "$F/CLAUDE.md"; printf '# Mine\n' > "$F/docs/specs/a.md"; printf '# Theirs\n' > "$F/docs/superpowers/specs/a.md"
+git -C "$F" add -A && git -C "$F" commit -q -m initial
+before="$(snap)"
+OUT="$(bash "$AD" --from "$F" 2>&1)"; rc=$?
+[ "$rc" != 0 ] && pass || fail "adopt succeeded although wiki-migrate failed: $OUT"
+assert_eq "$(snap)" "$before" "a failed wiki-migrate changed the repo or the Core"
+echo "$OUT" | grep -q 'open:' && fail "adopt reported success: $OUT" || pass
+
 # --- --check, --public-docs: docs/ stays in the repo and is listed in CLAUDE.md
 new_sandbox; setup_core
 F="$SANDBOX/Projects/Foo"; mkdir -p "$F/docs"; git init -q "$F" && git -C "$F" symbolic-ref HEAD refs/heads/main

@@ -29,6 +29,8 @@
 #   git does not know your name and email (...)
 # Only files git tracks are copied and removed; ignored files stay in the repo untouched.
 # Exit 1 (nothing deleted; the message says where the files are): a failed mv after the repo commit.
+# Exit 1 (nothing changed; wiki-migrate's stderr line says why): wiki-migrate fails on the staged copy (new
+# layout), before the repo commit.
 # Steps (new layout): copy CLAUDE.md, AGENTS.md, docs/ and .claude/ (not settings.local.json, not
 # worktrees/, not --public-docs paths) into a temp folder in the Core; add the pages the new-project
 # templates have that are missing, the check: line and public-docs: line; fold each tracked

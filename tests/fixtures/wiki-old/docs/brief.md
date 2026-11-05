@@ -21,3 +21,6 @@ Layers: `docs/architecture.md § Layers`
 [login](features/login.md)
 docs/architecture.md § Layers
 ```
+
+## External services
+None.
