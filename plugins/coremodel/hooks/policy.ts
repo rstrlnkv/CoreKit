@@ -133,7 +133,6 @@ export function texts(lang: Lang) {
     keep: (now: Level | '') =>
       now ? (ru ? `Оставить «${n(now)}»` : `Keep ${n(now)}`) : ru ? 'Оставить как есть' : 'Keep it as it is',
     applied,
-    mark: markLevel,
     inMenu: (l: Level | '') => (ru ? `в меню: ${l ? n(l) : '?'} (ваше)` : `in the menu: ${l ? n(l) : '?'} (yours)`),
     modeQuestion: (mode: Mode, m: ModelKey | '', l: Level | '') =>
       ru

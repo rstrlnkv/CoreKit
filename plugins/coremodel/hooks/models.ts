@@ -8,11 +8,11 @@ export type { ModelKey }
 /** Weakest to strongest. */
 export const LADDER: readonly ModelKey[] = ['haiku', 'sonnet', 'opus', 'fable']
 
-export const MODELS: Record<ModelKey, { id: string; name: string; input: number; read: number }> = {
-  haiku: { id: 'claude-haiku-5-5', name: 'Haiku', input: 0.1, read: 0.1 },
-  sonnet: { id: 'claude-sonnet-5-5', name: 'Sonnet', input: 2, read: 0.05 },
-  opus: { id: 'claude-opus-5-5', name: 'Opus', input: 4, read: 0.05 },
-  fable: { id: 'claude-fable-5-1', name: 'Fable', input: 10, read: 0.025 },
+export const MODELS: Record<ModelKey, { id: string; name: string; input: number }> = {
+  haiku: { id: 'claude-haiku-5-5', name: 'Haiku', input: 0.1 },
+  sonnet: { id: 'claude-sonnet-5-5', name: 'Sonnet', input: 2 },
+  opus: { id: 'claude-opus-5-5', name: 'Opus', input: 4 },
+  fable: { id: 'claude-fable-5-1', name: 'Fable', input: 10 },
 }
 
 /** A cache write (5-minute TTL) costs this many times the input price, on every model. */

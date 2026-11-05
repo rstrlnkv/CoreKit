@@ -59,14 +59,14 @@ async function log($: EngineInterface, what: string, err: unknown) {
 }
 
 /** The mode: what /coremodel stored wins over the setting. */
-export async function currentMode($: EngineInterface, options: { mode?: unknown }): Promise<Mode> {
+async function currentMode($: EngineInterface, options: { mode?: unknown }): Promise<Mode> {
   const stored = await $.store.get('mode')
   if (MODES.includes(stored as Mode)) return stored as Mode
   return MODES.includes(options.mode as Mode) ? (options.mode as Mode) : 'suggest'
 }
 
 /** Switches to `level` by holding it on this chat's requests (spec §4.4). */
-export async function applyLevel($: EngineInterface, level: Level, base: string): Promise<void> {
+async function applyLevel($: EngineInterface, level: Level, base: string): Promise<void> {
   hold = { level, base }
   await syncOverride($)
 }
@@ -78,7 +78,7 @@ async function syncOverride($: EngineInterface): Promise<void> {
 }
 
 /** Lets go of the held level: the chat runs at the menu's level again. */
-export async function releaseLevel($: EngineInterface): Promise<void> {
+async function releaseLevel($: EngineInterface): Promise<void> {
   hold = null
   // The pane reads `seen`: after a release it is the menu's level, not the one just let go.
   seen = toLevel(asked) || seen
@@ -86,13 +86,13 @@ export async function releaseLevel($: EngineInterface): Promise<void> {
 }
 
 /** Lets go of the held model: the chat runs on the person's own model again. */
-export async function releaseModel($: EngineInterface): Promise<void> {
+async function releaseModel($: EngineInterface): Promise<void> {
   modelHold = null
   await syncOverride($)
 }
 
 /** Lets go of both parts (off, Release, a new session). */
-export async function releaseHold($: EngineInterface): Promise<void> {
+async function releaseHold($: EngineInterface): Promise<void> {
   hold = null
   seen = toLevel(asked) || seen
   modelHold = null
@@ -118,7 +118,7 @@ async function newChat($: EngineInterface, fromEngine: boolean): Promise<void> {
 }
 
 /** Updates this session's counts, starting from zeros. */
-export async function count($: EngineInterface, f: (s: Stats) => Stats): Promise<void> {
+async function count($: EngineInterface, f: (s: Stats) => Stats): Promise<void> {
   await update($, stats, cur => f(cur ?? NO_STATS))
 }
 
@@ -135,7 +135,7 @@ async function placeMark($: EngineInterface, change: Mark) {
 }
 
 /** Switches to `key` by holding it on this chat's requests (spec §4.4, M7). */
-export async function applyModel($: EngineInterface, key: ModelKey, base: string): Promise<void> {
+async function applyModel($: EngineInterface, key: ModelKey, base: string): Promise<void> {
   modelHold = { key, base }
   await syncOverride($)
 }
@@ -361,7 +361,7 @@ async function runPick(
 }
 
 /** Sets the mode as `/coremodel <mode>` does; returns the reply. */
-export async function setMode($: EngineInterface, options: { mode?: unknown; pickModel?: unknown }, arg: Mode | 'on'): Promise<string> {
+async function setMode($: EngineInterface, options: { mode?: unknown; pickModel?: unknown }, arg: Mode | 'on'): Promise<string> {
   let text: string
   if (arg === 'auto' || arg === 'suggest') {
     await $.store.set('mode', arg)

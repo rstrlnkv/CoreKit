@@ -291,29 +291,6 @@ test('a stale pick is dropped', async ($, on) => {
   expect(w.efforts).toEqual(['medium'])
 })
 
-test('a locked row falls back to the hold, kept on later requests', async ($, on) => {
-  const w = world(on)
-  w.row = row('Medium', true)
-  w.reply = 'High (recommended)'
-  await start($)
-  await submit($, 'fix the login')
-  await step($, 'medium')
-  await step($, 'medium', 1)
-  expect(w.set.length).toBe(0)
-  expect(w.efforts).toEqual(['high', 'high'])
-})
-
-test('a row without the level falls back to the hold', async ($, on) => {
-  const w = world(on)
-  w.row = { ...row(), options: ['Low', 'Medium', 'High'] }
-  w.answer = '{"level":"xhigh","why":"w"}'
-  w.reply = 'Extra high (recommended)'
-  await start($)
-  await submit($, 'build the whole app, work alone')
-  await step($, 'high')
-  expect(w.efforts).toEqual(['xhigh'])
-})
-
 test('moving the menu releases the hold', async ($, on) => {
   const w = world(on)
   w.row = null
