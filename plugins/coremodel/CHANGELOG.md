@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.12 — 2026-11-05
+
+- `/coremodel` names the model as well as the level ("Now in the chat: Opus · High"), as the
+  README said, and with `pickModel: off` the level only.
+- `/coremodel` replies (status, mode set, off, on, pane) follow the language of the last prompt;
+  before, they were English in a Russian chat.
+- The working line says "checking model and effort…" (the effort alone with `pickModel: off`).
+- The two classic hooks (StopFailure, SessionStart) have a `.catch`, as the mods docs ask of
+  gating hooks; `claude plugin validate` no longer lists them.
+- Texts: the README and the spec say Remote Control prompts are checked like the prompt box;
+  "as CoreEffort did" is gone from the settings text; stale comments fixed.
+
 ## 0.4.11 — 2026-11-05
 
 Russian texts, read through once.

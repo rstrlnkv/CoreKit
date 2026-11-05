@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 — 2026-11-05
+
+- The Codex permission profile now blocks every secret the send filter drops: `prod.env`,
+  `app.env.local` and service-account JSON files were readable by GPT inside the project, though
+  the README said otherwise. Checked with `codex sandbox`; the test runs it where Codex is installed.
+- Outside a git repository the skill sends only the user's own question or text, with an empty
+  folder for Codex, instead of an unreachable flag note.
+
 ## 0.2.0 — 2026-11-05
 
 - Confirmation: before anything is sent, the skill shows the list of files (and the paths left out

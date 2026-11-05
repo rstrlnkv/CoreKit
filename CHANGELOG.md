@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.3 — 2026-11-05
+- The session-start hook also runs when a session is forked, so a fork gets the project context too.
+- A quick test suite re-run at once (fix one line, run again) no longer waits about 10 s: the
+  one-suite hook's grace is 3 s and it checks every second.
+- `tests/run.sh` names a test file that skipped (coremodel without the `claude` CLI) after
+  ALL TESTS PASSED instead of hiding it.
+- Cleanup: a dead fallback in the stop hook; banners on two shipped plans; migration-0.3 lists all
+  coremodel settings. Second refactor pass: docs/plans/2026-11-05-refactor-2.md.
+
 ## 0.5.2 — 2026-11-05
 - Both guards judge the command line handed to `bash -c`, `sh -c`, `zsh -c`, `dash`, `ksh` and
   `eval`: `bash -c "cat .env"` and `bash -c "echo x > CLAUDE.md"` are blocked like the plain commands.
