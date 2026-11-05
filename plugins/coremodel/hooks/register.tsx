@@ -433,7 +433,7 @@ function statsSvg(models: { key: string; name: string; n: number }[], levels: { 
 }
 
 const RULE = '─'.repeat(40)
-const HAIRLINE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1" width="1000" height="1" preserveAspectRatio="none"><rect width="1000" height="1" fill="#888780" fill-opacity="0.3"/></svg>'
+const HAIRLINE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 304 1" width="304" height="1"><rect width="304" height="1" fill="#888780" fill-opacity="0.45"/></svg>'
 
 export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
@@ -609,7 +609,7 @@ export const register: Register = (on, options) => {
     const levelMax = Math.max(1, ...levelCounts.map(l => s?.picks[l] ?? 0))
     const nameW = Math.max(0, ...modelCounts.map(m => MODELS[m].name.length), ...levelCounts.map(l => t.levelName(l).length))
     const rule = (key: string) =>
-      Svg ? <Svg key={key} source={HAIRLINE} alt="" height={1} /> : <Text key={key} dimColor wrap="truncate-end">{RULE}</Text>
+      Svg ? <Svg key={key} source={HAIRLINE} alt="separator" width={304} height={1} /> : <Text key={key} dimColor wrap="truncate-end">{RULE}</Text>
     const usageRow = (name: string, n: number, max: number) => `${name.padEnd(nameW)}  ${'█'.repeat(Math.max(1, Math.round((n / max) * 12)))} ${n}`
     return (
       <Box flexDirection="column" gap="sm">

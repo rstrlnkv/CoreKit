@@ -966,7 +966,7 @@ test('on the desktop the session counts are one drawing, on the terminal text ba
   await start($)
   await switchPair($, w, 'opus', 'high')
   const ui = await pane($, 'desktop')
-  const svg = (await ui.findAll({ type: 'Svg' })).find(x => String(x.props.alt) !== '')
+  const svg = (await ui.findAll({ type: 'Svg' })).find(x => /Opus/.test(String(x.props.alt)))
   expect(svg).not.toBe(undefined)
   expect(String(svg?.props.source)).toMatch(/^<svg /)
   expect(String(svg?.props.source)).toContain('Opus')

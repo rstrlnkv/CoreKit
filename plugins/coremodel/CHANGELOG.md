@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.8 — 2026-11-05
+
+- Desktop: the section rule is a drawing of the pane's own width (304 px), as the session drawing
+  is; the 1000 px one drew nothing. It has a text alternative, "separator".
+
 ## 0.4.7 — 2026-11-05
 
 - Desktop: the section rules are a one-pixel drawing across the whole pane (the text rule was cut
