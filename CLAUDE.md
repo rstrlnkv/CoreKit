@@ -18,6 +18,7 @@ docs/specs/2026-11-02-new-project-design.md (the `new-project` skill). Plans: do
   marketplace.json     marketplace "corekit": corecrew, coremodel, coreopinion; renames
 plugins/corecrew/      the corecrew plugin (moved here in 0.6.0; before, the repo root was the plugin)
   .claude-plugin/plugin.json   name "corecrew", version lives here, userConfig
+  .claude-plugin/icon.png      listing icon of every plugin (1024 px); sources: docs/icons/<plugin>.svg
   skills/
     new-project/       uses scripts/setup-core.sh; wiki templates
     task/              SKILL.md; references/: paths.md, brief.md, report.md, release.md, adopt.md

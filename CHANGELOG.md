@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.4 — 2026-11-05
+- An icon for the plugin (and for coremodel and coreopinion): the directory listing wants one, and
+  `claude plugin validate` no longer warns. Sources in `docs/icons/`.
+
 ## 0.6.3 — 2026-11-05
 - The one-suite hook names its two known limits in its header (several waiters finding one stale turn
   in the same instant; a 3 s grace against a slowly answered permission prompt). No behaviour change.

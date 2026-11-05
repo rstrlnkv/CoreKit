@@ -6,7 +6,7 @@ M="$ROOT/.claude-plugin/marketplace.json"
 
 # plugin.json
 assert_contains "$P" '"name": "corecrew"'
-assert_contains "$P" '"version": "0.6.3"'
+assert_contains "$P" '"version": "0.6.4"'
 assert_contains "$P" '"userConfig"'
 for key in core_dir attribution model_profile ui_language; do assert_contains "$P" "\"$key\""; done
 assert_contains "$P" '"type": "directory"'
@@ -47,8 +47,8 @@ assert_not_contains "$ROOT/README.md" 'my-app/code/'
 assert_contains "$ROOT/README.md" '/plugin install corecrew@corekit'
 assert_not_contains "$ROOT/README.md" '/corekit:'
 assert_not_contains "$ROOT/README.md" 'corekit@corekit'
-assert_eq "$(grep -m1 '^## ' "$ROOT/CHANGELOG.md" | cut -c1-9)" '## 0.6.3 ' "CHANGELOG first entry"
-assert_contains "$ROOT/CHANGELOG.md" '## 0.6.3 — 2026-11-05'
+assert_eq "$(grep -m1 '^## ' "$ROOT/CHANGELOG.md" | cut -c1-9)" '## 0.6.4 ' "CHANGELOG first entry"
+assert_contains "$ROOT/CHANGELOG.md" '## 0.6.4 — 2026-11-05'
 assert_contains "$ROOT/CHANGELOG.md" '## 0.5.0 — 2026-11-04'
 assert_contains "$ROOT/CHANGELOG.md" '## 0.4.0 — 2026-11-04'
 assert_contains "$ROOT/CHANGELOG.md" '## 0.3.0 — 2026-11-04'
@@ -141,5 +141,19 @@ for pl in corecrew coreopinion; do
   done
   [ "$n" -ge 3 ] && pass || fail "$pl: fewer than 3 trigger eval cases ($n)"
   assert_contains "$ROOT/plugins/$pl/evals/.gitignore" 'results/'
+done
+# every plugin has an icon (the directory wants a square PNG, 512 to 2048 px, under 2 MB); the SVG
+# sources are in docs/icons/
+for pl in corecrew coremodel coreopinion; do
+  ic="$ROOT/plugins/$pl/.claude-plugin/icon.png"
+  assert_file "$ic"
+  assert_file "$ROOT/docs/icons/$pl.svg"
+  if command -v sips >/dev/null 2>&1; then
+    w="$(sips -g pixelWidth "$ic" 2>/dev/null | sed -n 's/.*pixelWidth: //p')"; h="$(sips -g pixelHeight "$ic" 2>/dev/null | sed -n 's/.*pixelHeight: //p')"
+    assert_eq "$w" "$h" "$pl icon is square"
+    [ "${w:-0}" -ge 512 ] && [ "${w:-0}" -le 2048 ] && pass || fail "$pl icon is $w px, want 512 to 2048"
+  fi
+  [ "$(wc -c < "$ic" | tr -d ' ')" -lt 2000000 ] && pass || fail "$pl icon is 2 MB or more"
+  case "$(head -c 4 "$ic" | od -An -c | tr -d ' ')" in '211PNG'*|*PNG*) pass ;; *) fail "$pl icon is not a PNG" ;; esac
 done
 finish

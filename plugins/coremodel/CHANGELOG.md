@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.14 — 2026-11-05
+
+- An icon for the plugin listing (sliders); no change in behaviour.
+
 ## 0.4.13 — 2026-11-05
 
 - Cleanup, no change in behaviour: dead exports, a text only the tests used, unused cache-read

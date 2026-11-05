@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.5 — 2026-11-05
+
+- An icon for the plugin listing (two speech bubbles); no change in behaviour.
+
 ## 0.2.4 — 2026-11-05
 
 - The description no longer says "read-only sandbox" (Codex's `--sandbox read-only` can read the
