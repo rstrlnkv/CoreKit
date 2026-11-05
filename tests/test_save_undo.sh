@@ -115,9 +115,9 @@ assert_eq "$(git -C "$C" log -1 --format=%B | grep -ic 'co-authored-by')" "1" "m
 # session-rules.md (or standards/) stops the chain instead of riding along in its commit.
 LIB="$SCRIPTS/lib.sh"
 CHK='git -C "<Core>" status --short -- $(CORE_DIR="<Core>" bash "<scripts>/lib.sh" core-paths <project>)'
-assert_contains "$ROOT/skills/task/SKILL.md" "$CHK"
-assert_contains "$ROOT/skills/task/references/release.md" "$CHK"
-assert_not_contains "$ROOT/skills/task/SKILL.md" 'status --short -- <project> knowledge'
+assert_contains "$PLUGIN/skills/task/SKILL.md" "$CHK"
+assert_contains "$PLUGIN/skills/task/references/release.md" "$CHK"
+assert_not_contains "$PLUGIN/skills/task/SKILL.md" 'status --short -- <project> knowledge'
 cp_locate() { (cd "$C" && . "$SCRIPTS/_locate.sh" && locate && printf '%s\n' "$CORE_PATHS"); }
 assert_eq "$(CORE_DIR="$CORE_DIR" bash "$LIB" core-paths save-app)" "$(cp_locate)" "core-paths differs from save's CORE_PATHS"
 # the documented command, with <Core>, <scripts> and <project> filled in
@@ -149,7 +149,7 @@ assert_eq "$(git -C "$C" log -1 --format=%B | grep -ciE 'generated with \[claude
 # --- new layout: code in <Projects>/Foo beside the Core, docs in <Core>/foo, CLAUDE.local.md symlink
 F="$SANDBOX/Projects/Foo"; mkdir -p "$F" "$CORE_DIR/foo"
 echo "# foo" > "$CORE_DIR/foo/CLAUDE.md"
-git -C "$F" init -q; cp "$ROOT/skills/new-project/templates/code/gitignore-common" "$F/.gitignore"
+git -C "$F" init -q; cp "$PLUGIN/skills/new-project/templates/code/gitignore-common" "$F/.gitignore"
 ln -s "$CORE_DIR/foo/CLAUDE.md" "$F/CLAUDE.local.md"
 echo "n1" > "$F/n.txt"; echo "doc1" > "$CORE_DIR/foo/d.md"
 (cd "$F" && bash "$SAVE" "New layout step") > "$SANDBOX/out" 2>&1

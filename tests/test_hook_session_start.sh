@@ -3,7 +3,7 @@
 source "$(dirname "$0")/lib.sh"
 new_sandbox
 H="$HOOKS/session-start.sh"
-export CLAUDE_PLUGIN_ROOT="$ROOT"
+export CLAUDE_PLUGIN_ROOT="$PLUGIN"
 assert_file "$H"
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
 
@@ -87,7 +87,7 @@ run_rc "$C"; echo "$OUT" | grep -qF "Rule one" && fail "rules shown without file
 
 # --- layout note when .coredev is older
 cp "$CORE_DIR/.coredev" "$SANDBOX/corecrew.bak"
-FIX="bash \"$ROOT/scripts/setup-core.sh\" \"$CORE_DIR\""
+FIX="bash \"$PLUGIN/scripts/setup-core.sh\" \"$CORE_DIR\""
 printf 'app-id-prefix: com.example\n' > "$CORE_DIR/.coredev"          # no schema line
 run_rc "$C"; echo "$OUT" | grep -qF "$FIX" && pass || fail "no schema: fix command missing: $OUT"
 printf 'schema: 0\n' > "$CORE_DIR/.coredev"                           # lower schema
@@ -109,7 +109,7 @@ assert_eq "$OUT" "{\"systemMessage\":\"corecrew: Core at $CORE_DIR is not set up
 cp "$SANDBOX/corecrew.bak" "$CORE_DIR/.coredev"
 
 # --- git hooks: only an old "new-project hook" is named; shims and a user's own hook are left alone
-INST="bash \"$ROOT/scripts/install-hooks.sh\" \"$P\""
+INST="bash \"$PLUGIN/scripts/install-hooks.sh\" \"$P\""
 mkdir -p "$C/.git/hooks" "$CORE_DIR/.git/hooks"
 run_rc "$C"; echo "$OUT" | grep -qF "install-hooks.sh" && fail "hook note without hooks: $OUT" || pass
 printf '#!/bin/sh\n# new-project hook\nexit 0\n' > "$C/.git/hooks/pre-commit"

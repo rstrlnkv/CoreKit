@@ -4,7 +4,7 @@ source "$(dirname "$0")/lib.sh"
 new_sandbox
 C="$SCRIPTS/check-standard.sh"
 FX="$ROOT/tests/fixtures"
-NS="$ROOT/skills/new-standard"
+NS="$PLUGIN/skills/new-standard"
 TPL="$NS/references/template.md"
 SK="$NS/SKILL.md"
 
@@ -126,7 +126,7 @@ assert_not_contains "$SK" "superpowers:"
 assert_contains "$SKILL/SKILL.md" 'reference/knowledge.md'
 
 # Knowledge format
-K="$ROOT/reference/knowledge.md"
+K="$PLUGIN/reference/knowledge.md"
 assert_file "$K"
 assert_contains "$K" 'docs/knowledge/'
 assert_contains "$K" '<Core>/knowledge/'

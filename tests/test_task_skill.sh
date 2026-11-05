@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The task skill: frontmatter, paths, brief, report, flags.
 source "$(dirname "$0")/lib.sh"
-T="$ROOT/skills/task"
+T="$PLUGIN/skills/task"
 SK="$T/SKILL.md"
 PA="$T/references/paths.md"
 BR="$T/references/brief.md"
@@ -216,5 +216,5 @@ section "$SK" Start | grep -qF 'must be inside `<Core>/<project>/`' && fail "Sta
 assert_not_contains "$BR" '<Core>/<project>/code/'
 assert_not_contains "$REL" '../docs/'
 assert_not_contains "$PA" '<Core>/<project>/code'
-assert_not_contains "$ROOT/reference/wiki.md" 'relative to `code/`'
+assert_not_contains "$PLUGIN/reference/wiki.md" 'relative to `code/`'
 finish

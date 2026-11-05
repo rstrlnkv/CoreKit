@@ -51,10 +51,10 @@ EOF
 assert_eq "$(scan "$good")" "" "portable lines flagged"
 
 # scripts <repo> — shell scripts on disk (tracked or not) in scripts/ (incl. git-hooks/), hooks/,
-# skills/ (incl. skills/*/scripts/) and tests/: *.sh, or an extensionless file with a shell
+# skills/ (incl. skills/*/scripts/), tests/ and plugins/ (every plugin of the marketplace): *.sh, or an extensionless file with a shell
 # shebang. Other files (*.awk, *.md, templates without a shell shebang) are not shell code.
 scripts() {
-  (cd "$1" && find skills scripts hooks tests -type f 2>/dev/null | while IFS= read -r f; do
+  (cd "$1" && find skills scripts hooks tests plugins -type f 2>/dev/null | while IFS= read -r f; do
     [ "$f" = tests/test_portability.sh ] && continue
     case "$f" in *.sh) ;; *) head -1 "$f" | grep -qE '^#!.*sh' || continue ;; esac
     echo "$f"
@@ -80,8 +80,8 @@ scripts "$ROOT" | while IFS= read -r f; do
   [ -z "$hits" ] || echo "$hits"
 done > "$SANDBOX/hits"
 [ -s "$SANDBOX/hits" ] && fail "not portable to macOS bash 3.2 / BSD: $(cat "$SANDBOX/hits")" || pass
-scripts "$ROOT" | grep -qx 'scripts/save' && pass || fail "scripts without .sh not scanned"
-for want in hooks/guard-code.sh skills/new-project/scripts/scaffold.sh scripts/git-hooks/pre-commit-code; do
+scripts "$ROOT" | grep -qx 'plugins/corecrew/scripts/save' && pass || fail "scripts without .sh not scanned"
+for want in plugins/corecrew/hooks/guard-code.sh plugins/corecrew/skills/new-project/scripts/scaffold.sh plugins/corecrew/scripts/git-hooks/pre-commit-code plugins/coreopinion/skills/second-opinion/scripts/ask-gpt.sh; do
   scripts "$ROOT" | grep -qx "$want" && pass || fail "$want not scanned"
 done
 finish

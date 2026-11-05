@@ -6,7 +6,7 @@
     {
       "name": "corecrew",
       "displayName": "CoreCrew",
-      "source": "./",
+      "source": "./plugins/corecrew",
       "description": "Start projects from an interview and run tasks with a crew of agents; standards and lessons live in your private Core repo."
     },
     {

@@ -15,41 +15,43 @@ docs/specs/2026-11-02-new-project-design.md (the `new-project` skill). Plans: do
 ## Layout
 ```
 .claude-plugin/
-  plugin.json          name "corecrew", version lives here, userConfig
-  marketplace.json     marketplace "corekit"; plugin "corecrew"; renames
-skills/
-  new-project/         as today; uses scripts/setup-core.sh; wiki templates
-  task/                SKILL.md; references/: paths.md, brief.md, report.md, release.md, adopt.md
-  new-standard/        SKILL.md; references/template.md
-agents/                engineer tester security verifier localizer designer
-hooks/
-  hooks.json           five hooks, explicit timeouts
-  session-start.sh one-suite.sh guard-code.sh guard-secrets.sh stop-remind.sh
-  messages.sh          every hook text, in the ui_language setting
-reference/
-  wiki.md              wiki rules
-  knowledge.md         knowledge format
-scripts/               all machinery, portable bash
-  lib.sh               read settings, parse hook JSON without jq, locate <Core> and project
-  _locate.sh           find the plugin root and the Core for scripts run by hand
-  setup-core.sh        create or upgrade the Core skeleton
-  install-hooks.sh     install the git hooks into a code repo and the Core
-  sync-tools.sh        sync the tools the Core uses from the plugin
-  adopt.sh             move an existing project into the layout
-  wiki-check.sh        wiki checks
-  check-standard.sh    standard file checks
-  save, undo-step      one step = code + docs commit / revert
-  bash-lex.awk, bashlex-*.awk   the Bash tokenizer shared by guard-code and guard-secrets, and their parts
-  git-hooks/           pre-commit-code, pre-push-code, pre-push-core, blocked-patterns
-tests/                 bash: lib.sh, test_*.sh, run.sh, fixtures/
-evals/                 evals.json: two scenario evals for new-project (prompt + expected output), not trigger evals
-docs/migration-*.md    upgrade guides for users of older versions (0.2, 0.3)
-plugins/coremodel/    a second plugin (TypeScript hooks module); spec docs/specs/2026-11-04-coremodel-design.md;
+  marketplace.json     marketplace "corekit": corecrew, coremodel, coreopinion; renames
+plugins/corecrew/      the corecrew plugin (moved here in 0.6.0; before, the repo root was the plugin)
+  .claude-plugin/plugin.json   name "corecrew", version lives here, userConfig
+  skills/
+    new-project/       uses scripts/setup-core.sh; wiki templates
+    task/              SKILL.md; references/: paths.md, brief.md, report.md, release.md, adopt.md
+    new-standard/      SKILL.md; references/template.md
+  agents/              engineer tester security verifier localizer designer
+  hooks/
+    hooks.json         five hooks, explicit timeouts
+    session-start.sh one-suite.sh guard-code.sh guard-secrets.sh stop-remind.sh
+    messages.sh        every hook text, in the ui_language setting
+  reference/
+    wiki.md            wiki rules
+    knowledge.md       knowledge format
+  scripts/             all machinery, portable bash
+    lib.sh             read settings, parse hook JSON without jq, locate <Core> and project
+    _locate.sh         find the plugin root and the Core for scripts run by hand
+    setup-core.sh      create or upgrade the Core skeleton
+    install-hooks.sh   install the git hooks into a code repo and the Core
+    sync-tools.sh      sync the tools the Core uses from the plugin
+    adopt.sh           move an existing project into the layout
+    wiki-check.sh      wiki checks
+    check-standard.sh  standard file checks
+    save, undo-step    one step = code + docs commit / revert
+    bash-lex.awk, bashlex-*.awk   the Bash tokenizer shared by guard-code (also the read-only
+                       checkers' rule) and guard-secrets, and their parts
+    git-hooks/         pre-commit-code, pre-push-code, pre-push-core, blocked-patterns
+plugins/coremodel/     a second plugin (TypeScript hooks module); spec docs/specs/2026-11-04-coremodel-design.md;
                        own CHANGELOG; tests: `claude plugin test plugins/coremodel` (run by tests/test_coremodel.sh;
                        without the `claude` CLI it is skipped and run.sh names it after PASSED)
-plugins/coreopinion/   a third plugin: skill second-opinion (GPT via `codex exec` with a narrow read-only permission profile);
-                       own README and CHANGELOG; tests: tests/test_coreopinion.sh
-CHANGELOG.md, README.md
+plugins/coreopinion/   a third plugin: skill second-opinion (GPT via `codex exec` with a narrow read-only
+                       permission profile, in scripts/ask-gpt.sh); own README and CHANGELOG; tests: tests/test_coreopinion.sh
+tests/                 bash: lib.sh ($PLUGIN is plugins/corecrew), test_*.sh, run.sh, fixtures/
+evals/                 evals.json: two scenario evals for new-project (prompt + expected output), not trigger evals
+docs/migration-*.md    upgrade guides for users of older versions (0.2, 0.3)
+CHANGELOG.md, README.md   corecrew's changelog and the repo README
 ```
 No top-level `bin/` (claude.ai and Cowork refuse plugins that have one). Spec section 4.1 is the
 tree this layout follows.
@@ -58,7 +60,8 @@ tree this layout follows.
 ```bash
 bash tests/run.sh          # all tests; no network, prints ALL TESTS PASSED
 bash tests/test_hooks.sh   # one file
-claude plugin validate .   # plugin and marketplace manifests
+claude plugin validate .                   # the marketplace manifest
+claude plugin validate plugins/corecrew    # one plugin (also plugins/coremodel, plugins/coreopinion)
 ```
 Tests run in a temp sandbox via `new_sandbox` (sets `CORE_DIR`);
 they never touch the real `~/Projects/Core` or `~/.config`. Stub `gh` on `PATH` instead of
@@ -74,9 +77,9 @@ calling GitHub.
   this; add a pattern there when you find a new non-portable construct.
 - **Never overwrite or delete user files** in scripts; scaffold is idempotent and prints
   `created`/`skipped`.
-- **Releases:** bump `version` in .claude-plugin/plugin.json and add an entry to
+- **Releases:** bump `version` in plugins/corecrew/.claude-plugin/plugin.json and add an entry to
   CHANGELOG.md (newest first, `## X.Y.Z — YYYY-MM-DD`) in the same change.
-- After any change run `bash tests/run.sh` and `claude plugin validate .`.
+- After any change run `bash tests/run.sh` and `claude plugin validate .` (and the plugin you changed).
 - **Language:** all files, code, comments and commit messages in English; talk to the user
   in their language, in plain words.
 - Reference the spec and plan as plain text paths, never as `@`-imports.

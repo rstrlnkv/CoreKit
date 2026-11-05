@@ -17,7 +17,7 @@
 #         <Projects>/test-coredev already exists).
 # Only test-coredev/ in both places and the line in PROJECTS.md are written; the rest is left alone.
 set -u
-ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "$0")/../../plugins/corecrew" && pwd)"   # the corecrew plugin
 TPL="$ROOT_DIR/skills/new-project/templates"
 . "$ROOT_DIR/scripts/lib.sh"
 

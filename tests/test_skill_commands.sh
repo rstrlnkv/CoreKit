@@ -7,7 +7,7 @@ source "$(dirname "$0")/lib.sh"
 new_sandbox
 unset CORE_DIR CLAUDE_PLUGIN_OPTION_CORE_DIR
 
-for sk in "$ROOT"/skills/*/SKILL.md; do
+for sk in "$PLUGIN"/skills/*/SKILL.md; do
   if grep -nF '"${user_config.' "$sk" >/dev/null; then
     fail "$sk double-quotes a \${user_config.} placeholder: $(grep -nF '"${user_config.' "$sk" | head -3 | tr '\n' ' ')"
   else pass; fi
@@ -17,7 +17,7 @@ done
 # skill as the model would run it: ${CLAUDE_SKILL_DIR} substituted, ${user_config.*} left literal.
 shells="bash"; command -v zsh >/dev/null 2>&1 && shells="bash zsh"
 n=0
-for sk in "$ROOT"/skills/*/SKILL.md; do
+for sk in "$PLUGIN"/skills/*/SKILL.md; do
   d="$(dirname "$sk")"
   while IFS= read -r cmd; do
     [ -n "$cmd" ] || continue
@@ -33,17 +33,17 @@ for sk in "$ROOT"/skills/*/SKILL.md; do
   done <<< "$(grep -oE '`CORE_DIR=[^`]*user_config[^`]*lib\.sh" (core-dir|ready)`' "$sk" | tr -d '`')"
 done
 [ "$n" -ge 3 ] && pass || fail "expected core-dir/ready commands with the placeholder in the skills, found $n"
-for sk in "$ROOT"/skills/*/SKILL.md; do
+for sk in "$PLUGIN"/skills/*/SKILL.md; do
   grep -qF "CORE_DIR='\${user_config.core_dir}' bash \"\${CLAUDE_SKILL_DIR}/../../scripts/lib.sh\" core-dir" "$sk" \
     && pass || fail "$(basename "$(dirname "$sk")"): no core-dir command with the single-quoted placeholder"
 done
 
 # new-project and new-standard say what a literal placeholder means.
-for sk in "$ROOT/skills/new-project/SKILL.md" "$ROOT/skills/new-standard/SKILL.md" "$ROOT/skills/task/SKILL.md"; do
+for sk in "$PLUGIN/skills/new-project/SKILL.md" "$PLUGIN/skills/new-standard/SKILL.md" "$PLUGIN/skills/task/SKILL.md"; do
   assert_contains "$sk" 'still reads literally `${user_config.`'
 done
 # new-project resolves <Core> once (core-dir) before anything else, and uses the absolute path after.
-NP="$ROOT/skills/new-project/SKILL.md"
+NP="$PLUGIN/skills/new-project/SKILL.md"
 c="$(grep -n 'lib.sh" core-dir' "$NP" | head -1 | cut -d: -f1)"; r="$(grep -n 'lib.sh" ready' "$NP" | head -1 | cut -d: -f1)"
 [ -n "$c" ] && [ -n "$r" ] && [ "$c" -lt "$r" ] && pass || fail "new-project: core-dir must come before ready"
 assert_eq "$(grep -c 'user_config.core_dir' "$NP")" "2" "new-project: user_config.core_dir only in Settings and the core-dir command"

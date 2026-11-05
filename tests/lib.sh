@@ -1,9 +1,10 @@
 # Shared helpers for bash tests. Source this file; call `finish` at the end.
 FAILS=0; PASSES=0
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SKILL="$ROOT/skills/new-project"
-SCRIPTS="$ROOT/scripts"
-HOOKS="$ROOT/hooks"
+PLUGIN="$ROOT/plugins/corecrew"   # the corecrew plugin; the repo root holds the marketplace
+SKILL="$PLUGIN/skills/new-project"
+SCRIPTS="$PLUGIN/scripts"
+HOOKS="$PLUGIN/hooks"
 
 pass() { PASSES=$((PASSES + 1)); }
 fail() { FAILS=$((FAILS + 1)); echo "  FAIL: $*"; }
@@ -55,7 +56,7 @@ scaffold_old() {
 
 # sync_tools — copies the plugin's scripts into $COREDEV_TOOLS (what session-start does),
 # so git hook shims installed in the sandbox have something to run.
-sync_tools() { bash "$SCRIPTS/sync-tools.sh" "$ROOT" "$COREDEV_TOOLS" >/dev/null; }
+sync_tools() { bash "$SCRIPTS/sync-tools.sh" "$PLUGIN" "$COREDEV_TOOLS" >/dev/null; }
 
 # Checksum of all files under a dir, excluding .git internals.
 # (NUL-separated, so names with spaces or non-ASCII characters are summed too.)

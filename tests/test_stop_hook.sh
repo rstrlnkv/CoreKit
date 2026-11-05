@@ -10,7 +10,7 @@ python3 -m json.tool "$J" >/dev/null 2>&1 && pass || fail "settings.local.json i
 assert_not_contains "$J" "\"Stop\""; assert_not_contains "$J" "\"hooks\""
 assert_not_contains "$J" "stop-remind"; assert_contains "$J" "\"$P\""
 assert_not_contains "$SKILL/templates/code/settings.local.json.tmpl" "\"hooks\""
-HJ="$ROOT/hooks/hooks.json"
+HJ="$PLUGIN/hooks/hooks.json"
 python3 -m json.tool "$HJ" >/dev/null 2>&1 && pass || fail "hooks.json is not valid JSON"
 assert_contains "$HJ" "\"Stop\""
 assert_contains "$HJ" 'bash \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-remind.sh\"'

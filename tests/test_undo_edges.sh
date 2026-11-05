@@ -20,7 +20,7 @@ assert_file "$SAVE"; assert_file "$CORE_DIR/edge-app/CLAUDE.md"
 
 # new layout: undo-step from a worktree under <Projects>/Bar reverts the main checkout's step
 B="$SANDBOX/Projects/Bar"; mkdir -p "$B" "$CORE_DIR/bar"; echo "# bar" > "$CORE_DIR/bar/CLAUDE.md"
-git -C "$B" init -q; cp "$ROOT/skills/new-project/templates/code/gitignore-common" "$B/.gitignore"
+git -C "$B" init -q; cp "$PLUGIN/skills/new-project/templates/code/gitignore-common" "$B/.gitignore"
 ln -s "$CORE_DIR/bar/CLAUDE.md" "$B/CLAUDE.local.md"
 cd "$B" || exit 1
 echo 1 > one.txt; bash "$SAVE" "Bar first" >/dev/null

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Plugin and marketplace manifests: name, version, settings, dependency, rename; docs follow.
 source "$(dirname "$0")/lib.sh"
-P="$ROOT/.claude-plugin/plugin.json"
+P="$PLUGIN/.claude-plugin/plugin.json"
 M="$ROOT/.claude-plugin/marketplace.json"
 
 # plugin.json
@@ -38,6 +38,7 @@ assert_contains "$M" '"effort-picker": "coremodel"'
 assert_contains "$M" '"coreeffort": "coremodel"'
 assert_not_contains "$M" 'allowCrossMarketplaceDependenciesOn'
 assert_contains "$M" '"name": "coremodel"'
+assert_contains "$M" '"source": "./plugins/corecrew"'
 assert_contains "$M" '"source": "./plugins/coremodel"'
 
 # README and CHANGELOG
@@ -55,8 +56,8 @@ assert_contains "$ROOT/CHANGELOG.md" '## 0.2.1 — 2026-11-04'
 assert_contains "$ROOT/CHANGELOG.md" '## 0.2.0 — '
 
 # hooks.json: plugin Stop hook; no install.sh any more
-assert_file "$ROOT/hooks/hooks.json"
-H="$ROOT/hooks/hooks.json"
+assert_file "$PLUGIN/hooks/hooks.json"
+H="$PLUGIN/hooks/hooks.json"
 assert_contains "$H" '"Stop"'
 assert_contains "$H" '"timeout"'
 # hooks.json wires all five hooks (spec section 14). One key per line, so awk can pair each event and
@@ -75,7 +76,7 @@ Stop||stop-remind.sh|10"
 assert_eq "$WIRED" "$want_wired" "hooks.json events, matchers, scripts, timeouts"
 for s in session-start one-suite guard-code guard-secrets stop-remind; do
   assert_contains "$H" "/hooks/$s.sh"
-  assert_file "$ROOT/hooks/$s.sh"
+  assert_file "$PLUGIN/hooks/$s.sh"
 done
 # every command runs through bash (the scripts are not executable) and via the plugin root
 n_cmd="$(grep -c '"command":' "$H")"; n_to="$(grep -c '"timeout":' "$H")"
@@ -99,7 +100,7 @@ assert_no_file "$ROOT/install.sh"; assert_no_file "$ROOT/tests/test_install.sh"
 assert_not_contains "$ROOT/README.md" 'install.sh'
 assert_contains "$ROOT/README.md" '2.1.271'
 assert_contains "$ROOT/README.md" '/plugin install feature-dev@claude-plugins-official'
-T="$ROOT/skills/new-project/templates"
+T="$PLUGIN/skills/new-project/templates"
 assert_not_contains "$T/code/settings.local.json.tmpl" '"hooks"'
 assert_contains "$T/code/settings.local.json.tmpl" '"additionalDirectories"'
 assert_not_contains "$T/CLAUDE.md.tmpl" '/bin/'

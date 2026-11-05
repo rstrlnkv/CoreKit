@@ -88,7 +88,7 @@ echo "$OUT" | grep -q 'WARN' && echo "$OUT" | grep -q 'left unchanged' && pass |
 assert_contains "$C/.git/hooks/pre-push" "# mine"; assert_not_contains "$C/.git/hooks/pre-push" "corecrew hook shim"
 
 # --tools overrides the default; a tools dir with a space works
-T2="$SANDBOX/my tools"; bash "$SCRIPTS/sync-tools.sh" "$ROOT" "$T2" >/dev/null
+T2="$SANDBOX/my tools"; bash "$SCRIPTS/sync-tools.sh" "$PLUGIN" "$T2" >/dev/null
 rm -f "$C/.git/hooks/pre-push"
 assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P" --tools "$T2"
 assert_contains "$C/.git/hooks/pre-push" "$T2/git-hooks/pre-push-code"
