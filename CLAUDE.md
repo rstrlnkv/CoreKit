@@ -81,6 +81,10 @@ calling GitHub.
   this; add a pattern there when you find a new non-portable construct.
 - **Never overwrite or delete user files** in scripts; scaffold is idempotent and prints
   `created`/`skipped`.
+- **Test isolation:** tests run under `new_sandbox` (own HOME, XDG, GIT_CONFIG_GLOBAL;
+  tests/test_isolation.sh checks it). Never run `git config --global`/`--system` or write to
+  `~/.claude`, `~/.codex` or the real `~/Projects` from a test or an agent; for a manual check
+  use `GIT_CONFIG_GLOBAL=$(mktemp)`.
 - **Releases:** bump `version` in plugins/corecrew/.claude-plugin/plugin.json and add an entry to
   CHANGELOG.md (newest first, `## X.Y.Z — YYYY-MM-DD`) in the same change.
 - After any change run `bash tests/run.sh` and `claude plugin validate .` (and the plugin you changed).
