@@ -1,6 +1,7 @@
 ---
 name: second-opinion
 description: Use when the user wants a second opinion or an outside review from OpenAI's GPT through the Codex CLI — phrases like "second opinion", "ask ChatGPT", "ask GPT", "ask Codex", "review with GPT", "what would GPT say", "второе мнение", "спроси GPT", "спроси ChatGPT". GPT only reads and answers; Claude shows its answer with Claude's own assessment and makes any change itself, only after the user approves.
+allowed-tools: Bash(bash ${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh *)
 ---
 
 # Second opinion from GPT
@@ -105,22 +106,23 @@ holds:
   and a concrete fix; then a one-line overall verdict; say plainly when there is nothing
   serious; answer in <the user's language>.
 
-Run it in **one** Bash call with a timeout of 300000 ms (5 minutes). Put the real `$T` path in
-the first line. The `trap` removes the temp folder (it holds the diff) however the call ends, so
-the answer and the log tail are printed before the folder goes:
+Run it in **one** Bash call with a timeout of 300000 ms (5 minutes), with the real `$T` path:
 
 ```bash
-T='<the mktemp path>'; trap 'rm -rf "$T"' EXIT HUP INT TERM
-codex exec --ignore-user-config -c 'default_permissions="review"' -c 'permissions.review.filesystem={":minimal"="read", ":project_roots"={"."="read", "**/.env*"="none", "**/*.env"="none", "**/*.env.*"="none", "**/*.pem"="none", "**/*.key"="none", "**/*.p12"="none", "**/*.pfx"="none", "**/id_rsa*"="none", "**/id_ed25519*"="none", "**/*credentials*"="none", "**/.npmrc"="none", "**/.netrc"="none", "**/.pypirc"="none", "**/.git-credentials"="none", "**/*.tfvars"="none", "**/*.tfstate*"="none", "**/*.jks"="none", "**/*.keystore"="none", "**/*.p8"="none", "**/*[sS]ecret*"="none", "**/*[tT]oken*"="none", "**/*kubeconfig*"="none", "**/*.kdbx"="none", "**/.aws/**"="none", "**/*service?account*.json"="none", "**/*serviceaccount*.json"="none"}}' -c web_search="disabled" -C "$(cat "$T/dir")" -c model_reasoning_effort=medium --ephemeral --output-last-message "$T/answer.md" - < "$T/prompt.md" > "$T/log.txt" 2>&1; echo "exit=$?"
-echo "--- answer"; cat "$T/answer.md"; echo "--- log tail"; tail -n 20 "$T/log.txt"
+bash "${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh" "<the mktemp path>" medium
 ```
 
-- **What this confines.** I checked it with `codex sandbox` (it runs a command under the same
-  sandbox, nothing goes to OpenAI), codex 0.166:
+The script is pre-approved for this skill, so the user's yes in step 2 is the only question. It
+prints `exit=<code>`, then `--- answer` with GPT's final answer and `--- log tail`, and removes the
+temp folder (it holds the diff) however the run ends. Outside a git repository it adds
+`--skip-git-repo-check` and gives Codex an empty folder instead of the project.
+
+- **What this confines** (the profile is in the script). I checked it with `codex sandbox` (it
+  runs a command under the same sandbox, nothing goes to OpenAI), codex 0.166:
   - `--sandbox read-only` alone blocks writes and network, but does **not** limit reading: GPT
     could read the whole disk, including `~/.ssh` and any `.env`. Only the sentence in the
     prompt would stop it. So this skill does not use it.
-  - The `review` permission profile above gives read access to the project folder, minimal
+  - The script's `review` permission profile gives read access to the project folder, minimal
     system paths and temp folders, and to nothing else in the user's home. Reads of the secret
     patterns listed in it are blocked even inside the project (`.env*`, keys, `.npmrc`, ...).
     It is read-only (no writes) and has no network for commands. A secret file with an
@@ -130,18 +132,14 @@ echo "--- answer"; cat "$T/answer.md"; echo "--- log tail"; tail -n 20 "$T/log.t
     Codex then uses its own default model; the effort is set on the line.
   - It is still an outside model reading a real project. Never describe this to the user as
     "nothing else can be seen".
-- Never use a writable sandbox mode, and never a bypass flag.
+- Never run `codex exec` yourself with other flags: never a writable sandbox mode, never a bypass flag.
 - If codex rejects the profile (a message about `default_permissions` or `permissions` in the
   log), do not fall back silently: tell the user that the narrow profile did not work and that
-  the only alternative is `--sandbox read-only`, which can read the whole disk; run it only
-  after a new yes.
-- Effort: `-c model_reasoning_effort=medium` by default. Use `-c model_reasoning_effort=high`
-  only when the user asks for a deep, detailed or thorough review. (Codex's own default is
-  `xhigh`, which is slow and spends the plan's usage fast.)
-- `-` reads the prompt from stdin; `--output-last-message` writes only GPT's final answer to
-  `$T/answer.md`; `--ephemeral` keeps no Codex session on disk.
-- Outside a git repository add `--skip-git-repo-check`, make an empty folder `$T/empty` and write
-  its path into `$T/dir`, so GPT has no files to open.
+  the only alternative is `codex exec --sandbox read-only`, which can read the whole disk; run it
+  only after a new yes.
+- Effort: `medium` by default; pass `high` only when the user asks for a deep, detailed or
+  thorough review. (Codex's own default is `xhigh`, which is slow and spends the plan's usage fast.)
+- The script runs `--ephemeral` (no Codex session kept on disk) and reads the prompt from stdin.
 
 Tell the user it is running and may take 10–60 seconds, sometimes more.
 
@@ -181,14 +179,12 @@ do:
 
   ```json
   {
-    "sandbox": { "excludedCommands": ["codex exec *"] },
-    "permissions": { "allow": ["Bash(codex exec *)"] }
+    "sandbox": { "excludedCommands": ["bash */second-opinion/scripts/ask-gpt.sh *"] }
   }
   ```
 
   `sandbox.excludedCommands` runs matching commands outside the sandbox (with the user's full
-  access; Codex's own sandbox still applies). The allow rule only skips the
-  prompt for `codex exec`. Docs:
+  access; Codex's own sandbox still applies). Docs:
   https://code.claude.com/docs/en/sandbox-environments.md#run-commands-outside-the-sandbox-with-excludedcommands
   Do not change the user's settings yourself without their yes. If they ran Claude Code from
   inside Codex's app, start Claude Code from a normal terminal instead.
@@ -196,5 +192,5 @@ do:
 - **Exit 0 but empty answer**: say GPT returned nothing; show the last lines of the log.
 - **Anything else**: quote the last few lines of the log and say you do not know the cause.
 
-The `trap` already removed `$T`. If the Bash call timed out or was killed, run `rm -rf "$T"` first thing
+The script already removed `$T`. If the Bash call timed out or was killed, run `rm -rf "$T"` first thing
 (the path you noted), whatever else you do.

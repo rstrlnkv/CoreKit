@@ -43,9 +43,9 @@ assert_contains "$S" 'name: second-opinion'
 assert_contains "$S" 'description: '
 for phrase in 'second opinion' 'GPT' 'Codex' 'review'; do assert_contains "$S" "$phrase"; done
 assert_contains "$S" '--sandbox read-only'
-assert_contains "$S" 'model_reasoning_effort=medium'
-assert_contains "$S" 'model_reasoning_effort=high'
-assert_contains "$S" '--output-last-message'
+assert_contains "$P/skills/second-opinion/scripts/ask-gpt.sh" 'model_reasoning_effort="$effort"'
+assert_contains "$S" 'pass `high` only when the user asks'
+assert_contains "$P/skills/second-opinion/scripts/ask-gpt.sh" '--output-last-message'
 assert_contains "$S" 'git diff HEAD'
 assert_contains "$S" 'command -v codex'
 assert_contains "$S" 'Operation not permitted'
@@ -107,15 +107,21 @@ assert_eq "$got" "a.sh;" "empty-tree base lists staged files in a repo without c
 # the user confirms the file list before anything is sent
 assert_contains "$S" 'wait for the'
 assert_contains "$S" 'Nothing is sent before'
-# what read-only really confines: honest wording, narrowed profile, user config off
-assert_contains "$S" 'default_permissions='
-assert_contains "$S" '--ignore-user-config'
-assert_contains "$S" 'web_search="disabled"'
-assert_contains "$S" '":project_roots"'
+# what read-only really confines: honest wording, narrowed profile, user config off (in the run script)
+A="$P/skills/second-opinion/scripts/ask-gpt.sh"
+assert_contains "$A" 'default_permissions='
+assert_contains "$A" '--ignore-user-config'
+assert_contains "$A" 'web_search="disabled"'
+assert_contains "$A" '":project_roots"'
+# the run needs one yes (the skill's own): the script is pre-approved for the skill's turn only
+assert_contains "$S" 'allowed-tools: Bash(bash ${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh *)'
+assert_contains "$S" 'bash "${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh" "'
 # the profile blocks, inside the project, every secret the send filter drops (README promises it).
 # Checked for real with `codex sandbox` (local, nothing goes to OpenAI) where codex is installed.
-profile="$(grep -o "permissions.review.filesystem={.*}}'" "$S" | head -1 | sed "s/'\$//")"
-assert_eq "${profile:+found}" "found" "SKILL.md has the review permission profile"
+A="$P/skills/second-opinion/scripts/ask-gpt.sh"
+assert_file "$A"
+profile="$(grep -o "permissions.review.filesystem={.*}}'" "$A" | head -1 | sed "s/'\$//")"
+assert_eq "${profile:+found}" "found" "ask-gpt.sh has the review permission profile"
 if command -v codex >/dev/null 2>&1 && codex sandbox --help >/dev/null 2>&1; then
   R5="$SANDBOX/profile"; mkdir -p "$R5/.aws" "$R5/sub" "$R5/k"; git -C "$R5" init -q
   secrets='.env prod.env app.env.local sub/.env.prod key.pem server.key cert.p12 cert.pfx id_rsa id_ed25519.pub Credentials.txt
@@ -139,20 +145,33 @@ assert_not_contains "$S" 'GPT can read the project but'
 assert_not_contains "$P/README.md" 'GPT can read the project but'
 assert_contains "$P/README.md" 'whole disk'
 assert_contains "$P/README.md" 'codex sandbox'
-# the -C path never goes through shell parsing: it is read from a file
+# the -C path never goes through shell parsing: it is read from a file by the script
 assert_not_contains "$S" '-C "<project dir>"'
-assert_contains "$S" '-C "$(cat "$T/dir")"'
-run_line="$(grep -m1 '^codex exec ' "$S")"
-assert_eq "${run_line:+found}" "found" "SKILL.md has a codex exec line"
-BAD="$SANDBOX/we ird\"\$(touch PWNED)\`touch PWNED2\`dir"; mkdir -p "$BAD"
+assert_not_contains "$S" 'codex exec --ignore-user-config'   # one copy of the command: the script's
+mkdir -p "$SANDBOX/stub"; printf '#!/bin/sh\nprintf "%%s\\n" "$@" > "$STUB_ARGS"\necho "GPT says hi" > "$(dirname "$STUB_ARGS")/last"\nfor a; do case "$p" in --output-last-message) echo "GPT says hi" > "$a" ;; esac; p="$a"; done\n' > "$SANDBOX/stub/codex"; chmod +x "$SANDBOX/stub/codex"
+BAD="$SANDBOX/we ird\"\$(touch PWNED)\`touch PWNED2\`dir"; mkdir -p "$BAD"; git -C "$BAD" init -q
 T2="$SANDBOX/T2"; mkdir -p "$T2"; printf '%s' "$BAD" > "$T2/dir"; printf 'p\n' > "$T2/prompt.md"
-mkdir -p "$SANDBOX/stub"; printf '#!/bin/sh\nprintf "%%s\\n" "$@" > "$STUB_ARGS"\n' > "$SANDBOX/stub/codex"; chmod +x "$SANDBOX/stub/codex"
-( cd "$SANDBOX" && export STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" T="$T2" && eval "$run_line" >/dev/null 2>&1 )
+OUT="$(cd "$SANDBOX" && STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$T2" 2>&1)"
 assert_eq "$([ -e "$SANDBOX/PWNED" ] || [ -e "$SANDBOX/PWNED2" ] && echo ran || echo safe)" "safe" "a hostile project path runs nothing"
 assert_contains "$SANDBOX/args.txt" 'PWNED'
-# cleanup happens whatever the run does: one trap line, run block ends by printing the answer
-assert_contains "$S" "trap 'rm -rf \"\$T\"' EXIT HUP INT TERM"
-assert_contains "$S" 'cat "$T/answer.md"'
+assert_not_contains "$SANDBOX/args.txt" '--skip-git-repo-check'
+case "$OUT" in *"exit=0"*"--- answer"*"GPT says hi"*"--- log tail"*) pass ;; *) fail "ask-gpt.sh output: $OUT" ;; esac
+assert_no_file "$T2"   # the temp folder (it holds the diff) is gone after the run
+grep -qx 'model_reasoning_effort=medium' "$SANDBOX/args.txt" && pass || fail "default effort is medium"
+# high on request; anything else falls back to medium
+T3="$SANDBOX/T3"; mkdir -p "$T3"; printf '%s' "$BAD" > "$T3/dir"; printf 'p\n' > "$T3/prompt.md"
+( STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$T3" xhigh >/dev/null 2>&1 )
+grep -qx 'model_reasoning_effort=medium' "$SANDBOX/args.txt" && pass || fail "an unknown effort falls back to medium"
+# outside a git repository: the flag, and an empty folder instead of the project
+NR="$SANDBOX/norepo"; mkdir -p "$NR"; printf 'x\n' > "$NR/f.txt"
+T4="$SANDBOX/T4"; mkdir -p "$T4"; printf '%s' "$NR" > "$T4/dir"; printf 'p\n' > "$T4/prompt.md"
+( STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$T4" >/dev/null 2>&1 )
+assert_contains "$SANDBOX/args.txt" '--skip-git-repo-check'
+assert_eq "$(grep -A1 -x -- '-C' "$SANDBOX/args.txt" | tail -1)" "$T4/empty" "no repo: Codex gets an empty folder"
+# a missing prompt is refused, and the folder is not removed then
+T5="$SANDBOX/T5"; mkdir -p "$T5"
+( PATH="$SANDBOX/stub:$PATH" bash "$A" "$T5" >/dev/null 2>&1 ); assert_eq "$?" "2" "missing prompt: refused"
+assert_dir "$T5"
 # a 429 is not always the plan's limit: the skill quotes the error instead of guessing
 assert_contains "$S" 'quote the error line'
 assert_not_contains "$S" '`429`, `quota`): the ChatGPT plan'"'"'s Codex limit'

@@ -70,19 +70,18 @@ Claude says what failed and never pretends a review happened:
 - **Not signed in**: run `codex login` in a terminal.
 - **Usage limit or throttling**: Claude quotes the error; a plan limit resets later, short throttling passes in a minute or two.
 - **`Operation not permitted (os error 1)`**: Codex was started inside a sandbox. If you turned on
-  Claude Code's Bash sandbox, let `codex exec` run outside it in your own
+  Claude Code's Bash sandbox, let the skill's run script run outside it in your own
   `~/.claude/settings.json`:
 
   ```json
   {
-    "sandbox": { "excludedCommands": ["codex exec *"] },
-    "permissions": { "allow": ["Bash(codex exec *)"] }
+    "sandbox": { "excludedCommands": ["bash */second-opinion/scripts/ask-gpt.sh *"] }
   }
   ```
 
   `sandbox.excludedCommands` runs matching commands outside Claude Code's sandbox (Codex's own
-  read-only sandbox still applies); the allow rule only skips the permission prompt for
-  `codex exec`. See
+  read-only sandbox still applies). No allow rule is needed: the skill pre-approves its own run
+  script, so your yes to the file list is the only question. See
   [Run commands outside the sandbox](https://code.claude.com/docs/en/sandbox-environments.md#run-commands-outside-the-sandbox-with-excludedcommands).
   Also do not start Claude Code from inside Codex's own app.
 - **No answer in 5 minutes**: ask about a smaller piece.
