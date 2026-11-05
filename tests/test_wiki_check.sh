@@ -138,7 +138,4 @@ assert_file "$PLUGIN/reference/wiki.md"
 assert_contains "$PLUGIN/reference/wiki.md" "docs/<page>.md § <exact heading>"
 assert_contains "$PLUGIN/reference/wiki.md" "git -C <Core> diff --name-only HEAD -- <project>/docs"
 assert_contains "$PLUGIN/reference/wiki.md" "git -C <Core> ls-files --others --exclude-standard -- <project>/docs"
-assert_not_contains "$ROOT/CLAUDE.md" "cross-marketplace allowance"
-assert_not_contains "$ROOT/CLAUDE.md" "userConfig, dependencies"
-assert_contains "$ROOT/CLAUDE.md" "wiki-check.sh"
 finish

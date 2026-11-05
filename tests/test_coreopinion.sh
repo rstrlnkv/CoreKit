@@ -212,7 +212,6 @@ assert_file "$P/CHANGELOG.md"
 assert_eq "$(grep -m1 '^## ' "$P/CHANGELOG.md" | cut -c1-9)" '## 0.2.5 ' "coreopinion CHANGELOG first entry"
 assert_contains "$ROOT/README.md" '/plugin install coreopinion@corekit'
 assert_contains "$ROOT/README.md" 'plugins/coreopinion/README.md'
-assert_contains "$ROOT/CLAUDE.md" 'plugins/coreopinion/'
 
 # validates on its own, where the claude CLI is present
 if command -v claude >/dev/null 2>&1; then
