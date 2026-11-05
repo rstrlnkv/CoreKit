@@ -627,6 +627,25 @@ async function switchPair($: Eng, w: World, model: string, level: string, why = 
   await step($, 'medium')
 }
 
+test('/coremodel probe lists the /config rows with their choices and writes nothing', async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  await start($)
+  const out = await run($, 'probe')
+  expect(out).toContain('effortLevel')
+  expect(out).toContain('Low, Medium, High, Extra high, Max')
+  expect(w.logs.length).toBe(0)
+  expect(w.set.length).toBe(0)
+})
+
+test('/coremodel probe says so when the rows cannot be read', async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  expect(await run($, 'probe')).toContain('no rows')
+})
+
 test('/coremodel names the model and the level, in the prompt language', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   engineFooter(on)

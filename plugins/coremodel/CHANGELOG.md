@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.15 — 2026-11-05
+
+- `/coremodel probe` lists the rows of `/config` with their choices (read only, nothing written). It
+  is a probe: it shows whether Claude Code lists the models an account can use, so the plugin could
+  drop the unavailable ones by itself instead of waiting for a `model_not_found` error.
+
 ## 0.4.14 — 2026-11-05
 
 - An icon for the plugin listing (sliders); no change in behaviour.

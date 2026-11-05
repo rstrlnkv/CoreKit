@@ -78,6 +78,8 @@ the log once per session; that model is simply never picked.
 
 - `/coremodel` asks which mode to use, showing the current mode and the real level; Esc changes
   nothing.
+- `/coremodel probe` prints what `/config` offers (rows and their choices), to see whether the models
+  your account can use are listed there; it changes nothing.
 - `/coremodel panel` opens the pane (the footer button does the same without a chat command).
 - `/coremodel auto`, `/coremodel suggest` set the mode for every session.
 - `/coremodel off` and `/coremodel on` turn it off and back on.

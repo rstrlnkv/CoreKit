@@ -560,7 +560,7 @@ export const register: Register = (on, options) => {
     await $.command.register({
       name: 'coremodel',
       description: 'CoreModel: show what the chat runs at, set the mode (auto, suggest, off, on), or open the pane (panel)',
-      argumentHint: '[auto|suggest|off|on|panel]',
+      argumentHint: '[auto|suggest|off|on|panel|probe]',
     })
     return next(e)
   })
@@ -571,6 +571,21 @@ export const register: Register = (on, options) => {
     if (arg === 'panel') {
       const r = await $.ui.open({ id: PLUGIN, title: 'CoreModel' })
       return { text: r.isPlaced ? texts(lastLang).paneOpen : texts(lastLang).paneWaiting(r.reason) }
+    }
+    if (arg === 'probe') {
+      // What /config offers, for finding out whether it lists the models this account can use. Reads
+      // only; nothing is written or changed.
+      try {
+        const rows = await $.config.list()
+        if (!rows.length) return { text: 'CoreModel probe: no rows.' }
+        const line = (r: (typeof rows)[number]) => {
+          const opts = r.options ? ` · options: ${r.options.slice(0, 16).join(', ')}${r.options.length > 16 ? ', …' : ''}` : ''
+          return `${r.key} · ${r.label} · ${r.kind} · value: ${String(r.value)}${opts}`
+        }
+        return { text: `CoreModel probe: ${rows.length} rows\n${rows.map(line).join('\n')}` }
+      } catch (err) {
+        return { text: `CoreModel probe: no rows (${err instanceof Error ? err.message : String(err)}).` }
+      }
     }
     const mode = await currentMode($, options)
     const level = hold?.level ?? seen
