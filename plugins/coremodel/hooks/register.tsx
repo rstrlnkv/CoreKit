@@ -3,7 +3,7 @@ import type { EngineInterface, ModelCompleteResult, Register } from 'claude-code
 
 import type { Band, Level, Mark, Stats } from '../types'
 import { buildPrompt, parseAnswer, type Pick, toLevel } from './classifier'
-import { detectModels, enabledModels, LADDER, MODELS, type ModelKey, switchUsd, toModel } from './models'
+import { detectModels, enabledModels, LADDER, MODELS, type ModelKey, standIn, switchUsd, toModel } from './models'
 import { decide, decideModel, effortOptions, type Lang, type Mode, modelOptions, texts, uiLang } from './policy'
 
 const PLUGIN = 'coremodel'
@@ -286,6 +286,15 @@ async function runPick(
   // The person may have turned the plugin off while the classifier ran.
   const stale = async () => h.gen !== gen || touched !== began || (await currentMode($, options)) === 'off'
   if (await stale()) return
+  // A model the plugin may not use (the account lacks it, or its switch is off) gives way to the nearest
+  // one it may use, below it first. The reason says so wherever the pick is shown: the questions, the
+  // switch line, the transcript marks and the pane's last pick.
+  await refreshListed($)
+  const allowed = allowedModels(options)
+  if (pick.model && !allowed.includes(pick.model) && options.pickModel !== 'off') {
+    const sub = standIn(pick.model, allowed)
+    pick = sub ? { ...pick, model: sub, why: [t.insteadOf(pick.model, sub), pick.why].filter(Boolean).join('; ') } : { ...pick, model: '' }
+  }
   const named = pick.level === 'keep' ? null : pick.level
   // The pick is remembered as asked; the counts wait for what was applied below.
   await count($, s => (named ? { ...s, last: { level: named, why: pick.why, ...(pick.model ? { model: pick.model } : {}) } } : s))
@@ -295,8 +304,6 @@ async function runPick(
   const level = pick.level
 
   // The model first (spec §4.3): it decides what the chat costs from here on.
-  await refreshListed($)
-  const allowed = allowedModels(options)
   const isFirst = !(await $.session.messages()).some(m => m.role === 'assistant')
   const mAction = decideModel({ mode, pickModel: options.pickModel !== 'off', isFirst, now: nowModel, pick: pick.model, allowed })
   let modelTo: ModelKey | null = mAction === 'apply' && pick.model ? pick.model : null

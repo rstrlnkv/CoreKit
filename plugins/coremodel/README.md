@@ -71,7 +71,10 @@ session lets go of both.
 
 **Which models are offered.** CoreModel reads the list of models your account can use from the
 Model row of `/config` (the same list `/model` shows), before every pick and at the start of a
-session. A model that is not in it, such as Fable on a plan without it, is never picked or offered.
+session. A model that is not in it, such as Fable on a plan without it, is never picked or offered:
+when the pick names it, the nearest model you can use takes its place (the one below it first, so
+Opus for Fable), and the reason says so: "Fable is not available, Opus instead" in the question,
+the switch line and the transcript. The same holds for a model you switched off.
 When a model becomes available later, it is offered from the next pick: nothing is stored, so
 nothing needs a restart. If the list cannot be read, nothing is filtered. `/coremodel recheck` reads
 it again at once and also brings back a model that was dropped after an error.

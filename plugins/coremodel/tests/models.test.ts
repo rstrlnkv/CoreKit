@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { detectModels, enabledModels, LADDER, MODELS, stronger, switchUsd, toModel } from '../hooks/models'
+import { detectModels, enabledModels, LADDER, MODELS, standIn, stronger, switchUsd, toModel } from '../hooks/models'
 
 test('the ladder and ids follow the spec', () => {
   expect(LADDER).toEqual(['haiku', 'sonnet', 'opus', 'fable'])
@@ -53,4 +53,12 @@ test('detectModels reads the models the /config Model row offers', () => {
   expect(detectModels(undefined)).toBe(null)
   expect(detectModels([])).toBe(null)
   expect(detectModels(['default', 'best', 'opusplan'])).toBe(null)
+})
+
+test('standIn takes the nearest allowed model below, else above', () => {
+  expect(standIn('fable', ['haiku', 'sonnet', 'opus'])).toBe('opus')
+  expect(standIn('fable', ['haiku', 'sonnet'])).toBe('sonnet')
+  expect(standIn('opus', ['haiku', 'fable'])).toBe('haiku')
+  expect(standIn('haiku', ['opus', 'fable'])).toBe('opus')
+  expect(standIn('sonnet', [])).toBe(null)
 })

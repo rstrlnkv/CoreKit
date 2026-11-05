@@ -29,6 +29,17 @@ export function toModel(v: unknown): ModelKey | '' {
   return ''
 }
 
+/**
+ * The model to use in place of `pick` when `pick` may not be used: the nearest allowed one below it,
+ * else the nearest above it; null when none is allowed.
+ */
+export function standIn(pick: ModelKey, allowed: readonly ModelKey[]): ModelKey | null {
+  const at = LADDER.indexOf(pick)
+  for (let i = at - 1; i >= 0; i -= 1) if (allowed.includes(LADDER[i]!)) return LADDER[i]!
+  for (let i = at + 1; i < LADDER.length; i += 1) if (allowed.includes(LADDER[i]!)) return LADDER[i]!
+  return null
+}
+
 /** True when `a` sits above `b` on the ladder; false when `b` is unknown. */
 export function stronger(a: ModelKey, b: ModelKey | ''): boolean {
   return b !== '' && LADDER.indexOf(a) > LADDER.indexOf(b)

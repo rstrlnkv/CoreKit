@@ -129,7 +129,8 @@ about $0.50 at API prices."
 | `pickModel` | `on`, `off` | `on`; `off` = CoreEffort behaviour (effort only) |
 
 The models a chat may use are also limited to what the account's `/config` Model row lists (0.4.16),
-read before every pick; `/coremodel recheck` reads it again; `/coremodel probe` prints `/config`.
+read before every pick; a pick outside the allowed models gets a stand-in, the nearest allowed model
+below it, else above, with the reason "<Model> is not available, <Stand-in> instead" (0.5.1); `/coremodel recheck` reads it again; `/coremodel probe` prints `/config`.
 `/coremodel auto|suggest|off|on|panel` as `/coreeffort` today; `/coremodel` without an argument
 asks the mode.
 

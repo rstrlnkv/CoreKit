@@ -682,6 +682,24 @@ test('/coremodel with pickModel off names the level only', { options: { mode: 'a
   expect(out).not.toContain('Sonnet')
 })
 
+test('the switch line says when a stand-in replaced an unavailable model', { options: { mode: 'auto', useFable: false } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'fable', 'high', 'whole app')
+  const ui = await $.ui.mount({ ...ABOVE, surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /Opus · High \(was Sonnet · Medium\) · Fable is not available, Opus instead; whole app/ })) !== undefined).toBe(true)
+  await ui.unmount()
+  w.answer = '{"level":"high","model":"fable","why":"всё приложение"}'
+  await start($)
+  await submit($, 'собери всё приложение')
+  await step($, 'medium')
+  const ru = await $.ui.mount({ ...ABOVE, surface: 'desktop' })
+  expect((await ru.find({ type: 'Text', text: /Fable недоступна, вместо неё Opus; всё приложение/ })) !== undefined).toBe(true)
+  await ru.unmount()
+})
+
 test('switch line names both parts', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   engineFooter(on)

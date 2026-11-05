@@ -529,14 +529,15 @@ test('dismissed model question still asks effort', async ($, on) => {
   expect(w.efforts).toEqual(['high'])
 })
 
-test('a model outside the list is ignored', { options: { mode: 'auto', useFable: false } }, async ($, on) => {
+test('a model switched off is replaced by the nearest one below it', { options: { mode: 'auto', useFable: false } }, async ($, on) => {
   const w = world(on)
   w.answer = '{"level":"high","model":"fable","why":"x"}'
   await start($)
   await submit($, 'build it all')
   await step($, 'medium')
+  // auto: Opus on the first prompt is switched silently, the note says why
   expect(w.asked.length).toBe(0)
-  expect(w.models).toEqual(['claude-sonnet-5-5'])
+  expect(w.models).toEqual(['claude-opus-5-5'])
   expect(w.efforts).toEqual(['high'])
 })
 
@@ -732,7 +733,7 @@ test('a model without effort is not asked about a level', async ($, on) => {
 const WITHOUT_FABLE = ['default', 'sonnet', 'opus', 'haiku', 'best', 'sonnet[1m]', 'opus[1m]', 'opusplan']
 const WITH_FABLE = [...WITHOUT_FABLE, 'fable', 'fable[1m]']
 
-test('a model the account does not list is never picked or asked about', { options: { mode: 'auto' } }, async ($, on) => {
+test('a model the account does not list is never picked or asked about; the nearest below stands in', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.modelRow = WITHOUT_FABLE
   w.answer = '{"level":"medium","model":"fable","why":"whole app"}'
@@ -741,6 +742,49 @@ test('a model the account does not list is never picked or asked about', { optio
   await submit($, 'build the whole app, work alone')
   await step($, 'medium')
   expect(w.asked.length).toBe(0)
+  expect(w.models).toEqual(['claude-opus-5-5'])
+})
+
+test('suggest mode asks about the stand-in and says why', async ($, on) => {
+  const w = world(on)
+  w.modelRow = WITHOUT_FABLE
+  w.answer = '{"level":"medium","model":"fable","why":"whole app"}'
+  w.reply = ['Opus (recommended)']
+  await start($)
+  await submit($, 'build the whole app, work alone')
+  await step($, 'medium')
+  expect(w.asked[0]![0]).toBe('Opus (recommended)')
+  expect(w.asked[0]).not.toContain('Fable')
+  expect(w.questions[0]).toContain('Fable is not available, Opus instead')
+  expect(w.models).toEqual(['claude-opus-5-5'])
+})
+
+test('with nothing below, the nearest model above stands in', { options: { mode: 'auto', useHaiku: false } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"low","model":"haiku","why":"a typo"}'
+  await start($)
+  await submit($, 'fix a typo')
+  await step($, 'medium', 0, undefined, 'claude-opus-5-5')
+  // Haiku is off; Sonnet is the nearest above, and the chat runs on Opus: Sonnet is applied on the first prompt
+  expect(w.models).toEqual(['claude-sonnet-5-5'])
+})
+
+test('a stand-in equal to the current model changes nothing', { options: { mode: 'auto', useFable: false } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"medium","model":"fable","why":"x"}'
+  await start($)
+  await submit($, 'build it all')
+  await step($, 'medium', 0, undefined, 'claude-opus-5-5')
+  expect(w.asked.length).toBe(0)
+  expect(w.models).toEqual(['claude-opus-5-5'])
+})
+
+test('no model allowed at all: the model part is skipped', { options: { mode: 'auto', useHaiku: false, useSonnet: false, useOpus: false, useFable: false } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"medium","model":"fable","why":"x"}'
+  await start($)
+  await submit($, 'build it all')
+  await step($, 'medium')
   expect(w.models).toEqual(['claude-sonnet-5-5'])
 })
 

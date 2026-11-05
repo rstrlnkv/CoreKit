@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1 — 2026-11-05
+
+- A pick that names a model you cannot use (your account lacks it, or its switch is off) is no longer
+  dropped: the nearest model you can use takes its place, the one below first (Opus for Fable), else
+  the one above. You are told: the reason reads "Fable is not available, Opus instead" ("Fable
+  недоступна, вместо неё Opus") in the question, the switch line, the transcript mark and the pane's
+  last pick. When the stand-in is the model the chat already runs on, nothing changes.
+
 ## 0.5.0 — 2026-11-05
 
 - **The models are chosen with switches.** The text setting `models` (comma-separated, typo-prone) is

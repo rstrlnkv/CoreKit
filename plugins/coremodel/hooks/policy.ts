@@ -111,6 +111,9 @@ export function texts(lang: Lang) {
         ? `Похоже, задаче нужно усилие «${n(l)}»${why ? `: ${why}` : ''}. Переключить, пока Claude не начал?`
         : `This looks like ${l === 'xhigh' ? 'an' : 'a'} ${n(l)} effort task${why ? `: ${why}` : ''}. Switch before Claude starts?`,
     effortHeader: ru ? 'Усилие' : 'Effort',
+    // The reason a stand-in took the place of an unavailable pick; it leads the pick's own reason.
+    insteadOf: (from: ModelKey, to: ModelKey) =>
+      ru ? `${MODELS[from].name} недоступна, вместо неё ${MODELS[to].name}` : `${MODELS[from].name} is not available, ${MODELS[to].name} instead`,
     backToModel: ru ? '← Назад к модели' : '← Back to the model',
     levelOption: (l: Level, recommended: boolean) => `${n(l)}${recommended ? (ru ? ' (советую)' : ' (recommended)') : ''}`,
     modelHeader: ru ? 'Модель' : 'Model',
