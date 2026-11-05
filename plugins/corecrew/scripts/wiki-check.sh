@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# wiki-check.sh — deterministic wiki checks (spec section 8.3, rules in reference/wiki.md).
+# wiki-check.sh — deterministic wiki checks (docs/specs/2026-11-06-md-structure-design.md §7 in the
+# maintainer's Core; rules in reference/wiki.md).
 #
 # Usage: wiki-check.sh <project_dir> [--changed <path>...]
 #   <project_dir>  the Core project folder <Core>/<name>: CLAUDE.md, docs/ (map docs/INDEX.md).
@@ -23,8 +24,9 @@
 #   duplicate heading <h>                      the same "## " heading twice in one page
 #   page over 8 KB without ## headings
 #   INDEX.md stale                             on INDEX.md: "wiki-index.sh --check" fails
-#   missing                                    on INDEX.md: there is no docs/INDEX.md
 #   drift: <code path> changed, page not updated      (only with --changed)
+# Two lines stand alone: "wiki-check: INDEX.md: missing" (there is no docs/INDEX.md; the other
+# checks still run) and "wiki-check: docs: missing docs/ directory" (exit 1, nothing else checked).
 # <file> is relative to docs/ ("features/login.md"); CLAUDE.md is printed as "../CLAUDE.md".
 # Pages are read for wikilinks (body and the related: field) and Markdown links; CLAUDE.md for
 # Markdown links only; all outside code fences and `inline code`. Markdown links ignore other
@@ -37,7 +39,8 @@
 # the code root). A changed wiki page is passed as "<project_dir>/docs/<page>.md" (absolute, the
 # unambiguous form), "../docs/<page>.md" or "docs/<page>.md"; all mean docs/<page>.md of the project. So a code file that lives in a
 # top-level docs/ folder of code/ cannot be told apart from a wiki page; it is taken as a page.
-# (An absolute path under another folder is a code path, not a page.)
+# (An absolute path under another folder is a code path, not a page.) Any other "../<path>" lies
+# outside the project's code and docs and is ignored.
 # A page's files: entries match a changed path exactly, or by prefix when the entry ends in "/".
 #
 # Exit: 0 green, 1 problems found, 2 usage or internal error (e.g. awk failed: never "green"). Portable bash 3.2 + BSD awk.
@@ -65,7 +68,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 # Wiki pages (docs-relative, one per line) and every file under docs/ (wikilinks may name any).
 "$HERE/wiki-pages.sh" "$DOCS" > "$T/pages" || exit 2
-( cd "$DOCS" && find . -type f | sed 's|^\./||' ) > "$T/files"
+( set -o pipefail; cd "$DOCS" && find . -type f | sed 's|^\./||' | LC_ALL=C sort ) > "$T/files" || exit 2
 
 # Changed paths: "C <code path>" or "P <docs-relative page>".
 : > "$T/changed"
@@ -90,6 +93,8 @@ function shq(s) { gsub(/'/, "'\\''", s); return "'" s "'" }
 function report(file, msg) { print "wiki-check: " file ": " msg }
 function exists(p) { return system("test -e " shq(p)) == 0 }
 function base(p) { sub(/.*\//, "", p); return p }
+# Heading text: the rest of the line, closing hashes ("## Closed ##") dropped.
+function htext(s) { s = trim(s); sub(/[ \t]+#+$/, "", s); return trim(s) }
 # Characters of a UTF-8 string (awk runs with LC_ALL=C): continuation bytes do not count.
 function ulen(s) { gsub(/[\200-\277]/, "", s); return length(s) }
 
@@ -160,7 +165,7 @@ function loadheads(path,   line, n, fm, fence, t, np, pend, i) {
     if (fm && line ~ /^---[ \t]*$/) { fm = 0; fence = 0; np = 0; continue }
     if (line ~ /^[ \t]*(```|~~~)/) { fence = !fence; continue }
     if (!fence && match(line, /^#+[ \t]/) && RLENGTH <= 7) {
-      t = trim(substr(line, RLENGTH + 1))
+      t = htext(substr(line, RLENGTH + 1))
       if (fm) pend[++np] = t; else heads[path SUBSEP t] = 1
     }
   }
@@ -179,6 +184,7 @@ function resolve(t) {
 # inner = what stands between [[ and ]]: target[#heading][|alias].
 function wikilink(inner,   shown, t, h, c, f) {
   c = index(inner, "|"); shown = (c > 0) ? substr(inner, 1, c - 1) : inner
+  if (c > 0) sub(/\\$/, "", shown)                     # table form [[x\|alias]]
   t = shown; h = ""
   c = index(t, "#"); if (c > 0) { h = trim(substr(t, c + 1)); t = substr(t, 1, c - 1) }
   f = resolve(trim(t))
@@ -261,7 +267,7 @@ BEGIN {
   if (fence) next
   if (line ~ /^## /) {
     h2++
-    t = trim(substr(line, 4))
+    t = htext(substr(line, 4))
     if (mode == "page" && seenh[t]++ == 1) report(rel, "duplicate heading " t)
   }
   scanlinks(line)

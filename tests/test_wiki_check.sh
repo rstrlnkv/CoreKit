@@ -220,6 +220,41 @@ printf 'No front matter. [[nope]]\n' > "$SANDBOX/skipdirs/docs/knowledge/y.md"
 assert_exit 0 bash "$W" "$SANDBOX/skipdirs"
 assert_eq "$OUT" "" "knowledge/ and standards/ skipped"
 
+# Fix round 1: Cyrillic length, empty quoted value, table-escaped pipe, closing hashes.
+cyr() { local i s=""; for ((i = 0; i < $1; i++)); do s="${s}я"; done; printf '%s' "$s"; }   # $1 characters
+for n in 80 81; do
+  clone wiki-good "$SANDBOX/cyr$n"
+  { echo "description: $(cyr $n)"; } > "$SANDBOX/cyr.desc"
+  awk -v d="$(cat "$SANDBOX/cyr.desc")" '/^description:/ && !done { print d; done = 1; next } { print }' \
+    "$SANDBOX/cyr$n/docs/architecture.md" > "$SANDBOX/s.tmp" && mv "$SANDBOX/s.tmp" "$SANDBOX/cyr$n/docs/architecture.md"
+  bash "$SCRIPTS/wiki-index.sh" "$SANDBOX/cyr$n" >/dev/null
+done
+LC_ALL=en_US.UTF-8 assert_exit 0 bash "$W" "$SANDBOX/cyr80"
+assert_eq "$OUT" "" "Cyrillic description of 80 characters"
+LC_ALL=en_US.UTF-8 assert_exit 1 bash "$W" "$SANDBOX/cyr81"
+assert_eq "$OUT" "wiki-check: architecture.md: description over 80 chars" "Cyrillic 81"
+LC_ALL=C assert_exit 0 bash "$W" "$SANDBOX/cyr80"
+assert_eq "$OUT" "" "Cyrillic 80 under LC_ALL=C"
+
+clone wiki-good "$SANDBOX/emptytype"
+sed 's/^type: feature/type: ""/' "$SANDBOX/emptytype/docs/features/login.md" > "$SANDBOX/s.tmp" && mv "$SANDBOX/s.tmp" "$SANDBOX/emptytype/docs/features/login.md"
+bash "$SCRIPTS/wiki-index.sh" "$SANDBOX/emptytype" >/dev/null
+assert_exit 1 bash "$W" "$SANDBOX/emptytype"
+assert_eq "$OUT" "wiki-check: features/login.md: missing front matter field type" "empty quoted type"
+
+clone wiki-good "$SANDBOX/tbl"
+printf '\n| Page | Note |\n|---|---|\n| [[login\\|alias]] | [[login#Flow\\|see flow]] |\n' >> "$SANDBOX/tbl/docs/architecture.md"
+assert_exit 0 bash "$W" "$SANDBOX/tbl"
+assert_eq "$OUT" "" "table-escaped pipe in a wikilink"
+printf '| [[ghost\\|alias]] |\n' >> "$SANDBOX/tbl/docs/architecture.md"
+assert_exit 1 bash "$W" "$SANDBOX/tbl"
+assert_eq "$OUT" "wiki-check: architecture.md: broken wikilink [[ghost]]" "table-escaped pipe, broken target"
+
+clone wiki-good "$SANDBOX/closed"
+printf '\n## Closed ##\n\nSee [[architecture#Closed]].\n' >> "$SANDBOX/closed/docs/architecture.md"
+assert_exit 0 bash "$W" "$SANDBOX/closed"
+assert_eq "$OUT" "" "heading with closing hashes"
+
 # Fail closed: a broken awk is an error (exit 2), never green.
 mkdir "$SANDBOX/stub"
 printf '#!/bin/sh\necho boom\nexit 2\n' > "$SANDBOX/stub/awk"; chmod +x "$SANDBOX/stub/awk"
