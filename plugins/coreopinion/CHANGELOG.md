@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4 — 2026-11-05
+
+- The description no longer says "read-only sandbox" (Codex's `--sandbox read-only` can read the
+  whole disk, which this plugin avoids): it says a narrow read-only permission profile.
+
 ## 0.2.3 — 2026-11-05
 
 - Files you name were refused as secrets whenever they lay in one folder (a single file in a

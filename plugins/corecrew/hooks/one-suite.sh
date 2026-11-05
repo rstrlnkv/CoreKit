@@ -17,6 +17,10 @@
 # Env knobs, for tests: ONE_SUITE_PROCS (the process pattern, replaces the default), ONE_SUITE_WAIT
 # (seconds to wait; default 480), ONE_SUITE_GRACE (seconds a turn stays fresh; default 3),
 # ONE_SUITE_TURN (the turn directory).
+# Known limits: the takeover of a stale turn is a look and then a removal, so several waiters that find
+# the same stale turn in the same instant may go together (tried: one atomic rename; it narrows the
+# window but a fresh turn taken by mistake must be put back, which opens another); and the grace of 3 s
+# is short against a permission prompt the person answers slowly, after which a second run may start.
 # The default wait of 480 s must stay under this hook's `timeout` in hooks/hooks.json (Task 19 sets
 # it to 540) and under the stream watchdog, which stops an agent that is silent for 600 s.
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0

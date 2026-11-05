@@ -19,7 +19,7 @@
       "name": "coreopinion",
       "displayName": "CoreOpinion",
       "source": "./plugins/coreopinion",
-      "description": "Ask OpenAI's GPT, through the Codex CLI in a read-only sandbox, for a second opinion or a review; Claude shows the answer with its own assessment and stays the only one that edits."
+      "description": "Ask OpenAI's GPT, through the Codex CLI with a narrow read-only permission profile, for a second opinion or a review; Claude shows the answer with its own assessment and stays the only one that edits."
     }
   ],
   "renames": {

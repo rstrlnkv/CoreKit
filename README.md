@@ -161,7 +161,7 @@ Details: plugins/coremodel/README.md.
 
 ## `coreopinion` (a third plugin)
 
-`coreopinion` lets Claude ask OpenAI's GPT, through the Codex CLI in a read-only sandbox, for a
+`coreopinion` lets Claude ask OpenAI's GPT, through the Codex CLI with a narrow read-only permission profile, for a
 second opinion or a review (`/coreopinion:second-opinion`), and shows GPT's answer next to
 Claude's own assessment. Only Claude edits, after your yes. It needs the Codex CLI signed in with
 a ChatGPT plan and does not depend on the other plugins:

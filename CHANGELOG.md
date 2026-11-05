@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.3 — 2026-11-05
+- The one-suite hook names its two known limits in its header (several waiters finding one stale turn
+  in the same instant; a 3 s grace against a slowly answered permission prompt). No behaviour change.
+- README and tests: repo paths named in the READMEs must exist; Vite recipe verified (see stacks.md).
+
 ## 0.6.2 — 2026-11-05
 - The read-only checkers' rule, after a second opinion from GPT: any `cd` ends relative writes
   (`(cd /tmp); rm x` and `cd /tmp | rm x` run rm where the command started, so the folder is not
