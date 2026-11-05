@@ -1,0 +1,22 @@
+filters:
+  and:
+    - 'file.ext == "md"'
+    - 'file.basename != "INDEX"'
+    - '!file.path.startsWith("knowledge/")'
+    - '!file.path.startsWith("standards/")'
+    - '!file.path.startsWith("superpowers/")'
+views:
+  - type: table
+    name: Wiki
+    order:
+      - file.name
+      - type
+      - status
+      - updated
+      - description
+    groupBy:
+      property: type
+      direction: ASC
+    sort:
+      - property: updated
+        direction: DESC
