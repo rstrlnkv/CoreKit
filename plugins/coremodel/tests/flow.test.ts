@@ -529,7 +529,7 @@ test('dismissed model question still asks effort', async ($, on) => {
   expect(w.efforts).toEqual(['high'])
 })
 
-test('a model outside the list is ignored', { options: { mode: 'auto', models: 'haiku,sonnet,opus' } }, async ($, on) => {
+test('a model outside the list is ignored', { options: { mode: 'auto', useFable: false } }, async ($, on) => {
   const w = world(on)
   w.answer = '{"level":"high","model":"fable","why":"x"}'
   await start($)
@@ -629,7 +629,7 @@ test('mid-chat the model question offers only the pick and Keep', { options: { m
   expect(w.asked[0]).toEqual(['Opus (recommended)', 'Keep Sonnet'])
 })
 
-test('Keep is offered for a current model outside the list', { options: { models: 'haiku,sonnet' } }, async ($, on) => {
+test('Keep is offered for a current model outside the list', { options: { useOpus: false, useFable: false } }, async ($, on) => {
   const w = world(on)
   w.answer = '{"level":"medium","model":"sonnet","why":"x"}'
   w.reply = ['Keep Opus']
@@ -640,7 +640,7 @@ test('Keep is offered for a current model outside the list', { options: { models
   expect(w.models).toEqual(['claude-opus-5-5'])
 })
 
-test('a one-model list still gives two options', { options: { models: 'opus' } }, async ($, on) => {
+test('a one-model list still gives two options', { options: { useHaiku: false, useSonnet: false, useFable: false } }, async ($, on) => {
   const w = world(on)
   w.answer = '{"level":"medium","model":"opus","why":"x"}'
   await start($)
@@ -772,14 +772,14 @@ test('a model that becomes available later is offered from the next pick, no res
   expect(w.models.at(-1)).toBe('claude-fable-5-1')
 })
 
-test('the models setting and the account list both apply (their intersection)', { options: { mode: 'auto', models: 'sonnet,opus,fable' } }, async ($, on) => {
+test('the model switches and the account list both apply (their intersection)', { options: { mode: 'auto', useHaiku: false } }, async ($, on) => {
   const w = world(on)
-  w.modelRow = ['default', 'sonnet', 'fable', 'haiku']   // the account lacks Opus; the setting lacks Haiku
+  w.modelRow = ['default', 'sonnet', 'fable', 'haiku']   // the account lacks Opus; the switches leave Haiku off
   await start($)
-  w.answer = '{"level":"medium","model":"opus","why":"x"}'   // in the setting, not in the account
+  w.answer = '{"level":"medium","model":"opus","why":"x"}'   // switched on, not in the account
   await submit($, 'review the design')
   await step($, 'medium')
-  w.answer = '{"level":"medium","model":"haiku","why":"x"}'   // in the account, not in the setting
+  w.answer = '{"level":"medium","model":"haiku","why":"x"}'   // in the account, switched off
   await submit($, 'say hi')
   await step($, 'medium')
   expect(w.asked.length).toBe(0)

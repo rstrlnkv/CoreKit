@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { detectModels, LADDER, MODELS, parseModels, stronger, switchUsd, toModel } from '../hooks/models'
+import { detectModels, enabledModels, LADDER, MODELS, stronger, switchUsd, toModel } from '../hooks/models'
 
 test('the ladder and ids follow the spec', () => {
   expect(LADDER).toEqual(['haiku', 'sonnet', 'opus', 'fable'])
@@ -32,10 +32,15 @@ test('toModel reads keys, names and ids', () => {
   expect(toModel(3)).toBe('')
 })
 
-test('models setting is forgiving', () => {
-  expect(parseModels('Opus, sonnet,gpt')).toEqual(['sonnet', 'opus'])
-  expect(parseModels(undefined)).toEqual(['haiku', 'sonnet', 'opus', 'fable'])
-  expect(parseModels('')).toEqual(['haiku', 'sonnet', 'opus', 'fable'])
+test('enabledModels reads one switch per model, all on by default', () => {
+  expect(enabledModels({})).toEqual(['haiku', 'sonnet', 'opus', 'fable'])
+  expect(enabledModels({ useFable: false })).toEqual(['haiku', 'sonnet', 'opus'])
+  expect(enabledModels({ useHaiku: false, useOpus: false })).toEqual(['sonnet', 'fable'])
+  // a switch may arrive as text; only an explicit "off" word turns it off
+  expect(enabledModels({ useFable: 'false', useOpus: 'off', useSonnet: '0', useHaiku: 'true' })).toEqual(['haiku'])
+  expect(enabledModels({ useFable: 'yes', useOpus: 1, useSonnet: undefined })).toEqual(['haiku', 'sonnet', 'opus', 'fable'])
+  // every switch off is a valid choice: no model is ever picked
+  expect(enabledModels({ useHaiku: false, useSonnet: false, useOpus: false, useFable: false })).toEqual([])
 })
 
 test('detectModels reads the models the /config Model row offers', () => {

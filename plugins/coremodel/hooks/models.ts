@@ -34,11 +34,22 @@ export function stronger(a: ModelKey, b: ModelKey | ''): boolean {
   return b !== '' && LADDER.indexOf(a) > LADDER.indexOf(b)
 }
 
-/** The `models` setting as ladder-ordered keys; unknown words are dropped, nothing left means all four. */
-export function parseModels(setting: unknown): ModelKey[] {
-  const words = typeof setting === 'string' ? setting.split(',').map(w => toModel(w)) : []
-  const picked = LADDER.filter(k => words.includes(k))
-  return picked.length ? picked : [...LADDER]
+/** The settings key of the switch for a model: useHaiku, useSonnet, useOpus, useFable. */
+export function switchKey(k: ModelKey): string {
+  return `use${MODELS[k].name}`
+}
+
+/**
+ * The models switched on in the plugin settings, weakest first. Every switch is on by default; only an
+ * explicit off (false, or the words false, off, no, 0) turns one off. All four off means no model is
+ * ever picked (the effort still is).
+ */
+export function enabledModels(options: Readonly<Record<string, unknown>>): ModelKey[] {
+  return LADDER.filter(k => {
+    const v = options[switchKey(k)]
+    if (v === false) return false
+    return !(typeof v === 'string' && ['false', 'off', 'no', '0'].includes(v.trim().toLowerCase()))
+  })
 }
 
 /**
@@ -51,15 +62,6 @@ export function detectModels(options: readonly string[] | undefined): ModelKey[]
   const found = options.map(o => toModel(o))
   const keys = LADDER.filter(k => found.includes(k))
   return keys.length ? keys : null
-}
-
-/** The words of the `models` setting that name no model (a typo), as typed. */
-export function unknownModels(setting: unknown): string[] {
-  if (typeof setting !== 'string') return []
-  return setting
-    .split(',')
-    .map(w => w.trim())
-    .filter(w => w !== '' && toModel(w) === '')
 }
 
 /**

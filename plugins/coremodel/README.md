@@ -78,8 +78,10 @@ it again at once and also brings back a model that was dropped after an error.
 
 If a model the plugin picked still fails (`model_not_found`), the turn fails once; CoreModel then
 stops using that model for the session and says so in the pane (`/coremodel recheck` undoes that).
-The `models` setting is a limit on top of the account's list. A word in `models` that names no model (a typo such as `hauki`) is shown in the pane and written to
-the log once per session; that model is simply never picked.
+The four **Allow Haiku / Sonnet / Opus / Fable** switches in the plugin settings (all on by default)
+are a limit on top of the account's list: untick a model you never want, and CoreModel never picks it.
+They can only narrow the list, never add a model your account does not have. With every switch off
+CoreModel picks the effort only.
 
 ## Commands
 
@@ -98,7 +100,7 @@ the log once per session; that model is simply never picked.
 
 - `mode`: `suggest`, `auto` or `off` (default `suggest`). `/coremodel` wins over it.
 - `classifier`: `sonnet` (default, the more accurate) or `haiku` (faster, cheaper).
-- `models`: a limit on the models CoreModel may pick, comma-separated (default `haiku,sonnet,opus,fable`). It can only narrow what your account lists, never add a model the account does not have.
+- `useHaiku`, `useSonnet`, `useOpus`, `useFable` (titled **Allow …**, on by default): tick the models CoreModel may pick. They narrow what your account lists, never add a model it does not have. (Before 0.5.0 this was one text setting `models`; it is no longer read.)
 - `pickModel`: `on` (default) or `off`. With `off` it picks the effort level only and never changes the model.
 
 ## Install

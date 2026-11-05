@@ -3,7 +3,7 @@ import type { EngineInterface, ModelCompleteResult, Register } from 'claude-code
 
 import type { Band, Level, Mark, Stats } from '../types'
 import { buildPrompt, parseAnswer, type Pick, toLevel } from './classifier'
-import { detectModels, LADDER, MODELS, type ModelKey, parseModels, switchUsd, toModel, unknownModels } from './models'
+import { detectModels, enabledModels, LADDER, MODELS, type ModelKey, switchUsd, toModel } from './models'
 import { decide, decideModel, effortOptions, type Lang, type Mode, modelOptions, texts, uiLang } from './policy'
 
 const PLUGIN = 'coremodel'
@@ -60,9 +60,9 @@ async function refreshListed($: EngineInterface): Promise<void> {
   }
 }
 
-/** The models CoreModel may pick: the `models` setting, what the account lists, minus those that failed. */
-function allowedModels(setting: unknown): ModelKey[] {
-  return parseModels(setting).filter(k => (listed === null || listed.includes(k)) && !unavailable.has(k))
+/** The models CoreModel may pick: switched on in the settings, listed by the account, minus those that failed. */
+function allowedModels(options: Readonly<Record<string, unknown>>): ModelKey[] {
+  return enabledModels(options).filter(k => (listed === null || listed.includes(k)) && !unavailable.has(k))
 }
 
 async function log($: EngineInterface, what: string, err: unknown) {
@@ -253,7 +253,7 @@ function typedLevel(text: string): Level | undefined {
 /** The pick for one prompt, then the switch, the question, or nothing. */
 async function runPick(
   $: EngineInterface,
-  options: { mode?: unknown; classifier?: unknown; models?: unknown; pickModel?: unknown },
+  options: Readonly<Record<string, unknown>>,
   h: NonNullable<typeof held>,
   now: Level | '',
   base: string,
@@ -296,7 +296,7 @@ async function runPick(
 
   // The model first (spec §4.3): it decides what the chat costs from here on.
   await refreshListed($)
-  const allowed = allowedModels(options.models)
+  const allowed = allowedModels(options)
   const isFirst = !(await $.session.messages()).some(m => m.role === 'assistant')
   const mAction = decideModel({ mode, pickModel: options.pickModel !== 'off', isFirst, now: nowModel, pick: pick.model, allowed })
   let modelTo: ModelKey | null = mAction === 'apply' && pick.model ? pick.model : null
@@ -569,8 +569,6 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     unavailable.clear()
     await refreshListed($)
-    const typos = unknownModels(options.models)
-    if (typos.length) await log($, 'models', `unknown in the setting: ${typos.join(', ')} (use haiku, sonnet, opus, fable)`)
     // A new session, or a reload of this module, starts with no held level: drop what $.state kept.
     await newChat($, false)
     await $.command.register({
@@ -593,8 +591,8 @@ export const register: Register = (on, options) => {
       unavailable.clear()
       await refreshListed($)
       $.ui.invalidate('ui.render')
-      const names = allowedModels(options.models).map(k => MODELS[k].name)
-      return { text: texts(lastLang).recheck(names, listed !== null, options.pickModel !== 'off') }
+      const names = allowedModels(options).map(k => MODELS[k].name)
+      return { text: texts(lastLang).recheck(names, enabledModels(options).length, listed !== null, options.pickModel !== 'off') }
     }
     if (arg === 'probe') {
       // What /config offers, for finding out whether it lists the models this account can use. Reads
@@ -668,7 +666,7 @@ export const register: Register = (on, options) => {
     const held = pair?.level ?? null
     const heldModel = pair?.model ?? null
     const s = await read($, stats)
-    const allowed = allowedModels(options.models)
+    const allowed = allowedModels(options)
     // pickModel off: effort only (spec §6).
     const pickOn = options.pickModel !== 'off'
     const act = (what: string, f: () => Promise<unknown>) => () => {
@@ -692,9 +690,7 @@ export const register: Register = (on, options) => {
           <Text dimColor>{t.now}</Text>
           <Text bold>{t.nowPair(pickOn ? nowModel : '', nowLevel)}</Text>
           {held || heldModel ? <Text dimColor>{menu ? `${t.heldBy} · ${menu}` : t.heldBy}</Text> : null}
-          {unknownModels(options.models).length ? (
-            <Text key="typo" color="warning">{t.unknownModels(unknownModels(options.models))}</Text>
-          ) : null}
+
           {[...unavailable].map(m => (
             <Text key={`unavailable-${m}`} color="warning">{t.unavailable(m)}</Text>
           ))}

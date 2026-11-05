@@ -156,10 +156,6 @@ export function texts(lang: Lang) {
     modeHint: (m: Mode, pickModel: boolean) => (m === 'auto' && !pickModel ? AUTO_EFFORT_HINT[lang] : MODE_HINTS[lang][m]),
     lastPick: ru ? 'Последний выбор' : 'Last pick',
     notApplied: ru ? 'не применён' : 'not applied',
-    unknownModels: (words: string[]) =>
-      ru
-        ? `В настройке models неизвестные названия: ${words.map(w => `«${w}»`).join(', ')} (допустимы haiku, sonnet, opus, fable)`
-        : `In the models setting, unknown: ${words.map(w => `"${w}"`).join(', ')} (use haiku, sonnet, opus, fable)`,
     modeSet: (mode: 'auto' | 'suggest', pickModel: boolean) =>
       ru
         ? `Режим: «${MODE_NAMES.ru[mode]}». ${mode === 'auto' && !pickModel ? AUTO_EFFORT_HINT.ru : MODE_HINTS.ru[mode]}.`
@@ -198,12 +194,16 @@ export function texts(lang: Lang) {
         ? `Модель ${MODELS[m].name} недоступна — CoreModel больше не выберет её в этой сессии (/coremodel recheck попробует снова)`
         : `${MODELS[m].name} is not available — CoreModel will not pick it again this session (/coremodel recheck tries again)`,
     // /coremodel recheck: what CoreModel may pick now. `usable` is false when the account's list could not be used.
-    recheck: (names: string[], usable: boolean, pickModel: boolean) => {
+    recheck: (names: string[], enabled: number, usable: boolean, pickModel: boolean) => {
       if (!pickModel) return ru ? 'pickModel выключен: CoreModel выбирает только усилие.' : 'pickModel is off: CoreModel picks the effort only.'
+      if (!enabled)
+        return ru
+          ? 'Все модели выключены в настройках плагина: CoreModel выбирает только усилие. Включите нужные в настройках.'
+          : 'Every model is switched off in the settings, so CoreModel picks the effort only. Switch the ones you want on in the plugin settings.'
       if (!names.length)
         return ru
-          ? 'Выбирать нечего: список моделей аккаунта и настройка models не имеют общих моделей. Поправьте настройку models.'
-          : "Nothing to pick: the account's model list and the models setting share no model. Change the models setting."
+          ? 'Выбирать нечего: модели, включённые в настройках, и список моделей аккаунта не имеют общих. Включите другие модели в настройках.'
+          : "Nothing to pick: the models switched on in the settings and the account's model list share no model. Switch other models on in the plugin settings."
       const head = ru ? `Модели, которые может выбрать CoreModel: ${names.join(', ')}.` : `Models CoreModel may pick: ${names.join(', ')}.`
       if (usable) return head
       return head + (ru ? ' Список моделей аккаунта прочитать не удалось, поэтому ничего не отфильтровано.' : " The account's model list could not be used, so nothing was filtered.")

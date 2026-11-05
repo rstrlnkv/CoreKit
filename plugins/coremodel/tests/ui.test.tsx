@@ -756,7 +756,7 @@ test('working line names the pair', { options: { mode: 'auto' } }, async ($, on)
   for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking… · Opus · High')
 })
 
-test('pane model buttons only for allowed models', { options: { models: 'sonnet,opus' } }, async ($, on) => {
+test('pane model buttons only for allowed models', { options: { useHaiku: false, useFable: false } }, async ($, on) => {
   world(on)
   await start($)
   for (const surface of SURFACES) {
@@ -862,7 +862,7 @@ test('the unavailable note offers recheck and never sends the person to the mode
   expect(await has($, /models setting/)).toBe(false)
 })
 
-test('the unavailable note stays the same when the models setting names the model', { options: { mode: 'auto', models: 'sonnet,opus' } }, async ($, on) => {
+test('the unavailable note is the same when the model is switched on in the settings', { options: { mode: 'auto', useHaiku: false, useFable: false } }, async ($, on) => {
   const w = world(on)
   w.row = null
   await start($)
@@ -896,7 +896,7 @@ test('/coremodel recheck says when the list is unusable, empty, or the model is 
   expect(await run($, 'recheck')).not.toContain('could not be used')
 })
 
-test('/coremodel recheck explains an empty result', { options: { models: 'fable' } }, async ($, on) => {
+test('/coremodel recheck explains an empty result', { options: { useHaiku: false, useSonnet: false, useOpus: false } }, async ($, on) => {
   const w = world(on)
   w.row = null
   w.modelRow = ['default', 'sonnet', 'opus']
@@ -965,32 +965,21 @@ test('a not applied pick reads in Russian too', async ($, on) => {
   expect(await has($, /^Высокое · не применён$/)).toBe(true)
 })
 
-test('an unknown word in models is shown in the pane and logged once', { options: { models: 'hauki, sonnet, opus' } }, async ($, on) => {
+test('no model warning and no log line with the default switches', async ($, on) => {
   const w = world(on)
   await start($)
-  expect(await has($, /models setting.*hauki/)).toBe(true)
-  expect(w.logs.length).toBe(1)
-  expect(w.logs[0]!.includes('hauki')).toBe(true)
-  // Haiku never became one of the choices: the typo dropped it.
+  expect(await has($, /models setting|настройк/)).toBe(false)
+  expect(w.logs.length).toBe(0)
+})
+
+test('a model switched off in the settings has no pane button and is never picked', { options: { mode: 'auto', useHaiku: false } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
   const ui = await pane($)
   expect(await ui.find({ type: 'Button', key: 'model-haiku' })).toBe(undefined)
   expect(await ui.find({ type: 'Button', key: 'model-sonnet' })).not.toBe(undefined)
   await ui.unmount()
-})
-
-test('a correct models setting shows no warning', { options: { models: 'haiku, sonnet' } }, async ($, on) => {
-  const w = world(on)
-  await start($)
-  expect(await has($, /models setting/)).toBe(false)
-  expect(w.logs.length).toBe(0)
-})
-
-test('the models warning is in Russian after a Russian prompt', { options: { models: 'hauki, sonnet' } }, async ($, on) => {
-  const w = world(on)
-  w.reply = null
-  await start($)
-  await switchTo($, w, 'high', 'medium', 'почини авторизацию')
-  expect(await has($, /В настройке models неизвестные названия: «hauki»/)).toBe(true)
 })
 
 test('/coremodel replies speak of the pair, not only the level', async ($, on) => {
@@ -1146,4 +1135,11 @@ test('the mode question and the kept count read in Russian', async ($, on) => {
   expect(w.asked.at(-1)).toEqual(['Автоматически', 'Спрашивать', 'Выкл'])
   expect(text).toContain('Режим: «Автоматически»')
   expect(await has($, /^Без изменений: 1$/)).toBe(true)
+})
+
+test('/coremodel recheck says when every model is switched off in the settings', { options: { useHaiku: false, useSonnet: false, useOpus: false, useFable: false } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  expect(await run($, 'recheck')).toContain('switched off in the settings')
 })

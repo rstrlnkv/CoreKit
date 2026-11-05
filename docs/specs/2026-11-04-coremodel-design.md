@@ -125,9 +125,11 @@ about $0.50 at API prices."
 |---|---|---|
 | `mode` | `suggest`, `auto`, `off` | `suggest` |
 | `classifier` | `haiku`, `sonnet` | `sonnet` |
-| `models` | any of `haiku`, `sonnet`, `opus`, `fable`, comma-separated | all four |
+| `useHaiku`, `useSonnet`, `useOpus`, `useFable` | on/off (0.5.0; before, one text setting `models`) | all on |
 | `pickModel` | `on`, `off` | `on`; `off` = CoreEffort behaviour (effort only) |
 
+The models a chat may use are also limited to what the account's `/config` Model row lists (0.4.16),
+read before every pick; `/coremodel recheck` reads it again; `/coremodel probe` prints `/config`.
 `/coremodel auto|suggest|off|on|panel` as `/coreeffort` today; `/coremodel` without an argument
 asks the mode.
 

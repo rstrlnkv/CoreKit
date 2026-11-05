@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 — 2026-11-05
+
+- **The models are chosen with switches.** The text setting `models` (comma-separated, typo-prone) is
+  replaced by four on/off settings, **Allow Haiku**, **Allow Sonnet**, **Allow Opus** and **Allow
+  Fable**, all on by default. A manifest cannot offer a multi-choice list (`options` and `multiple`
+  exclude each other), and one switch per model is the documented way to get tick boxes. The old
+  `models` value is no longer read: if you narrowed it, untick the models again. With every switch
+  off CoreModel picks the effort only.
+- The typo warning for `models` (pane and log) is gone, since a switch cannot be misspelled.
+- `/coremodel recheck` says when every switch is off.
+
 ## 0.4.17 — 2026-11-05
 
 After an independent review of 0.4.16:

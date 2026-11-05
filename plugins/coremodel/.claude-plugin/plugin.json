@@ -1,7 +1,7 @@
 {
   "name": "coremodel",
   "displayName": "CoreModel",
-  "version": "0.4.17",
+  "version": "0.5.0",
   "description": "Picks the model and the effort level each prompt needs, for code and office work; asks before Fable, xhigh or max, and names the token cost of a model switch mid-chat.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",
@@ -31,11 +31,29 @@
       ],
       "default": "sonnet"
     },
-    "models": {
-      "type": "string",
-      "title": "Models",
-      "description": "A limit on the models CoreModel may pick, comma-separated: haiku, sonnet, opus, fable. Models your account does not list are never picked anyway.",
-      "default": "haiku,sonnet,opus,fable"
+    "useHaiku": {
+      "type": "boolean",
+      "title": "Allow Haiku",
+      "description": "May CoreModel pick Haiku? Untick it to never use Haiku. A model your account does not have is never picked anyway.",
+      "default": true
+    },
+    "useSonnet": {
+      "type": "boolean",
+      "title": "Allow Sonnet",
+      "description": "May CoreModel pick Sonnet? Untick it to never use Sonnet. A model your account does not have is never picked anyway.",
+      "default": true
+    },
+    "useOpus": {
+      "type": "boolean",
+      "title": "Allow Opus",
+      "description": "May CoreModel pick Opus? Untick it to never use Opus. A model your account does not have is never picked anyway.",
+      "default": true
+    },
+    "useFable": {
+      "type": "boolean",
+      "title": "Allow Fable",
+      "description": "May CoreModel pick Fable? Untick it to never use Fable. A model your account does not have is never picked anyway.",
+      "default": true
     },
     "pickModel": {
       "type": "string",
