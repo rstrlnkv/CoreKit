@@ -9,7 +9,13 @@ if ! command -v gh >/dev/null 2>&1; then
   echo "Push blocked: the GitHub CLI (gh) is not installed, so privacy of $repo cannot be checked." >&2
   echo "Install it (brew install gh), run 'gh auth login', then push again." >&2; exit 1
 fi
-private=$(gh api "repos/$repo" --jq .private 2>/dev/null)
+# A failed call (no answer, e.g. a network timeout) is tried up to 3 times, 2 s apart
+# (CORECREW_GH_RETRY_SLEEP); an answer, "true" or not, is final.
+private=""
+for try in 1 2 3; do
+  private=$(gh api "repos/$repo" --jq .private 2>/dev/null) && [ -n "$private" ] && break
+  [ "$try" -lt 3 ] && sleep "${CORECREW_GH_RETRY_SLEEP:-2}"
+done
 if [ "$private" != "true" ]; then
   echo "Push blocked: GitHub repository $repo is not private (or gh is not logged in)." >&2
   echo "Make it private in the repository settings or run 'gh auth login', then push again." >&2

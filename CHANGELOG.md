@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1 — 2026-11-06
+- The Core pre-push hook asks GitHub up to three times, 2 s apart, whether the Core repository is
+  private, so one network timeout no longer blocks a push. A "not private" answer still blocks at once.
+- The Core README template names the code folder `../<Name>/` and lists the `AGENTS.md` link, the
+  generated `docs/INDEX.md`, the Obsidian vaults and the optional `session-rules.md`. An existing
+  Core README is never changed.
+
 ## 0.7.0 — 2026-11-06
 - The wiki index is generated: `docs/INDEX.md` is built from the front matter of the pages
   (`wiki-index.sh`), so nobody edits it by hand; `wiki-check.sh` reports it when it is out of date.

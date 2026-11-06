@@ -30,6 +30,10 @@ assert_contains "$CORE_DIR/standards/README.md" "/corecrew:new-standard"
 assert_contains "$CORE_DIR/knowledge/README.md" "symptom"
 assert_contains "$CORE_DIR/knowledge/README.md" "/corecrew:task"
 assert_not_contains "$CORE_DIR/README.md" "bin/"
+assert_contains "$CORE_DIR/README.md" "AGENTS.md"
+assert_contains "$CORE_DIR/README.md" "session-rules.md"
+assert_contains "$CORE_DIR/README.md" "docs/INDEX.md"
+assert_not_contains "$CORE_DIR/README.md" "<project-name>"
 for f in standards/README.md knowledge/README.md; do
   [ "$(wc -l < "$CORE_DIR/$f")" -le 15 ] && pass || fail "$f longer than 15 lines"
 done
