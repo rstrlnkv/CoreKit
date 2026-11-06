@@ -1,70 +1,79 @@
 # Wiki rules
 
-A project's internal wiki is `<Core>/<project>/docs/`. Its map is `docs/INDEX.md`. An agent
-reads `CLAUDE.md`, then the map, then the one page its task needs. A user standard
-`<Core>/standards/wiki.md`, if present, wins over this file.
-
-## The map
-
-- `docs/INDEX.md` has one line per page: `- [Title](path.md) — what it is for.`
-- It links exactly the wiki pages on disk: a new page gets a line, a deleted page loses it.
+A project's wiki is `<Core>/<project>/docs/`, one Obsidian vault per project. An agent reads
+`CLAUDE.md`, then the map `docs/INDEX.md`, then the one page its task needs. A user standard `<Core>/standards/wiki.md` wins over this file.
 
 ## Pages
 
-- One subject per page. Folders are flat (`features/`, `decisions/`), one level deep.
-- A page over about 8 KB needs `##` headings so a reader can jump to the part they need.
-- Every page starts with front matter, all six fields:
-  `title`, `description`, `status`, `files`, `related`, `updated`.
-  - `files:` lists the code paths (relative to the code root) the page describes; a path ending in
-    `/` stands for a folder. Write `files: []` when the page describes no code.
-  - `related:` lists other pages. `updated:` is the date of the last content change.
-- Headings are unique within a page.
+- A page is every `docs/**/*.md` except `INDEX.md` and `knowledge/`, `standards/`, `superpowers/`,
+  `.obsidian/`. Its name is the file name without `.md`; names are unique within a project.
+- One subject per page. Folders are flat (`features/`, `decisions/`, `specs/`, `plans/`).
+- A page over about 8 KB needs `##` headings. Headings are unique within a page.
+- No history (git has it), no number without the command that prints it. One home per fact:
+  link, do not copy. A new decision is a new file `decisions/NNN-<slug>.md`.
 
-## References
+## Front matter
 
-- Refer to another page as `docs/<page>.md § <exact heading>`. The heading is the `## ` line
-  text, written exactly. It runs to the end of the line or to the closing backtick, so put the
-  reference in backticks when prose follows it. One trailing `.` `,` `;` `:` or `)` is
-  forgiven when the exact text is not a heading.
-- Links are Markdown links relative to the file that holds them. A link with `#anchor` is
-  checked for the file only.
-- "See above", "this document" and "as mentioned" are defects. Name the page and heading.
+Every page starts with all six fields, in this order:
+`type`, `status`, `description`, `files`, `related`, `updated`.
 
-## Content
+- `type`: `brief`, `architecture`, `decision`, `feature`, `spec`, `plan` or `glossary`.
+- `status`: `draft`, `active`, `done` or `superseded`.
+- `description`: one line, at most 80 characters (surrounding quotes do not count).
+- `files`: code paths relative to the code root; a path ending in `/` is a folder; `[]` for none.
+- `related`: other pages as `[[name]]` links; `[]` for none.
+- `updated`: `YYYY-MM-DD`, the last content change.
 
-- No history: git has it. No dated measurements.
-- No number without the command that prints it.
-- One home per fact: do not copy another page or `CLAUDE.md`; link to it.
-- A new architectural decision is a new file `decisions/NNN-<slug>.md`.
+## Links
+
+- Link to a page with a wikilink: `[[name]]`, `[[folder/name]]`, `[[name#Heading]]` (exact heading
+  text, `#` to `######`), `[[name|alias]]`, `[[name#Heading|alias]]`; `![[name]]` embeds.
+- A target with an extension other than `.md` names a file under `docs/`.
+- Wikilinks in code fences and `inline code` are not links. A Markdown link `[text](path)` is for
+  URLs and files outside the wiki and must resolve; to a wiki page it is a defect.
+
+## The map and Obsidian
+
+`docs/INDEX.md` is generated: run `bash scripts/wiki-index.sh <project_dir>` after adding,
+renaming, deleting or re-describing a page; never edit it. It groups pages by `type`, one line
+each: `[[name]] description`. Pages with status `done` or `superseded` are counted in a
+`history:` line. With `--check` it writes nothing and prints `wiki-index: stale` when out of date.
+`docs/wiki.base` (a table of pages by field) and `docs/.obsidian/` come from `new-project` or
+`wiki-migrate.sh`; the scripts print `created` or `skipped` and never overwrite them.
 
 ## Who keeps it true
 
 - engineer is the only author of wiki edits. When a change touches a code file, engineer updates
-  every page whose `files:` lists it (content and `updated`), adds a map line for a new page
-  and a decision file for a new decision.
-- verifier runs `wiki-check.sh`; release refuses to commit while it is red.
+  every page whose `files:` lists it (content and `updated`), writes a decision file for a new
+  decision, then runs `wiki-index.sh`.
+- verifier runs `wiki-check.sh`; release runs `wiki-index.sh`, then `wiki-check.sh`, and refuses
+  to commit while it is red. `docs/knowledge/` and `docs/standards/` are outside these rules.
 
-## Not covered by the checks
+## Old wikis
 
-`docs/knowledge/`, `docs/standards/` and `docs/superpowers/` are outside the wiki rules.
+`bash scripts/wiki-migrate.sh <project_dir> [--dry-run]` converts a 0.6 wiki (Markdown links, a
+hand-written map, specs and plans in `docs/superpowers/`): front matter, links, specs and plans
+to `docs/specs/` and `docs/plans/`. `adopt` runs it too. A `warning:` line names what to fix by hand.
 
 ## Checking
 
 `bash scripts/wiki-check.sh <project_dir> [--changed <path>...]` prints
-`wiki-check: <file>: <problem>` for each failure and exits 1; silent and exit 0 when green.
+`wiki-check: <file>: <problem>` (`<file>` relative to `docs/`) per failure and exits 1; silent and 0 when green.
 
 | Problem | Meaning |
 |---|---|
-| `missing front matter field <f>` | a required field is absent or empty |
-| `not in INDEX.md` / `INDEX.md links missing page` | map and disk disagree |
-| `broken link` / `broken reference § <heading>` | the target file or heading does not exist |
-| `unclosed front matter` | the opening `---` has no closing `---` |
-| `duplicate heading` | the same `##` heading twice in one page |
+| `missing front matter field <f>` | a field is absent, or `type`, `status`, `description`, `updated` is empty |
+| `bad type: <v>`, `bad status: <v>`, `bad updated: <v>` | the value is not in the lists above, or not `YYYY-MM-DD` |
+| `description over 80 chars` | longer, without surrounding quotes |
+| `duplicate page name <name>` | a later page has a taken name |
+| `broken wikilink [[<target>]]` | no such page or file, or no such heading |
+| `use a wikilink: <target>`, `broken link <target>` | a Markdown link points to a wiki page, or to a missing file |
+| `unclosed front matter`, `duplicate heading <h>` | no closing `---`; the same `##` heading twice in a page |
 | `page over 8 KB without ## headings` | add headings or split the page |
-| `drift: <code path> changed, page not updated` | `--changed` lists a code file that a page's `files:` names, and the page is not among the changed files |
+| `INDEX.md stale` | `wiki-index.sh --check` fails: run `wiki-index.sh` |
+| `drift: <code path> changed, page not updated` | `--changed` names a code file a page's `files:` lists, page not changed |
 
-`--changed` takes paths relative to the code root (as `git diff --name-only` prints there). A
-changed page is passed as the absolute `<Core>/<project>/docs/<page>.md` (`docs/<page>.md` and
-`../docs/<page>.md` also work). Pages live in the Core repo, so list the changed ones there
-(read-only) and prefix each with `<Core>/`:
+Also `wiki-check: INDEX.md: missing` (other checks still run) and `wiki-check: docs: missing docs/ directory` (nothing else is checked).
+`--changed` takes code-root-relative paths (as `git diff --name-only` prints there). A changed page
+is the absolute `<Core>/<project>/docs/<page>.md`. List the changed pages in the Core (read-only):
 `{ git -C <Core> diff --name-only HEAD -- <project>/docs; git -C <Core> ls-files --others --exclude-standard -- <project>/docs; }`.

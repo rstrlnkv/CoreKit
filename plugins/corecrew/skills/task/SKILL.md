@@ -21,7 +21,8 @@ Detail lives in references, read when you reach that step:
 
 Shared files: `${CLAUDE_SKILL_DIR}/../../reference/wiki.md` (wiki rules),
 `${CLAUDE_SKILL_DIR}/../../reference/knowledge.md` (knowledge format),
-`${CLAUDE_SKILL_DIR}/../../scripts/wiki-check.sh`, `${CLAUDE_SKILL_DIR}/../../scripts/save`.
+`${CLAUDE_SKILL_DIR}/../../scripts/wiki-index.sh`, `${CLAUDE_SKILL_DIR}/../../scripts/wiki-check.sh`,
+`${CLAUDE_SKILL_DIR}/../../scripts/save`.
 
 ## Language
 Talk to the user in their language, in plain words. Everything on disk (code, docs, commit
@@ -133,8 +134,8 @@ Briefs follow `references/brief.md`. A corecrew agent's `subagent_type` is `core
    whose `applies-to` names it (in `<Core>/standards/` or the project's `docs/standards/`).
    A second reply without it: note it in `Open`.
 10. Extra tasks in one brief are not done; they come back in `Open`.
-11. Wiki rules are `${CLAUDE_SKILL_DIR}/../../reference/wiki.md`: engineer keeps the wiki,
-    verifier runs `wiki-check.sh`. You do not edit wiki pages yourself.
+11. Wiki rules are `${CLAUDE_SKILL_DIR}/../../reference/wiki.md`: engineer keeps the wiki and
+    regenerates `docs/INDEX.md` with `wiki-index.sh`, verifier runs `wiki-check.sh`. You do not edit wiki pages yourself.
 12. Never tag, never push. With the attribution value resolved at Start = `forbid`, no commit message gets a
     `Co-Authored-By` or `Generated with` line.
 

@@ -3,8 +3,8 @@
 `/corecrew:task adopt <folder>`: bring an existing project into the corecrew layout. The repo
 stays where it is, in `<Projects>/<Name>` (`<Projects>` is the folder that holds `<Core>`); its
 internal files move to `<Core>/<name>/` (`<name>` is `<Name>` in lower case) and reach the
-session through `CLAUDE.local.md`, a gitignored link to `<Core>/<name>/CLAUDE.md`. Only a project
-still in the old layout (its repo at `<Core>/<name>/code`) is moved, to `<Projects>/<name>`.
+session through `CLAUDE.local.md` and `AGENTS.md`, gitignored links to `<Core>/<name>/CLAUDE.md`.
+Only a project still in the old layout (its repo at `<Core>/<name>/code`) is moved, to `<Projects>/<name>`.
 Start has already resolved `<Core>`, checked that it is set up, and noted `<scripts>` (the plugin
 scripts folder). No crew, no tester: only you and the script. Talk to the user in plain words;
 never run `adopt.sh` before "ok".
@@ -41,8 +41,11 @@ never run `adopt.sh` before "ok".
      under "add to .gitignore"; the user's own lines stay as they are), so local Claude files never
      reach a commit, and, when the repo has none, a `.worktreeinclude` that copies
      `.claude/settings.local.json` into new worktrees (an existing one is left as is);
-   - the `CLAUDE.local.md` link and `.claude/settings.local.json` (created, or a `warning:` line:
-     the user's own file is left as is and needs the `additionalDirectories` entry it names);
+   - the `CLAUDE.local.md` and `AGENTS.md` links and `.claude/settings.local.json` (created, or a
+     `warning:` line: the user's own file is left as is and needs the `additionalDirectories`
+     entry it names; a `<Core>/<name>/AGENTS.md` blocks the `AGENTS.md` link until its rules are
+     folded into `CLAUDE.md`);
+   - the conversion of the old wiki by `wiki-migrate.sh` (a failure is a `warning:` line);
    - what gets created.
    If the plan lists `CLAUDE.md` or `.claude/` under "stays in the repo (ignored by git)", tell
    the user: the Core gets a template `CLAUDE.md`, and their own file stays in the repo.
@@ -70,8 +73,8 @@ never run `adopt.sh` before "ok".
    installed in that repo; say so. A non-zero exit: show its lines and stop (exit 1 means a
    step after the repo commit failed: nothing was deleted, and the lines say where the files are).
 8. **Verify** with `bash "<scripts>/wiki-check.sh" "<Core>/<name>"`.
-   Red: say which pages and why; the usual cause is a link or reference in an old page that
-   no longer resolves. Pages the script gave new front matter hold `TODO` descriptions and
+   Red: say which pages and why; the usual cause is a link in an old page that
+   no longer resolves, or a `warning:` line from `wiki-migrate.sh` (a page with no known type). Pages the script gave new front matter hold `TODO` descriptions and
    `status: draft`: say they still need writing.
 9. **Report** in plain words, with these lines:
    - `Path: adopt`

@@ -13,7 +13,7 @@ Every untrue sentence with its location and the command that refutes it, the num
 ## What to read first
 Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:` and `project:` name it.
 1. `CLAUDE.md` (how this project writes about itself).
-2. `docs/INDEX.md`, the map of the wiki.
+2. `docs/INDEX.md`, the generated map of the wiki.
 3. The wiki pages the task needs, the diff, and the whole of every file whose prose it touched.
 4. Its standards: `docs/standards/<name>.md` of the project, else `<Core>/standards/<name>.md`, for every standard whose `applies-to` names verifier.
 5. `docs/knowledge/verifier.md`, then `<Core>/knowledge/verifier.md`; skip lines tagged `[<stack>]` for another stack.

@@ -13,7 +13,7 @@ A working change and its proof: the command and its output. A change without a r
 ## What to read first
 Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:` and `project:` name it.
 1. `CLAUDE.md` (build and check commands, rules of the house).
-2. `docs/INDEX.md`, the map of the wiki.
+2. `docs/INDEX.md`, the generated map of the wiki.
 3. The wiki page the task needs, and the affected files in full with their neighbours.
 4. Its standards: `docs/standards/<name>.md` of the project, else `<Core>/standards/<name>.md`, for every standard whose `applies-to` names engineer.
 5. `docs/knowledge/engineer.md`, then `<Core>/knowledge/engineer.md`; skip lines tagged `[<stack>]` for another stack.
@@ -24,7 +24,7 @@ Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:
 - Tag a Knowledge line `[<stack>]` when it holds for one stack only; an untagged line holds for every stack.
 - Red test first: on the fix path tester's red test exists and you make it green; otherwise write the failing test, then the code, then green. Run only the tests of the modules you touched, unless the brief names the full `check:`.
 - Shortest code that does it the way the project does it. Reuse what exists (the tree, the standard library, the platform, an installed dependency) before new code. Fix a defect where every caller passes, and search for the same logic elsewhere; a copy you touch moves to one shared place.
-- You are the only author of changes, wiki included. When you touch a code file, update every wiki page whose `files:` lists it (content and `updated`), add a `docs/INDEX.md` line for a new page and `decisions/NNN-<slug>.md` for a new decision, following the wiki rules file the brief names.
+- You are the only author of changes, wiki included. When you touch a code file, update every wiki page whose `files:` lists it (content and `updated`), write `decisions/NNN-<slug>.md` for a new decision, then run `wiki-index.sh` (next to `wiki-check.sh`) on the project folder so `docs/INDEX.md` is regenerated, never edited by hand, following the wiki rules file the brief names.
 - Then run `wiki-check.sh` (path from the brief) on the project folder with `--changed`: the changed code files (`git diff --name-only HEAD` plus `git ls-files --others --exclude-standard`, in the code root) and the changed Core wiki pages as absolute `<Core>/<project>/docs/<page>.md` paths. The wiki rules file the brief names has the details.
 - A repair pass fixes each finding where the checker pointed, then runs the same check the checker ran and shows its output.
 - UI work starts from the built, running app and a screenshot of the screens involved. Name each screen, its state and the command that renders it in `Screens`.

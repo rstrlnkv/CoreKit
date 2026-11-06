@@ -217,4 +217,6 @@ assert_not_contains "$BR" '<Core>/<project>/code/'
 assert_not_contains "$REL" '../docs/'
 assert_not_contains "$PA" '<Core>/<project>/code'
 assert_not_contains "$PLUGIN/reference/wiki.md" 'relative to `code/`'
+# 0.7 wiki: the release wiki step regenerates INDEX.md before the check (more in test_wiki_texts.sh)
+assert_contains "$REL" 'wiki-index.sh'
 finish
