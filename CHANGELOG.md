@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.0 — 2026-11-06
+- The wiki index is generated: `docs/INDEX.md` is built from the front matter of the pages
+  (`wiki-index.sh`), so nobody edits it by hand; `wiki-check.sh` reports it when it is out of date.
+- Every project's `docs/` is one Obsidian vault: scaffold adds `wiki.base` (a table of all pages)
+  and `.obsidian/`.
+- Front matter: `type` replaces `title`; page references are wikilinks (`[[page#Heading]]`), not
+  `docs/page.md § Heading`. Specs and plans live in `docs/specs/` and `docs/plans/` (before:
+  `docs/superpowers/`).
+- `wiki-check.sh` has new checks for the new format (front matter fields, wikilink targets, the
+  generated INDEX).
+- New `AGENTS.md` link in the code folder next to `CLAUDE.local.md`, made by scaffold and adopt and
+  repaired at session start. Note for coreopinion/Codex users: `AGENTS.md` now exposes the private
+  `CLAUDE.md` to Codex in that folder, so `second-opinion` runs can send its content to OpenAI.
+- New `scripts/wiki-migrate.sh` converts a 0.6 wiki to the new format (front matter, wikilinks,
+  `docs/superpowers/` to `docs/specs/` and `docs/plans/`, INDEX); `adopt` runs it too.
+- Upgrade: once per existing project run
+  `bash <plugin>/scripts/wiki-migrate.sh <Core>/<project> --dry-run`, read the output, then run it
+  again without `--dry-run`.
+
 ## 0.6.6 — 2026-11-05
 - The one-suite hook no longer lets several test runs through when many waiters (8 in the stress
   test) find the same stale turn at the same instant. The takeover now runs under a short lock
