@@ -2,7 +2,7 @@
 # Claude Code Stop hook: reminds Claude to run `save` when the code repo or this
 # project's docs have uncommitted changes. Reminds once per stop (stop_hook_active) and
 # once per set of changes, so it stays quiet while Claude waits for the user's approval.
-# Inert outside a project (docs/specs/2026-11-04-project-layout-design.md section 4: <Core>/<project>/ or
+# Inert outside a project (<Core>/<project>/ or
 # its code folder beside the Core): a repo with the same shape elsewhere passes.
 # _locate.sh, lib.sh and `save` sit under ../scripts in the plugin.
 D="$(dirname "$0")/../scripts"

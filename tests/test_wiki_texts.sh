@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The texts that teach the wiki (agents, skills, reference/wiki.md, README) match the 0.7 wiki:
 # typed front matter, wikilinks, generated INDEX.md, wiki.base, wiki-migrate.sh.
-# Spec: docs/specs/2026-11-06-md-structure-design.md §3-§7 in the maintainer's Core.
+# Spec: the maintainer's design notes (private).
 source "$(dirname "$0")/lib.sh"
 WK="$PLUGIN/reference/wiki.md"
 ENG="$PLUGIN/agents/engineer.md"

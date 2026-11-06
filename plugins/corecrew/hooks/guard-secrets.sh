@@ -54,7 +54,7 @@
 #   The tokenizer lives in scripts/bash-lex.awk and scripts/bashlex-guard-secrets.awk: if they are missing
 #   the Bash path fails open (silently); the file tools are still judged. If awk is there but fails, the
 #   hook fails closed when the command has a secret-looking string.
-# - Inert outside a project (docs/specs/2026-11-04-project-layout-design.md section 4: <Core>/<project>/
+# - Inert outside a project (<Core>/<project>/
 #   or its code folder beside the Core): cwd missing or not in a project -> exit 0 at once (so ~/.ssh is
 #   open when Claude works outside a project, spec D17). No network, no git.
 #

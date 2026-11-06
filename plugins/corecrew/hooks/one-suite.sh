@@ -6,7 +6,7 @@
 # nothing to wait with, so it asks again or looks at `ps` once per step, and every step re-reads its
 # whole context. Only a wait longer than ONE_SUITE_WAIT seconds is refused (exit 2; stderr goes back
 # to the caller: "run the same command again").
-# Inert outside a project (docs/specs/2026-11-04-project-layout-design.md section 4: <Core>/<project>/ or
+# Inert outside a project (<Core>/<project>/ or
 # its code folder beside the Core): with no cwd, or a cwd that is not inside a project, it exits 0 at
 # once, before it looks at the command or at any process.
 # Only the command is read, never the description: "see whether swift test runs" is not a test run.

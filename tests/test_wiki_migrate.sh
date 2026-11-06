@@ -2,7 +2,7 @@
 # wiki-migrate.sh: converts a 0.6-format wiki (fixture tests/fixtures/wiki-old) to the 0.7 format
 # (expected result: tests/fixtures/wiki-old.expected, byte for byte).
 #
-# Contract the tests pin (docs/specs/2026-11-06-md-structure-design.md §4, §8; the task 5 brief):
+# Contract the tests pin:
 #   stdout, one line per changed file, in this order, then the warnings:
 #     1. pages in LC_ALL=C order of their final docs-relative path (wiki-pages.sh order), one line each:
 #          "moved docs/superpowers/specs/a.md -> docs/specs/a.md"   a page moved out of superpowers/

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The READMEs and CHANGELOG-free docs name repo paths (plugins/..., docs/..., tests/..., evals/...):
+# The READMEs, SECURITY.md, ARCHITECTURE.md and other CHANGELOG-free docs name repo paths (plugins/..., docs/..., tests/..., evals/...):
 # every one must exist, so a file that was moved or removed cannot stay in the text. Paths with a
 # placeholder (<name>, *, $) and a trailing "..." are skipped.
 source "$(dirname "$0")/lib.sh"
@@ -10,7 +10,7 @@ paths_in() {
     | LC_ALL=C sed -E 's/^[^pdte]//' | LC_ALL=C sort -u
 }
 
-for doc in README.md plugins/coremodel/README.md plugins/coreopinion/README.md; do
+for doc in README.md plugins/coremodel/README.md plugins/coreopinion/README.md SECURITY.md ARCHITECTURE.md; do
   assert_file "$ROOT/$doc"
   n=0
   while IFS= read -r p; do

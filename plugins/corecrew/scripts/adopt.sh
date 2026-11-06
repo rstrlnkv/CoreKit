@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Brings an existing project (a git repo folder) into the corecrew layout (docs/specs/2026-11-04-project-
-# layout-design.md, section 5.2): internal files go to <Core>/<name>/, the repo stays where it is, in
+# Brings an existing project (a git repo folder) into the corecrew layout:
+# internal files go to <Core>/<name>/, the repo stays where it is, in
 # <Projects>/<Name> (<Projects> = the Core's parent folder, <name> = <Name> in lower case). Only a project
 # still in the old layout (a repo at <Core>/<name>/code) is moved, to <Projects>/<name>.
 # Usage: bash adopt.sh --from <folder> [--name <name>] [--public-docs "<paths>"]
