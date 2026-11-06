@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # wiki-migrate.sh — convert an existing (0.6-format) wiki to the current one
-# (docs/specs/2026-11-06-md-structure-design.md §4, §8 in the maintainer's Core; rules in reference/wiki.md).
+# (rules in reference/wiki.md).
 #
 # Usage: wiki-migrate.sh <project_dir> [--dry-run]
 #   <project_dir>  the Core project folder (has docs/); the INDEX title uses its folder name.
@@ -77,8 +77,8 @@ done
 
 if [ "$dry" -eq 1 ]; then S="$(mktemp -d "${TMPDIR:-/tmp}/wiki-migrate.XXXXXX")" || die "cannot create a temp folder"
 else S="$(mktemp -d "$proj/.wiki-migrate.XXXXXX" 2>/dev/null)" || { S=""; die "cannot create a temp folder in $proj; nothing was changed"; }; fi
-SP="$S/$name"; SD="$SP/docs"; W="$S/work"
-mkdir "$SP" "$W" && cp -Rp "$docs" "$SD" 2>/dev/null || die "could not copy $docs (unreadable file?); nothing was changed"
+SP="$S/new/$name"; SD="$SP/docs"; W="$S/.work"
+mkdir -p "$SP" && mkdir "$W" && cp -Rp "$docs" "$SD" 2>/dev/null || die "could not copy $docs (unreadable file?); nothing was changed"
 : > "$W/lines"; : > "$W/warn"; : > "$W/moved"
 
 # Moves inside the copy; "<new>|<old>" (docs-relative) in $W/moved.
@@ -349,7 +349,7 @@ if [ "$dry" -eq 0 ] && grep -qE '^(moved|updated|created) ' "$W/sorted"; then
     die "could not replace $docs; nothing was changed"
   fi
   if [ "$GOT" -eq 1 ]; then
-    mv "$docs" "$S/new" && mv "$S/old" "$docs" || { k="$S"; S=""; die "interrupted; the old docs/ is in $k/old"; }
+    mv "$docs" "$S/.undone" && mv "$S/old" "$docs" || { k="$S"; S=""; die "interrupted; the old docs/ is in $k/old"; }
     die "interrupted; nothing was changed"
   fi
   trap - TERM INT HUP

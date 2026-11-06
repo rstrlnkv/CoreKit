@@ -75,12 +75,12 @@ mkproj() { mkdir -p "$1"; cp -R "$FXO" "$1/wiki-old"; P="$1/wiki-old"; }
 # gitify <core dir> — make <core dir> a git repo holding the project with fixed commit dates:
 # 2026-02-03 for every file but docs/glossary.md, which arrives on 2026-03-04.
 gitify() {
-  local core="$1"
+  local core="$1" nm="${2:-wiki-old}"
   git init -q "$core" && git -C "$core" symbolic-ref HEAD refs/heads/main || return 1
-  mv "$core/wiki-old/docs/glossary.md" "$SANDBOX/glossary.hold" || return 1
+  mv "$core/$nm/docs/glossary.md" "$SANDBOX/glossary.hold" || return 1
   git -C "$core" add -A
   GIT_AUTHOR_DATE="2026-02-03T12:00:00 +0000" GIT_COMMITTER_DATE="2026-02-03T12:00:00 +0000" git -C "$core" commit -q -m one || return 1
-  mv "$SANDBOX/glossary.hold" "$core/wiki-old/docs/glossary.md"
+  mv "$SANDBOX/glossary.hold" "$core/$nm/docs/glossary.md"
   git -C "$core" add -A
   GIT_AUTHOR_DATE="2026-03-04T12:00:00 +0000" GIT_COMMITTER_DATE="2026-03-04T12:00:00 +0000" git -C "$core" commit -q -m two
 }
@@ -274,5 +274,15 @@ STUB
 else
   echo "  note: running as root, mv-stub tests skipped"
 fi
+
+# --- a project folder named "old": the staging copy must not collide with the script's own "old" folder
+new_sandbox
+mkdir -p "$SANDBOX/core"; cp -R "$FXO" "$SANDBOX/core/old"; P="$SANDBOX/core/old"
+gitify "$SANDBOX/core" old || fail "could not build the git fixture for old"
+run "$P"
+assert_eq "$RC" "0" "project named old: exit"
+assert_eq "$ERR" "" "project named old: stderr"
+diff -r -x INDEX.md "$P/docs" "$FXE/docs" >/dev/null 2>&1 && pass || fail "project named old: pages differ from the expected tree"
+bash "$WI" "$P" --check >/dev/null 2>&1 && pass || fail "project named old: INDEX stale"
 
 finish

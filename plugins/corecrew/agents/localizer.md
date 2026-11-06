@@ -13,7 +13,7 @@ Every defect as the value comes out of the built artifact, quoted exactly, with 
 ## What to read first
 Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:` and `project:` name it.
 1. `CLAUDE.md` (how the project holds its languages and what it builds with).
-2. `docs/INDEX.md`, the map of the wiki.
+2. `docs/INDEX.md`, the generated map of the wiki.
 3. The wiki page the task needs, the conventions kept beside the strings, and the keys this change touched.
 4. Its standards: `docs/standards/<name>.md` of the project, else `<Core>/standards/<name>.md`, for every standard whose `applies-to` names localizer.
 5. `docs/knowledge/localizer.md`, then `<Core>/knowledge/localizer.md`; skip lines tagged `[<stack>]` for another stack.

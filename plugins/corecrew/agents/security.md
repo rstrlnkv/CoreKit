@@ -13,7 +13,7 @@ Every finding with a path: where the input comes from, how far it reaches, what 
 ## What to read first
 Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:` and `project:` name it.
 1. `CLAUDE.md` (what the program may touch).
-2. `docs/INDEX.md`, the map of the wiki.
+2. `docs/INDEX.md`, the generated map of the wiki.
 3. The wiki page the task needs, and tester's report in the brief: do not look for the same thing twice.
 4. Its standards: `docs/standards/<name>.md` of the project, else `<Core>/standards/<name>.md`, for every standard whose `applies-to` names security.
 5. `docs/knowledge/security.md`, then `<Core>/knowledge/security.md`; skip lines tagged `[<stack>]` for another stack.

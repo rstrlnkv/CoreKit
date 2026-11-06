@@ -8,7 +8,7 @@ A project's wiki is `<Core>/<project>/docs/`, one Obsidian vault per project. An
 - A page is every `docs/**/*.md` except `INDEX.md` and `knowledge/`, `standards/`, `superpowers/`,
   `.obsidian/`. Its name is the file name without `.md`; names are unique within a project.
 - One subject per page. Folders are flat (`features/`, `decisions/`, `specs/`, `plans/`).
-- A page over about 8 KB needs `##` headings. Headings are unique within a page.
+- A page over about 8 KB needs `##` headings. `##` headings are unique within a page.
 - No history (git has it), no number without the command that prints it. One home per fact:
   link, do not copy. A new decision is a new file `decisions/NNN-<slug>.md`.
 

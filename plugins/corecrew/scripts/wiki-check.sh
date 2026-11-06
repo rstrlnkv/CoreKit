@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# wiki-check.sh — deterministic wiki checks (docs/specs/2026-11-06-md-structure-design.md §7 in the
-# maintainer's Core; rules in reference/wiki.md).
+# wiki-check.sh — deterministic wiki checks (rules in reference/wiki.md).
 #
 # Usage: wiki-check.sh <project_dir> [--changed <path>...]
 #   <project_dir>  the Core project folder <Core>/<name>: CLAUDE.md, docs/ (map docs/INDEX.md).

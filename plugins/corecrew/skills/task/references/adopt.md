@@ -45,7 +45,8 @@ never run `adopt.sh` before "ok".
      `warning:` line: the user's own file is left as is and needs the `additionalDirectories`
      entry it names; a `<Core>/<name>/AGENTS.md` blocks the `AGENTS.md` link until its rules are
      folded into `CLAUDE.md`);
-   - the conversion of the old wiki by `wiki-migrate.sh` (a failure is a `warning:` line);
+   - the conversion of the old wiki by `wiki-migrate.sh` (new layout: a failure stops adopt with nothing changed;
+     old layout: a `warning:` line);
    - what gets created.
    If the plan lists `CLAUDE.md` or `.claude/` under "stays in the repo (ignored by git)", tell
    the user: the Core gets a template `CLAUDE.md`, and their own file stays in the repo.
