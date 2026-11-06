@@ -35,7 +35,10 @@
 #   where the original is); a failing second mv rolls back, exit 1.
 #   Rulings (coordinator): a backtick span whose WHOLE content is one reference `docs/x.md § H` becomes
 #   [[x#H]] (backticks dropped); any other span or fence content stays byte-identical.
-#   Front matter fields outside the six (e.g. stage:) are kept after the six, in original order.
+#   A brief's stage: field moves into a last body section "## Progress" with one line "Stage: <v>" (unless
+#   the body already has ## Progress, the value is multi-line, or the body ends in an open code fence: then
+#   the field stays and is warned). Any other field outside the six
+#   is kept after the six, in original order, with "warning: <name>: extra front matter field <k>".
 #   [t](page.md#anchor): anchor = exact heading of that page -> [[page#anchor]] (when t is the name);
 #   otherwise [[page|t]] ([[page]] when t is the name) and "warning: <page>: anchor #<anchor> dropped".
 source "$(dirname "$0")/lib.sh"
@@ -148,6 +151,89 @@ echo "$OUT" | grep -qE '^(moved|updated|created) ' && fail "second run reports c
 assert_eq "$(printf '%s\n' "$OUT" | grep '^warning:')" "$(printf '%s\n' "$WANT_OUT" | grep '^warning:' | grep -v 'anchor #')" "second run warnings"
 run "$P" --dry-run; assert_eq "$RC" "0" "second --dry-run exit"
 assert_eq "$(snap_all "$P")" "$after1" "second --dry-run changed the project"
+
+# --- fields outside the six: stage: of a brief moves to ## Progress, anything else stays and is warned about
+# mkpage <file> <front matter lines...> — one page: front matter from the arguments, body "# T", "", "Text."
+mkpage() { local f="$1"; shift; mkdir -p "$(dirname "$f")"; { echo '---'; printf '%s\n' "$@"; printf -- '---\n\n# T\n\nText.\n'; } > "$f"; }
+SIX_TAIL='files: []
+related: []
+updated: 2026-01-01'
+# (a) a non-brief page with tags: x
+new_sandbox
+mkdir -p "$SANDBOX/xa/p"
+mkpage "$SANDBOX/xa/p/docs/features/x.md" 'title: X' 'tags: x' 'description: D.' 'status: active' 'files: []' 'related: []' 'updated: 2026-01-01'
+run "$SANDBOX/xa/p"
+assert_eq "$RC" "0" "extra field: exit"
+assert_eq "$(sed -n '2,9p' "$SANDBOX/xa/p/docs/features/x.md")" "type: feature
+status: active
+description: D.
+files: []
+related: []
+updated: 2026-01-01
+tags: x
+---" "extra field tags: stays after the six"
+printf '%s\n' "$OUT" | grep -qxF "warning: x: extra front matter field tags" && pass || fail "no extra-field warning for tags: $OUT"
+OUT2="$(bash "$WC" "$SANDBOX/xa/p" 2>&1)"
+printf '%s\n' "$OUT2" | grep -qxF "wiki-check: features/x.md: unknown front matter field tags" && pass || fail "wiki-check does not report tags: $OUT2"
+# (b) a brief that already has ## Progress keeps its stage: field and gets the warning
+new_sandbox
+mkdir -p "$SANDBOX/xb/p"
+mkpage "$SANDBOX/xb/p/docs/brief.md" 'title: Brief' 'type: brief' 'status: active' 'description: D.' 'stage: decided' 'files: []' 'related: []' 'updated: 2026-01-01'
+printf '\n## Progress\nStage: interviewed\n' >> "$SANDBOX/xb/p/docs/brief.md"
+run "$SANDBOX/xb/p"
+assert_eq "$RC" "0" "stage + ## Progress: exit"
+assert_contains "$SANDBOX/xb/p/docs/brief.md" "stage: decided"
+assert_eq "$(grep -c '^## Progress' "$SANDBOX/xb/p/docs/brief.md")" "1" "stage + ## Progress: sections"
+assert_eq "$(grep -c '^Stage: ' "$SANDBOX/xb/p/docs/brief.md")" "1" "stage + ## Progress: Stage lines"
+assert_eq "$(sed -n '2,8p' "$SANDBOX/xb/p/docs/brief.md" | tail -1)" "stage: decided" "stage: follows the six"
+printf '%s\n' "$OUT" | grep -qxF "warning: brief: extra front matter field stage" && pass || fail "no warning for the kept stage: $OUT"
+# (e) a multi-line stage: keeps its continuation lines, is warned about, gets no ## Progress
+new_sandbox
+mkdir -p "$SANDBOX/xe/p/docs"
+printf -- '---\ntype: brief\nstatus: active\ndescription: D.\nstage: |\n  line one\n  line two\nfiles: []\nrelated: []\nupdated: 2026-01-01\n---\n\n# T\n' > "$SANDBOX/xe/p/docs/brief.md"
+run "$SANDBOX/xe/p"
+assert_eq "$RC" "0" "multi-line stage: exit"
+assert_eq "$(sed -n '8,10p' "$SANDBOX/xe/p/docs/brief.md")" "stage: |
+  line one
+  line two" "multi-line stage kept with its lines"
+grep -q '^## Progress' "$SANDBOX/xe/p/docs/brief.md" && fail "multi-line stage: Progress added" || pass
+printf '%s\n' "$OUT" | grep -qxF "warning: brief: extra front matter field stage" && pass || fail "no warning for multi-line stage: $OUT"
+# (f) a body that ends inside an open code fence: stage stays, warned, nothing appended
+new_sandbox
+mkdir -p "$SANDBOX/xf/p/docs"
+printf -- '---\ntype: brief\nstatus: active\ndescription: D.\nstage: decided\nfiles: []\nrelated: []\nupdated: 2026-01-01\n---\n\n# T\n\n```\ncode\n' > "$SANDBOX/xf/p/docs/brief.md"
+run "$SANDBOX/xf/p"
+assert_eq "$RC" "0" "open fence: exit"
+assert_contains "$SANDBOX/xf/p/docs/brief.md" "stage: decided"
+grep -q '^## Progress' "$SANDBOX/xf/p/docs/brief.md" && fail "open fence: Progress added" || pass
+printf '%s\n' "$OUT" | grep -qxF "warning: brief: extra front matter field stage" && pass || fail "no warning for stage in open fence: $OUT"
+# (c) a brief with stage: and no final newline keeps none; the second run changes nothing
+new_sandbox
+mkdir -p "$SANDBOX/xc/p/docs"
+printf -- '---\ntitle: Brief\ntype: brief\nstatus: active\ndescription: D.\nstage: interviewed\nfiles: []\nrelated: []\nupdated: 2026-01-01\n---\n\n# Brief\n\nText.' > "$SANDBOX/xc/p/docs/brief.md"
+run "$SANDBOX/xc/p"
+assert_eq "$RC" "0" "stage no final newline: exit"
+assert_eq "$(tail -c 1 "$SANDBOX/xc/p/docs/brief.md" | od -An -c | tr -d ' ')" "d" "stage page: the final newline appeared (or Progress is missing)"
+assert_eq "$(tail -n 4 "$SANDBOX/xc/p/docs/brief.md")" "Text.
+
+## Progress
+Stage: interviewed" "Progress section at the end"
+grep -q '^stage:' "$SANDBOX/xc/p/docs/brief.md" && fail "stage: left in the front matter" || pass
+after_c="$(snap_all "$SANDBOX/xc/p")"
+run "$SANDBOX/xc/p"
+assert_eq "$RC" "0" "stage: second run exit"
+printf '%s\n' "$OUT" | grep -q '^updated ' && fail "second run reports updates: $OUT" || pass
+assert_eq "$(snap_all "$SANDBOX/xc/p")" "$after_c" "second run changed the project"
+# (d) a dry run changes no files
+new_sandbox
+mkdir -p "$SANDBOX/xd/p/docs/features"
+mkpage "$SANDBOX/xd/p/docs/brief.md" 'title: Brief' 'type: brief' 'status: active' 'description: D.' 'stage: interviewed' 'files: []' 'related: []' 'updated: 2026-01-01'
+mkpage "$SANDBOX/xd/p/docs/features/x.md" 'title: X' 'tags: x' 'description: D.' 'status: active' 'files: []' 'related: []' 'updated: 2026-01-01'
+before_d="$(snap_all "$SANDBOX/xd/p")"
+run "$SANDBOX/xd/p" --dry-run
+assert_eq "$RC" "0" "extra fields dry run: exit"
+assert_eq "$(snap_all "$SANDBOX/xd/p")" "$before_d" "extra fields dry run changed files"
+printf '%s\n' "$OUT" | grep -qxF "warning: x: extra front matter field tags" && pass || fail "dry run: no warning for tags: $OUT"
 
 # --- outside git: updated = today
 new_sandbox

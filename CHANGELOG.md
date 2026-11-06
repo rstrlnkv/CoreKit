@@ -2,6 +2,13 @@
 
 Every entry starts with a badge: **NEW** is a new capability, **FIX** is a defect fixed, **UPD** is a change to existing behaviour, documentation or internal work.
 
+## 0.7.2 — 2026-11-06
+- **FIX** The `new-project` resume stage now lives in a `## Progress` section of the brief (`Stage: <stage>`)
+  instead of a `stage:` front matter field, which the wiki rules do not allow.
+- **UPD** `wiki-check` reports front matter fields beyond the six; `wiki-migrate` moves a brief's one-line
+  stage into `## Progress` (kept and warned when it is multi-line, the body has `## Progress` or ends in an open
+  code fence) and warns about other extra fields.
+
 ## 0.7.1 — 2026-11-06
 - **FIX** The Core pre-push hook asks GitHub up to three times, 2 s apart, whether the Core repository is
   private, so one network timeout no longer blocks a push. A "not private" answer still blocks at once.

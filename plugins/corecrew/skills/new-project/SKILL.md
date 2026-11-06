@@ -40,10 +40,13 @@ stored in `<Core>/.coredev`:
 ```
 
 ## Stages
-Progress lives in `stage:` in `<Core>/<name>/docs/brief.md`. If the user mentions a project that
-already has a brief, read it and resume at the next stage instead of starting over.
+Progress lives in the last section `## Progress` of `<Core>/<name>/docs/brief.md`, one line
+`Stage: <stage>`; never add a front-matter field (the wiki allows exactly six). If the user mentions a
+project that already has a brief, read it and resume at the next stage instead of starting over.
+An older brief with `stage: <v>` in its front matter: write `## Progress` / `Stage: <v>` as the last
+section and delete the field in the same edit, then run wiki-check (if `## Progress` exists, only delete the field).
 
-| stage | next step |
+| Stage | next step |
 |-------|-----------|
 | (none) | 0 Preflight, 1 Interview, 2 Name |
 | interviewed | 3 Analysis |
@@ -83,13 +86,13 @@ repos and the docs skeleton. If scaffold exits 2 with `target exists: <path>`, a
 name already sits beside the Core and is not a corecrew project: it is never touched. Say so in
 plain words and let the user choose: another name (run preflight again), or, if that folder is an
 existing project of theirs, `/corecrew:task adopt <path>` instead of a new project. Fill `docs/brief.md` with the answers (English), set
-`stage: interviewed`.
+`Stage: interviewed`.
 
 **3. Analysis.** Follow `references/analysis.md` and `references/stacks.md`: constraints → 2–3
 scored stack options with one recommendation → research subagent verifies them → architecture.
 Get approval for each part. Write `docs/architecture.md` and
 `docs/decisions/001-stack-and-architecture.md`; run `wiki-index.sh` after adding pages
-(see Wiki); set `stage: decided`.
+(see Wiki); set `Stage: decided`.
 
 **4. Scaffold.** First the app id prefix: if the chosen stack uses `<org>` in
 `references/stacks.md` and `<prefix>` (see Settings) is empty, ask for it (`com.<their-name>`,
@@ -99,7 +102,7 @@ This runs on every entry to stage 4, so it also happens when resuming at `decide
 dir**, then `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/scripts/merge-generated.sh" <tmp>/<folder> "<Projects>/<name>"`. Never run a
 generator with `--force`/`--overwrite` in the code folder. Fill the Build/Test/Run and Stack sections of
 `CLAUDE.md` (leave the `check:` line for stage 6). `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/install-hooks.sh" "<Core>/<name>"`. Then from `<Projects>/<name>`:
-`bash "${CLAUDE_SKILL_DIR}/../../scripts/save" "Scaffold <stack> project"`. Set `stage: scaffolded`.
+`bash "${CLAUDE_SKILL_DIR}/../../scripts/save" "Scaffold <stack> project"`. Set `Stage: scaffolded`.
 
 **5. GitHub.** Ask separately before each repo is created, naming it and its visibility:
 - docs repo (once): `gh repo create <CoreName> --private --source "<Core>" --push`
@@ -111,7 +114,7 @@ first build and that command succeed, replace the placeholder line `check: <set 
 in `<Core>/<name>/CLAUDE.md` with the real single command, e.g. `check: flutter test` (the one
 test/check command, run in `<Projects>/<name>`; hooks and the verifier read it). Then run
 `bash "${CLAUDE_SKILL_DIR}/../../scripts/wiki-check.sh" "<Core>/<name>"` and fix every
-`wiki-check:` line it prints (silent = green). Set `stage: ready` and `save "Ready"`. Report in the user's language: what was created and where; how to open it
+`wiki-check:` line it prints (silent = green). Set `Stage: ready` and `save "Ready"`. Report in the user's language: what was created and where; how to open it
 (`cd <Projects>/<name> && claude`); how to check it themselves; what may break.
 
 **7. Offer a plan.** Offer a v1 plan with `superpowers:writing-plans`, saved to

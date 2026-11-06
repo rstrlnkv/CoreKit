@@ -8,14 +8,13 @@ A project's wiki is `<Core>/<project>/docs/`, one Obsidian vault per project. An
 - A page is every `docs/**/*.md` except `INDEX.md` and `knowledge/`, `standards/`, `superpowers/`,
   `.obsidian/`. Its name is the file name without `.md`; names are unique within a project.
 - One subject per page. Folders are flat (`features/`, `decisions/`, `specs/`, `plans/`).
-- A page over about 8 KB needs `##` headings. `##` headings are unique within a page.
+- A page over about 8 KB needs `##` headings; `##` headings are unique within a page.
 - No history (git has it), no number without the command that prints it. One home per fact:
   link, do not copy. A new decision is a new file `decisions/NNN-<slug>.md`.
 
 ## Front matter
 
-Every page starts with all six fields, in this order:
-`type`, `status`, `description`, `files`, `related`, `updated`.
+Every page starts with all six fields, in this order; these six are all, any other field is an error (put state in the body; the brief keeps `## Progress`): `type`, `status`, `description`, `files`, `related`, `updated`.
 
 - `type`: `brief`, `architecture`, `decision`, `feature`, `spec`, `plan` or `glossary`.
 - `status`: `draft`, `active`, `done` or `superseded`.
@@ -54,7 +53,7 @@ each: `[[name]] description`. Pages with status `done` or `superseded` are count
 `bash scripts/wiki-migrate.sh <project_dir> [--dry-run]` converts a 0.6 wiki (Markdown links, a
 hand-written map, specs and plans in `docs/superpowers/`): front matter, links, specs and plans to
 `docs/specs/` and `docs/plans/`; `adopt` runs it too. A `warning:` line names what to fix by hand (also
-old `CLAUDE.md` lines). `wiki-index.sh` refuses a wiki with `no page has a type`; `/corecrew:task` then offers the migration at Start.
+old `CLAUDE.md` lines). It moves a brief's one-line, non-empty `stage:` into `## Progress` (`Stage: <v>`) when the body has no `## Progress`; otherwise the field is kept and warned, like any other extra field. `wiki-index.sh` refuses a wiki with `no page has a type`; `/corecrew:task` then offers the migration at Start.
 
 ## Checking
 
@@ -64,6 +63,7 @@ old `CLAUDE.md` lines). `wiki-index.sh` refuses a wiki with `no page has a type`
 | Problem | Meaning |
 |---|---|
 | `missing front matter field <f>` | a field is absent, or `type`, `status`, `description`, `updated` is empty |
+| `unknown front matter field <f>` | a key beyond the six; move it into the body or delete it |
 | `bad type: <v>`, `bad status: <v>`, `bad updated: <v>` | the value is not in the lists above, or not `YYYY-MM-DD` |
 | `description over 80 chars`, `description not one line` | longer without surrounding quotes; a `>` or `\|` block |
 | `duplicate page name <name>` | a later page has a taken name |

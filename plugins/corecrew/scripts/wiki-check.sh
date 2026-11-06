@@ -11,6 +11,7 @@
 # Checks (one line per failure, "wiki-check: <file>: <problem>", exit 1; silent and 0 when green):
 #   missing front matter field <f>             type/status/description/files/related/updated absent,
 #                                              or type/status/description/updated empty
+#   unknown front matter field <f>             a key beyond those six (the wiki allows exactly six)
 #   bad type: <v>                              not brief architecture decision feature spec plan glossary
 #   bad status: <v>                            not draft active done superseded
 #   bad updated: <v>                           not YYYY-MM-DD
@@ -163,6 +164,7 @@ function fmline(l,   k, v) {
   if (l ~ /^[A-Za-z_][A-Za-z0-9_-]*[ \t]*:/) {
     k = l; sub(/[ \t]*:.*/, "", k)
     v = trim(substr(l, index(l, ":") + 1))
+    if (!(k in has) && k !~ /^(type|status|description|files|related|updated)$/) unk[++nunk] = k
     has[k] = 1; val[k] = v; curkey = k
     if (k == "files" && v ~ /^\[/) flow(v)
     if (k == "related") { scanwiki(v); relflow(v) }
@@ -306,6 +308,7 @@ END {
       if (f == "description" && val[f] ~ /^[>|]/) report(rel, "description not one line")
       else if (f == "description" && ulen(v) > 80) report(rel, "description over 80 chars")
     }
+    for (i = 1; i <= nunk; i++) report(rel, "unknown front matter field " unk[i])
     if (size > 8192 && h2 == 0) report(rel, "page over 8 KB without ## headings")
     if (!(rel in pagechg)) {
       for (i = 1; i <= nf; i++) {

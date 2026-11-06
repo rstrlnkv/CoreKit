@@ -5,7 +5,6 @@ description: "A notes tool for teams: what, for whom, v1 scope."
 files: []
 related: ["[[architecture]]", "[[login]]", "[[sign in]]"]
 updated: 2026-01-05
-stage: interviewed
 ---
 
 # Brief
@@ -24,3 +23,6 @@ docs/architecture.md § Layers
 
 ## External services
 None.
+
+## Progress
+Stage: interviewed

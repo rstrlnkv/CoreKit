@@ -53,7 +53,8 @@ scan_repo() {
     case "$rel" in
       .claude-plugin/*.json|README.md|LICENSE|CHANGELOG.md|docs/*) ;;
       plugins/*/.claude-plugin/*.json|plugins/*/README.md|plugins/*/CHANGELOG.md) ;;
-      *) lines "owner handle outside manifests, README, LICENSE, CHANGELOG, docs" "$rel" -iF 'rstrlnkv' "$f" ;;
+      SECURITY.md|ARCHITECTURE.md) ;;
+      *) lines "owner handle outside manifests, README, LICENSE, CHANGELOG, SECURITY, ARCHITECTURE, docs" "$rel" -iF 'rstrlnkv' "$f" ;;
     esac
     case "$rel" in
       skills/*|agents/*|reference/*)
@@ -84,6 +85,9 @@ printf 'owner rstrlnkv\n' > "$R/skills/s/handle.md"        # hit: handle
 printf 'owner rstrlnkv\n' > "$R/README.md"                 # allowed
 printf '{"owner":"rstrlnkv"}\n' > "$R/.claude-plugin/plugin.json"   # allowed
 printf 'owner rstrlnkv\n' > "$R/LICENSE"                   # allowed
+printf 'owner rstrlnkv\n' > "$R/SECURITY.md"               # allowed: root SECURITY.md
+printf 'owner rstrlnkv\n' > "$R/ARCHITECTURE.md"           # allowed: root ARCHITECTURE.md
+printf 'owner rstrlnkv\n' > "$R/tests/SECURITY.md"         # hit: only the root file is allowed
 mkdir -p "$R/plugins/p/.claude-plugin" "$R/plugins/p/hooks"
 printf '{"owner":"rstrlnkv"}\n' > "$R/plugins/p/.claude-plugin/plugin.json"   # allowed: a plugin's manifest
 printf 'owner rstrlnkv\n' > "$R/plugins/p/README.md"       # allowed: a plugin's README
@@ -100,7 +104,7 @@ printf 'path %s\n' "$U" > "$R/tests/a b.sh"                # hit: name with a sp
 git -C "$R" add -A >/dev/null
 printf 'path %s\n' "$U" > "$R/untracked.sh"                # not tracked: not scanned
 hits="$(scan_repo "$R" "" | LC_ALL=C sort | tr '\n' ';')"
-assert_eq "$hits" "docs/ok3.md:1: archive project name;plugins/p/hooks/h.ts:1: owner handle outside manifests, README, LICENSE, CHANGELOG, docs;skills/s/handle.md:1: owner handle outside manifests, README, LICENSE, CHANGELOG, docs;skills/s/leak-home.md:1: absolute home path (/Users/ or /home/);skills/s/old.md:1: archive project name;skills/s/std.md:1: owner standard file name;tests/a b.sh:1: absolute home path (/Users/ or /home/);tests/leak-path.sh:1: absolute home path (/Users/ or /home/);" "planted leaks"
+assert_eq "$hits" "docs/ok3.md:1: archive project name;plugins/p/hooks/h.ts:1: owner handle outside manifests, README, LICENSE, CHANGELOG, SECURITY, ARCHITECTURE, docs;skills/s/handle.md:1: owner handle outside manifests, README, LICENSE, CHANGELOG, SECURITY, ARCHITECTURE, docs;skills/s/leak-home.md:1: absolute home path (/Users/ or /home/);skills/s/old.md:1: archive project name;skills/s/std.md:1: owner standard file name;tests/SECURITY.md:1: owner handle outside manifests, README, LICENSE, CHANGELOG, SECURITY, ARCHITECTURE, docs;tests/a b.sh:1: absolute home path (/Users/ or /home/);tests/leak-path.sh:1: absolute home path (/Users/ or /home/);" "planted leaks"
 
 # PROJECTS.md self-check: fake list, fake names; a name never shows up in the output.
 FAKE="$SANDBOX/fake-PROJECTS.md"

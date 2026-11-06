@@ -9,7 +9,7 @@ Run this yourself. Do not invoke `superpowers:brainstorming` here — its hard g
 3. **Verification** — one research subagent checks the options (prompt below). Update scores.
 4. **Architecture** — components, data storage and sync, external services, risks.
 5. **Record** — write `docs/architecture.md` and `docs/decisions/001-stack-and-architecture.md`
-   (English), update `stage: decided` in `docs/brief.md`, show a short summary in the user's
+   (English), set `Stage: decided` under `## Progress` in `docs/brief.md`, show a short summary in the user's
    language, run `save "Decide stack and architecture"`.
 
 ## Platform constraints

@@ -9,7 +9,10 @@
 #                            code repo); default <project_dir>.
 #
 # Pages are what wiki-pages.sh lists. Per page: title dropped; fields in the order type status
-# description files related updated, other fields kept after them in their order; missing ones added
+# description files related updated, other fields kept after them in their order and warned about (a brief's
+# stage: <v> instead moves to a last body section "## Progress" with the line "Stage: <v>", unless
+# the value is empty or multi-line, the body already has that section, or the body ends inside an open
+# code fence: then the field stays and is warned); missing ones added
 # (an empty value without continuation lines counts as missing; a multi-line one is kept line for line):
 # type from the path (brief.md, architecture.md, glossary.md, decisions/, features/, specs/, plans/; else
 # none), status draft, description "TODO: describe this page.", files [], related [], updated = date of
@@ -29,7 +32,7 @@
 # path order; "created|skipped docs/<vault file>"; the wiki-index.sh line; then, in page order,
 # "warning: <name>: set type" | "description over 80 chars" | "status <v>" | "anchor #<a> dropped" |
 # "reference to <page> § <rest of the line> not converted" | "description is not one line" (it starts
-# with > or |) | "front matter not closed" (such a page is left as it is); then
+# with > or |) | "extra front matter field <k>" | "front matter not closed" (such a page is left as it is); then
 # "warning: CLAUDE.md:<N>: still says docs/superpowers|map line; update it by hand" per 0.6 line of
 # <project_dir>/CLAUDE.md (never edited), and "warning: leftover <folder> from an interrupted run; check
 # and remove it by hand" per <project_dir>/.wiki-migrate.* left by a killed run (kept).
@@ -288,18 +291,29 @@ END {
   field("type", TYPE); field("status", "draft")
   field("description", "\"TODO: describe this page.\""); field("files", "[]")
   field("related", "[]"); field("updated", DATE)
+  t = (("type" in at) ? val("type") : TYPE)
+  hasprog = 0
+  openfence = 0
+  for (i = start; i <= NR; i++) {
+    if (X[i] ~ /^## Progress[ \t]*$/) hasprog = 1
+    if (X[i] ~ /^[ \t]*(```|~~~)/) openfence = !openfence
+  }
+  mvstage = (t == "brief" && ("stage" in at) && val("stage") != "" && NC[at["stage"]] == 0 && !hasprog && !openfence)
+  extras = ""
   for (i = 1; i <= nk; i++) {
     k = K[i]
     if (k == "title" || ((k in at) && at[k] == i && k ~ /^(type|status|description|files|related|updated)$/)) continue
     if ((k in dflt) && !(k in at)) continue
+    if (mvstage && k == "stage" && at[k] == i) continue
+    if (k !~ /^\001/) extras = extras k "\n"
     emit(L[i]); for (j = 1; j <= NC[i]; j++) emit(C[i, j])
   }
   emit("---")
-  t = (("type" in at) ? val("type") : TYPE)
   if (t !~ /^(brief|architecture|decision|feature|spec|plan|glossary)$/) warn("set type")
   if (("description" in at) && trim(substr(L[at["description"]], index(L[at["description"]], ":") + 1)) ~ /^[>|]/) warn("description is not one line")
   else if (ulen(val("description")) > 80) warn("description over 80 chars")
   s = val("status"); if (s != "" && s !~ /^(draft|active|done|superseded)$/) warn("status " s)
+  ne = split(extras, ex, "\n"); for (i = 1; i < ne; i++) warn("extra front matter field " ex[i])
   if (start == 1) emit("")
   fence = 0
   for (i = start; i <= NR; i++) {
@@ -308,6 +322,7 @@ END {
     else if (!fence) l = body(l)
     printf "%s%s\n", l, cr[i] ? "\r" : ""
   }
+  if (mvstage) { emit(""); emit("## Progress"); emit("Stage: " val("stage")) }
 }'
 
 while IFS= read -r pg; do

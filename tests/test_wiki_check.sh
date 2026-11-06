@@ -49,6 +49,44 @@ wiki-check: features/login.md: use a wikilink: ../architecture.md#components"
 assert_exit 0 bash "$W" "$FX/wiki-good"
 assert_eq "$(grep -rl '^title:' "$FX/wiki-good/docs" --include='*.md' | grep -v '/knowledge/' | wc -l | tr -d ' ')" "0" "fixture pages carry no title"
 
+# Front matter fields outside the six: one line per extra key, in file order, after the page's missing-field lines.
+# edit_arch <dir> <sed args...>: edit architecture.md of a clone, then regenerate its INDEX.
+edit_arch() { local d="$1"; shift; sed "$@" "$d/docs/architecture.md" > "$SANDBOX/s.tmp" && mv "$SANDBOX/s.tmp" "$d/docs/architecture.md"
+  bash "$SCRIPTS/wiki-index.sh" "$d" >/dev/null 2>&1; }
+clone wiki-good "$SANDBOX/extra1"
+edit_arch "$SANDBOX/extra1" 's/^updated: \(.*\)$/updated: \1\
+stage: ready/'
+assert_contains "$SANDBOX/extra1/docs/architecture.md" "stage: ready"
+assert_exit 1 bash "$W" "$SANDBOX/extra1"
+assert_eq "$OUT" "wiki-check: architecture.md: unknown front matter field stage" "one extra field"
+clone wiki-good "$SANDBOX/extra2"
+edit_arch "$SANDBOX/extra2" 's/^updated: \(.*\)$/updated: \1\
+tags: x\
+stage: ready/'
+assert_exit 1 bash "$W" "$SANDBOX/extra2"
+assert_eq "$OUT" "wiki-check: architecture.md: unknown front matter field tags
+wiki-check: architecture.md: unknown front matter field stage" "two extras in file order"
+clone wiki-good "$SANDBOX/extra3"
+edit_arch "$SANDBOX/extra3" 's/^type: architecture/title: X\
+type: architecture/'
+assert_exit 1 bash "$W" "$SANDBOX/extra3"
+assert_eq "$OUT" "wiki-check: architecture.md: unknown front matter field title" "title is an unknown field"
+# missing lines come first, then the extras
+clone wiki-good "$SANDBOX/extra4"
+edit_arch "$SANDBOX/extra4" -e '/^updated:/d' -e 's/^type: architecture/stage: ready\
+type: architecture/'
+assert_exit 1 bash "$W" "$SANDBOX/extra4"
+assert_eq "$OUT" "wiki-check: architecture.md: missing front matter field updated
+wiki-check: architecture.md: unknown front matter field stage" "missing before unknown"
+# an indented continuation line under a folded description is not a field (only "not one line" is reported)
+clone wiki-good "$SANDBOX/extra5"
+printf -- '---\ntype: feature\nstatus: active\ndescription: >\n  note: folded text\n  other: more\nfiles: []\nrelated: []\nupdated: 2026-11-06\n---\n\n# F\n' > "$SANDBOX/extra5/docs/features/f.md"
+bash "$SCRIPTS/wiki-index.sh" "$SANDBOX/extra5" >/dev/null 2>&1
+assert_exit 1 bash "$W" "$SANDBOX/extra5"
+assert_eq "$OUT" "wiki-check: features/f.md: description not one line" "continuation lines are not fields"
+assert_exit 0 bash "$W" "$FX/wiki-good"
+assert_eq "$OUT" "" "wiki-good stays silent with the unknown-field check"
+
 # Problem prefixes, exactly as the verifier and release read them.
 assert_exit 1 bash "$W" "$FX/wiki-bad-3"
 assert_contains <(printf '%s' "$OUT") "wiki-check: architecture.md: broken link "

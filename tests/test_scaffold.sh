@@ -41,14 +41,18 @@ assert_no_file "$CORE_DIR/bin"; assert_no_file "$CORE_DIR/hooks"
 for f in brief.md architecture.md decisions/001-stack-and-architecture.md; do
   head -1 "$P/docs/$f" | grep -qx -- '---' && pass || fail "$f: no front matter"
   fm="$(awk 'NR==1 { next } /^---[ \t]*$/ { exit } { print }' "$P/docs/$f")"
-  keys="$(printf '%s\n' "$fm" | sed -n 's/^\([a-z][a-z]*\):.*/\1/p' | grep -v '^stage$' | tr '\n' ' ')"
+  keys="$(printf '%s\n' "$fm" | sed -n 's/^\([a-z][a-z]*\):.*/\1/p' | tr '\n' ' ')"
   assert_eq "$keys" "type status description files related updated " "$f: front matter fields"
   grep -q '^title:' "$P/docs/$f" && fail "$f: has title:" || pass
 done
 assert_contains "$P/docs/brief.md" "type: brief"
 assert_contains "$P/docs/architecture.md" "type: architecture"
 assert_contains "$P/docs/decisions/001-stack-and-architecture.md" "type: decision"
-assert_contains "$P/docs/brief.md" "stage:"
+grep -q '^stage:' "$P/docs/brief.md" && fail "brief.md: front matter has a stage: field" || pass
+# progress is the last body section of the brief: ## Progress with one line "Stage: <v>"
+assert_contains "$P/docs/brief.md" "## Progress"
+assert_contains "$P/docs/brief.md" "Stage: interviewed"
+assert_eq "$(grep '^## ' "$P/docs/brief.md" | tail -1)" "## Progress" "brief.md: ## Progress is not the last ## heading"
 # CLAUDE.md: specs and plans are wiki pages with the six fields; no 0.6 wording wiki-migrate warns about
 grep 'docs/specs/' "$P/CLAUDE.md" | grep -qF 'six front-matter fields (`type: spec` / `type: plan`)' && pass || fail "CLAUDE.md: the specs/plans line does not name the six fields"
 grep -qE 'docs/superpowers|map line' "$P/CLAUDE.md" && fail "CLAUDE.md still has a 0.6 line: $(grep -nE 'docs/superpowers|map line' "$P/CLAUDE.md")" || pass
