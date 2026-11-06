@@ -261,4 +261,45 @@ if [ -d "$SANDBOX/cs/A" ]; then
 else
   echo "  note: case-sensitive volume, letter-case test skipped"; pass
 fi
+
+# --- an invalid setting is named once, at startup only
+rm -rf "$SANDBOX/ss"; mkdir -p "$SANDBOX/ss/xdg/corecrew" "$SANDBOX/ss/el"
+SSC="$SANDBOX/ss/Core"; CORE_DIR="$SSC" setup_core
+printf 'core_dir: %s\n' "$SSC" > "$SANDBOX/ss/xdg/corecrew/settings"
+sinput() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"SessionStart","source":"%s"}' "$1" "$2"; }
+rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
+OUT="$(sinput "$SANDBOX/ss/el" startup | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
+case "$OUT" in "{\"systemMessage\":\""*"core_dir"*"Core"*) pass ;; *) fail "elsewhere, startup: expected one systemMessage with the warning, got: $OUT" ;; esac
+assert_eq "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "1" "elsewhere: one line"
+OUT="$(sinput "$SANDBOX/ss/el" resume | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
+assert_eq "$OUT" "" "elsewhere, resume: silent"
+OUT="$(sinput "$SANDBOX/ss/el" compact | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
+assert_eq "$OUT" "" "elsewhere, compact: silent"
+if command -v python3 >/dev/null 2>&1; then
+  rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
+  J="$(sinput "$SANDBOX/ss/el" startup | env -u CORE_DIR HOME="$SANDBOX/ss/nohome" XDG_CONFIG_HOME="$SANDBOX/ss/none" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
+  printf '%s' "$J" | python3 -I -c 'import json,sys; d=json.loads(sys.stdin.read()); m=d["systemMessage"]; assert "core_dir" in m and "Core not found" in m' && pass || fail "warning + hint is not one valid JSON line: $J"
+fi
+# several warnings: one per line (JSON \n), in the person's language
+printf 'core_dir: %s\nattribution: yes\nmodel_profile: fast\nui_language: ru\n' "$SSC" > "$SANDBOX/ss/xdg/corecrew/settings"
+rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
+OUT="$(sinput "$SANDBOX/ss/el" startup | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" bash "$H" 2>&1)"
+assert_eq "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "1" "several warnings: one JSON line"
+case "$OUT" in *'attribution'*'\n'*'model_profile'*) pass ;; *) fail "several warnings: expected an escaped newline between them: $OUT" ;; esac
+case "$OUT" in *"файл настроек"*) pass ;; *) fail "ru warning expected: $OUT" ;; esac
+case "$OUT" in *"settings file"*) fail "English source label in ru: $OUT" ;; *) pass ;; esac
+mkdir -p "$SSC/wpx/docs"; echo "# wpx" > "$SSC/wpx/CLAUDE.md"
+OUT="$(sinput "$SSC/wpx" startup | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" bash "$H" 2>&1)"
+assert_eq "$(printf '%s\n' "$OUT" | grep -cE '^corecrew: (attribution|model_profile) ')" "2" "project: one warning per line"
+printf 'core_dir: %s\n' "$SSC" > "$SANDBOX/ss/xdg/corecrew/settings"
+# inside a project: a plain stdout line before the project header
+mkdir -p "$SSC/wpx/docs"; echo "# wpx" > "$SSC/wpx/CLAUDE.md"
+OUT="$(sinput "$SSC/wpx" startup | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
+first="$(printf '%s\n' "$OUT" | head -1)"
+case "$first" in *core_dir*Core*) pass ;; *) fail "project: warning should be the first line, got: $first" ;; esac
+printf '%s\n' "$OUT" | grep -qF "wpx" && pass || fail "project header still printed: $OUT"
+OUT="$(sinput "$SSC/wpx" resume | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
+printf '%s\n' "$OUT" | grep -q "core_dir" && fail "project, resume: no warning expected" || pass
+OUT="$(sinput "$SSC/wpx" startup | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" bash "$H" 2>&1)"
+printf '%s\n' "$OUT" | grep -q "not valid" && fail "no warning without a problem" || pass
 finish

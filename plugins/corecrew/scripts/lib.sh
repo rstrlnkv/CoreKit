@@ -1,8 +1,10 @@
 # Shared helpers for the plugin's scripts. Source it, or run it: bash lib.sh get|set <key> [value].
-# Settings come from plugin options (CLAUDE_PLUGIN_OPTION_*) and from <Core>/.coredev
-# (lines "key: value"). The settings file is read, never executed.
-# load_settings sets: CORE_DIR, CORE_NAME, ATTRIBUTION, MODEL_PROFILE, APP_ID_PREFIX.
-# (ui_language is read by hooks/messages.sh through opt_value.)
+# User settings (core_dir, attribution, model_profile, ui_language) come, per key, from: the CORE_DIR
+# env (core_dir only), the plugin option CLAUDE_PLUGIN_OPTION_<KEY> (Claude Code), the settings file
+# ~/.config/corecrew/settings or $CORECREW_CONFIG (lines "key: value"; the only source in Codex), the
+# default. Project facts live in <Core>/.coredev (lines "key: value"). Files are read, never executed.
+# load_settings sets: CORE_DIR, CORE_NAME, PROJECTS_DIR, ATTRIBUTION, MODEL_PROFILE, UI_LANGUAGE,
+# APP_ID_PREFIX, SETTINGS_WARN (records "key<TAB>value<TAB>source<TAB>value in effect" of values ignored as invalid).
 
 # The Core layout schema this plugin version writes and expects (the one place it is defined).
 COREDEV_SCHEMA=2
@@ -102,21 +104,141 @@ opt_value() {
   printf '%s' "$1"
 }
 
-# load_settings — CORE_DIR: $CORE_DIR, else $CLAUDE_PLUGIN_OPTION_CORE_DIR, else ~/Projects/Core.
-# A value that is an unsubstituted ${user_config.*} placeholder counts as unset.
+# settings_file_path — the settings file: $CORECREW_CONFIG, else $XDG_CONFIG_HOME/corecrew/settings
+# (an empty or relative XDG_CONFIG_HOME is ignored), else ~/.config/corecrew/settings.
+settings_file_path() {
+  if [ -n "${CORECREW_CONFIG:-}" ]; then printf '%s' "$CORECREW_CONFIG"; return 0; fi
+  case "${XDG_CONFIG_HOME:-}" in
+    /*) printf '%s/corecrew/settings' "${XDG_CONFIG_HOME%/}" ;;
+    *) printf '%s/.config/corecrew/settings' "$HOME" ;;
+  esac
+}
+
+# _sf_get <key> — the value of the first "key: value" line of the settings file: trimmed, one pair of
+# matching quotes removed, CR dropped, "#" inside a value is data; blanks before the colon and a leading
+# UTF-8 BOM are accepted. A missing file prints nothing.
+_sf_get() {
+  local f line v k first=1; f="$(settings_file_path)"
+  [ -f "$f" ] && [ -r "$f" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ "$first" = 1 ]; then first=0; line="${line#$'\xef\xbb\xbf'}"; fi   # UTF-8 BOM
+    line="${line%$'\r'}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    case "$line" in *:*) ;; *) continue ;; esac
+    k="${line%%:*}"; k="${k%"${k##*[![:space:]]}"}"
+    [ "$k" = "$1" ] || continue
+    v="${line#*:}"
+    v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
+    if [ "${#v}" -ge 2 ]; then
+      case "$v" in \"*\") v="${v#\"}"; v="${v%\"}" ;; \'*\') v="${v#\'}"; v="${v%\'}" ;; esac
+    fi
+    printf '%s' "$v"; return 0
+  done < "$f"
+  return 0
+}
+
+# _setting_valid <key> <value> — exit 0 when the value is usable. core_dir: ~, ~/..., or an absolute path.
+_setting_valid() {
+  case "$1:$2" in
+    core_dir:"~"|core_dir:"~/"*|core_dir:/*) return 0 ;;
+    attribution:allow|attribution:forbid) return 0 ;;
+    model_profile:economy|model_profile:balanced|model_profile:strong) return 0 ;;
+    ui_language:en|ui_language:ru) return 0 ;;
+  esac
+  return 1
+}
+
+# _resolve_setting <key> — sets REPLY to the value of core_dir|attribution|model_profile|ui_language and
+# appends the ignored invalid values to SETTINGS_WARN as "key<TAB>value<TAB>source<TAB>value in effect"
+# (source: env, option or file). Order: env CORE_DIR (core_dir only), plugin option, settings file,
+# default. Empty, placeholder and invalid values fall through to the next source.
+_resolve_setting() {
+  local key="$1" i v src bad="" k s
+  REPLY=""
+  for i in 1 2 3; do
+    v=""; src=""
+    case "$i:$key" in
+      1:core_dir) v="${CORE_DIR:-}"; src="env" ;;
+      2:core_dir) v="${CLAUDE_PLUGIN_OPTION_CORE_DIR:-}"; src="option" ;;
+      2:attribution) v="${CLAUDE_PLUGIN_OPTION_ATTRIBUTION:-}"; src="option" ;;
+      2:model_profile) v="${CLAUDE_PLUGIN_OPTION_MODEL_PROFILE:-}"; src="option" ;;
+      2:ui_language) v="${CLAUDE_PLUGIN_OPTION_UI_LANGUAGE:-}"; src="option" ;;
+      3:*) v="$(_sf_get "$key")"; src="file" ;;
+      *) continue ;;
+    esac
+    v="$(opt_value "$v")"
+    [ -n "$v" ] || continue
+    if _setting_valid "$key" "$v"; then REPLY="$v"; break; fi
+    # an unknown ui_language is silently English (as documented in hooks/messages.sh); the rest is named
+    [ "$key" = ui_language ] || bad="${bad}${v}"$'\t'"${src}"$'\n'
+  done
+  if [ -z "$REPLY" ]; then
+    case "$key" in
+      core_dir) REPLY="~/Projects/Core" ;; attribution) REPLY=allow ;;
+      model_profile) REPLY=balanced ;; ui_language) REPLY=en ;;
+    esac
+  fi
+  while IFS=$'\t' read -r v s; do
+    [ -n "$v" ] || continue
+    SETTINGS_WARN="${SETTINGS_WARN}${key}"$'\t'"${v}"$'\t'"${s}"$'\t'"${REPLY}"$'\n'
+  done <<< "$bad"
+  return 0
+}
+
+# _settings_file_check — a settings file that exists but cannot be read is named once (key settings_file).
+_settings_file_check() {
+  local f; f="$(settings_file_path)"
+  if [ -f "$f" ] && [ ! -r "$f" ]; then
+    SETTINGS_WARN="${SETTINGS_WARN}settings_file"$'\t'"${f}"$'\t'"file"$'\t'"the defaults"$'\n'
+  fi
+  return 0
+}
+
+# resolve_setting <key> — prints the value (see _resolve_setting; warnings are not kept).
+resolve_setting() { local SETTINGS_WARN=""; _resolve_setting "$1"; printf '%s' "$REPLY"; }
+
+# settings_warning_lines — SETTINGS_WARN as English lines for stderr, one per ignored value: what is wrong,
+# where to fix it, what is used instead. (hooks/messages.sh has the same texts in en and ru.)
+settings_warning_lines() {
+  local k v s e sl fx
+  while IFS=$'\t' read -r k v s e; do
+    [ -n "$k" ] || continue
+    if [ "$k" = settings_file ]; then
+      printf 'corecrew: the settings file %s cannot be read; its values are ignored and the defaults are used.\n' "$v"; continue
+    fi
+    case "$s" in
+      env) sl="environment variable CORE_DIR"; fx="Unset or correct the CORE_DIR variable." ;;
+      option) sl="plugin option"; fx="Correct it in the plugin's options in Claude Code." ;;
+      *) sl="settings file"; fx="Correct it in $(settings_file_path)." ;;
+    esac
+    case "$k" in
+      core_dir) printf 'corecrew: core_dir "%s" (%s) is not valid: it must be an absolute path or start with ~/. %s Using %s instead.\n' "$v" "$sl" "$fx" "$e" ;;
+      attribution) printf 'corecrew: attribution "%s" (%s) is not valid: use allow or forbid. %s Using "%s" instead.\n' "$v" "$sl" "$fx" "$e" ;;
+      model_profile) printf 'corecrew: model_profile "%s" (%s) is not valid: use economy, balanced or strong. %s Using "%s" instead.\n' "$v" "$sl" "$fx" "$e" ;;
+      *) printf 'corecrew: %s "%s" (%s) is not valid. %s Using "%s" instead.\n' "$k" "$v" "$sl" "$fx" "$e" ;;
+    esac
+  done <<< "$SETTINGS_WARN"
+}
+
+# _core_raw <value> — sets CORE_RAW: the core_dir value with ~ expanded and no trailing slash.
+_core_raw() {
+  CORE_RAW="$(expand_home "$1")"
+  while [ "${#CORE_RAW}" -gt 1 ] && [ "${CORE_RAW%/}" != "$CORE_RAW" ]; do CORE_RAW="${CORE_RAW%/}"; done
+}
+
+# load_settings — see the header. An invalid core_dir (not absolute, not ~...) is ignored with a warning,
+# never read as relative to the current folder.
 load_settings() {
-  local c o a m
-  c="$(opt_value "${CORE_DIR:-}")"; o="$(opt_value "${CLAUDE_PLUGIN_OPTION_CORE_DIR:-}")"
-  a="$(opt_value "${CLAUDE_PLUGIN_OPTION_ATTRIBUTION:-}")"; m="$(opt_value "${CLAUDE_PLUGIN_OPTION_MODEL_PROFILE:-}")"
-  local raw; raw="$(expand_home "${c:-${o:-$HOME/Projects/Core}}")"
-  while [ "${#raw}" -gt 1 ] && [ "${raw%/}" != "$raw" ]; do raw="${raw%/}"; done
-  CORE_DIR="$(canon_dir "$raw")"
+  SETTINGS_WARN=""
+  _settings_file_check
+  _resolve_setting core_dir; _core_raw "$REPLY"; CORE_DIR="$(canon_dir "$CORE_RAW")"
   CORE_NAME="$(basename "$CORE_DIR")"
   # beside the Core as typed: a core_dir that is a symlink keeps the code folders next to the link,
   # not next to its target
-  PROJECTS_DIR="$(canon_dir "$(dirname "$raw")")"
-  ATTRIBUTION="${a:-allow}"
-  MODEL_PROFILE="${m:-balanced}"
+  PROJECTS_DIR="$(canon_dir "$(dirname "$CORE_RAW")")"
+  _resolve_setting attribution; ATTRIBUTION="$REPLY"
+  _resolve_setting model_profile; MODEL_PROFILE="$REPLY"
+  _resolve_setting ui_language; UI_LANGUAGE="$REPLY"
   APP_ID_PREFIX="$(coredev_get app-id-prefix)"
 }
 
@@ -466,17 +588,41 @@ projects_entry() {
   fi
 }
 
-# CLI: bash lib.sh get <key> | set <key> <value> | ready (exit 0 when core_ready) | core-dir (absolute path)
+# CLI: bash lib.sh get <key> | set <key> <value> | ready (exit 0 when core_ready) | core-dir (absolute path; warnings for ignored values on stderr)
+#      | settings [key[=optionvalue] ...] (resolved user settings, one "key: value" line each)
+#      | setting-path (the settings file path)
 #      | schema (the plugin's schema number) | core-paths <project> (the Core paths `save` commits for
 #      the project, one line, space-separated; from _locate.sh next to this file)
 #      | project-of <path> | code-dir <name> | layout <name> (see project_of, code_dir_of, layout_of)
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  _ORIG_CORE_DIR="${CORE_DIR:-}"
   load_settings
   case "${1:-}" in
     get) [ $# -eq 2 ] || { echo "Usage: lib.sh get <key>" >&2; exit 2; }; coredev_get "$2" ;;
     set) [ $# -eq 3 ] || { echo "Usage: lib.sh set <key> <value>" >&2; exit 2; }; coredev_set "$2" "$3" ;;
     ready) core_ready ;;
-    core-dir) printf '%s\n' "$CORE_DIR" ;;
+    core-dir) printf '%s\n' "$CORE_DIR"; settings_warning_lines >&2 ;;
+    setting-path) settings_file_path; echo ;;
+    settings)
+      shift; keys=""; CORE_DIR="$_ORIG_CORE_DIR"; SETTINGS_WARN=""; _settings_file_check
+      for a in "$@"; do
+        k="${a%%=*}"; v=""; [ "$k" = "$a" ] || v="${a#*=}"
+        case "$k" in
+          core_dir) [ "$k" = "$a" ] || CLAUDE_PLUGIN_OPTION_CORE_DIR="$v" ;;
+          attribution) [ "$k" = "$a" ] || CLAUDE_PLUGIN_OPTION_ATTRIBUTION="$v" ;;
+          model_profile) [ "$k" = "$a" ] || CLAUDE_PLUGIN_OPTION_MODEL_PROFILE="$v" ;;
+          ui_language) [ "$k" = "$a" ] || CLAUDE_PLUGIN_OPTION_UI_LANGUAGE="$v" ;;
+          *) echo "Usage: lib.sh settings [core_dir|attribution|model_profile|ui_language[=value] ...]" >&2; exit 2 ;;
+        esac
+        keys="$keys $k"
+      done
+      [ -n "$keys" ] || keys="core_dir attribution model_profile ui_language"
+      for k in $keys; do
+        _resolve_setting "$k"
+        if [ "$k" = core_dir ]; then _core_raw "$REPLY"; printf 'core_dir: %s\n' "$(canon_dir "$CORE_RAW")"
+        else printf '%s: %s\n' "$k" "$REPLY"; fi
+      done
+      settings_warning_lines >&2 ;;
     schema) printf '%s\n' "$COREDEV_SCHEMA" ;;
     project-of) [ $# -eq 2 ] || { echo "Usage: lib.sh project-of <path>" >&2; exit 2; }; project_of "$2" ;;
     code-dir) [ $# -eq 2 ] || { echo "Usage: lib.sh code-dir <name>" >&2; exit 2; }; code_dir_of "$2" ;;
@@ -485,6 +631,6 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
       [ $# -eq 2 ] && [ -n "$2" ] || { echo "Usage: lib.sh core-paths <project>" >&2; exit 2; }
       . "$(dirname "${BASH_SOURCE[0]}")/_locate.sh" || exit 1
       core_paths "$CORE_DIR" "$2" ;;
-    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | schema | core-paths <project> | project-of <path> | code-dir <name> | layout <name>" >&2; exit 2 ;;
+    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | settings [key[=value] ...] | setting-path | schema | core-paths <project> | project-of <path> | code-dir <name> | layout <name>" >&2; exit 2 ;;
   esac
 fi

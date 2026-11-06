@@ -21,9 +21,12 @@ pass the Core location: `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/scripts/<sc
   After writing a document, show a 2–4 line summary of it in chat in the user's language.
 
 ## Settings
-Claude Code asks for the plugin options when the plugin is enabled. The Core setting is
+Claude Code asks for the plugin options when the plugin is enabled (in Codex the settings file
+`~/.config/corecrew/settings` holds them). The Core setting is
 `${user_config.core_dir}`. A value that still reads literally `${user_config.` means the plugin is
-unconfigured: treat it as unset; the scripts then use the default `~/Projects/Core`. Below,
+unconfigured: treat it as unset; the scripts then use the settings file, else the default
+`~/Projects/Core`. If the core-dir command in stage 0 prints a line on stderr, tell the user in plain
+words that their core_dir setting was ignored and why. Below,
 `<Core>` means the absolute Core path resolved once in stage 0 (when resuming at a later stage,
 resolve it first the same way), `<CoreName>` its last path component, `<Projects>` its parent folder (where the code repos live), `<prefix>` the app id prefix
 stored in `<Core>/.coredev`:

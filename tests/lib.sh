@@ -29,6 +29,7 @@ new_sandbox() {
   SANDBOX="$(cd -P "$SANDBOX" && pwd)"   # physical path: scripts print canonical paths
   export CORE_DIR="$SANDBOX/Projects/Core"
   export CLAUDE_PLUGIN_DATA="$SANDBOX/plugin-data"   # never the real ~/.claude
+  unset CORECREW_CONFIG   # the settings file is looked up under the sandbox XDG_CONFIG_HOME
   # Nothing from the developer's machine: no real HOME, XDG config, global or system git config
   # (a global excludes file, init.defaultBranch, ...). Git identity comes from the env vars below.
   mkdir -p "$SANDBOX/home" "$SANDBOX/xdg"; : > "$SANDBOX/gitconfig"

@@ -191,8 +191,7 @@ done
 sec_has "$SK" Start 'cd "${CLAUDE_SKILL_DIR}/../.." && pwd'
 sec_has "$SK" Start '`<scripts>` is `<plugin>/scripts`'
 sec_has "$SK" Start 'opened with Read'
-sec_has "$SK" Start 'attribution: `${user_config.attribution}`'
-sec_has "$SK" Start 'model profile: `${user_config.model_profile}`'
+sec_has "$SK" Start 'lib.sh" settings attribution='"'"'${user_config.attribution}'"'"' model_profile='"'"'${user_config.model_profile}'"'"
 assert_contains "$REL" '<scripts>/save'
 assert_contains "$REL" '<scripts>/wiki-check.sh'
 assert_contains "$T/references/adopt.md" '<scripts>/adopt.sh'

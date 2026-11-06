@@ -52,4 +52,27 @@ assert_contains "$NP" 'setup-core.sh" "<Core>"'
 # scaffold's exit 2 "target exists": a folder of that name beside the Core is never touched
 assert_contains "$NP" '`target exists: <path>`'
 assert_contains "$NP" '/corecrew:task adopt <path>'
+
+# `lib.sh" settings key='${user_config.key}' ...` spans: run with literal placeholders, defaults come out.
+n=0
+for sk in "$PLUGIN"/skills/*/SKILL.md; do
+  d="$(dirname "$sk")"
+  while IFS= read -r cmd; do
+    [ -n "$cmd" ] || continue
+    n=$((n + 1))
+    cmd="$(printf '%s' "$cmd" | sed "s|\${CLAUDE_SKILL_DIR}|$d|g")"
+    for sh in $shells; do
+      out="$(cd "$SANDBOX" && "$sh" -c "$cmd" 2>&1)"
+      case "$out" in *"bad substitution"*) fail "$sh: bad substitution: $cmd" ;; *) pass ;; esac
+      case "$cmd" in
+        *attribution=*) case "$out" in *"attribution: allow"*) pass ;; *) fail "$sh: settings command prints no default attribution: $out" ;; esac ;;
+      esac
+      case "$cmd" in
+        *model_profile=*) case "$out" in *"model_profile: balanced"*) pass ;; *) fail "$sh: settings command prints no default model_profile: $out" ;; esac ;;
+      esac
+    done
+  done <<< "$(grep -oE "\`bash \"[^\`]*lib\.sh\" settings [^\`]*user_config[^\`]*\`" "$sk" | tr -d '`')"
+done
+[ "$n" -ge 1 ] && pass || fail "expected a settings command with placeholders in the skills, found $n"
+assert_contains "$PLUGIN/skills/task/SKILL.md" 'lib.sh" settings'
 finish

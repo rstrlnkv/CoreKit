@@ -25,13 +25,16 @@ Talk to the user in their language, in plain words. Everything on disk (version,
 commit messages) is English. Report labels (`Merged:`, `Version:`, `Open:`) stay English.
 
 ## Settings
-Settings arrive as `${user_config.core_dir}` and `${user_config.attribution}`.
-A value that still reads literally `${user_config.` means the plugin is unconfigured: treat it as unset and use the
-defaults: `core_dir` `~/Projects/Core`, `attribution` `allow`.
+In Claude Code the settings arrive as the plugin options `${user_config.core_dir}` and
+`${user_config.attribution}`; in Codex they live in the settings file (see Settings in the task
+skill). A value that still reads literally `${user_config.` means the plugin is unconfigured: treat
+it as unset. Resolve attribution with the `lib.sh settings` call in Start of the task skill; the
+defaults are `core_dir` `~/Projects/Core`, `attribution` `allow`.
 
 ## Start
 1. **Core.** Resolve `<Core>` to an absolute path and show it:
    `CORE_DIR='${user_config.core_dir}' bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" core-dir`.
+   If that command prints a line on stderr, tell the user in plain words that their core_dir setting was ignored and why.
    Then do steps 1, 2 and 4–6 of Start in the task skill (set-up, project and code root, the
    `check:` line and the standards, clean tree, base commits), with the same stops.
 2. **Branch.** In the code root: `git rev-parse --abbrev-ref HEAD` is the branch. On `main`

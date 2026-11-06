@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # The one table of every message the corecrew hooks show. Sourced by all five hooks.
 #
-#   msg <key> [arg ...]    prints the text of <key> in the language of the plugin setting ui_language
-#                          ($CLAUDE_PLUGIN_OPTION_UI_LANGUAGE), without a final newline.
+#   msg <key> [arg ...]    prints the text of <key> in the language of the setting ui_language
+#                          (lib.sh resolve_setting: plugin option, then settings file), without a final newline.
 #   msg_has <key> <lang>   exit 0 when the table has a <lang> text for <key>.
 #   MSG_KEYS               the list of keys (tests/test_hook_messages.sh checks both languages for each).
 #
-# Languages: en (default) and ru. An unset, empty, unknown or unsubstituted "${user_config." value is en.
+# Languages: en (default) and ru. An unset, empty, unknown or unsubstituted "${user_config." value is en
+# (lib.sh not sourced: only the plugin option is read).
 # A key that lacks a text in the chosen language prints its en text.
 # In a text, @1 @2 ... stand for the arguments. They are inserted as plain text (never as a printf
 # format, never re-scanned), so a path with %, spaces, quotes or Cyrillic prints verbatim.
@@ -20,7 +21,8 @@
 MSG_KEYS="sync_failed hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
 session_rules schema_none run_starting layout_note old_hooks guard_code_blocked guard_code_public secrets_blocked secrets_ask
 local_link_created agents_link_created agents_link_wrong local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind
-readonly_agent"
+readonly_agent settings_invalid_path settings_invalid_value settings_unreadable allowed_attribution allowed_model_profile
+src_env src_option src_file fix_env fix_option fix_file"
 
 # _msg_text <lang> <key> — sets MSG_T to the text, or to nothing when there is none. Keep the keys and
 # the en:/ru: branches in step with MSG_KEYS.
@@ -83,6 +85,28 @@ _msg_text() {
     ru:dirty_docs) MSG_T='документация' ;;
     en:dirty_both) MSG_T='code and docs' ;;
     ru:dirty_both) MSG_T='код и документация' ;;
+    en:settings_invalid_path) MSG_T='corecrew: core_dir "@1" (@2) is not valid: it must be an absolute path or start with ~/. @3 Using @4 instead.' ;;
+    ru:settings_invalid_path) MSG_T='corecrew: core_dir "@1" (@2) недопустим: нужен абсолютный путь или путь, начинающийся с ~/. @3 Вместо него используется @4.' ;;
+    en:settings_invalid_value) MSG_T='corecrew: @1 "@2" (@3) is not valid: use @4. @5 Using "@6" instead.' ;;
+    ru:settings_invalid_value) MSG_T='corecrew: @1 "@2" (@3) недопустимо: допустимы @4. @5 Вместо него используется "@6".' ;;
+    en:settings_unreadable) MSG_T='corecrew: the settings file @1 cannot be read; its values are ignored and the defaults are used.' ;;
+    ru:settings_unreadable) MSG_T='corecrew: файл настроек @1 не читается; его значения игнорируются, используются значения по умолчанию.' ;;
+    en:allowed_attribution) MSG_T='allow or forbid' ;;
+    ru:allowed_attribution) MSG_T='allow или forbid' ;;
+    en:allowed_model_profile) MSG_T='economy, balanced or strong' ;;
+    ru:allowed_model_profile) MSG_T='economy, balanced или strong' ;;
+    en:src_env) MSG_T='environment variable CORE_DIR' ;;
+    ru:src_env) MSG_T='переменная окружения CORE_DIR' ;;
+    en:src_option) MSG_T='plugin option' ;;
+    ru:src_option) MSG_T='параметр плагина' ;;
+    en:src_file) MSG_T='settings file' ;;
+    ru:src_file) MSG_T='файл настроек' ;;
+    en:fix_env) MSG_T='Unset or correct the CORE_DIR variable.' ;;
+    ru:fix_env) MSG_T='Удалите переменную CORE_DIR или исправьте её.' ;;
+    en:fix_option) MSG_T='Correct it in the plugin'"'"'s options in Claude Code.' ;;
+    ru:fix_option) MSG_T='Исправьте значение в параметрах плагина в Claude Code.' ;;
+    en:fix_file) MSG_T='Correct it in @1.' ;;
+    ru:fix_file) MSG_T='Исправьте значение в файле @1.' ;;
     en:stop_remind) MSG_T='Uncommitted changes in @1. If this working step is finished, run: bash "@2" "<short English message>"@3. If you are waiting for the user'"'"'s answer or approval, do not save; just end your turn.' ;;
     ru:stop_remind) MSG_T='Есть несохранённые изменения: @1. Если этот рабочий шаг закончен, выполните: bash "@2" "<short English message>"@3. Если вы ждёте ответа или одобрения пользователя, не сохраняйте, просто закончите ответ.' ;;
   esac
@@ -91,7 +115,8 @@ _msg_text() {
 # _msg_lang — the language to use: en or ru.
 _msg_lang() {
   local l
-  if type opt_value >/dev/null 2>&1; then l="$(opt_value "${CLAUDE_PLUGIN_OPTION_UI_LANGUAGE:-}")"
+  if [ -n "${UI_LANGUAGE:-}" ]; then l="$UI_LANGUAGE"
+  elif type resolve_setting >/dev/null 2>&1; then l="$(resolve_setting ui_language)"
   else case "${CLAUDE_PLUGIN_OPTION_UI_LANGUAGE:-}" in *'${user_config.'*) l="" ;; *) l="${CLAUDE_PLUGIN_OPTION_UI_LANGUAGE:-}" ;; esac
   fi
   case "$l" in ru) printf 'ru' ;; *) printf 'en' ;; esac
@@ -117,4 +142,21 @@ msg() {
     esac
   done
   printf '%s' "$out$tpl"
+}
+
+# msg_settings_warning <key> <value> <source> <value in effect> <settings file> — one SETTINGS_WARN record
+# (lib.sh) as a sentence in the person's language: what is wrong, where to fix it, what is used instead.
+msg_settings_warning() {
+  local sl fx
+  if [ "$1" = settings_file ]; then msg settings_unreadable "$2"; return; fi
+  case "$3" in
+    env) sl="$(msg src_env)"; fx="$(msg fix_env)" ;;
+    option) sl="$(msg src_option)"; fx="$(msg fix_option)" ;;
+    *) sl="$(msg src_file)"; fx="$(msg fix_file "$5")" ;;
+  esac
+  case "$1" in
+    core_dir) msg settings_invalid_path "$2" "$sl" "$fx" "$4" ;;
+    attribution) msg settings_invalid_value "$1" "$2" "$sl" "$(msg allowed_attribution)" "$fx" "$4" ;;
+    *) msg settings_invalid_value "$1" "$2" "$sl" "$(msg allowed_model_profile)" "$fx" "$4" ;;
+  esac
 }

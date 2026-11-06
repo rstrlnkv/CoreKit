@@ -25,7 +25,7 @@ branches="$(grep -oE '^[[:space:]]*(en|ru):[a-z_]+\)' "$M" | sed -E 's/^[[:space
 wanted="$(. "$M" 2>/dev/null; for k in $MSG_KEYS; do echo "en:$k"; echo "ru:$k"; done | LC_ALL=C sort)"
 assert_eq "$branches" "$wanted" "MSG_KEYS and the en:/ru: branches agree"
 used="$(grep -ohE '\bmsg[[:space:]]+[a-z_]+' "$HOOKS"/session-start.sh "$HOOKS"/guard-code.sh "$HOOKS"/guard-secrets.sh \
-  "$HOOKS"/one-suite.sh "$HOOKS"/stop-remind.sh | awk '{print $2}' | LC_ALL=C sort -u)"
+  "$HOOKS"/one-suite.sh "$HOOKS"/stop-remind.sh "$M" | awk '{print $2}' | LC_ALL=C sort -u)"
 [ -n "$used" ] && pass || fail "no hook calls msg"
 for k in $used; do (. "$M"; msg_has "$k" en) && pass || fail "hook uses key $k that is not in the table"; done
 for k in $(. "$M" 2>/dev/null; echo $MSG_KEYS); do
@@ -231,4 +231,44 @@ sinput | vrun ru bash "$H" 2>&1 >/dev/null | grep -qF "изменения: ко�
 echo w > "$SC/n3.txt"
 sinput | vrun en bash "$H" 2>&1 >/dev/null | grep -qF "changes in code and docs." && pass || fail "stop-remind en: code and docs"
 
+
+# --- ui_language from the settings file (the plugin option still wins); an invalid file value is en
+LIBSH="$SCRIPTS/lib.sh"; mkdir -p "$SANDBOX/xdg/corecrew"; SFM="$SANDBOX/xdg/corecrew/settings"
+ftext() { ( unset CORECREW_CONFIG; . "$LIBSH"; . "$M"; "$@" ); }
+printf 'ui_language: ru\n' > "$SFM"
+unset CLAUDE_PLUGIN_OPTION_UI_LANGUAGE
+assert_eq "$(ftext msg docs_index /p)" "Индекс документации проекта: /p" "ui_language: ru in the file"
+assert_eq "$(CLAUDE_PLUGIN_OPTION_UI_LANGUAGE=en ftext msg docs_index /p)" "Project docs index: /p" "option beats file"
+printf 'ui_language: de\n' > "$SFM"
+assert_eq "$(ftext msg docs_index /p)" "Project docs index: /p" "invalid file value -> en"
+rm -f "$SFM"
+assert_eq "$(ftext msg docs_index /p)" "Project docs index: /p" "no file -> en"
+assert_contains_str() { case "$1" in *"$2"*) pass ;; *) fail "$3: $1" ;; esac; }
+assert_lacks_str() { case "$1" in *"$2"*) fail "$3: $1" ;; *) pass ;; esac; }
+wtext() { ( unset CLAUDE_PLUGIN_OPTION_UI_LANGUAGE; CLAUDE_PLUGIN_OPTION_UI_LANGUAGE="$1"; shift; . "$M"; msg_settings_warning "$@" ); }
+for l in en ru; do
+  t="$(wtext "$l" core_dir Core option '~/Projects/Core' /f/settings)"
+  assert_contains_str "$t" "core_dir" "core_dir warning $l has the key"
+  assert_contains_str "$t" "~/" "core_dir warning $l says what is allowed"
+  assert_contains_str "$t" "~/Projects/Core" "core_dir warning $l names the value in effect"
+  t="$(wtext "$l" attribution yes file allow /f/settings)"
+  assert_contains_str "$t" "/f/settings" "attribution file warning $l names the file"
+  assert_contains_str "$t" "forbid" "attribution warning $l lists the values"
+  assert_lacks_str "$t" "path" "attribution warning $l has no path advice"
+  assert_lacks_str "$t" "путь" "attribution warning $l has no path advice"
+  t="$(wtext "$l" model_profile fast file balanced /f/settings)"
+  assert_contains_str "$t" "strong" "model_profile warning $l lists the values"
+  assert_contains_str "$t" "balanced" "model_profile warning $l names the value in effect"
+  t="$(wtext "$l" core_dir x env '~/Projects/Core' /f/settings)"
+  assert_contains_str "$t" "CORE_DIR" "env warning $l names the variable"
+  assert_lacks_str "$t" "/f/settings" "env warning $l does not send to the file"
+  t="$(wtext "$l" settings_file /f/settings file 'the defaults' /f/settings)"
+  assert_contains_str "$t" "/f/settings" "unreadable file warning $l names the file"
+done
+for k in core_dir attribution model_profile; do
+  t="$(wtext ru "$k" bad option x /f/settings; wtext ru "$k" bad file x /f/settings; wtext ru "$k" bad env x /f/settings)"
+  assert_lacks_str "$t" "settings file" "ru $k warning: no English source label"
+  assert_lacks_str "$t" "plugin option" "ru $k warning: no English source label"
+  assert_lacks_str "$t" "environment variable" "ru $k warning: no English source label"
+done
 finish

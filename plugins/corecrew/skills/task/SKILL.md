@@ -29,10 +29,13 @@ Talk to the user in their language, in plain words. Everything on disk (code, do
 messages, briefs) is English. Report labels (`Path:`, `Proof:` …) stay English.
 
 ## Settings
-Settings arrive as `${user_config.core_dir}`, `${user_config.attribution}` and
-`${user_config.model_profile}`. A value that still reads literally `${user_config.` means the
-plugin is unconfigured: treat it as unset and use the defaults: `core_dir` `~/Projects/Core`,
-`attribution` `allow`, `model_profile` `balanced`.
+In Claude Code the settings arrive as the plugin options `${user_config.core_dir}`,
+`${user_config.attribution}` and `${user_config.model_profile}`. In Codex there is no options
+screen: they live in the settings file (`bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" setting-path`
+prints its path, `~/.config/corecrew/settings` by default; lines `key: value`). A value that
+still reads literally `${user_config.` means the plugin is unconfigured: treat it as unset. The scripts
+resolve each setting (option, then file, then default `core_dir` `~/Projects/Core`, `attribution`
+`allow`, `model_profile` `balanced`) with the commands in Start.
 
 Model per role, from `model_profile`; pass it as the `model` of every corecrew Agent call.
 Do not pass `model` to feature-dev agents; they use their own default.
@@ -48,12 +51,14 @@ opened with Read, which substitutes nothing, so they say `<plugin>`, `<scripts>`
 attribution value resolved at Start" instead of placeholders:
 - `<plugin>`: the absolute path printed by `cd "${CLAUDE_SKILL_DIR}/../.." && pwd`.
   `<scripts>` is `<plugin>/scripts`.
-- attribution: `${user_config.attribution}`; a value that still reads `${user_config.` means `allow`.
-- model profile: `${user_config.model_profile}`; a value that still reads `${user_config.` means `balanced`.
+- attribution and model profile: run
+  `bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" settings attribution='${user_config.attribution}' model_profile='${user_config.model_profile}'`;
+  its lines `attribution: <v>` and `model_profile: <v>` are the values to use.
 
 1. **Core.** Resolve `<Core>` first, to an absolute path (the setting may start with `~`), show it
    to the user and use it everywhere:
    `CORE_DIR='${user_config.core_dir}' bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" core-dir`.
+   If that command prints a line on stderr, tell the user in plain words that their core_dir setting was ignored and why.
    Then check set-up:
    `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" ready`
    (exit 0 = set up). If not, say in plain words that a one-time setup is needed and list what it

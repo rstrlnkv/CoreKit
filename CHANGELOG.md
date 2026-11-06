@@ -2,6 +2,20 @@
 
 Every entry starts with a badge: **NEW** is a new capability, **FIX** is a defect fixed, **UPD** is a change to existing behaviour, documentation or internal work.
 
+## 0.8.0 — 2026-11-06
+- **NEW** A settings file, `~/.config/corecrew/settings` (or the path in `CORECREW_CONFIG`), holds `core_dir`,
+  `attribution`, `model_profile` and `ui_language` as `key: value` lines; it is the settings source where there
+  is no plugin options screen. Order per key: `CORE_DIR` env (`core_dir` only), plugin option, file, default.
+- **NEW** `lib.sh settings [key[=value] ...]` prints the resolved settings and `lib.sh setting-path` the file path;
+  the task skill calls them (ship points to task); the skills call `lib.sh core-dir` and relay its stderr.
+- **FIX** A relative `core_dir` (for example `Core`) is no longer turned into `<current folder>/Core`: it is
+  ignored with a warning and the next source is used. A wrong `attribution` or `model_profile` is ignored the same way. The warning (en and ru) names the
+  setting and its source, says where to fix it and which value is used instead; several warnings are one per line. An unknown
+  `ui_language` stays silent and falls back to `en`. The file accepts blanks before the colon and a UTF-8 BOM; one that
+  cannot be read is named in a warning.
+- **UPD** The hooks read `ui_language`, and the skills `attribution` and `model_profile`, through the same resolver;
+  the session-start hook names an ignored setting at each session start (not on resume, clear or compact).
+
 ## 0.7.2 — 2026-11-06
 - **FIX** The `new-project` resume stage now lives in a `## Progress` section of the brief (`Stage: <stage>`)
   instead of a `stage:` front matter field, which the wiki rules do not allow.

@@ -27,6 +27,19 @@ if [ -n "$syncerr" ]; then
   if [ -n "$proj" ]; then printf '%s\n' "$syncerr"; else printf '%s\n' "$syncerr" >&2; fi
 fi
 
+# An invalid setting is named once per session start (not on resume, clear or compact).
+warn=""; WNL=$'\n'
+case "$(json_str "$in" source)" in
+  ""|startup)
+    while IFS=$'\t' read -r wk wv ws we; do
+      [ -n "$wk" ] || continue
+      warn="${warn:+$warn$WNL}$(msg_settings_warning "$wk" "$wv" "$ws" "$we" "$(settings_file_path)")"
+    done <<< "$SETTINGS_WARN" ;;
+esac
+# json_text <text> — escaped for a JSON string, on one line.
+# Newlines (between several warnings) become the JSON escape \n.
+json_text() { printf '%s' "$1" | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | LC_ALL=C tr '\r\t' '  ' | LC_ALL=C awk 'NR>1{printf "\\n"} {printf "%s",$0}'; }
+
 # 2. No Core yet, session elsewhere: the hint, once per machine.
 if ! core_ready && [ -z "$proj" ]; then
   if [ ! -e "$DATA/state/core-hint-shown" ]; then
@@ -34,17 +47,22 @@ if ! core_ready && [ -z "$proj" ]; then
     # below would then mark a hint nobody read.
     if [ -d "$CORE_DIR" ]; then hint="$(msg hint_not_set_up "$CORE_DIR")"
     else hint="$(msg hint_not_found "$CORE_DIR")"; fi
-    hint="$(printf '%s' "$hint" | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | LC_ALL=C tr '\n\r\t' '   ')"
-    printf '{"systemMessage":"%s"}\n' "$hint"
+    printf '{"systemMessage":"%s"}\n' "$(json_text "${warn:+$warn$WNL}$hint")"
     { mkdir -p "$DATA/state" && : > "$DATA/state/core-hint-shown"; } 2>/dev/null
+    exit 0
   fi
+  [ -z "$warn" ] || printf '{"systemMessage":"%s"}\n' "$(json_text "$warn")"
   exit 0
 fi
-# Core set up, session elsewhere: nothing to say.
-[ -n "$proj" ] || exit 0
+# Core set up, session elsewhere: nothing to say but a setting problem.
+if [ -z "$proj" ]; then
+  [ -z "$warn" ] || printf '{"systemMessage":"%s"}\n' "$(json_text "$warn")"
+  exit 0
+fi
 
 # 3. Inside a project.
 P="$CORE_DIR/$proj"; T="$DATA/tools"
+[ -z "$warn" ] || printf '%s\n' "$warn"
 printf '%s\n' "$(msg project_header "$proj" "$CORE_DIR")"
 printf '%s\n' "$(msg docs_index "$P/docs/INDEX.md")"
 noattr=""; [ "$ATTRIBUTION" = forbid ] && noattr=" --no-attribution"

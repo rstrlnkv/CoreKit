@@ -18,4 +18,6 @@ git -C "$SANDBOX/r" check-ignore -q .claude/settings.local.json && fail "setting
   || { fail "sandbox not isolated; skipping the global write"; finish; exit 1; }
 git config --global test.isolation yes
 assert_contains "$SANDBOX/gitconfig" "isolation = yes"
+
+[ -z "${CORECREW_CONFIG:-}" ] && pass || fail "CORECREW_CONFIG leaks into the sandbox"
 finish

@@ -25,7 +25,7 @@ is written, summarize it in 2–4 lines in the user's language.
 ## Start
 The Core setting is `${user_config.core_dir}`.
 A value that still reads literally `${user_config.` means the plugin is unconfigured: treat it as
-unset; the script below then uses the default `~/Projects/Core`. First resolve `<Core>` to an absolute path and use that path in
+unset; the script below then uses the settings file (`~/.config/corecrew/settings`, the only source in Codex), else the default `~/Projects/Core`. If it prints a line on stderr, tell the user in plain words that their core_dir setting was ignored and why. First resolve `<Core>` to an absolute path and use that path in
 every command and file write below (the setting may start with `~`):
 `CORE_DIR='${user_config.core_dir}' bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" core-dir`
 

@@ -106,6 +106,24 @@ Asked when the plugin is enabled from inside Claude Code (a command-line install
 | `model_profile` | `economy` / `balanced` / `strong` | `balanced` | Which models the crew uses per role |
 | `ui_language` | `en` / `ru` | `en` | Language of the messages the hooks show |
 
+`core_dir` must be absolute or start with `~` (a full path such as `~/Core`, or one starting with `/`); a relative value such as `Core` is ignored with a warning and the next source is used. A value that is not one of the listed values is ignored the same way, except `ui_language`: an unknown value silently falls back to `en`. A warning names the setting, where it came from, where to fix it and the value used instead; a settings file that cannot be read is named too.
+
+**Settings file.** Without an options screen (Codex, or a command-line install) the settings live in `~/.config/corecrew/settings`, one `key: value` per line (`#` starts a comment line; quotes around a value are optional). Set `CORECREW_CONFIG` to use another path. The file is read, never executed.
+
+```
+core_dir: ~/Projects/Core
+attribution: allow
+model_profile: balanced
+ui_language: en
+```
+
+Per key, the first of these that holds a valid value wins: the `CORE_DIR` environment variable (`core_dir` only), the plugin option, the settings file, the default. To create the file without overwriting an existing one:
+
+```bash
+f="${XDG_CONFIG_HOME:-$HOME/.config}/corecrew/settings"
+[ -e "$f" ] || { mkdir -p "$(dirname "$f")" && printf 'core_dir: ~/Projects/Core\nattribution: allow\nmodel_profile: balanced\nui_language: en\n' > "$f"; }
+```
+
 ### `new-project` (corecrew)
 
 Say "new project" (or run `/corecrew:new-project`) and Claude:
