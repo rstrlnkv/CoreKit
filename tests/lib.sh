@@ -51,7 +51,7 @@ setup_core() {
 # (<Core>/<name>/code), for tests of the old-layout paths. Silent.
 scaffold_old() {
   bash "$SKILL/scripts/scaffold.sh" --name "$1" >/dev/null || return 1
-  mv "$(dirname "$CORE_DIR")/$1" "$CORE_DIR/$1/code" && rm -f "$CORE_DIR/$1/code/CLAUDE.local.md"
+  mv "$(dirname "$CORE_DIR")/$1" "$CORE_DIR/$1/code" && rm -f "$CORE_DIR/$1/code/CLAUDE.local.md" "$CORE_DIR/$1/code/AGENTS.md"
 }
 
 # sync_tools — copies the plugin's scripts into $COREDEV_TOOLS (what session-start does),

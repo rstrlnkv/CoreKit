@@ -104,7 +104,7 @@ Say "new project" (or run `/corecrew:new-project`) and Claude:
 2. **Analyses** platform constraints, compares 2–3 stacks with scores and a recommendation
    (Flutter, SwiftUI, Tauri, Vite, Python bot/CLI), verifies them against official docs, and
    sketches the architecture. You approve each part.
-3. **Records decisions** in a small wiki (`docs/`, YAML front matter, ADRs) — in English.
+3. **Records decisions** in a small wiki (`docs/`: typed YAML front matter, `[[wikilinks]]`, a generated `INDEX.md`, ADRs; opens as an Obsidian vault) — in English.
 4. **Scaffolds** the project with the stack's official generator and checks that it builds.
 5. **Creates GitHub repos** — only after you approve each one.
 
@@ -114,7 +114,7 @@ Say "new project" (or run `/corecrew:new-project`) and Claude:
   .coredev, PROJECTS.md, standards/, knowledge/
   my-app/CLAUDE.md, docs/     private files of the project (<Core>/<name>/)
 ~/Projects/my-app/            the code (<Projects>/<name> in the docs) — its own repo, can be public
-  CLAUDE.local.md             gitignored link to Core/my-app/CLAUDE.md
+  CLAUDE.local.md, AGENTS.md  gitignored links to Core/my-app/CLAUDE.md
 ```
 `<Projects>` is the folder that holds the Core. Launch Claude Code in the code folder
 (`~/Projects/my-app`): it reads the private `CLAUDE.md` through the `CLAUDE.local.md` link, which
@@ -136,7 +136,7 @@ docs repo. The plugin's Stop hook reminds Claude to save when a step is left unc
 
 Inside a Core project (the Core folder, or the code folder beside it) and nowhere else:
 
-- **Session start** refreshes the plugin's tools, links `CLAUDE.local.md`, and prints the project, the docs index, the save and undo commands and your `session-rules.md`.
+- **Session start** refreshes the plugin's tools, links `CLAUDE.local.md` and `AGENTS.md`, and prints the project, the docs index, the save and undo commands and your `session-rules.md`.
 - **Secrets guard** refuses to read `.env`, `.env.*` (not `.env.example`) and `~/.ssh`, also through `bash -c`, `sh -c` and `eval`.
   For Bash it is a best-effort check, not a sandbox: it does not see `python -c`, `node -e`, `find -exec`, `git show REV:.env`, `dd` or `curl -F @.env`.
   Treat it as a seat belt against accidents, not as protection from a determined program.

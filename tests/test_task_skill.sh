@@ -217,4 +217,16 @@ assert_not_contains "$BR" '<Core>/<project>/code/'
 assert_not_contains "$REL" '../docs/'
 assert_not_contains "$PA" '<Core>/<project>/code'
 assert_not_contains "$PLUGIN/reference/wiki.md" 'relative to `code/`'
+# Start steps 1-8 in order; the wiki step (6) sits between the clean tree and the base commits.
+prev=0
+for n in 1 2 3 4 5 6 7 8; do
+  l="$(section "$SK" Start | grep -nE "^$n\\. " | head -1 | cut -d: -f1)"
+  if [ -n "$l" ] && [ "$l" -gt "$prev" ]; then pass; else fail "SKILL.md Start step $n missing or out of order"; fi
+  prev="${l:-$prev}"
+done
+section "$SK" Start | grep -E '^6\. ' | grep -qF '**Wiki.**' && pass || fail "SKILL.md Start step 6 is not the wiki step"
+section "$SK" Start | grep -E '^7\. ' | grep -qF '**Base commits.**' && pass || fail "SKILL.md Start step 7 is not Base commits"
+assert_contains "$REL" 'Start step 6'
+# 0.7 wiki: the release wiki step regenerates INDEX.md before the check (more in test_wiki_texts.sh)
+assert_contains "$REL" 'wiki-index.sh'
 finish

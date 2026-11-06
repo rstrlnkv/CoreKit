@@ -1,11 +1,11 @@
 ---
-title: Login
-description: How a user logs in. Read before changing the login flow.
+type: feature
 status: active
+description: How a user logs in. Read before changing the login flow.
 files:
   - src/login.sh
 related:
-  - architecture.md
+  - "[[architecture]]"
 updated: 2026-11-03
 ---
 
@@ -13,7 +13,7 @@ updated: 2026-11-03
 
 ## Flow
 
-The user passes a token; `src/login.sh` checks it. Back to [components](../architecture.md#components) or [top](#flow).
+The user passes a token; `src/login.sh` checks it. Back to [[architecture#Components|components]] or [top](#flow).
 
 ## Errors
 

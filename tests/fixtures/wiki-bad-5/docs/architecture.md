@@ -1,9 +1,9 @@
 ---
-title: Architecture
-description: Components and storage. Read before structural changes.
+type: architecture
 status: active
+description: Components and storage. Read before structural changes.
 files: [src/app.sh, src/lib/]
-related: [features/login.md]
+related: ["[[login]]"]
 updated: 2026-11-03
 ---
 
@@ -11,10 +11,4 @@ updated: 2026-11-03
 
 ## Components
 
-The entry point is `src/app.sh`. Login is described in
-[the login page](features/login.md#flow). The reasoning is in
-[decision 001](decisions/001-stack.md). Official docs: [bash](https://www.gnu.org/software/bash/).
-
-## Storage
-
-Files only. See the login page for the one write path.
+The entry point is `src/app.sh`. See [[login]] and [[001-stack]].

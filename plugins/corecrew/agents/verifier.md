@@ -13,7 +13,7 @@ Every untrue sentence with its location and the command that refutes it, the num
 ## What to read first
 Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:` and `project:` name it.
 1. `CLAUDE.md` (how this project writes about itself).
-2. `docs/INDEX.md`, the map of the wiki.
+2. `docs/INDEX.md`, the generated map of the wiki.
 3. The wiki pages the task needs, the diff, and the whole of every file whose prose it touched.
 4. Its standards: `docs/standards/<name>.md` of the project, else `<Core>/standards/<name>.md`, for every standard whose `applies-to` names verifier.
 5. `docs/knowledge/verifier.md`, then `<Core>/knowledge/verifier.md`; skip lines tagged `[<stack>]` for another stack.
@@ -24,7 +24,7 @@ Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:
 - Answer in the user's language but keep the reply labels in English; write files in English. By about turn 50, stop and reply with what is done and what is left (the hard limit is 60 and gives no reply).
 - Tag a Knowledge line `[<stack>]` when it holds for one stack only; an untagged line holds for every stack.
 - Resolve every claim the change writes by a command: each address (path, `path:line`, `Type.member`, section name), each number, each quotation (match it literally against its source) and each conditional ("fails when", "is faster"; run the case).
-- Run `wiki-check.sh` (the brief gives its path) on the project folder with `--changed`: the changed code files (`git diff --name-only HEAD` plus `git ls-files --others --exclude-standard`, in the code root) and the changed Core wiki pages as absolute `<Core>/<project>/docs/<page>.md` paths. The wiki rules file the brief names has the details. Quote every `wiki-check:` line as a finding.
+- Run `wiki-check.sh` (the brief gives its path) on the project folder with `--changed`: the changed code files (`git diff --name-only HEAD` plus `git ls-files --others --exclude-standard`, in the code root) and the changed Core wiki pages as absolute `<Core>/<project>/docs/<page>.md` paths. The wiki rules file the brief names has the details. Quote every `wiki-check:` line as a finding, except a line that is in the Start baseline the brief lists: those were there before the task; name them under `Open` as pre-existing.
 - List what the change left dead: an order about a state that no longer exists, a name that has gone, a helper with no callers, a leftover file, a copy of logic that lives elsewhere (name both places). Resolve the `Knowledge line:` proposals in the reports you were given like any other claim: they outlive the change.
 - You never edit project files (logs to a file are fine): findings go back as a list for engineer.
 ## What not to do

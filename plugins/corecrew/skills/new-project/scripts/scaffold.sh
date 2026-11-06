@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Creates a project skeleton from templates: the internal docs in $CORE_DIR/<name>/ and the code
-# repo beside the Core in $PROJECTS_DIR/<name> (with a CLAUDE.local.md symlink to the private CLAUDE.md).
+# repo beside the Core in $PROJECTS_DIR/<name> (with CLAUDE.local.md and AGENTS.md symlinks to the private CLAUDE.md).
 # Never overwrites existing files. Needs a set-up Core (scripts/setup-core.sh); exits 3 if not.
 # Usage:
 #   bash scaffold.sh --name <name> [--purpose "<text>"] [--dry-run]
@@ -47,6 +47,17 @@ fi
 
 # Project docs (the Core itself comes from setup-core.sh)
 put_project_docs "$TPL" "$P" || exit 1
+# docs/INDEX.md is generated from the pages' front matter (same path form as the lines above)
+if [ "$DRY" -eq 1 ]; then
+  if [ -f "$P/docs/INDEX.md" ]; then echo "skipped $(rel_core "$P")/docs/INDEX.md"; else echo "would create $(rel_core "$P")/docs/INDEX.md"; fi
+else
+  R="$(rel_core "$P")"
+  IDX_OUT="$(bash "$ROOT_DIR/scripts/wiki-index.sh" "$P")" || { echo "wiki-index.sh failed for $P" >&2; exit 1; }
+  while IFS=' ' read -r word rest; do
+    [ -n "$word" ] || continue
+    case "$rest" in docs/*) echo "$word $R/$rest" ;; *) echo "$word${rest:+ $rest}" ;; esac
+  done <<< "$IDX_OUT"
+fi
 
 # Code repo, beside the Core
 mkdir_p "$K"
@@ -55,6 +66,7 @@ put "$TPL/code/gitignore-common"          "$K/.gitignore" copy
 put "$TPL/code/settings.local.json.tmpl"  "$K/.claude/settings.local.json"
 put "$TPL/code/worktreeinclude"           "$K/.worktreeinclude" copy
 link_local_claude "$K" "$P" || exit 1
+link_agents "$K" "$P" || exit 1
 
 # Project list
 projects_entry "$NAME" "$PURPOSE" "$NAME/" || exit 1

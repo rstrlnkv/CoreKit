@@ -29,14 +29,18 @@
 #   git does not know your name and email (...)
 # Only files git tracks are copied and removed; ignored files stay in the repo untouched.
 # Exit 1 (nothing deleted; the message says where the files are): a failed mv after the repo commit.
+# Exit 1 (nothing changed; wiki-migrate's stderr line says why): wiki-migrate fails on the staged copy (new
+# layout), before the repo commit.
 # Steps (new layout): copy CLAUDE.md, AGENTS.md, docs/ and .claude/ (not settings.local.json, not
-# worktrees/, not --public-docs paths) into a temp folder in the Core; add the wiki map and the pages the
-# new-project templates have that are missing, the check: line and public-docs: line; fold each tracked
+# worktrees/, not --public-docs paths) into a temp folder in the Core; add the pages the new-project
+# templates have that are missing, the check: line and public-docs: line; fold each tracked
 # .claude/rules/<f>.md into CLAUDE.md as "### <f>" under "## Rules" (the heading is added at the end when
 # missing; "Applies to: <paths>" from its paths: front matter, the front matter itself dropped, its
 # headings moved three levels down); other tracked .claude/ files are kept in <Core>/<name>/.claude/,
-# where they no longer load (the plan and the report list them); give copied pages that lack wiki front
-# matter the missing fields. Then one commit in the repo "Move internal Claude files to Core" (git rm of
+# where they no longer load (the plan and the report list them); convert the copied wiki with
+# wiki-migrate.sh (typed front matter, wikilinks, docs/superpowers/{specs,plans} moved, the Obsidian
+# files, INDEX.md generated; updated dates from the repo; its warning: lines are printed). Then one
+# commit in the repo "Move internal Claude files to Core" (git rm of
 # the copied and folded files, plus the corecrew ignore lines of the new-project .gitignore template that
 # the repo's .gitignore lacks, appended at its end: user lines are never changed or removed; plus
 # .worktreeinclude from the new-project template when the repo has none, so native worktrees get
@@ -48,9 +52,12 @@
 # worktrees under .claude/worktrees are repaired; each <Core>/<name>/.claude/rules/<f>.md is folded into
 # <Core>/<name>/CLAUDE.md the same way (the rule files are kept; they no longer load); a warning: line
 # names <Core>/<name>/CLAUDE.md when it still says ../docs/ or `code/` (it is not rewritten).
+# Then wiki-migrate.sh converts <Core>/<name>/docs in place (its failure is a warning: line; the
+# change goes into the "Adopt <name>" commit).
 # Warnings (plan and report): tracked CLAUDE.md / AGENTS.md / CLAUDE.local.md files that stay in the repo
 # (nested ones, public ones), which corecrew's hooks block changing or adding after adopt.
-# Both: CLAUDE.local.md in the code folder becomes a link to <Core>/<name>/CLAUDE.md;
+# Both: CLAUDE.local.md and AGENTS.md in the code folder become links to <Core>/<name>/CLAUDE.md
+# (AGENTS.md is not linked while <Core>/<name>/AGENTS.md exists: a warning: line asks to fold it);
 # .claude/settings.local.json is created from the template when missing (else left as is, with a
 # warning: line naming the additionalDirectories entry to add when it lacks it); git hook shims are
 # installed; PROJECTS.md gets (or has updated) its line "- <name> — <purpose> — <Name>/"; the Core gets
@@ -341,14 +348,14 @@ if [ "$DRY" -eq 1 ]; then
 "
     done <<< "$(project_docs_manifest)"
     show "create in $P/ (missing pages from the new-project templates):" "$CRE"
-    echo "add to $P/: the check: line$([ -n "$PUB_LIST" ] && echo ', the public-docs: line'), front matter fields missing on copied pages, map lines for pages the map lacks"
+    echo "add to $P/: the check: line$([ -n "$PUB_LIST" ] && echo ', the public-docs: line'), then the wiki converted by wiki-migrate.sh (front matter, wikilinks, Obsidian files, generated INDEX.md)"
   fi
   echo "link: $K/CLAUDE.local.md -> $P/CLAUDE.md"
   case "$SL_STATE" in
     create) echo "create: $K/$SL_REL (permissions.additionalDirectories: $P)" ;;
     warn) echo "$SL_WARN" ;;
   esac
-  echo "then: $([ "$OLD" -eq 1 ] && echo 'repair git worktrees, ')install git hook shims, set the PROJECTS.md line to \"$(basename "$K")/\", commit \"Adopt $NAME\" in the Core"
+  echo "then: $([ "$OLD" -eq 1 ] && echo 'repair git worktrees, convert the wiki with wiki-migrate.sh, ')install git hook shims, set the PROJECTS.md line to \"$(basename "$K")/\", commit \"Adopt $NAME\" in the Core"
   echo "dry run: nothing was changed"
   exit 0
 fi
@@ -362,8 +369,9 @@ TMP="$(mktemp -d "$CORE_DIR/.adopt.XXXXXX")" || { echo "adopt: cannot create a t
 cleanup() { if [ "$COMMITTED" -eq 0 ]; then rm -rf "$TMP"; else rm -f "$TMP/rules.md"; rmdir "$TMP" 2>/dev/null; fi; }
 trap cleanup EXIT
 STAGE="$TMP/p"
-DATE="$(date +%Y-%m-%d)"
+DATE="$(date +%Y-%m-%d)"   # render() in lib.sh fills the templates with it
 CREATED=""
+MIG=""
 
 # set_line <file> <key> <value> — replace the first "key:" line, else append "key: value".
 set_line() {
@@ -372,42 +380,6 @@ set_line() {
     !done && (index($0, k ":") == 1) { print k ": " v; done = 1; next }
     { print }
     END { if (!done) print k ": " v }' "$1" > "$tmp" && mv "$tmp" "$1" || { rm -f "$tmp"; return 1; }
-}
-
-# fm_value <file> <key> — a front matter value without quotes.
-fm_value() {
-  awk -v k="$2" 'NR == 1 && /^---/ { f = 1; next } f && /^---/ { exit }
-    f && index($0, k ":") == 1 { v = substr($0, length(k) + 2); gsub(/^[ \t]+|[ \t\r]+$/, "", v)
-      gsub(/^"|"$/, "", v); print v; exit }' "$1"
-}
-# fix_frontmatter <file> <updated> — add the wiki front matter fields the page lacks. Nothing
-# is invented: the title is the page's first "# " heading (else the file name), updated is the
-# date of its last commit, description is an explicit TODO, status draft, files and related empty.
-fix_frontmatter() {
-  local f="$1" up="$2" title tmp="$1.adopt.$$"
-  title="$(awk '/^# / { sub(/^# +/, ""); print; exit }' "$f" | tr -d '"\\\r')"
-  [ -n "$title" ] || title="$(basename "$f" .md)"
-  if [ "$(head -1 "$f" | tr -d '\r')" = "---" ]; then
-    sed -n '2,$p' "$f" | grep -q '^---[[:space:]]*$' || return 0   # unclosed: leave it, wiki-check reports it
-    awk -v T="$title" -v U="$up" '
-      BEGIN { n = split("title description status files related updated", K, " ")
-        d["title"] = "\"" T "\""; d["description"] = "\"TODO: describe this page.\""
-        d["status"] = "draft"; d["files"] = "[]"; d["related"] = "[]"; d["updated"] = U }
-      NR == 1 { print; infm = 1; next }
-      infm && /^---[ \t\r]*$/ { for (i = 1; i <= n; i++) if (!(K[i] in has)) print K[i] ": " d[K[i]]
-        infm = 0; print; next }
-      infm { if (match($0, /^[A-Za-z_][A-Za-z0-9_-]*[ \t]*:/)) {
-          key = substr($0, 1, RLENGTH); sub(/[ \t]*:$/, "", key)
-          val = substr($0, RLENGTH + 1); gsub(/^[ \t]+|[ \t\r]+$/, "", val); has[key] = 1
-          if ((key == "title" || key == "description" || key == "status" || key == "updated") \
-              && (val == "" || val == "\"\"" || val == "\047\047")) { print key ": " d[key]; next } }
-        print; next }
-      { print }' "$f" > "$tmp" || { rm -f "$tmp"; return 1; }
-  else
-    { printf -- '---\ntitle: "%s"\ndescription: "TODO: describe this page."\nstatus: draft\nfiles: []\nrelated: []\nupdated: %s\n---\n\n' "$title" "$up"
-      cat "$f"; } > "$tmp" || { rm -f "$tmp"; return 1; }
-  fi
-  mv "$tmp" "$f"
 }
 
 # rule_block <rule file> <label> — the rule as a CLAUDE.md subsection: "### <label>", then
@@ -490,7 +462,7 @@ if [ "$OLD" -eq 0 ]; then
       || { echo "adopt: could not copy $f" >&2; exit 1; }
   done <<< "$COPY"
 
-  # Missing wiki pages and the map (from the new-project templates); CLAUDE.md if there was none.
+  # Missing wiki pages and vault files (from the new-project templates); CLAUDE.md if there was none.
   CR="$(put_project_docs "$TPL" "$STAGE")" || exit 1
   CREATED="$(printf '%s\n' "$CR" | sed -n 's|^created \.adopt\.[^/]*/p/||p')"
   if [ -n "$CHECK" ]; then set_line "$STAGE/CLAUDE.md" check "$CHECK" || exit 1
@@ -510,23 +482,12 @@ if [ "$OLD" -eq 0 ]; then
     rm -f "$TMP/rules.md"
   fi
 
-  # Copied pages that wiki-check says lack front matter fields; pages the map does not link.
-  W="$(bash "$ROOT_DIR/scripts/wiki-check.sh" "$STAGE" 2>/dev/null)"
-  while IFS= read -r pg; do
-    [ -n "$pg" ] || continue
-    up="$(git -C "$FROM" log -1 --format=%cd --date=short -- "docs/$pg" 2>/dev/null)"
-    fix_frontmatter "$STAGE/docs/$pg" "${up:-$DATE}" || { echo "adopt: could not fix front matter of $pg" >&2; exit 1; }
-  done <<< "$(printf '%s\n' "$W" | sed -n 's/^wiki-check: \(.*\): missing front matter field .*$/\1/p' | LC_ALL=C sort -u)"
-  W="$(bash "$ROOT_DIR/scripts/wiki-check.sh" "$STAGE" 2>/dev/null)"
-  while IFS= read -r pg; do
-    [ -n "$pg" ] || continue
-    title="$(fm_value "$STAGE/docs/$pg" title)"; [ -n "$title" ] || title="$pg"
-    desc="$(fm_value "$STAGE/docs/$pg" description)"
-    case "$desc" in ""|">"|"|"|">-"|"|-") desc="TODO: describe this page." ;; esac
-    target="$pg"; case "$pg" in *" "*) target="<$pg>" ;; esac
-    [ -z "$(tail -c1 "$STAGE/docs/INDEX.md")" ] || printf '\n' >> "$STAGE/docs/INDEX.md"
-    printf -- '- [%s](%s) — %s\n' "$title" "$target" "$desc" >> "$STAGE/docs/INDEX.md" || exit 1
-  done <<< "$(printf '%s\n' "$W" | sed -n 's/^wiki-check: \(.*\): not in INDEX\.md$/\1/p')"
+  # The wiki in the current format (front matter, wikilinks, Obsidian files, generated INDEX); dates
+  # from the repo the pages came from. It runs through a link named as the project (the INDEX title is
+  # the folder name). Its warnings are printed after the move.
+  ln -s p "$TMP/$NAME" || exit 1
+  MIG="$(WIKI_MIGRATE_DATES="$FROM" bash "$ROOT_DIR/scripts/wiki-migrate.sh" "$TMP/$NAME")" || exit 1
+  rm -f "$TMP/$NAME"
 elif [ -n "$RULES" ]; then
   # Old layout: the rule blocks are read now (nothing changed yet); they are folded after the move.
   : > "$TMP/rules.md" || exit 1
@@ -604,6 +565,12 @@ elif [ "$NRULES" -gt 0 ]; then
   fi
   rm -f "$TMP/rules.md"
 fi
+# The wiki in the current format: converted in the staged copy (new layout), here after the move (old).
+if [ "$OLD" -eq 1 ]; then
+  MIG="$(bash "$ROOT_DIR/scripts/wiki-migrate.sh" "$P")" \
+    || echo "warning: the wiki in $P/docs was not converted; run: bash \"$ROOT_DIR/scripts/wiki-migrate.sh\" \"$P\"" >&2
+fi
+printf '%s\n' "$MIG" | grep -E '^(moved|warning:) '
 show "kept in Core, no longer loaded:" "$KEPT"
 if [ "$COMMITTED" -eq 1 ]; then
   [ "${#REMOVE[@]}" -eq 0 ] || echo "removed ${#REMOVE[@]} file(s) from the repo (commit: Move internal Claude files to Core)"
@@ -630,6 +597,7 @@ fi
 [ "$NNEST" -eq 0 ] || show "$NEST_WARN" "$NEST" >&2
 [ "$STALE" -eq 0 ] || echo "$STALE_WARN" >&2
 link_local_claude "$K" "$P" || echo "warning: $K/CLAUDE.local.md was not linked; make it a link to $P/CLAUDE.md" >&2
+link_agents "$K" "$P" || echo "warning: $K/AGENTS.md was not linked; fold $P/AGENTS.md into CLAUDE.md if it exists, then make AGENTS.md a link to $P/CLAUDE.md" >&2
 case "$SL_STATE" in
   create) put "$TPL/code/settings.local.json.tmpl" "$K/$SL_REL" \
             || echo "warning: could not create $K/$SL_REL; add \"$P\" to permissions.additionalDirectories in it" >&2 ;;

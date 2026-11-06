@@ -1,35 +1,47 @@
 #!/usr/bin/env bash
-# wiki-check.sh — deterministic wiki checks (spec section 8.3, rules in reference/wiki.md).
+# wiki-check.sh — deterministic wiki checks (rules in reference/wiki.md).
 #
 # Usage: wiki-check.sh <project_dir> [--changed <path>...]
 #   <project_dir>  the Core project folder <Core>/<name>: CLAUDE.md, docs/ (map docs/INDEX.md).
 #                  The code lives elsewhere (beside the Core, or in the old layout in code/).
 #
-# Wiki pages are docs/**/*.md except docs/knowledge/, docs/standards/, docs/superpowers/
-# and INDEX.md (the map is checked for links only).
+# Wiki pages are what wiki-pages.sh lists (docs/**/*.md except INDEX.md, knowledge/, standards/,
+# superpowers/, .obsidian/). A page's name is its file name without ".md".
 #
 # Checks (one line per failure, "wiki-check: <file>: <problem>", exit 1; silent and 0 when green):
-#   missing front matter field <f>             page lacks title/description/status/files/related/updated
-#   not in INDEX.md                            a page on disk the map does not link
-#   INDEX.md links missing page <target>       a map link to a page that does not exist
+#   missing front matter field <f>             type/status/description/files/related/updated absent,
+#                                              or type/status/description/updated empty
+#   bad type: <v>                              not brief architecture decision feature spec plan glossary
+#   bad status: <v>                            not draft active done superseded
+#   bad updated: <v>                           not YYYY-MM-DD
+#   description over 80 chars                 counted in characters, surrounding quotes removed
+#   description not one line                  the value starts with > or | (a folded or literal block)
+#   related is not a wikilink: <item>          a related: item that is not [[...]] ([] passes)
+#   duplicate page name <name>                 on each later page (sorted path order) with a taken name
+#   broken wikilink [[<target>]]               no such page/file, or no such heading (alias dropped)
+#   use a wikilink: <target>                   a Markdown link from a page to a wiki page
 #   broken link <target>                       a Markdown link whose file does not exist
-#   broken reference § <heading> (...)         "docs/<page>.md § <heading>" with no such page/heading
 #   unclosed front matter                      opening --- without a closing ---
 #   duplicate heading <h>                      the same "## " heading twice in one page
 #   page over 8 KB without ## headings
+#   INDEX.md stale                             on INDEX.md: "wiki-index.sh --check" fails
 #   drift: <code path> changed, page not updated      (only with --changed)
+# Two lines stand alone: "wiki-check: INDEX.md: missing" (there is no docs/INDEX.md; the other
+# checks still run) and "wiki-check: docs: missing docs/ directory" (exit 1, nothing else checked).
 # <file> is relative to docs/ ("features/login.md"); CLAUDE.md is printed as "../CLAUDE.md".
-# Links and references are read in docs/ pages, INDEX.md and CLAUDE.md, outside code fences;
-# links ignore other schemes (http:, mailto:...) and pure "#anchor"; "page.md#anchor" checks
-# the file only. A reference heading is the rest of the line, or the text up to the first
-# backtick (so wrap a reference in backticks when prose follows it); if the exact text is not a
-# heading, one trailing . , ; : or ) is dropped and it is tried again ("... § Components.").
+# Pages are read for wikilinks (body and the related: field) and Markdown links; CLAUDE.md for
+# Markdown links only; all outside code fences and `inline code`. Markdown links ignore other
+# schemes (http:, mailto:...) and pure "#anchor"; "page.md#anchor" checks the file only.
+# A wikilink [[t]], [[t#h]], [[t|alias]] or ![[t]] resolves: t with a "/" to docs/t.md or the file
+# docs/t; t without one to the page named t, else a file named t anywhere under docs/; an empty
+# t to the page itself. h is the exact text of a # to ###### heading of that page, outside fences.
 #
 # --changed paths: code files as code-root-relative paths (what "git diff --name-only" prints in
 # the code root). A changed wiki page is passed as "<project_dir>/docs/<page>.md" (absolute, the
 # unambiguous form), "../docs/<page>.md" or "docs/<page>.md"; all mean docs/<page>.md of the project. So a code file that lives in a
 # top-level docs/ folder of code/ cannot be told apart from a wiki page; it is taken as a page.
-# (An absolute path under another folder is a code path, not a page.)
+# (An absolute path under another folder is a code path, not a page.) Any other "../<path>" lies
+# outside the project's code and docs and is ignored.
 # A page's files: entries match a changed path exactly, or by prefix when the entry ends in "/".
 #
 # Exit: 0 green, 1 problems found, 2 usage or internal error (e.g. awk failed: never "green"). Portable bash 3.2 + BSD awk.
@@ -53,14 +65,11 @@ DOCS="$PROJ/docs"
 T="$(mktemp -d "${TMPDIR:-/tmp}/wiki-check.XXXXXX")" || exit 2
 trap 'rm -rf "$T"' EXIT
 
-# Wiki pages (docs-relative, one per line).
-( cd "$DOCS" && find . -type f -name '*.md' | sed 's|^\./||' | LC_ALL=C sort ) |
-while IFS= read -r p; do
-  case "$p" in
-    INDEX.md|knowledge/*|standards/*|superpowers/*) ;;
-    *) printf '%s\n' "$p" ;;
-  esac
-done > "$T/pages"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+
+# Wiki pages (docs-relative, one per line) and every file under docs/ (wikilinks may name any).
+"$HERE/wiki-pages.sh" "$DOCS" > "$T/pages" || exit 2
+( set -o pipefail; cd "$DOCS" && find . -type f | sed 's|^\./||' | LC_ALL=C sort ) > "$T/files" || exit 2
 
 # Changed paths: "C <code path>" or "P <docs-relative page>".
 : > "$T/changed"
@@ -77,11 +86,18 @@ if [ "$HAVE_CHANGED" = 1 ]; then
   done >> "$T/changed"
 fi
 
+
 cat > "$T/check.awk" <<'AWKEOF'
 function trim(s) { sub(/^[ \t\r]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
+function unq(s) { if (length(s) >= 2 && (s ~ /^".*"$/ || s ~ /^'.*'$/)) s = substr(s, 2, length(s) - 2); return s }
 function shq(s) { gsub(/'/, "'\\''", s); return "'" s "'" }
 function report(file, msg) { print "wiki-check: " file ": " msg }
 function exists(p) { return system("test -e " shq(p)) == 0 }
+function base(p) { sub(/.*\//, "", p); return p }
+# Heading text: the rest of the line, closing hashes ("## Closed ##") dropped.
+function htext(s) { s = trim(s); sub(/[ \t]+#+$/, "", s); return trim(s) }
+# Characters of a UTF-8 string (awk runs with LC_ALL=C): continuation bytes do not count.
+function ulen(s) { gsub(/[\200-\277]/, "", s); return length(s) }
 
 # Collapse "." and ".." and repeated slashes.
 function norm(p,   n, parts, i, k, st, out, abs) {
@@ -114,15 +130,28 @@ function unpct(s,   out, i, h, v) {
   return out s
 }
 
-# One trailing sentence mark removed ("... § Components." at the end of a sentence).
-function stripp(s) { sub(/[.,;:)]$/, "", s); return trim(s) }
-
 function additem(v) {
-  v = trim(v)
-  if (v ~ /^".*"$/ || v ~ /^'.*'$/) v = substr(v, 2, length(v) - 2)
-  v = trim(v)
+  v = trim(unq(trim(v)))
   if (v == "") return
   nf++; flist[nf] = v
+}
+# related: items (inline [a, "b"] or block "- a"), each a [[...]] wikilink, quoted or not.
+function relitem(v) {
+  v = trim(unq(trim(v)))
+  if (v != "" && v !~ /^!?\[\[.*\]\]$/) report(rel, "related is not a wikilink: " v)
+}
+function relflow(v,   i, c, q, cur) {
+  if (mode != "page") return
+  if (v !~ /^\[/) { relitem(v); return }
+  sub(/^\[/, "", v); sub(/\][ \t]*$/, "", v); q = ""; cur = ""
+  for (i = 1; i <= length(v); i++) {
+    c = substr(v, i, 1)
+    if (q != "") { if (c == q) q = ""; cur = cur c; continue }
+    if (c == "\"" || c == "'") q = c
+    if (c == ",") { relitem(cur); cur = ""; continue }
+    cur = cur c
+  }
+  relitem(cur)
 }
 function flow(v,   n, parts, i) {
   sub(/^\[/, "", v); sub(/\][ \t]*$/, "", v)
@@ -136,21 +165,62 @@ function fmline(l,   k, v) {
     v = trim(substr(l, index(l, ":") + 1))
     has[k] = 1; val[k] = v; curkey = k
     if (k == "files" && v ~ /^\[/) flow(v)
+    if (k == "related") { scanwiki(v); relflow(v) }
     return
   }
   if (curkey == "files" && l ~ /^[ \t]*-[ \t]+/) { v = l; sub(/^[ \t]*-[ \t]+/, "", v); additem(v) }
+  if (curkey == "related") { scanwiki(l); if (mode == "page" && l ~ /^[ \t]*-[ \t]/) { v = l; sub(/^[ \t]*-[ \t]*/, "", v); relitem(v) } }
 }
 
-# "## " headings of a file (outside code fences), cached.
-function loadheads(path,   line, fence, t) {
+# Headings (# to ######) of a file, outside its front matter and code fences, cached.
+# Headings seen inside a front matter that never closes still count (that page reports "unclosed").
+function loadheads(path,   line, n, fm, fence, t, np, pend, i) {
   if (path in loaded) return
   loaded[path] = 1
-  fence = 0
+  n = 0; fm = 0; fence = 0; np = 0
   while ((getline line < path) > 0) {
+    sub(/\r$/, "", line); n++
+    if (n == 1 && line ~ /^---[ \t]*$/) { fm = 1; continue }
+    if (fm && line ~ /^---[ \t]*$/) { fm = 0; fence = 0; np = 0; continue }
     if (line ~ /^[ \t]*(```|~~~)/) { fence = !fence; continue }
-    if (!fence && line ~ /^## /) { t = trim(substr(line, 4)); heads[path SUBSEP t] = 1 }
+    if (!fence && match(line, /^#+[ \t]/) && RLENGTH <= 7) {
+      t = htext(substr(line, RLENGTH + 1))
+      if (fm) pend[++np] = t; else heads[path SUBSEP t] = 1
+    }
   }
   close(path)
+  for (i = 1; i <= np; i++) heads[path SUBSEP pend[i]] = 1
+}
+
+# The docs-relative file a wikilink target names, or "" when none.
+function resolve(t) {
+  if (t == "") return rel
+  if (index(t, "/") > 0) { if ((t ".md") in fileset) return t ".md"; return (t in fileset) ? t : "" }
+  if (t in pagebyname) return pagebyname[t]
+  return (t in filebyname) ? filebyname[t] : ""
+}
+
+# inner = what stands between [[ and ]]: target[#heading][|alias].
+function wikilink(inner,   shown, t, h, c, f) {
+  c = index(inner, "|"); shown = (c > 0) ? substr(inner, 1, c - 1) : inner
+  if (c > 0) sub(/\\$/, "", shown)                     # table form [[x\|alias]]
+  t = shown; h = ""
+  c = index(t, "#"); if (c > 0) { h = trim(substr(t, c + 1)); t = substr(t, 1, c - 1) }
+  f = resolve(trim(t))
+  if (f != "" && h != "") { loadheads(docs "/" f); if (!((docs "/" f SUBSEP h) in heads)) f = "" }
+  if (f == "") report(rel, "broken wikilink [[" shown "]]")
+}
+
+# Wikilinks of a page line; `inline code` is skipped, a backtick inside [[...]] is part of the link.
+function scanwiki(s,   i, b, e) {
+  if (mode != "page") return
+  while ((i = index(s, "[[")) > 0) {
+    b = index(s, "`")
+    if (b > 0 && b < i) { s = substr(s, b + 1); e = index(s, "`"); if (e > 0) s = substr(s, e + 1); continue }
+    s = substr(s, i + 2); e = index(s, "]]"); if (e == 0) return
+    if (e > 1) wikilink(substr(s, 1, e - 1))
+    s = substr(s, e + 2)
+  }
 }
 
 function checklink(raw,   t, c, rp, full) {
@@ -163,10 +233,8 @@ function checklink(raw,   t, c, rp, full) {
   t = unpct(t)
   if (substr(t, 1, 1) == "/") { rp = norm(t); full = rp }
   else { rp = norm((fdir == "" ? "" : fdir "/") t); full = proj "/" rp }
-  if (mode == "index" && rp ~ /^docs\//) linked[substr(rp, 6)] = 1
-  if (exists(full)) return
-  if (mode == "index" && t ~ /\.md$/) report(rel, "INDEX.md links missing page " raw)
-  else report(rel, "broken link " raw)
+  if (mode == "page" && rp ~ /^docs\// && (substr(rp, 6) in pageset)) { report(rel, "use a wikilink: " raw); return }
+  if (!exists(full)) report(rel, "broken link " raw)
 }
 
 function scanlinks(s,   i, e, rest, tgt, t) {
@@ -185,45 +253,31 @@ function scanlinks(s,   i, e, rest, tgt, t) {
   }
 }
 
-function scanrefs(s,   p, before, after, last, start, j, page, a, b, c, shown, pf) {
-  while ((p = index(s, MARK)) > 0) {
-    before = substr(s, 1, p - 1); after = substr(s, p + ml); s = after
-    if (before !~ /[ \t]$/) continue
-    sub(/[ \t]+$/, "", before); sub(/`$/, "", before)
-    if (before !~ /\.md$/) continue
-    last = 0; start = 0
-    while ((j = index(substr(before, start + 1), "docs/")) > 0) { start += j; last = start }
-    if (last == 0) continue
-    page = substr(before, last)
-    a = trim(after); b = a
-    c = index(a, "`"); if (c > 0) b = trim(substr(a, 1, c - 1))
-    if (a == "" || b == "") continue
-    shown = (c > 0) ? b : a
-    pf = proj "/" norm(page)
-    if (!exists(pf)) { report(rel, "broken reference § " shown " (no such page " page ")"); continue }
-    loadheads(pf)
-    if (!((pf SUBSEP a) in heads) && !((pf SUBSEP b) in heads) \
-        && !((pf SUBSEP stripp(a)) in heads) && !((pf SUBSEP stripp(b)) in heads))
-      report(rel, "broken reference § " shown " (no such heading in " page ")")
-  }
-}
-
 BEGIN {
-  mode = ENVIRON["WC_MODE"]; rel = ENVIRON["WC_REL"]; proj = ENVIRON["WC_PROJ"]
+  mode = ENVIRON["WC_MODE"]; rel = ENVIRON["WC_REL"]; proj = ENVIRON["WC_PROJ"]; docs = proj "/docs"
   fdir = ENVIRON["WC_FDIR"]; size = ENVIRON["WC_SIZE"] + 0
-  changedf = ENVIRON["WC_CHANGED"]; pagesf = ENVIRON["WC_PAGES"]
-  MARK = "§ "; ml = length(MARK)
+  changedf = ENVIRON["WC_CHANGED"]; pagesf = ENVIRON["WC_PAGES"]; filesf = ENVIRON["WC_FILES"]
+  split("brief architecture decision feature spec plan glossary", a, " "); for (i in a) oktype[a[i]] = 1
+  split("draft active done superseded", a, " "); for (i in a) okstatus[a[i]] = 1
   nc = 0
   while ((getline l < changedf) > 0) {
     if (substr(l, 1, 2) == "C ") { nc++; codechg[nc] = substr(l, 3); codeset[substr(l, 3)] = 1 }
     else if (substr(l, 1, 2) == "P ") pagechg[substr(l, 3)] = 1
   }
   close(changedf)
+  while ((getline l < pagesf) > 0) {
+    pageset[l] = 1; n = base(l); sub(/\.md$/, "", n)
+    if (!(n in pagebyname)) pagebyname[n] = l
+    else if (mode == "page" && l == rel) report(rel, "duplicate page name " n)
+  }
+  close(pagesf)
+  while ((getline l < filesf) > 0) { fileset[l] = 1; n = base(l); if (!(n in filebyname)) filebyname[n] = l }
+  close(filesf)
 }
 
 {
   line = $0; sub(/\r$/, "", line)
-  if (NR == 1 && line ~ /^---[ \t]*$/) { infm = 1; hasfm = 1; next }
+  if (NR == 1 && line ~ /^---[ \t]*$/) { infm = 1; next }
   if (infm) {
     if (line ~ /^---[ \t]*$/) { infm = 0; next }
     fmline(line); next
@@ -232,22 +286,25 @@ BEGIN {
   if (fence) next
   if (line ~ /^## /) {
     h2++
-    t = trim(substr(line, 4))
+    t = htext(substr(line, 4))
     if (mode == "page" && seenh[t]++ == 1) report(rel, "duplicate heading " t)
   }
   scanlinks(line)
-  scanrefs(line)
+  scanwiki(line)
 }
 
 END {
   if (infm) report(rel, "unclosed front matter")
   if (mode == "page") {
-    nreq = split("title description status files related updated", req, " ")
+    nreq = split("type status description files related updated", req, " ")
     for (i = 1; i <= nreq; i++) {
-      f = req[i]
-      blank = (f == "title" || f == "description" || f == "status" || f == "updated") && \
-              (val[f] == "" || val[f] == "\"\"" || val[f] == "''")
-      if (!hasfm || !(f in has) || blank) report(rel, "missing front matter field " f)
+      f = req[i]; v = unq(val[f])
+      if (!(f in has) || (v == "" && f != "files" && f != "related")) { report(rel, "missing front matter field " f); continue }
+      if (f == "type" && !(v in oktype)) report(rel, "bad type: " v)
+      if (f == "status" && !(v in okstatus)) report(rel, "bad status: " v)
+      if (f == "updated" && v !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) report(rel, "bad updated: " v)
+      if (f == "description" && val[f] ~ /^[>|]/) report(rel, "description not one line")
+      else if (f == "description" && ulen(v) > 80) report(rel, "description over 80 chars")
     }
     if (size > 8192 && h2 == 0) report(rel, "page over 8 KB without ## headings")
     if (!(rel in pagechg)) {
@@ -260,26 +317,26 @@ END {
       }
     }
   }
-  if (mode == "index") {
-    while ((getline pg < pagesf) > 0) if (!(pg in linked)) report(pg, "not in INDEX.md")
-    close(pagesf)
-  }
 }
 function drift(c) { report(rel, "drift: " c " changed, page not updated") }
 AWKEOF
 
 # run_awk <mode> <display name> <file> <dir of file relative to project>
 run_awk() {
-  WC_MODE="$1" WC_REL="$2" WC_PROJ="$PROJ" WC_FDIR="$4" WC_SIZE="$(wc -c < "$3" | tr -d ' ')" \
-  WC_CHANGED="$T/changed" WC_PAGES="$T/pages" awk -f "$T/check.awk" "$3"
+  LC_ALL=C WC_MODE="$1" WC_REL="$2" WC_PROJ="$PROJ" WC_FDIR="$4" WC_SIZE="$(wc -c < "$3" | tr -d ' ')" \
+  WC_CHANGED="$T/changed" WC_PAGES="$T/pages" WC_FILES="$T/files" awk -f "$T/check.awk" "$3"
 }
 
 # A failing awk must not read as "green": remember it in $T/failed and exit 2 below.
 run_checked() { run_awk "$@" || echo "$2" >> "$T/failed"; }
 
 OUT="$(
-  if [ -f "$DOCS/INDEX.md" ]; then run_checked index INDEX.md "$DOCS/INDEX.md" docs
-  else echo "wiki-check: INDEX.md: missing"; fi
+  if [ ! -f "$DOCS/INDEX.md" ]; then echo "wiki-check: INDEX.md: missing"
+  else
+    "$HERE/wiki-index.sh" "$PROJ" --check > /dev/null 2>&1; rc=$?      # (no "case" here: bash 3.2 misparses it in $( ))
+    if [ "$rc" = 1 ]; then echo "wiki-check: INDEX.md: INDEX.md stale"
+    elif [ "$rc" != 0 ]; then echo INDEX.md >> "$T/failed"; fi
+  fi
   while IFS= read -r page; do
     d="$(dirname "$page")"; if [ "$d" = . ]; then d=docs; else d="docs/$d"; fi
     run_checked page "$page" "$DOCS/$page" "$d"

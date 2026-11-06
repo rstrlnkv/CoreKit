@@ -72,7 +72,7 @@ if [ "$old" -eq 1 ]; then
   printf '%s\n' "$(msg layout_note "$shown" "$COREDEV_SCHEMA" "$ROOT/scripts/setup-core.sh" "$CORE_DIR")"
 fi
 
-# Code folder: new layout gets the CLAUDE.local.md link (the main folder, also from a worktree or the
+# Code folder: new layout gets the CLAUDE.local.md and AGENTS.md links (AGENTS.md: a link elsewhere is named, any other refusal is silent) (the main folder, also from a worktree or the
 # Core project folder); old layout is named. No code folder, or a case clash: nothing to do.
 code=""; code="$(code_dir_of "$proj" 2>/dev/null)" || code=""
 if [ -n "$code" ]; then
@@ -85,6 +85,11 @@ if [ -n "$code" ]; then
       printf '%s\n' "$(msg local_link_wrong "$code/CLAUDE.local.md" "$P/CLAUDE.md")"
     else   # nothing there, yet ln failed (for example a read-only folder)
       printf '%s\n' "$(msg local_link_failed "$code/CLAUDE.local.md" "$P/CLAUDE.md")"
+    fi
+    if aout="$(link_agents "$code" "$P" 2>/dev/null)"; then
+      case "$aout" in created*) printf '%s\n' "$(msg agents_link_created "$P/CLAUDE.md")" ;; esac
+    elif [ -L "$code/AGENTS.md" ]; then   # a link elsewhere (or dangling); a real file stays silent
+      printf '%s\n' "$(msg agents_link_wrong "$code/AGENTS.md" "$P/CLAUDE.md")"
     fi
   fi
 fi

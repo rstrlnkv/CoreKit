@@ -57,6 +57,22 @@ GH_STUB=true  PATH="$STUB:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2
 GH_STUB=false PATH="$STUB:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && fail "public Core push allowed" || pass
 PATH="/usr/bin:/bin" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && fail "push allowed without gh" || pass
 GH_STUB=true PATH="$STUB:$PATH" bash "$H" origin "git@github.com:someone/Core.git" </dev/null >/dev/null 2>&1 && pass || fail "ssh url not parsed"
+# a failed gh call (network) is retried: 2 failures then "true" pass, 3 failures block, "false" is final
+FL="$SANDBOX/flaky"; mkdir -p "$FL"
+cat > "$FL/gh" <<'STUBEOF'
+#!/bin/sh
+n=$(cat "$GH_COUNT" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$GH_COUNT"
+if [ "$n" -le "$GH_FAILS" ]; then echo "TLS handshake timeout" >&2; exit 1; fi
+echo "$GH_ANSWER"
+STUBEOF
+chmod +x "$FL/gh"
+CNT="$SANDBOX/gh.count"
+rm -f "$CNT"; GH_COUNT="$CNT" GH_FAILS=2 GH_ANSWER=true CORECREW_GH_RETRY_SLEEP=0 PATH="$FL:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && pass || fail "push blocked after 2 failed gh calls"
+assert_eq "$(cat "$CNT")" "3" "gh called three times"
+rm -f "$CNT"; GH_COUNT="$CNT" GH_FAILS=3 GH_ANSWER=true CORECREW_GH_RETRY_SLEEP=0 PATH="$FL:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && fail "push allowed after 3 failed gh calls" || pass
+assert_eq "$(cat "$CNT")" "3" "gh tried at most three times"
+rm -f "$CNT"; GH_COUNT="$CNT" GH_FAILS=0 GH_ANSWER=false CORECREW_GH_RETRY_SLEEP=0 PATH="$FL:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && fail "public Core push allowed (flaky stub)" || pass
+assert_eq "$(cat "$CNT")" "1" "a public answer is not retried"
 
 # --- shim edge cases
 # tools file missing: the commit fails and the message names the fix and the shim

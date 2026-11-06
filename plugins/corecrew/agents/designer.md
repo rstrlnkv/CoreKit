@@ -13,7 +13,7 @@ Every finding as a measurement off a rendered screen: a size, a contrast ratio, 
 ## What to read first
 Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:` and `project:` name it.
 1. `CLAUDE.md` (what the program is, who uses it, in what conditions).
-2. `docs/INDEX.md`, the map of the wiki.
+2. `docs/INDEX.md`, the generated map of the wiki.
 3. The wiki page the task needs, and engineer's `Screens` line in the brief: start from it, search the source only for what it does not name. Find the project's design document and its own measuring instruments rather than inventing a second way.
 4. Its standards: `docs/standards/<name>.md` of the project, else `<Core>/standards/<name>.md`, for every standard whose `applies-to` names designer.
 5. `docs/knowledge/designer.md`, then `<Core>/knowledge/designer.md`; skip lines tagged `[<stack>]` for another stack.

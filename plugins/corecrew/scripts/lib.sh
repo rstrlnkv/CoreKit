@@ -394,11 +394,15 @@ git_init() {
 project_docs_manifest() {
   cat <<'EOF'
 CLAUDE.md.tmpl|CLAUDE.md
-docs/INDEX.md.tmpl|docs/INDEX.md
 docs/brief.md.tmpl|docs/brief.md
 docs/architecture.md.tmpl|docs/architecture.md
 docs/decisions/001-stack-and-architecture.md.tmpl|docs/decisions/001-stack-and-architecture.md
+docs/wiki.base|docs/wiki.base
+docs/obsidian-app.json|docs/.obsidian/app.json
+docs/obsidian-gitignore|docs/.obsidian/.gitignore
 mkdir|docs/features
+mkdir|docs/specs
+mkdir|docs/plans
 mkdir|docs/knowledge
 EOF
 }
@@ -413,22 +417,38 @@ put_project_docs() {
   done <<< "$(project_docs_manifest)"
 }
 
-# link_local_claude <code_dir> <core_project_dir> — make <code_dir>/CLAUDE.local.md a symlink to
-# <core_project_dir>/CLAUDE.md. Prints "created|skipped <path>" ("would create" with DRY=1, nothing
-# written). A real file or a link to somewhere else is never touched: exit 1 with a plain line.
-link_local_claude() {
-  local link="$1/CLAUDE.local.md" target="$2/CLAUDE.md"
+# link_file_to_claude <code_dir> <core_project_dir> <file name> — make <code_dir>/<file name> a
+# symlink to <core_project_dir>/CLAUDE.md. Prints "created|skipped <path>" ("would create" with DRY=1,
+# nothing written). Exit 1 when the target CLAUDE.md is missing (no dangling link). A real file or a link to somewhere else is never touched: exit 1 with a plain line.
+link_file_to_claude() {
+  local link="$1/$3" target="$2/CLAUDE.md"
+  # (a DRY=1 plan for a project folder that is not there yet, as scaffold --dry-run, is let through)
+  if [ ! -f "$target" ] && { [ "${DRY:-0}" -ne 1 ] || [ -d "$2" ]; }; then echo "$target does not exist; nothing to link $3 to" >&2; return 1; fi
   if [ -L "$link" ] && [ "$(readlink "$link")" = "$target" ]; then
     echo "skipped $(rel_core "$link")"; return 0
   fi
   if [ -e "$link" ] || [ -L "$link" ]; then
-    echo "CLAUDE.local.md exists and is not a link to $target; leave it or remove it yourself" >&2
+    echo "$3 exists and is not a link to $target; leave it or remove it yourself" >&2
     return 1
   fi
   if [ "${DRY:-0}" -eq 1 ]; then echo "would create $(rel_core "$link")"; return 0; fi
   mkdir -p "$1" || return 1
   ln -s "$target" "$link" || return 1
   echo "created $(rel_core "$link")"
+}
+
+# link_local_claude <code_dir> <core_project_dir> — <code_dir>/CLAUDE.local.md links to the private CLAUDE.md.
+link_local_claude() { link_file_to_claude "$1" "$2" CLAUDE.local.md; }
+
+# link_agents <code_dir> <core_project_dir> — <code_dir>/AGENTS.md links to the private CLAUDE.md, like
+# link_local_claude. Refuses (exit 1) when <core_project_dir>/AGENTS.md exists and the code folder has no AGENTS.md link yet
+# (the link would hide it); an existing link is judged by link_file_to_claude alone.
+link_agents() {
+  if [ ! -L "$1/AGENTS.md" ] && [ -e "$2/AGENTS.md" ]; then
+    echo "AGENTS.md exists in the Core at $2/AGENTS.md and the link would hide it; fold $2/AGENTS.md into CLAUDE.md, then remove it" >&2
+    return 1
+  fi
+  link_file_to_claude "$1" "$2" AGENTS.md
 }
 
 # projects_entry <name> <purpose> <entry> — add "- <name> — <purpose> — <entry>" to $CORE_DIR/PROJECTS.md

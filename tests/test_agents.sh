@@ -161,4 +161,7 @@ has "$D" 'states'
 has "$D" 'at most 6 images'
 has "$D" 'Screens'
 
+# 0.7 wiki: the engineer runs the generator, not a hand-written INDEX line (more in test_wiki_texts.sh)
+has "$AG/engineer.md" 'wiki-index.sh'
+assert_not_contains "$AG/engineer.md" 'INDEX.md` line'
 finish

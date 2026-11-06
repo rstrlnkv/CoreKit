@@ -38,6 +38,13 @@ snap() {
   done
 }
 last_line() { printf '%s\n' "$1" | tail -1; }
+# wiki_only <project dir> <want> — wiki-check prints exactly <want> (newline separated; "" = green).
+# A copied page with no known folder gets no `type` (wiki-migrate warns "set type"), so it stays red
+# until the owner sets one; nothing else may be wrong.
+wiki_only() {
+  local got; got="$(bash "$WC" "$1" 2>&1)"
+  assert_eq "$got" "$2" "wiki-check of $1"
+}
 # refuses <want line> <args...> — exit 2, exactly that one line, nothing changed in $SANDBOX
 refuses() {
   local want="$1"; shift
@@ -77,7 +84,8 @@ P="$CORE_DIR/foo"
 assert_eq "$(last_line "$OUT")" "open: $F" "last line"
 echo "$OUT" | grep -qxF "kept in Core, no longer loaded:" && pass || fail "report lacks the kept list: $OUT"
 echo "$OUT" | grep -qxF "  .claude/commands/x.md" && pass || fail "report lacks x.md: $OUT"
-echo "$OUT" | grep -q '^warning:' && fail "warning printed: $OUT" || pass
+# page warnings come from wiki-migrate ("warning: <page>: ..."); adopt's own warnings contain a path
+echo "$OUT" | grep '^warning:' | grep -qv '^warning: [^/]*: ' && fail "adopt warning printed: $OUT" || pass
 assert_dir "$F"
 assert_eq "$(cd "$F" && pwd -P)" "$F" "folder path"
 assert_eq "$(inode "$F")" "$I0" "folder inode"
@@ -104,13 +112,20 @@ assert_no_file "$P/.claude/rules"
 assert_file "$P/docs/a.md"
 [ -L "$F/CLAUDE.local.md" ] && pass || fail "no CLAUDE.local.md link"
 assert_eq "$(readlink "$F/CLAUDE.local.md")" "$P/CLAUDE.md" "link target"
+[ -L "$F/AGENTS.md" ] && pass || fail "no AGENTS.md link"
+assert_eq "$(readlink "$F/AGENTS.md")" "$P/CLAUDE.md" "AGENTS.md link target"
 assert_contains "$F/.claude/settings.local.json" "\"$P\""
 assert_eq "$(cat "$F/.worktreeinclude")" "$(cat "$SKILL/templates/code/worktreeinclude")" ".worktreeinclude from the template"
 echo "$DRY_OUT" | grep -qF ".worktreeinclude" && pass || fail "plan lacks .worktreeinclude: $DRY_OUT"
 grep -qxF -- "- foo — Adopted existing project — Foo/" "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md line: $(cat "$CORE_DIR/PROJECTS.md")"
 assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "Adopt foo" "Core commit"
 assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "Core dirty"
-bash "$WC" "$P" >/dev/null 2>&1 && pass || fail "wiki-check not green: $(bash "$WC" "$P" 2>&1)"
+wiki_only "$P" "wiki-check: a.md: missing front matter field type"
+echo "$OUT" | grep -qxF "warning: a: set type" && pass || fail "adopt did not pass on migrate's warning: $OUT"
+assert_contains "$P/docs/a.md" "description: \"TODO: describe this page.\""
+assert_not_contains "$P/docs/a.md" "title:"
+assert_file "$P/docs/wiki.base"; assert_file "$P/docs/.obsidian/app.json"; assert_file "$P/docs/.obsidian/.gitignore"
+bash "$SCRIPTS/wiki-index.sh" "$P" --check && pass || fail "INDEX.md is not the generated one"
 assert_contains "$F/.git/hooks/pre-commit" "corecrew hook shim"
 assert_contains "$CORE_DIR/.git/hooks/pre-push" "corecrew hook shim"
 ls -A "$CORE_DIR" | grep -q '^\.adopt' && fail "temp dir left in Core" || pass
@@ -147,13 +162,65 @@ assert_contains "$P/CLAUDE.md" "check: <set after scaffolding>"
 assert_not_contains "$P/CLAUDE.md" "public-docs:"
 assert_contains "$P/docs/guide.md" "How to use it."
 head -1 "$P/docs/guide.md" | grep -qx -- '---' && pass || fail "guide.md: no front matter added"
-assert_contains "$P/docs/INDEX.md" "guide.md"
-bash "$WC" "$P" >/dev/null 2>&1 && pass || fail "wiki-check not green: $(bash "$WC" "$P" 2>&1)"
-echo "$OUT1" | grep -q 'wiki-check:' && fail "wiki problems printed: $OUT1" || pass
+assert_not_contains "$P/docs/guide.md" "title:"
+assert_contains "$P/docs/guide.md" "status: draft"
+assert_contains "$P/docs/guide.md" "description: \"TODO: describe this page.\""
+grep -q '^updated: [0-9]\{4\}-[0-9][0-9]-[0-9][0-9]$' "$P/docs/guide.md" && pass || fail "guide.md: no updated date"
+# the INDEX is generated (no hand-written line for a page with no type), and says so for the template pages
+bash "$SCRIPTS/wiki-index.sh" "$P" --check && pass || fail "INDEX.md is not the generated one"
+assert_not_contains "$P/docs/INDEX.md" "guide"
+assert_contains "$P/docs/INDEX.md" "[[brief]]"
+assert_contains "$P/docs/INDEX.md" "# my-app wiki"
+echo "$OUT1" | grep -qxF "warning: guide: set type" && pass || fail "no 'set type' warning: $OUT1"
+wiki_only "$P" "wiki-check: guide.md: missing front matter field type"
+echo "$OUT1" | grep -qxF "wiki-check: guide.md: missing front matter field type" && pass || fail "adopt did not print the wiki problem: $OUT1"
 assert_contains "$F/.git/hooks/pre-push" "corecrew hook shim"
 grep -q '^- my-app — .* — my-app/$' "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md line"
 assert_eq "$(git -C "$CORE_DIR" show --name-only --format= HEAD | sed 's|/.*||' | LC_ALL=C sort -u | tr '\n' ';')" \
   "PROJECTS.md;my-app;" "Core commit scope"
+
+# --- a 0.6-format wiki (tests/fixtures/wiki-old): adopt ends with a migrated wiki. Dates depend on the
+# repo's history, so they are not compared here (test_wiki_migrate.sh compares the tree byte for byte).
+new_sandbox; setup_core
+F="$SANDBOX/Projects/wiki-old"; mkdir -p "$F"; cp -R "$ROOT/tests/fixtures/wiki-old/docs" "$F/docs"; cp "$ROOT/tests/fixtures/wiki-old/CLAUDE.md.in" "$F/CLAUDE.md"
+git init -q "$F" && git -C "$F" symbolic-ref HEAD refs/heads/main
+git -C "$F" add -A && git -C "$F" commit -q -m initial
+assert_exit 0 bash "$AD" --from "$F"
+OLDOUT="$OUT"
+P="$CORE_DIR/wiki-old"
+assert_eq "$(last_line "$OLDOUT")" "open: $F" "last line (old-format wiki)"
+for w in "warning: login: description over 80 chars" "warning: refs: description is not one line" "warning: n: set type" "warning: n: status wip"; do
+  echo "$OLDOUT" | grep -qxF "$w" && pass || fail "adopt output lacks '$w': $OLDOUT"
+done
+wiki_only "$P" "wiki-check: features/login.md: description over 80 chars
+wiki-check: features/refs.md: description not one line
+wiki-check: notes/n.md: missing front matter field type
+wiki-check: notes/n.md: bad status: wip"
+if grep -rq '^title:' "$P/docs" --include='*.md' --exclude-dir=knowledge; then fail "a page still has title:"; else pass; fi
+assert_no_file "$P/docs/superpowers/specs/a.md"; assert_file "$P/docs/specs/a.md"; assert_file "$P/docs/plans/b.md"
+assert_contains "$P/docs/brief.md" "[[architecture|the design]]"
+assert_contains "$P/docs/brief.md" "related: [\"[[architecture]]\", \"[[login]]\", \"[[sign in]]\"]"
+assert_contains "$P/docs/features/sign in.md" "Glossary: [[glossary#Термины]]"
+assert_contains "$P/docs/brief.md" '`[architecture](architecture.md)`'
+assert_contains "$P/docs/knowledge/k.md" "[brief](../brief.md)"
+assert_contains "$P/docs/INDEX.md" "[[sign in]] The sign-in page."
+bash "$SCRIPTS/wiki-index.sh" "$P" --check && pass || fail "INDEX.md is not the generated one (old-format wiki)"
+assert_not_contains "$P/docs/INDEX.md" "](brief.md)"
+assert_file "$P/docs/wiki.base"; assert_file "$P/docs/.obsidian/app.json"
+assert_eq "$(git -C "$F" status --porcelain)" "" "code repo dirty (old-format wiki)"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "Core dirty (old-format wiki)"
+
+# --- wiki-migrate fails inside adopt (a move target exists): adopt stops before the repo commit, nothing changes
+new_sandbox; setup_core
+F="$SANDBOX/Projects/mig-fail"; mkdir -p "$F/docs/specs" "$F/docs/superpowers/specs"
+git init -q "$F" && git -C "$F" symbolic-ref HEAD refs/heads/main
+printf '# Mig\n' > "$F/CLAUDE.md"; printf '# Mine\n' > "$F/docs/specs/a.md"; printf '# Theirs\n' > "$F/docs/superpowers/specs/a.md"
+git -C "$F" add -A && git -C "$F" commit -q -m initial
+before="$(snap)"
+OUT="$(bash "$AD" --from "$F" 2>&1)"; rc=$?
+[ "$rc" != 0 ] && pass || fail "adopt succeeded although wiki-migrate failed: $OUT"
+assert_eq "$(snap)" "$before" "a failed wiki-migrate changed the repo or the Core"
+echo "$OUT" | grep -q 'open:' && fail "adopt reported success: $OUT" || pass
 
 # --- --check, --public-docs: docs/ stays in the repo and is listed in CLAUDE.md
 new_sandbox; setup_core
@@ -300,10 +367,14 @@ P="$CORE_DIR/my-proj"
 assert_eq "$(last_line "$OUT")" "open: $F" "last line (non-ASCII)"
 assert_file "$P/docs/гайд app.md"
 assert_contains "$P/docs/гайд app.md" "Текст."
-assert_contains "$P/docs/INDEX.md" "гайд app.md"
+bash "$SCRIPTS/wiki-index.sh" "$P" --check && pass || fail "INDEX.md is not the generated one (non-ASCII)"
+assert_not_contains "$P/docs/INDEX.md" "гайд app.md"
+echo "$OUT" | grep -qxF "warning: гайд app: set type" && pass || fail "no 'set type' warning for the Cyrillic page: $OUT"
+assert_not_contains "$P/docs/гайд app.md" "title:"
 assert_eq "$(git -C "$F" status --porcelain)" "" "code repo dirty"
 grep -q '^- my-proj — .* — My-Proj/$' "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md line keeps the folder's case"
-bash "$WC" "$P" >/dev/null 2>&1 && pass || fail "wiki-check (non-ASCII): $(bash "$WC" "$P" 2>&1)"
+wiki_only "$P" "wiki-check: guide.md: missing front matter field type
+wiki-check: гайд app.md: missing front matter field type"
 # --from typed in another letter case (a case-insensitive disk): accepted; paths keep the case on disk
 F="$SANDBOX/Projects/Case-App"; mkrepo "$F"
 if [ -d "$SANDBOX/projects/case-app/.git" ]; then
@@ -343,9 +414,11 @@ assert_exit 0 bash "$AD" --from "$F"
 P="$CORE_DIR/keep-app"
 assert_contains "$P/CLAUDE.md" "check: npm test"
 assert_eq "$(grep -c '^check:' "$P/CLAUDE.md")" "1" "check lines"
-assert_contains "$P/docs/guide.md" "title: Mine"
-assert_eq "$(grep -c '^title:' "$P/docs/guide.md")" "1" "title lines"
-bash "$WC" "$P" >/dev/null 2>&1 && pass || fail "wiki-check (front matter): $(bash "$WC" "$P" 2>&1)"
+# the 0.6 `title` goes; the owner's description and status stay; the missing fields are added
+assert_not_contains "$P/docs/guide.md" "title:"
+assert_eq "$(sed -n '1,/^---$/p;' "$P/docs/guide.md" | head -3 | tr '\n' '|')" "---|status: active|description: Does things.|" "kept fields, canonical order"
+assert_contains "$P/docs/guide.md" "# Mine"
+wiki_only "$P" "wiki-check: guide.md: missing front matter field type"
 
 # --- tracked files only: ignored files stay in the repo and never reach the Core or its git
 new_sandbox; setup_core
@@ -474,6 +547,25 @@ assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "Core dirty (old layout)
 assert_contains "$K/.git/hooks/pre-commit" "corecrew hook shim"
 assert_eq "$(bash "$SCRIPTS/lib.sh" layout old-app)" "new" "layout after the move"
 bash "$WC" "$CORE_DIR/old-app" >/dev/null 2>&1 && pass || fail "wiki-check (old layout): $(bash "$WC" "$CORE_DIR/old-app" 2>&1)"
+
+# old layout: adopt runs wiki-migrate on <Core>/<name> after the move (typed front matter, wikilinks,
+# generated INDEX)
+new_sandbox; setup_core; sync_tools
+mkold mig-old
+MP="$CORE_DIR/mig-old"
+printf -- '---\ntitle: Old page\ndescription: An old page.\nstatus: active\nfiles: []\nrelated: [docs/brief.md]\nupdated: 2026-01-01\n---\n\n# Old page\n\nSee [brief](../brief.md).\n' > "$MP/docs/features/oldpage.md"
+printf -- '- [Old page](features/oldpage.md) — hand-written.\n' >> "$MP/docs/INDEX.md"
+git -C "$CORE_DIR" add -A && git -C "$CORE_DIR" commit -q -m "old format page"
+assert_exit 0 bash "$AD" --from "$MP/code"
+assert_not_contains "$MP/docs/features/oldpage.md" "title:"
+assert_contains "$MP/docs/features/oldpage.md" "type: feature"
+assert_contains "$MP/docs/features/oldpage.md" "See [[brief]]."
+assert_contains "$MP/docs/features/oldpage.md" 'related: ["[[brief]]"]'
+assert_contains "$MP/docs/INDEX.md" "[[oldpage]] An old page."
+assert_not_contains "$MP/docs/INDEX.md" "hand-written"
+bash "$SCRIPTS/wiki-index.sh" "$MP" --check && pass || fail "INDEX.md is not the generated one (old layout)"
+assert_file "$MP/docs/.obsidian/app.json"
+wiki_only "$MP" ""
 
 # old layout: <Core>/<name>/.claude/rules/*.md (0.4 and older) stop loading after the move, so they are
 # folded into <Core>/<name>/CLAUDE.md under ## Rules in the "Adopt <name>" commit; the files are kept
@@ -653,6 +745,9 @@ echo "$OUT" | grep -qxF "  AGENTS.md" && pass || fail "plan lacks AGENTS.md: $OU
 assert_exit 0 bash "$AD" --from "$F"
 P="$CORE_DIR/ag-app"
 assert_contains "$P/AGENTS.md" "Cross-tool rules."
+# M7: the Core copy blocks the AGENTS.md link; it is kept and a warning names it (adopt goes on)
+echo "$OUT" | grep -q "^warning:.*$P/AGENTS.md" && pass || fail "no warning naming the Core AGENTS.md: $OUT"
+[ -L "$F/AGENTS.md" ] && fail "AGENTS.md linked despite the Core copy" || pass
 assert_no_file "$F/AGENTS.md"
 git -C "$F" show --name-only --format= HEAD | grep -qxF AGENTS.md && pass || fail "repo commit lacks AGENTS.md"
 grep -qxF AGENTS.md "$F/.gitignore" && pass || fail ".gitignore lacks AGENTS.md"

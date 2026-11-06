@@ -173,10 +173,50 @@ assert_eq "$RC" "0" "read-only folder: exit"
 echo "$OUT" | grep -qF "exists and is not a link" && fail "read-only folder: claims a file exists: $OUT" || pass
 echo "$OUT" | grep -qF "corecrew: could not create $NC/CLAUDE.local.md, so the private CLAUDE.md is not loaded. Run: ln -s \"$NP/CLAUDE.md\" \"$NC/CLAUDE.local.md\"" \
   && pass || fail "read-only folder: could-not-create line missing: $OUT"
+# --- AGENTS.md link (M7): made once with one line; kept silently when it cannot be made
+rm -f "$NC/AGENTS.md" "$NP/AGENTS.md"; [ -L "$NC/CLAUDE.local.md" ] || ln -s "$NP/CLAUDE.md" "$NC/CLAUDE.local.md"
+run_rc "$NC"; assert_eq "$RC" "0" "AGENTS link: exit"
+[ -L "$NC/AGENTS.md" ] && pass || fail "hook did not create the AGENTS.md link"
+assert_eq "$(readlink "$NC/AGENTS.md")" "$NP/CLAUDE.md" "AGENTS.md link target"
+assert_eq "$(echo "$OUT" | grep -c 'AGENTS.md')" "1" "one AGENTS.md line: $OUT"
+echo "$OUT" | grep 'AGENTS.md' | grep -qF "$NP/CLAUDE.md" && pass || fail "AGENTS.md line lacks the target: $OUT"
+echo "$OUT" | grep -qF "created " && fail "link_agents line leaked: $OUT" || pass
+echo "$OUT" | grep -qF "skipped " && fail "link_agents line leaked: $OUT" || pass
+run_rc "$NC"; echo "$OUT" | grep -qF "AGENTS.md" && fail "second run mentions AGENTS.md: $OUT" || pass
+# ru: the same line in Russian (no English wording)
+rm "$NC/AGENTS.md"; CLAUDE_PLUGIN_OPTION_UI_LANGUAGE=ru run_rc "$NC"
+echo "$OUT" | grep 'AGENTS.md' | grep -qF "$NP/CLAUDE.md" && pass || fail "ru AGENTS.md line missing: $OUT"
+echo "$OUT" | grep 'AGENTS.md' | grep -q 'linked' && fail "ru line is English: $OUT" || pass
+# a real file, a link elsewhere: untouched, nothing about AGENTS.md
+rm "$NC/AGENTS.md"; printf 'mine\n' > "$NC/AGENTS.md"
+run_rc "$NC"; assert_eq "$RC" "0" "real AGENTS.md: exit"
+assert_eq "$(cat "$NC/AGENTS.md")" "mine" "real AGENTS.md untouched"; [ -L "$NC/AGENTS.md" ] && fail "real AGENTS.md replaced" || pass
+echo "$OUT" | grep -qF "AGENTS.md" && fail "real AGENTS.md: noise: $OUT" || pass
+rm "$NC/AGENTS.md"; echo x > "$SANDBOX/else.md"; ln -s "$SANDBOX/else.md" "$NC/AGENTS.md"
+run_rc "$NC"; assert_eq "$(readlink "$NC/AGENTS.md")" "$SANDBOX/else.md" "AGENTS.md link elsewhere untouched"
+# (M4) a link elsewhere is named once, like a wrong CLAUDE.local.md, with the command that fixes it
+assert_eq "$(echo "$OUT" | grep -c 'AGENTS.md')" "1" "link elsewhere: one AGENTS.md line: $OUT"
+echo "$OUT" | grep -qF "corecrew: $NC/AGENTS.md is a link to somewhere other than $NP/CLAUDE.md" && pass || fail "link elsewhere: line missing: $OUT"
+echo "$OUT" | grep -qF "ln -s \"$NP/CLAUDE.md\" \"$NC/AGENTS.md\"" && pass || fail "link elsewhere: no fix command: $OUT"
+CLAUDE_PLUGIN_OPTION_UI_LANGUAGE=ru run_rc "$NC"
+echo "$OUT" | grep 'AGENTS.md' | grep -qF "$NP/CLAUDE.md" && pass || fail "ru link elsewhere line missing: $OUT"
+echo "$OUT" | grep 'AGENTS.md' | grep -q 'somewhere' && fail "ru link elsewhere line is English: $OUT" || pass
+# a dangling link elsewhere is named too
+rm "$NC/AGENTS.md"; ln -s "$SANDBOX/gone.md" "$NC/AGENTS.md"
+run_rc "$NC"; echo "$OUT" | grep -qF "corecrew: $NC/AGENTS.md is a link to somewhere other than" && pass || fail "dangling AGENTS.md link: no line: $OUT"
+# a Core AGENTS.md: no link, nothing printed, the Core file stays
+rm "$NC/AGENTS.md"; printf 'core\n' > "$NP/AGENTS.md"
+run_rc "$NC"
+[ -e "$NC/AGENTS.md" ] || [ -L "$NC/AGENTS.md" ] && fail "AGENTS.md linked despite the Core copy" || pass
+echo "$OUT" | grep -qF "AGENTS.md" && fail "Core AGENTS.md: noise: $OUT" || pass
+assert_eq "$(cat "$NP/AGENTS.md")" "core" "Core AGENTS.md changed"
+rm "$NP/AGENTS.md"; ln -s "$NP/CLAUDE.md" "$NC/AGENTS.md"
 # the old layout: its line, no link
 run_rc "$C"
 echo "$OUT" | grep -qF "corecrew: this project still lives in $C; run /corecrew:task adopt $C to move it to $PR/sess-app" && pass || fail "old layout line missing: $OUT"
 [ -e "$C/CLAUDE.local.md" ] && fail "link made in an old-layout code folder" || pass
+[ -e "$C/AGENTS.md" ] || [ -L "$C/AGENTS.md" ] && fail "AGENTS.md made in an old-layout code folder" || pass
+echo "$OUT" | grep -qF "AGENTS.md" && fail "old layout: AGENTS.md mentioned: $OUT" || pass
 # a folder of Projects that is not a project: nothing at all
 mkdir -p "$PR/Brain"; run_rc "$PR/Brain"; assert_eq "$OUT" "" "Projects/Brain: silent"
 

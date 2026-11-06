@@ -1,14 +1,9 @@
----
-title: Docs index
-description: One line per docs page. Read first to find the right page.
-status: active
-files: []
-related: []
-updated: 2026-11-03
----
+# wiki-bad-6 wiki
+One line per page; open only the page you need.
 
-# Demo — docs index
-
-- [architecture.md](architecture.md) — components and storage.
-- [features/login.md](features/login.md) — how login works.
-- [decisions/001-stack.md](decisions/001-stack.md) — why this stack.
+## architecture
+[[architecture]] Components and storage. Read before structural changes.
+## decision
+[[001-stack]] Why plain bash. Read when asked why not another language.
+## feature
+[[login]] How a user logs in. Read before changing the login flow.

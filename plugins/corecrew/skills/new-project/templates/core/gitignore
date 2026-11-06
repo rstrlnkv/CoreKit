@@ -1,3 +1,6 @@
 .DS_Store
 .env
 .env.*
+# staging folders of an interrupted wiki-migrate.sh or adopt (check and remove them by hand)
+.wiki-migrate.*/
+.adopt.*/

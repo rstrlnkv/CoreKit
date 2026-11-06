@@ -44,6 +44,54 @@ assert_exit 0 bash "$LIB" code-dir twin;                                 assert_
   cat "$CORE_DIR/PROJECTS.md" ) > "$SANDBOX/out" 2>&1
 assert_eq "$(cat "$SANDBOX/out")" "- foo — x — Foo/" "valid_project_name / rel_core / projects_entry"
 
+# --- link_agents <code_dir> <core_project_dir>: <code_dir>/AGENTS.md -> <core_project_dir>/CLAUDE.md (M7)
+la() { ( source "$LIB"; load_settings; link_agents "$@" ); }
+new_sandbox; P="$SANDBOX/Projects"
+mkdir -p "$CORE_DIR/ag" "$P/Ag"; : > "$CORE_DIR/ag/CLAUDE.md"
+T="$CORE_DIR/ag/CLAUDE.md"
+OUT="$(DRY=1 la "$P/Ag" "$CORE_DIR/ag" 2>&1)"; assert_eq "$OUT" "would create ../Ag/AGENTS.md" "link_agents dry-run line"
+[ -e "$P/Ag/AGENTS.md" ] || [ -L "$P/Ag/AGENTS.md" ] && fail "DRY=1 wrote AGENTS.md" || pass
+assert_exit 0 la "$P/Ag" "$CORE_DIR/ag"; assert_eq "$OUT" "created ../Ag/AGENTS.md" "link_agents created line"
+[ -L "$P/Ag/AGENTS.md" ] && pass || fail "AGENTS.md is not a symlink"
+assert_eq "$(readlink "$P/Ag/AGENTS.md")" "$T" "link_agents target"
+assert_exit 0 la "$P/Ag" "$CORE_DIR/ag"; assert_eq "$OUT" "skipped ../Ag/AGENTS.md" "link_agents second run"
+assert_eq "$(readlink "$P/Ag/AGENTS.md")" "$T" "link kept on second run"
+# a real file is never touched: content and type stay, exit 1, a plain line
+rm "$P/Ag/AGENTS.md"; printf 'mine\n' > "$P/Ag/AGENTS.md"
+assert_exit 1 la "$P/Ag" "$CORE_DIR/ag"
+echo "$OUT" | grep -qF "AGENTS.md exists and is not a link to $T; leave it or remove it yourself" && pass || fail "real-file message: $OUT"
+assert_eq "$(cat "$P/Ag/AGENTS.md")" "mine" "real AGENTS.md content"
+[ -L "$P/Ag/AGENTS.md" ] && fail "real AGENTS.md replaced by a link" || pass
+# DRY=1 on a real file: still exit 1, still untouched
+OUT="$(DRY=1 la "$P/Ag" "$CORE_DIR/ag" 2>&1)"; [ $? -eq 1 ] && pass || fail "DRY=1 real file did not exit 1"
+assert_eq "$(cat "$P/Ag/AGENTS.md")" "mine" "real AGENTS.md content after DRY=1"
+# a link to elsewhere (and a dangling one) stays as it is
+for tgt in "$SANDBOX/elsewhere.md" "$SANDBOX/no/such.md"; do
+  rm -f "$P/Ag/AGENTS.md"; ln -s "$tgt" "$P/Ag/AGENTS.md"
+  assert_exit 1 la "$P/Ag" "$CORE_DIR/ag"
+  echo "$OUT" | grep -qF "AGENTS.md exists and is not a link to $T; leave it or remove it yourself" && pass || fail "elsewhere message: $OUT"
+  assert_eq "$(readlink "$P/Ag/AGENTS.md")" "$tgt" "link to elsewhere changed"
+done
+# a Core AGENTS.md blocks the link, stays as it is, and the line names it
+rm -f "$P/Ag/AGENTS.md"; printf 'core rules\n' > "$CORE_DIR/ag/AGENTS.md"
+assert_exit 1 la "$P/Ag" "$CORE_DIR/ag"
+echo "$OUT" | grep -qF "fold $CORE_DIR/ag/AGENTS.md into CLAUDE.md, then remove it" && pass || fail "core AGENTS.md message: $OUT"
+[ -e "$P/Ag/AGENTS.md" ] || [ -L "$P/Ag/AGENTS.md" ] && fail "link made despite Core AGENTS.md" || pass
+assert_eq "$(cat "$CORE_DIR/ag/AGENTS.md")" "core rules" "Core AGENTS.md changed"
+OUT="$(DRY=1 la "$P/Ag" "$CORE_DIR/ag" 2>&1)"; [ $? -eq 1 ] && pass || fail "DRY=1 with Core AGENTS.md did not exit 1"
+echo "$OUT" | grep -q "^would create" && fail "DRY=1 announced a link: $OUT" || pass
+
+# --- no <core_project_dir>/CLAUDE.md: refuse with exit 1 and create nothing (no dangling link)
+ll() { ( source "$LIB"; load_settings; link_local_claude "$@" ); }
+new_sandbox; P="$SANDBOX/Projects"; mkdir -p "$CORE_DIR/nc" "$P/Nc"
+for fn in la ll; do
+  assert_exit 1 $fn "$P/Nc" "$CORE_DIR/nc"
+  [ -e "$P/Nc/AGENTS.md" ] || [ -L "$P/Nc/AGENTS.md" ] || [ -e "$P/Nc/CLAUDE.local.md" ] || [ -L "$P/Nc/CLAUDE.local.md" ] \
+    && fail "$fn made a dangling link" || pass
+  OUT="$(DRY=1 $fn "$P/Nc" "$CORE_DIR/nc" 2>&1)"; [ $? -eq 1 ] && pass || fail "$fn DRY=1 without CLAUDE.md did not exit 1: $OUT"
+  echo "$OUT" | grep -q "^would create" && fail "$fn DRY=1 announced a link: $OUT" || pass
+done
+
 # case clash: only on a case-sensitive disk
 if mkdir "$P/foo" 2>/dev/null && [ -d "$P/Foo/src" ] && [ "$(ls "$P" | grep -ci '^foo$')" -eq 2 ]; then
   assert_exit 3 bash "$LIB" code-dir foo

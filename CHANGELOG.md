@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.7.1 — 2026-11-06
+- The Core pre-push hook asks GitHub up to three times, 2 s apart, whether the Core repository is
+  private, so one network timeout no longer blocks a push. A "not private" answer still blocks at once.
+- The Core README template names the code folder `../<Name>/` and lists the `AGENTS.md` link, the
+  generated `docs/INDEX.md`, the Obsidian vaults and the optional `session-rules.md`. An existing
+  Core README is never changed.
+
+## 0.7.0 — 2026-11-06
+- The wiki index is generated: `docs/INDEX.md` is built from the front matter of the pages
+  (`wiki-index.sh`), so nobody edits it by hand; `wiki-check.sh` reports it when it is out of date.
+- Every project's `docs/` is one Obsidian vault: scaffold adds `wiki.base` (a table of all pages)
+  and `.obsidian/`.
+- Front matter: `type` replaces `title`; page references are wikilinks (`[[page#Heading]]`), not
+  `docs/page.md § Heading`. Specs and plans live in `docs/specs/` and `docs/plans/` (before:
+  `docs/superpowers/`).
+- `wiki-check.sh` has new checks for the new format (front matter fields, wikilink targets, the
+  generated INDEX).
+- New `AGENTS.md` link in the code folder next to `CLAUDE.local.md`, made by scaffold and adopt and
+  repaired at session start. Note for coreopinion/Codex users: `AGENTS.md` now exposes the private
+  `CLAUDE.md` to Codex in that folder, so `second-opinion` runs can send its content to OpenAI.
+- New `scripts/wiki-migrate.sh` converts a 0.6 wiki to the new format (front matter, wikilinks,
+  `docs/superpowers/` to `docs/specs/` and `docs/plans/`, INDEX); `adopt` runs it too.
+- Upgrade: the first `/corecrew:task` on a 0.6 project offers the migration: it shows a
+  `wiki-migrate.sh --dry-run` first and converts the wiki only on your ok, as its own commit.
+  The old lines in the project's `CLAUDE.md` (`docs/superpowers`, map lines) are reported for a
+  hand edit; the script never changes that file. By hand:
+  `bash <plugin>/scripts/wiki-migrate.sh <Core>/<project> --dry-run`, then again without it.
+
 ## 0.6.6 — 2026-11-05
 - The one-suite hook no longer lets several test runs through when many waiters (8 in the stress
   test) find the same stale turn at the same instant. The takeover now runs under a short lock

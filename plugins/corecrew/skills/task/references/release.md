@@ -28,8 +28,12 @@ found → ask the user first, then brief engineer with the answer.
    Never run the placeholder.
 2. **Checkers.** Every checker called in this chain (verifier, security, localizer, designer)
    has a clean final report: no open finding. None called (for example a `question` chain) → ✓.
-3. **Wiki.** `bash "<scripts>/wiki-check.sh" "<Core>/<project>" --changed <files> <pages>`.
-   Silent exit 0 → ✓. Otherwise decide by the Core's schema:
+3. **Wiki.** `bash "<scripts>/wiki-index.sh" "<Core>/<project>"` (regenerates `docs/INDEX.md`; its
+   result is committed with the chain), then `bash "<scripts>/wiki-check.sh" "<Core>/<project>" --changed <files> <pages>`.
+   Silent exit 0 → ✓. A wiki the plugin still refuses (`no page has a type`: the 0.6 format) is ✗
+   with "migrate at Start" (Start step 6 offers `wiki-migrate.sh`). A wiki-check line that is also
+   in the Start baseline is a pre-existing problem: list it under `Open` as a warning; the release
+   goes on. Only new lines are ✗. For them decide by the Core's schema:
    `CORE_DIR="<Core>" bash "<scripts>/lib.sh" get schema` against
    `CORE_DIR="<Core>" bash "<scripts>/lib.sh" schema`. The Core is
    old-schema when its number is lower than the plugin's. Then the problems are shown as
