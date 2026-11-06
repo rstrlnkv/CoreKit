@@ -26,7 +26,7 @@ docs/                             upgrade guides (migration-*.md) and icon sourc
 ## How the parts fit
 
 - **Skills** are the user's entry points (`/corecrew:task`, `/coreopinion:second-opinion`).
-  They tell Claude what to do and call scripts through `${CLAUDE_SKILL_DIR}` or the plugin tools.
+  They tell Claude what to do and call scripts through the plugin folder they resolve first (`lib.sh plugin-root`) or the plugin tools.
 - **Agents** are the roles `/corecrew:task` hands work to. The designer, localizer, security and
   verifier agents are read-only: a hook refuses their writes.
 - **Hooks** (`plugins/corecrew/hooks/hooks.json`) run at session start, before tool calls and at

@@ -1,0 +1,3 @@
+# Codex ignores disable-model-invocation in SKILL.md; this is its equivalent.
+policy:
+  allow_implicit_invocation: false

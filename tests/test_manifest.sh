@@ -158,4 +158,37 @@ for pl in corecrew coremodel coreopinion; do
   [ "$(wc -c < "$ic" | tr -d ' ')" -lt 2000000 ] && pass || fail "$pl icon is 2 MB or more"
   case "$(head -c 4 "$ic" | od -An -c | tr -d ' ')" in '211PNG'*|*PNG*) pass ;; *) fail "$pl icon is not a PNG" ;; esac
 done
+# Codex manifest: Codex reads .codex-plugin/plugin.json instead of .claude-plugin/plugin.json, so the
+# shared fields must not drift. No root plugin.json: Codex treats it as an AgentPlugin manifest and
+# skips the plugin's hooks.
+CX="$PLUGIN/.codex-plugin/plugin.json"
+assert_file "$CX"
+assert_no_file "$PLUGIN/plugin.json"
+jf() { sed -n "s/^ *\"$2\": *\"\(.*\)\",\{0,1\}\$/\1/p" "$1" | head -1; }
+for k in name version description license; do
+  [ -n "$(jf "$P" $k)" ] && assert_eq "$(jf "$CX" $k)" "$(jf "$P" $k)" "$k differs between the Claude and Codex manifests" || fail "no $k in the Claude manifest"
+done
+assert_eq "$(jf "$CX" displayName)" "$(jf "$P" displayName)" "displayName differs"
+for k in hooks skills userConfig extensions mcpServers; do assert_not_contains "$CX" "\"$k\""; done
+bc="$(jf "$CX" brandColor)"
+case "$bc" in '#'??????) printf '%s' "${bc#\#}" | grep -qE '^[0-9A-Fa-f]{6}$' && pass || fail "brandColor not #RRGGBB: $bc" ;; *) fail "brandColor not #RRGGBB: $bc" ;; esac
+for k in composerIcon logo; do
+  v="$(jf "$CX" $k)"
+  case "$v" in ./*) pass ;; *) fail "$k must start with ./: $v" ;; esac
+  case "$v" in *..*) fail "$k must not hold ..: $v" ;; *) pass ;; esac
+  assert_file "$PLUGIN/${v#./}"
+done
+if command -v python3 >/dev/null 2>&1; then
+  assert_exit 0 python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$CX"
+fi
+# Codex ignores disable-model-invocation; agents/openai.yaml is its equivalent. Both or neither.
+for sk in "$PLUGIN"/skills/*/SKILL.md; do
+  d="$(dirname "$sk")"; nm="$(basename "$d")"
+  if grep -qx 'disable-model-invocation: true' "$sk"; then
+    assert_contains "$d/agents/openai.yaml" 'allow_implicit_invocation: false'
+  else
+    assert_no_file "$d/agents/openai.yaml"
+  fi
+done
+
 finish

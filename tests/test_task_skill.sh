@@ -188,10 +188,10 @@ assert_contains "$SK" 'run_in_background: false'
 for f in "$T"/references/*.md; do
   if grep -qF '${' "$f"; then fail "$(basename "$f") holds a \${...} placeholder: $(grep -nF '${' "$f" | head -2 | tr '\n' ' ')"; else pass; fi
 done
-sec_has "$SK" Start 'cd "${CLAUDE_SKILL_DIR}/../.." && pwd'
-sec_has "$SK" Start '`<scripts>` is `<plugin>/scripts`'
+sec_has "$SK" Paths 'lib.sh" plugin-root'
+sec_has "$SK" Paths '`<scripts>` is `<plugin>/scripts`'
 sec_has "$SK" Start 'opened with Read'
-sec_has "$SK" Start 'lib.sh" settings attribution='"'"'${user_config.attribution}'"'"' model_profile='"'"'${user_config.model_profile}'"'"
+sec_has "$SK" Start 'bash "<scripts>/lib.sh" settings attribution='"'"'${user_config.attribution}'"'"' model_profile='"'"'${user_config.model_profile}'"'"
 assert_contains "$REL" '<scripts>/save'
 assert_contains "$REL" '<scripts>/wiki-check.sh'
 assert_contains "$T/references/adopt.md" '<scripts>/adopt.sh'

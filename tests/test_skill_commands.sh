@@ -14,7 +14,9 @@ for sk in "$PLUGIN"/skills/*/SKILL.md; do
 done
 
 # Every `CORE_DIR=…${user_config.core_dir}… bash ".../lib.sh" core-dir|ready` span, copied from the
-# skill as the model would run it: ${CLAUDE_SKILL_DIR} substituted, ${user_config.*} left literal.
+# skill as the model would run it: <scripts>, <plugin>, <skill> filled in (see subst), ${user_config.*} left literal.
+# subst <skill dir>: what the model does with the placeholders after `lib.sh plugin-root`
+subst() { sed -e "s|<scripts>|$PLUGIN/scripts|g" -e "s|<plugin>|$PLUGIN|g" -e "s|<skill>|$1|g"; }
 shells="bash"; command -v zsh >/dev/null 2>&1 && shells="bash zsh"
 n=0
 for sk in "$PLUGIN"/skills/*/SKILL.md; do
@@ -22,7 +24,7 @@ for sk in "$PLUGIN"/skills/*/SKILL.md; do
   while IFS= read -r cmd; do
     [ -n "$cmd" ] || continue
     n=$((n + 1))
-    cmd="$(printf '%s' "$cmd" | sed "s|\${CLAUDE_SKILL_DIR}|$d|g")"
+    cmd="$(printf '%s' "$cmd" | subst "$d")"
     for sh in $shells; do
       out="$(cd "$SANDBOX" && "$sh" -c "$cmd" 2>&1)"
       case "$out" in *"bad substitution"*) fail "$sh: bad substitution in $(basename "$d"): $cmd" ;; *) pass ;; esac
@@ -34,7 +36,7 @@ for sk in "$PLUGIN"/skills/*/SKILL.md; do
 done
 [ "$n" -ge 3 ] && pass || fail "expected core-dir/ready commands with the placeholder in the skills, found $n"
 for sk in "$PLUGIN"/skills/*/SKILL.md; do
-  grep -qF "CORE_DIR='\${user_config.core_dir}' bash \"\${CLAUDE_SKILL_DIR}/../../scripts/lib.sh\" core-dir" "$sk" \
+  grep -qF "CORE_DIR='\${user_config.core_dir}' bash \"<scripts>/lib.sh\" core-dir" "$sk" \
     && pass || fail "$(basename "$(dirname "$sk")"): no core-dir command with the single-quoted placeholder"
 done
 
@@ -60,7 +62,7 @@ for sk in "$PLUGIN"/skills/*/SKILL.md; do
   while IFS= read -r cmd; do
     [ -n "$cmd" ] || continue
     n=$((n + 1))
-    cmd="$(printf '%s' "$cmd" | sed "s|\${CLAUDE_SKILL_DIR}|$d|g")"
+    cmd="$(printf '%s' "$cmd" | subst "$d")"
     for sh in $shells; do
       out="$(cd "$SANDBOX" && "$sh" -c "$cmd" 2>&1)"
       case "$out" in *"bad substitution"*) fail "$sh: bad substitution: $cmd" ;; *) pass ;; esac
@@ -75,4 +77,29 @@ for sk in "$PLUGIN"/skills/*/SKILL.md; do
 done
 [ "$n" -ge 1 ] && pass || fail "expected a settings command with placeholders in the skills, found $n"
 assert_contains "$PLUGIN/skills/task/SKILL.md" 'lib.sh" settings'
+
+# One way to name the plugin folder: `${CLAUDE_SKILL_DIR}` once per skill, in ## Paths, never in a
+# command; every command uses <scripts>/<plugin>/<skill>, filled in after `lib.sh plugin-root`.
+for sk in "$PLUGIN"/skills/*/SKILL.md; do
+  nm="$(basename "$(dirname "$sk")")"
+  assert_eq "$(grep -c '\${CLAUDE_SKILL_DIR}' "$sk")" "1" "$nm: \${CLAUDE_SKILL_DIR} appears once"
+  paths="$(awk '/^## /{on = ($0 == "## Paths")} on' "$sk")"
+  case "$paths" in *'${CLAUDE_SKILL_DIR}'*'lib.sh" plugin-root'*) pass ;; *) fail "$nm: ## Paths lacks CLAUDE_SKILL_DIR and plugin-root" ;; esac
+  if grep -nE 'bash "[^<"]' "$sk" | grep -v '^[0-9]*:.*bash "\$' >/dev/null; then
+    fail "$nm: a bash command not starting with a placeholder: $(grep -nE 'bash "[^<"]' "$sk" | head -2 | tr '\n' ' ')"
+  else pass; fi
+done
+# plugin-root: the physical plugin folder, in bash and zsh; loud when the folder is not one
+for sh in $shells; do
+  out="$("$sh" -c "bash \"$PLUGIN/skills/task/../../scripts/lib.sh\" plugin-root" 2>&1)"
+  assert_eq "$out" "$(cd -P "$PLUGIN" && pwd)" "$sh: plugin-root prints the plugin folder"
+done
+err="$(bash "/../../scripts/lib.sh" plugin-root 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] && [ -n "$err" ] && pass || fail "an empty skill folder must fail with a message (rc=$rc)"
+err="$(bash "<skill>/../../scripts/lib.sh" plugin-root 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] && [ -n "$err" ] && pass || fail "a placeholder left in must fail with a message (rc=$rc)"
+mkdir -p "$SANDBOX/x/scripts"; cp "$PLUGIN/scripts/lib.sh" "$SANDBOX/x/scripts/lib.sh"
+err="$(bash "$SANDBOX/x/scripts/lib.sh" plugin-root 2>&1)"; rc=$?
+assert_eq "$rc" "1" "a folder that is not a plugin: exit 1"
+case "$err" in *"not a plugin folder"*) pass ;; *) fail "no 'not a plugin folder' message: $err" ;; esac
 finish

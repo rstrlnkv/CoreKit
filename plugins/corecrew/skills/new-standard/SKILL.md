@@ -11,11 +11,25 @@ argument-hint: "[topic | knowledge line]"
 A standard is a short file of rules the user wants every agent to follow, kept in their own
 Core at `<Core>/standards/<name>.md`. The plugin ships no standards: this
 skill only helps the user write theirs. **Never write into the plugin** (the folder that holds
-this skill, `${CLAUDE_SKILL_DIR}/../..`); the only file this skill creates or changes is the
+this skill, `<plugin>`); the only file this skill creates or changes is the
 standard in Core.
 
-Format: `${CLAUDE_SKILL_DIR}/references/template.md`. The shape is checked by
-`${CLAUDE_SKILL_DIR}/../../scripts/check-standard.sh`.
+Format: `<skill>/references/template.md`. The shape is checked by
+`<scripts>/check-standard.sh`.
+
+## Paths
+This skill's folder is `${CLAUDE_SKILL_DIR}`. Claude Code replaces that text with the absolute
+path before you read it. Codex does not: there the text stays as written, and the folder is the
+directory of the SKILL.md path Codex gave for this skill (`(file: …/SKILL.md)` in the skills
+list, or the path of the skill block it loaded; a path that starts with a root alias such as
+`r1/` starts with the folder listed under "Skill roots"). Call that folder `<skill>`. Run this
+first, with `<skill>` filled in: `bash "<skill>/../../scripts/lib.sh" plugin-root`. It prints
+`<plugin>`, the absolute plugin folder; `<scripts>` is `<plugin>/scripts`. Write every later
+command and every Read path with these filled in as absolute paths. If the command fails, or you
+cannot give `<skill>` as an absolute path, stop, tell the user the corecrew folder was not
+found, and do not guess a path. In Codex, `<skill>` must lie inside a
+`plugins/cache/<marketplace>/corecrew/<version>/skills/` folder; if it does not, ask the user
+before running anything from it.
 
 ## Language
 Talk to the user in their language, in plain words; explain a term the first time you use it.
@@ -27,15 +41,15 @@ The Core setting is `${user_config.core_dir}`.
 A value that still reads literally `${user_config.` means the plugin is unconfigured: treat it as
 unset; the script below then uses the settings file (`~/.config/corecrew/settings`, the only source in Codex), else the default `~/Projects/Core`. If it prints a line on stderr, tell the user in plain words that their core_dir setting was ignored and why. First resolve `<Core>` to an absolute path and use that path in
 every command and file write below (the setting may start with `~`):
-`CORE_DIR='${user_config.core_dir}' bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" core-dir`
+`CORE_DIR='${user_config.core_dir}' bash "<scripts>/lib.sh" core-dir`
 
 Then check that the Core is set up:
-`CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" ready`
+`CORE_DIR="<Core>" bash "<scripts>/lib.sh" ready`
 (exit 0 = set up). If it fails, say in plain words that the Core does not exist yet and that
 `/corecrew:new-project` sets it up (one time); stop. Do not set it up from here.
 
 The argument is a topic ("versioning"), a knowledge line (contains `→`: `symptom → cause →
-guard`, see `${CLAUDE_SKILL_DIR}/../../reference/knowledge.md`), or empty (ask what the standard
+guard`, see `<plugin>/reference/knowledge.md`), or empty (ask what the standard
 is about, in one question). Pick `<name>`: Latin, lowercase, hyphens, 3–40 chars. If
 `<Core>/standards/<name>.md` exists, read it: this is an update, and the draft starts from it.
 
@@ -64,7 +78,7 @@ nothing, continue from steps 1–2 and tell the user that Sources holds only the
 every comment, keep the five sections in order, at most 120 lines. Keep the draft in a temp
 file under `${TMPDIR:-/tmp}` (outside Core, outside the plugin) until the user says "ok". Show it
 in the user's language (the rules, why, and how each is checked) and edit until they say ok.
-Run `bash "${CLAUDE_SKILL_DIR}/../../scripts/check-standard.sh" <draft>`; each
+Run `bash "<scripts>/check-standard.sh" <draft>`; each
 `check-standard:` line is a defect: fix it and run again, until it prints nothing.
 - New standard: on "ok", copy the draft to `<Core>/standards/<name>.md`.
 - Existing standard: show `diff -u "<Core>/standards/<name>.md" <draft>` and copy over it only

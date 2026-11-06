@@ -3,6 +3,13 @@
 Every entry starts with a badge: **NEW** is a new capability, **FIX** is a defect fixed, **UPD** is a change to existing behaviour, documentation or internal work.
 
 ## 0.8.0 — 2026-11-06
+- **NEW** A Codex manifest, `.codex-plugin/plugin.json` (Codex reads it instead of `.claude-plugin/plugin.json`; the
+  name, version, description and license must match; there is no root `plugin.json`, which would make Codex skip the hooks).
+- **NEW** `agents/openai.yaml` with `allow_implicit_invocation: false` keeps `task`, `new-standard` and `ship` out of
+  Codex's skills list, the equivalent of `disable-model-invocation` that Codex ignores.
+- **NEW** `lib.sh plugin-root` prints the absolute plugin folder and exits 1 when the script is not in the corecrew plugin (the manifest must be named `corecrew`).
+- **UPD** The skills name the plugin folder once, in a `## Paths` section, and use `<skill>`, `<plugin>` and `<scripts>`
+  filled in after `lib.sh plugin-root`, instead of `${CLAUDE_SKILL_DIR}` in every command (Codex does not expand it).
 - **NEW** A settings file, `~/.config/corecrew/settings` (or the path in `CORECREW_CONFIG`), holds `core_dir`,
   `attribution`, `model_profile` and `ui_language` as `key: value` lines; it is the settings source where there
   is no plugin options screen. Order per key: `CORE_DIR` env (`core_dir` only), plugin option, file, default.

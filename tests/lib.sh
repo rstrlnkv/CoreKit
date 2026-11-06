@@ -34,6 +34,7 @@ new_sandbox() {
   # (a global excludes file, init.defaultBranch, ...). Git identity comes from the env vars below.
   mkdir -p "$SANDBOX/home" "$SANDBOX/xdg"; : > "$SANDBOX/gitconfig"
   export HOME="$SANDBOX/home" XDG_CONFIG_HOME="$SANDBOX/xdg" GIT_CONFIG_GLOBAL="$SANDBOX/gitconfig" GIT_CONFIG_NOSYSTEM=1
+  export CODEX_HOME="$SANDBOX/codex-home"   # a test that runs codex never touches the real ~/.codex
   export COREDEV_TOOLS="$CLAUDE_PLUGIN_DATA/tools"
   export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com
   export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com

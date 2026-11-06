@@ -5,6 +5,7 @@ REAL_HOME="$HOME"
 new_sandbox
 case "$HOME" in "$SANDBOX"/*) pass ;; *) fail "HOME not in the sandbox: $HOME" ;; esac
 case "${XDG_CONFIG_HOME:-}" in "$SANDBOX"/*) pass ;; *) fail "XDG_CONFIG_HOME not in the sandbox: ${XDG_CONFIG_HOME:-}" ;; esac
+case "${CODEX_HOME:-}" in "$SANDBOX"/*) pass ;; *) fail "CODEX_HOME not in the sandbox: ${CODEX_HOME:-}" ;; esac
 assert_eq "$GIT_CONFIG_GLOBAL" "$SANDBOX/gitconfig" "GIT_CONFIG_GLOBAL"
 assert_eq "$GIT_CONFIG_NOSYSTEM" "1" "GIT_CONFIG_NOSYSTEM"
 [ "$HOME" != "$REAL_HOME" ] && pass || fail "HOME is the real one"

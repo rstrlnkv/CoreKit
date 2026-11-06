@@ -591,6 +591,7 @@ projects_entry() {
 # CLI: bash lib.sh get <key> | set <key> <value> | ready (exit 0 when core_ready) | core-dir (absolute path; warnings for ignored values on stderr)
 #      | settings [key[=optionvalue] ...] (resolved user settings, one "key: value" line each)
 #      | setting-path (the settings file path)
+#      | plugin-root (the absolute plugin folder this script is in; exit 1 when it is not the corecrew plugin)
 #      | schema (the plugin's schema number) | core-paths <project> (the Core paths `save` commits for
 #      the project, one line, space-separated; from _locate.sh next to this file)
 #      | project-of <path> | code-dir <name> | layout <name> (see project_of, code_dir_of, layout_of)
@@ -623,6 +624,20 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
         else printf '%s: %s\n' "$k" "$REPLY"; fi
       done
       settings_warning_lines >&2 ;;
+    plugin-root)
+      # A mix-up catch, not a security boundary: a script cannot vet itself, so a look-alike folder
+      # that carries its own copy of this script passes. The Paths text of the skills adds the
+      # Codex cache-location rule for the model.
+      r="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+      m=""
+      if [ -f "$r/.codex-plugin/plugin.json" ]; then m="$r/.codex-plugin/plugin.json"
+      elif [ -f "$r/.claude-plugin/plugin.json" ]; then m="$r/.claude-plugin/plugin.json"; fi
+      if [ -d "$r/skills" ] && [ -n "$m" ]; then
+        grep -q '"name"[[:space:]]*:[[:space:]]*"corecrew"' "$m" || { echo "corecrew: not a corecrew plugin folder: $r" >&2; exit 1; }
+        printf '%s\n' "$r"
+      else
+        echo "corecrew: not a plugin folder: $r" >&2; exit 1
+      fi ;;
     schema) printf '%s\n' "$COREDEV_SCHEMA" ;;
     project-of) [ $# -eq 2 ] || { echo "Usage: lib.sh project-of <path>" >&2; exit 2; }; project_of "$2" ;;
     code-dir) [ $# -eq 2 ] || { echo "Usage: lib.sh code-dir <name>" >&2; exit 2; }; code_dir_of "$2" ;;
@@ -631,6 +646,6 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
       [ $# -eq 2 ] && [ -n "$2" ] || { echo "Usage: lib.sh core-paths <project>" >&2; exit 2; }
       . "$(dirname "${BASH_SOURCE[0]}")/_locate.sh" || exit 1
       core_paths "$CORE_DIR" "$2" ;;
-    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | settings [key[=value] ...] | setting-path | schema | core-paths <project> | project-of <path> | code-dir <name> | layout <name>" >&2; exit 2 ;;
+    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | settings [key[=value] ...] | setting-path | plugin-root | schema | core-paths <project> | project-of <path> | code-dir <name> | layout <name>" >&2; exit 2 ;;
   esac
 fi

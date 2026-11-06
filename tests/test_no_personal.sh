@@ -52,7 +52,7 @@ scan_repo() {
     esac
     case "$rel" in
       .claude-plugin/*.json|README.md|LICENSE|CHANGELOG.md|docs/*) ;;
-      plugins/*/.claude-plugin/*.json|plugins/*/README.md|plugins/*/CHANGELOG.md) ;;
+      plugins/*/.claude-plugin/*.json|plugins/*/.codex-plugin/*.json|plugins/*/README.md|plugins/*/CHANGELOG.md) ;;
       SECURITY.md|ARCHITECTURE.md) ;;
       *) lines "owner handle outside manifests, README, LICENSE, CHANGELOG, SECURITY, ARCHITECTURE, docs" "$rel" -iF 'rstrlnkv' "$f" ;;
     esac
@@ -88,8 +88,9 @@ printf 'owner rstrlnkv\n' > "$R/LICENSE"                   # allowed
 printf 'owner rstrlnkv\n' > "$R/SECURITY.md"               # allowed: root SECURITY.md
 printf 'owner rstrlnkv\n' > "$R/ARCHITECTURE.md"           # allowed: root ARCHITECTURE.md
 printf 'owner rstrlnkv\n' > "$R/tests/SECURITY.md"         # hit: only the root file is allowed
-mkdir -p "$R/plugins/p/.claude-plugin" "$R/plugins/p/hooks"
+mkdir -p "$R/plugins/p/.claude-plugin" "$R/plugins/p/.codex-plugin" "$R/plugins/p/hooks"
 printf '{"owner":"rstrlnkv"}\n' > "$R/plugins/p/.claude-plugin/plugin.json"   # allowed: a plugin's manifest
+printf '{"owner":"rstrlnkv"}\n' > "$R/plugins/p/.codex-plugin/plugin.json"   # allowed: a plugin's Codex manifest
 printf 'owner rstrlnkv\n' > "$R/plugins/p/README.md"       # allowed: a plugin's README
 printf 'owner rstrlnkv\n' > "$R/plugins/p/CHANGELOG.md"    # allowed: a plugin's CHANGELOG
 printf 'owner rstrlnkv\n' > "$R/plugins/p/hooks/h.ts"      # hit: a plugin's code

@@ -16,9 +16,23 @@ It never forces anything: no forced push, no rewritten history, no merge commit 
 user's back.
 
 Files of the task skill this skill follows (open them with Read):
-- `${CLAUDE_SKILL_DIR}/../task/SKILL.md` — sections Settings and Start
-- `${CLAUDE_SKILL_DIR}/../task/references/paths.md` — section `release`
-- `${CLAUDE_SKILL_DIR}/../task/references/release.md` — the release postconditions
+- `<plugin>/skills/task/SKILL.md` — sections Settings and Start
+- `<plugin>/skills/task/references/paths.md` — section `release`
+- `<plugin>/skills/task/references/release.md` — the release postconditions
+
+## Paths
+This skill's folder is `${CLAUDE_SKILL_DIR}`. Claude Code replaces that text with the absolute
+path before you read it. Codex does not: there the text stays as written, and the folder is the
+directory of the SKILL.md path Codex gave for this skill (`(file: …/SKILL.md)` in the skills
+list, or the path of the skill block it loaded; a path that starts with a root alias such as
+`r1/` starts with the folder listed under "Skill roots"). Call that folder `<skill>`. Run this
+first, with `<skill>` filled in: `bash "<skill>/../../scripts/lib.sh" plugin-root`. It prints
+`<plugin>`, the absolute plugin folder; `<scripts>` is `<plugin>/scripts`. Write every later
+command and every Read path with these filled in as absolute paths. If the command fails, or you
+cannot give `<skill>` as an absolute path, stop, tell the user the corecrew folder was not
+found, and do not guess a path. In Codex, `<skill>` must lie inside a
+`plugins/cache/<marketplace>/corecrew/<version>/skills/` folder; if it does not, ask the user
+before running anything from it.
 
 ## Language
 Talk to the user in their language, in plain words. Everything on disk (version, changelog,
@@ -33,7 +47,7 @@ defaults are `core_dir` `~/Projects/Core`, `attribution` `allow`.
 
 ## Start
 1. **Core.** Resolve `<Core>` to an absolute path and show it:
-   `CORE_DIR='${user_config.core_dir}' bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" core-dir`.
+   `CORE_DIR='${user_config.core_dir}' bash "<scripts>/lib.sh" core-dir`.
    If that command prints a line on stderr, tell the user in plain words that their core_dir setting was ignored and why.
    Then do steps 1, 2 and 4–6 of Start in the task skill (set-up, project and code root, the
    `check:` line and the standards, clean tree, base commits), with the same stops.

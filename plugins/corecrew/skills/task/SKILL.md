@@ -13,16 +13,30 @@ per step, and you carry the user's task from request to one verified commit. One
 call is one chain.
 
 Detail lives in references, read when you reach that step:
-- `${CLAUDE_SKILL_DIR}/references/paths.md` — the six paths and the checkers' wave
-- `${CLAUDE_SKILL_DIR}/references/brief.md` — how to write a brief to an agent
-- `${CLAUDE_SKILL_DIR}/references/report.md` — the final report
-- `${CLAUDE_SKILL_DIR}/references/release.md` — the release postconditions (every chain that changed files)
-- `${CLAUDE_SKILL_DIR}/references/adopt.md` — bringing an existing project into the Core layout
+- `<skill>/references/paths.md` — the six paths and the checkers' wave
+- `<skill>/references/brief.md` — how to write a brief to an agent
+- `<skill>/references/report.md` — the final report
+- `<skill>/references/release.md` — the release postconditions (every chain that changed files)
+- `<skill>/references/adopt.md` — bringing an existing project into the Core layout
 
-Shared files: `${CLAUDE_SKILL_DIR}/../../reference/wiki.md` (wiki rules),
-`${CLAUDE_SKILL_DIR}/../../reference/knowledge.md` (knowledge format),
-`${CLAUDE_SKILL_DIR}/../../scripts/wiki-index.sh`, `${CLAUDE_SKILL_DIR}/../../scripts/wiki-check.sh`,
-`${CLAUDE_SKILL_DIR}/../../scripts/save`.
+Shared files: `<plugin>/reference/wiki.md` (wiki rules),
+`<plugin>/reference/knowledge.md` (knowledge format),
+`<scripts>/wiki-index.sh`, `<scripts>/wiki-check.sh`,
+`<scripts>/save`.
+
+## Paths
+This skill's folder is `${CLAUDE_SKILL_DIR}`. Claude Code replaces that text with the absolute
+path before you read it. Codex does not: there the text stays as written, and the folder is the
+directory of the SKILL.md path Codex gave for this skill (`(file: …/SKILL.md)` in the skills
+list, or the path of the skill block it loaded; a path that starts with a root alias such as
+`r1/` starts with the folder listed under "Skill roots"). Call that folder `<skill>`. Run this
+first, with `<skill>` filled in: `bash "<skill>/../../scripts/lib.sh" plugin-root`. It prints
+`<plugin>`, the absolute plugin folder; `<scripts>` is `<plugin>/scripts`. Write every later
+command and every Read path with these filled in as absolute paths. If the command fails, or you
+cannot give `<skill>` as an absolute path, stop, tell the user the corecrew folder was not
+found, and do not guess a path. In Codex, `<skill>` must lie inside a
+`plugins/cache/<marketplace>/corecrew/<version>/skills/` folder; if it does not, ask the user
+before running anything from it.
 
 ## Language
 Talk to the user in their language, in plain words. Everything on disk (code, docs, commit
@@ -31,7 +45,7 @@ messages, briefs) is English. Report labels (`Path:`, `Proof:` …) stay English
 ## Settings
 In Claude Code the settings arrive as the plugin options `${user_config.core_dir}`,
 `${user_config.attribution}` and `${user_config.model_profile}`. In Codex there is no options
-screen: they live in the settings file (`bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" setting-path`
+screen: they live in the settings file (`bash "<scripts>/lib.sh" setting-path`
 prints its path, `~/.config/corecrew/settings` by default; lines `key: value`). A value that
 still reads literally `${user_config.` means the plugin is unconfigured: treat it as unset. The scripts
 resolve each setting (option, then file, then default `core_dir` `~/Projects/Core`, `attribution`
@@ -49,34 +63,33 @@ Do not pass `model` to feature-dev agents; they use their own default.
 First note three resolved values and use them in every later step. The reference files are
 opened with Read, which substitutes nothing, so they say `<plugin>`, `<scripts>` and "the
 attribution value resolved at Start" instead of placeholders:
-- `<plugin>`: the absolute path printed by `cd "${CLAUDE_SKILL_DIR}/../.." && pwd`.
-  `<scripts>` is `<plugin>/scripts`.
+- `<plugin>` and `<scripts>`: resolved under Paths.
 - attribution and model profile: run
-  `bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" settings attribution='${user_config.attribution}' model_profile='${user_config.model_profile}'`;
+  `bash "<scripts>/lib.sh" settings attribution='${user_config.attribution}' model_profile='${user_config.model_profile}'`;
   its lines `attribution: <v>` and `model_profile: <v>` are the values to use.
 
 1. **Core.** Resolve `<Core>` first, to an absolute path (the setting may start with `~`), show it
    to the user and use it everywhere:
-   `CORE_DIR='${user_config.core_dir}' bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" core-dir`.
+   `CORE_DIR='${user_config.core_dir}' bash "<scripts>/lib.sh" core-dir`.
    If that command prints a line on stderr, tell the user in plain words that their core_dir setting was ignored and why.
    Then check set-up:
-   `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" ready`
+   `CORE_DIR="<Core>" bash "<scripts>/lib.sh" ready`
    (exit 0 = set up). If not, say in plain words that a one-time setup is needed and list what it
    creates (a git repo `<Core>` with `standards/`, `knowledge/`, `.coredev`, `PROJECTS.md`); on
-   "ok" run `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/setup-core.sh" "<Core>"`.
+   "ok" run `CORE_DIR="<Core>" bash "<scripts>/setup-core.sh" "<Core>"`.
    If the user declines setup, stop; change nothing.
 2. **Project.** Find the project of the working directory:
-   `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" project-of "$PWD"`
+   `CORE_DIR="<Core>" bash "<scripts>/lib.sh" project-of "$PWD"`
    prints `<name>` (exit 1: the directory is not in a project). Not a project: for `adopt`
    follow `references/adopt.md`; for anything else say in one line that `/corecrew:new-project`
    (a new project) or `/corecrew:task adopt <folder>` (an existing one) brings it into the
    layout, and stop. Then
-   `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" layout <name>`:
+   `CORE_DIR="<Core>" bash "<scripts>/lib.sh" layout <name>`:
    - `old`: say in one line "this project uses the old layout; run `/corecrew:task adopt <path>`"
      and stop (`adopt` itself goes on, as above).
    - `new`: the code root is the worktree root when the directory is inside
      `<Projects>/<Name>/.claude/worktrees/<w>/`, else the output of
-     `CORE_DIR="<Core>" bash "${CLAUDE_SKILL_DIR}/../../scripts/lib.sh" code-dir <name>`
+     `CORE_DIR="<Core>" bash "<scripts>/lib.sh" code-dir <name>`
      (`<Projects>/<Name>`, the folder beside the Core). Use the code root for briefs, tests,
      release and `git`. The wiki and `CLAUDE.md` stay in `<Core>/<name>/`.
    - exit 1 from `layout` or `code-dir`: the project has no code folder (for example the Core is
@@ -150,7 +163,7 @@ Briefs follow `references/brief.md`. A corecrew agent's `subagent_type` is `core
    whose `applies-to` names it (in `<Core>/standards/` or the project's `docs/standards/`).
    A second reply without it: note it in `Open`.
 10. Extra tasks in one brief are not done; they come back in `Open`.
-11. Wiki rules are `${CLAUDE_SKILL_DIR}/../../reference/wiki.md`: engineer keeps the wiki and
+11. Wiki rules are `<plugin>/reference/wiki.md`: engineer keeps the wiki and
     regenerates `docs/INDEX.md` with `wiki-index.sh`, verifier runs `wiki-check.sh`. You do not edit wiki pages yourself.
 12. Never tag, never push. With the attribution value resolved at Start = `forbid`, no commit message gets a
     `Co-Authored-By` or `Generated with` line.
@@ -160,7 +173,7 @@ Every agent reply ends with `Knowledge line: <symptom → cause → guard | none
 - None: go to release (a `question` chain that changed no files has no release; see Finish).
 - Some: show them in plain words, one by one. For each the user answers ok / no, and, if ok,
   "this project / all projects". Write accepted lines as the format in
-  `${CLAUDE_SKILL_DIR}/../../reference/knowledge.md` says: into
+  `<plugin>/reference/knowledge.md` says: into
   `<Core>/<project>/docs/knowledge/<role>.md` (this project) or `<Core>/knowledge/<role>.md`
   (all projects). They go into the same commit as the chain (release.md postcondition 5). On the `question`
   path nothing else changed: with accepted lines, write them and commit

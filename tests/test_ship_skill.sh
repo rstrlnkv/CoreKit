@@ -9,7 +9,7 @@ assert_contains "$SK" 'name: ship'
 assert_contains "$SK" 'disable-model-invocation: true'
 
 # The release itself follows task's postconditions; no second copy of them.
-assert_contains "$SK" 'task/references/release.md'
+assert_contains "$SK" '<plugin>/skills/task/references/release.md'
 assert_contains "$SK" 'still reads literally `${user_config.`'
 
 # The global git config is the same before and after the tests.
