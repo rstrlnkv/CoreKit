@@ -61,11 +61,13 @@ created docs/.obsidian/.gitignore
 updated docs/INDEX.md
 warning: login: description over 80 chars
 warning: login: anchor #Missing dropped
+warning: refs: description is not one line
 warning: refs: reference to architecture § Nope at all not converted
 warning: sign in: anchor #Nope dropped
 warning: n: set type
 warning: n: status wip"
 WANT_CHECK="wiki-check: features/login.md: description over 80 chars
+wiki-check: features/refs.md: description not one line
 wiki-check: notes/n.md: missing front matter field type
 wiki-check: notes/n.md: bad status: wip"
 
@@ -284,5 +286,85 @@ assert_eq "$RC" "0" "project named old: exit"
 assert_eq "$ERR" "" "project named old: stderr"
 diff -r -x INDEX.md "$P/docs" "$FXE/docs" >/dev/null 2>&1 && pass || fail "project named old: pages differ from the expected tree"
 bash "$WI" "$P" --check >/dev/null 2>&1 && pass || fail "project named old: INDEX stale"
+
+# --- C1: a symlink inside docs/ is refused before anything is copied, in a dry run and a real run
+# (a plain docs/superpowers migrates: the main test above)
+new_sandbox
+mkproj "$SANDBOX/ln"; EXT="$SANDBOX/ext"; mkdir "$EXT"
+mv "$P/docs/superpowers" "$EXT/superpowers"; ln -s "$EXT/superpowers" "$P/docs/superpowers"
+ext_before="$(tree_sum "$EXT")"; docs_before="$(snap_all "$P")"
+[ -n "$(find "$EXT/superpowers" -type f)" ] && pass || fail "the link target holds no files (nothing to test)"
+for m in --dry-run ""; do
+  run "$P" $m
+  assert_eq "$RC" "1" "superpowers link ${m:-real}: exit"
+  assert_eq "$ERR" "wiki-migrate: docs/superpowers is a symlink; nothing was changed" "superpowers link ${m:-real}: message"
+  assert_eq "$(tree_sum "$EXT")" "$ext_before" "superpowers link ${m:-real}: the link target changed"
+  assert_eq "$(snap_all "$P")" "$docs_before" "superpowers link ${m:-real}: the project changed"
+  assert_eq "$OUT" "" "superpowers link ${m:-real}: stdout"
+done
+# the other folders, each a link to an outside folder
+for l in superpowers/specs superpowers/plans specs plans .obsidian; do
+  q="$SANDBOX/l-$(echo "$l" | tr '/.' '__')"; mkproj "$q"; X="$q-target"; mkdir -p "$X"
+  if [ -d "$P/docs/$l" ]; then mv "$P/docs/$l" "$X/t"; else mkdir "$X/t"; printf 'x\n' > "$X/t/keep.md"; fi
+  ln -s "$X/t" "$P/docs/$l"; xb="$(tree_sum "$X")"; pb="$(snap_all "$P")"
+  run "$P" --dry-run
+  assert_eq "$RC" "1" "docs/$l link: exit"
+  assert_eq "$ERR" "wiki-migrate: docs/$l is a symlink; nothing was changed" "docs/$l link: message"
+  assert_eq "$(tree_sum "$X")" "$xb" "docs/$l link: target changed"
+  assert_eq "$(snap_all "$P")" "$pb" "docs/$l link: project changed"
+done
+
+# --- I2: 0.6 lines in CLAUDE.md are reported (dry run and real run), never edited
+new_sandbox
+mkproj "$SANDBOX/cm"
+printf '# x\n\n- A new page gets a map line in `docs/INDEX.md`.\n- Put specs and plans in `docs/superpowers/`.\ncheck: true\n' > "$P/CLAUDE.md"
+cp "$P/CLAUDE.md" "$SANDBOX/cm.orig"
+WANT_CM="warning: CLAUDE.md:3: still says map line; update it by hand
+warning: CLAUDE.md:4: still says docs/superpowers; update it by hand"
+for m in --dry-run ""; do
+  run "$P" $m
+  assert_eq "$RC" "0" "CLAUDE.md ${m:-real}: exit"
+  assert_eq "$(printf '%s\n' "$OUT" | grep '^warning: CLAUDE.md')" "$WANT_CM" "CLAUDE.md ${m:-real}: warnings"
+  cmp -s "$P/CLAUDE.md" "$SANDBOX/cm.orig" && pass || fail "CLAUDE.md ${m:-real}: CLAUDE.md was edited"
+done
+# a CLAUDE.md made from the current template: no warning
+mkproj "$SANDBOX/cm7"; cp "$PLUGIN/skills/new-project/templates/CLAUDE.md.tmpl" "$P/CLAUDE.md"
+run "$P" --dry-run
+printf '%s\n' "$OUT" | grep -q '^warning: CLAUDE.md' && fail "a 0.7 CLAUDE.md is warned about: $(printf '%s\n' "$OUT" | grep CLAUDE.md)" || pass
+
+# --- I3: a folded or literal description is warned about; ">" mid-text is not
+new_sandbox
+mkproj "$SANDBOX/fold"
+i=0
+for v in '>' '|' '>-' '|-'; do
+  i=$((i + 1))
+  printf -- '---\ntype: feature\nstatus: active\ndescription: %s\n  Folded text.\nfiles: []\nrelated: []\nupdated: 2026-01-01\n---\n\n# F\n' "$v" > "$P/docs/features/f$i.md"
+done
+printf -- '---\ntype: feature\nstatus: active\ndescription: a > b\nfiles: []\nrelated: []\nupdated: 2026-01-01\n---\n\n# F\n' > "$P/docs/features/f5.md"
+run "$P" --dry-run
+assert_eq "$RC" "0" "folded description: exit"
+assert_eq "$(printf '%s\n' "$OUT" | grep 'not one line')" "warning: f1: description is not one line
+warning: f2: description is not one line
+warning: f3: description is not one line
+warning: f4: description is not one line
+warning: refs: description is not one line" "folded description warnings (refs.md of the fixture is one too)"
+
+# --- M2: a leftover staging folder from a killed run is named and kept; the run goes on
+new_sandbox
+mkproj "$SANDBOX/lo"; mkdir "$P/.wiki-migrate.AbC123"; printf 'x\n' > "$P/.wiki-migrate.AbC123/f"
+run "$P"
+assert_eq "$RC" "0" "leftover: exit"
+printf '%s\n' "$OUT" | grep -qxF "warning: leftover $P/.wiki-migrate.AbC123 from an interrupted run; check and remove it by hand" && pass || fail "leftover not named: $OUT"
+assert_file "$P/.wiki-migrate.AbC123/f"
+assert_file "$P/docs/specs/a.md"; assert_no_file "$P/docs/superpowers/specs/a.md"
+
+# --- a wiki whose pages get no type still migrates (wiki-index does not refuse there)
+new_sandbox
+mkdir -p "$SANDBOX/ut/p/docs"; printf '# Notes\n' > "$SANDBOX/ut/p/docs/notes.md"
+run "$SANDBOX/ut/p"
+assert_eq "$RC" "0" "untyped wiki: exit"
+assert_eq "$ERR" "" "untyped wiki: stderr"
+printf '%s\n' "$OUT" | grep -qxF "warning: notes: set type" && pass || fail "untyped wiki: no set type warning: $OUT"
+assert_file "$SANDBOX/ut/p/docs/INDEX.md"
 
 finish

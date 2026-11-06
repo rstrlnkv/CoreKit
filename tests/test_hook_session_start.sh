@@ -194,7 +194,16 @@ assert_eq "$(cat "$NC/AGENTS.md")" "mine" "real AGENTS.md untouched"; [ -L "$NC/
 echo "$OUT" | grep -qF "AGENTS.md" && fail "real AGENTS.md: noise: $OUT" || pass
 rm "$NC/AGENTS.md"; echo x > "$SANDBOX/else.md"; ln -s "$SANDBOX/else.md" "$NC/AGENTS.md"
 run_rc "$NC"; assert_eq "$(readlink "$NC/AGENTS.md")" "$SANDBOX/else.md" "AGENTS.md link elsewhere untouched"
-echo "$OUT" | grep -qF "AGENTS.md" && fail "link elsewhere: noise: $OUT" || pass
+# (M4) a link elsewhere is named once, like a wrong CLAUDE.local.md, with the command that fixes it
+assert_eq "$(echo "$OUT" | grep -c 'AGENTS.md')" "1" "link elsewhere: one AGENTS.md line: $OUT"
+echo "$OUT" | grep -qF "corecrew: $NC/AGENTS.md is a link to somewhere other than $NP/CLAUDE.md" && pass || fail "link elsewhere: line missing: $OUT"
+echo "$OUT" | grep -qF "ln -s \"$NP/CLAUDE.md\" \"$NC/AGENTS.md\"" && pass || fail "link elsewhere: no fix command: $OUT"
+CLAUDE_PLUGIN_OPTION_UI_LANGUAGE=ru run_rc "$NC"
+echo "$OUT" | grep 'AGENTS.md' | grep -qF "$NP/CLAUDE.md" && pass || fail "ru link elsewhere line missing: $OUT"
+echo "$OUT" | grep 'AGENTS.md' | grep -q 'somewhere' && fail "ru link elsewhere line is English: $OUT" || pass
+# a dangling link elsewhere is named too
+rm "$NC/AGENTS.md"; ln -s "$SANDBOX/gone.md" "$NC/AGENTS.md"
+run_rc "$NC"; echo "$OUT" | grep -qF "corecrew: $NC/AGENTS.md is a link to somewhere other than" && pass || fail "dangling AGENTS.md link: no line: $OUT"
 # a Core AGENTS.md: no link, nothing printed, the Core file stays
 rm "$NC/AGENTS.md"; printf 'core\n' > "$NP/AGENTS.md"
 run_rc "$NC"

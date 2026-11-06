@@ -15,6 +15,8 @@
 #   bad status: <v>                            not draft active done superseded
 #   bad updated: <v>                           not YYYY-MM-DD
 #   description over 80 chars                 counted in characters, surrounding quotes removed
+#   description not one line                  the value starts with > or | (a folded or literal block)
+#   related is not a wikilink: <item>          a related: item that is not [[...]] ([] passes)
 #   duplicate page name <name>                 on each later page (sorted path order) with a taken name
 #   broken wikilink [[<target>]]               no such page/file, or no such heading (alias dropped)
 #   use a wikilink: <target>                   a Markdown link from a page to a wiki page
@@ -133,6 +135,24 @@ function additem(v) {
   if (v == "") return
   nf++; flist[nf] = v
 }
+# related: items (inline [a, "b"] or block "- a"), each a [[...]] wikilink, quoted or not.
+function relitem(v) {
+  v = trim(unq(trim(v)))
+  if (v != "" && v !~ /^!?\[\[.*\]\]$/) report(rel, "related is not a wikilink: " v)
+}
+function relflow(v,   i, c, q, cur) {
+  if (mode != "page") return
+  if (v !~ /^\[/) { relitem(v); return }
+  sub(/^\[/, "", v); sub(/\][ \t]*$/, "", v); q = ""; cur = ""
+  for (i = 1; i <= length(v); i++) {
+    c = substr(v, i, 1)
+    if (q != "") { if (c == q) q = ""; cur = cur c; continue }
+    if (c == "\"" || c == "'") q = c
+    if (c == ",") { relitem(cur); cur = ""; continue }
+    cur = cur c
+  }
+  relitem(cur)
+}
 function flow(v,   n, parts, i) {
   sub(/^\[/, "", v); sub(/\][ \t]*$/, "", v)
   n = split(v, parts, ",")
@@ -145,11 +165,11 @@ function fmline(l,   k, v) {
     v = trim(substr(l, index(l, ":") + 1))
     has[k] = 1; val[k] = v; curkey = k
     if (k == "files" && v ~ /^\[/) flow(v)
-    if (k == "related") scanwiki(v)
+    if (k == "related") { scanwiki(v); relflow(v) }
     return
   }
   if (curkey == "files" && l ~ /^[ \t]*-[ \t]+/) { v = l; sub(/^[ \t]*-[ \t]+/, "", v); additem(v) }
-  if (curkey == "related") scanwiki(l)
+  if (curkey == "related") { scanwiki(l); if (mode == "page" && l ~ /^[ \t]*-[ \t]/) { v = l; sub(/^[ \t]*-[ \t]*/, "", v); relitem(v) } }
 }
 
 # Headings (# to ######) of a file, outside its front matter and code fences, cached.
@@ -283,7 +303,8 @@ END {
       if (f == "type" && !(v in oktype)) report(rel, "bad type: " v)
       if (f == "status" && !(v in okstatus)) report(rel, "bad status: " v)
       if (f == "updated" && v !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) report(rel, "bad updated: " v)
-      if (f == "description" && ulen(v) > 80) report(rel, "description over 80 chars")
+      if (f == "description" && val[f] ~ /^[>|]/) report(rel, "description not one line")
+      else if (f == "description" && ulen(v) > 80) report(rel, "description over 80 chars")
     }
     if (size > 8192 && h2 == 0) report(rel, "page over 8 KB without ## headings")
     if (!(rel in pagechg)) {
@@ -312,7 +333,7 @@ run_checked() { run_awk "$@" || echo "$2" >> "$T/failed"; }
 OUT="$(
   if [ ! -f "$DOCS/INDEX.md" ]; then echo "wiki-check: INDEX.md: missing"
   else
-    "$HERE/wiki-index.sh" "$PROJ" --check > /dev/null; rc=$?      # (no "case" here: bash 3.2 misparses it in $( ))
+    "$HERE/wiki-index.sh" "$PROJ" --check > /dev/null 2>&1; rc=$?      # (no "case" here: bash 3.2 misparses it in $( ))
     if [ "$rc" = 1 ]; then echo "wiki-check: INDEX.md: INDEX.md stale"
     elif [ "$rc" != 0 ]; then echo INDEX.md >> "$T/failed"; fi
   fi

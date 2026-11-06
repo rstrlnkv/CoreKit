@@ -189,10 +189,11 @@ assert_exit 0 bash "$AD" --from "$F"
 OLDOUT="$OUT"
 P="$CORE_DIR/wiki-old"
 assert_eq "$(last_line "$OLDOUT")" "open: $F" "last line (old-format wiki)"
-for w in "warning: login: description over 80 chars" "warning: n: set type" "warning: n: status wip"; do
+for w in "warning: login: description over 80 chars" "warning: refs: description is not one line" "warning: n: set type" "warning: n: status wip"; do
   echo "$OLDOUT" | grep -qxF "$w" && pass || fail "adopt output lacks '$w': $OLDOUT"
 done
 wiki_only "$P" "wiki-check: features/login.md: description over 80 chars
+wiki-check: features/refs.md: description not one line
 wiki-check: notes/n.md: missing front matter field type
 wiki-check: notes/n.md: bad status: wip"
 if grep -rq '^title:' "$P/docs" --include='*.md' --exclude-dir=knowledge; then fail "a page still has title:"; else pass; fi

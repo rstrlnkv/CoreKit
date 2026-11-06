@@ -24,7 +24,7 @@ assert_exit 0 bash "$W" ..
 cd "$ROOT" || exit 1
 
 # Copy a fixture and regenerate its INDEX.md (the title of the INDEX holds the folder name).
-clone() { cp -R "$FX/$1" "$2"; bash "$SCRIPTS/wiki-index.sh" "$2" >/dev/null; }
+clone() { cp -R "$FX/$1" "$2"; bash "$SCRIPTS/wiki-index.sh" "$2" >/dev/null 2>&1; }
 
 # One broken fixture per check.
 check wiki-bad-1 "wiki-check: features/login.md: missing front matter field status
@@ -283,6 +283,41 @@ assert_exit 2 bash "$W" "$FX/wiki-good" src/app.sh
 assert_exit 2 bash "$W" "$SANDBOX/does-not-exist"
 mkdir "$SANDBOX/nodocs"
 assert_exit 1 bash "$W" "$SANDBOX/nodocs"
+
+# I3: a folded or literal description (>, |, >-, |-) is not one line; ">" mid-text is fine.
+clone wiki-good "$SANDBOX/fold"
+i=0
+for v in '>' '|' '>-' '|-'; do
+  i=$((i + 1))
+  printf -- '---\ntype: feature\nstatus: active\ndescription: %s\n  A long text folded\n  over two lines.\nfiles: []\nrelated: []\nupdated: 2026-11-06\n---\n\n# F%s\n' "$v" "$i" > "$SANDBOX/fold/docs/features/f$i.md"
+done
+printf -- '---\ntype: feature\nstatus: active\ndescription: a > b and c | d\nfiles: []\nrelated: []\nupdated: 2026-11-06\n---\n\n# F5\n' > "$SANDBOX/fold/docs/features/f5.md"
+bash "$SCRIPTS/wiki-index.sh" "$SANDBOX/fold" >/dev/null 2>&1
+assert_exit 1 bash "$W" "$SANDBOX/fold"
+assert_eq "$OUT" "wiki-check: features/f1.md: description not one line
+wiki-check: features/f2.md: description not one line
+wiki-check: features/f3.md: description not one line
+wiki-check: features/f4.md: description not one line" "folded descriptions"
+
+# M6: a related item that is not a wikilink is reported; [] passes.
+clone wiki-good "$SANDBOX/relpath"
+sed 's/^related: .*/related: [docs\/features\/login.md, "[[features\/login]]"]/' "$SANDBOX/relpath/docs/architecture.md" > "$SANDBOX/s.tmp" && mv "$SANDBOX/s.tmp" "$SANDBOX/relpath/docs/architecture.md"
+sed 's/^  - "\[\[architecture\]\]"/  - architecture.md/' "$SANDBOX/relpath/docs/features/login.md" > "$SANDBOX/s.tmp" && mv "$SANDBOX/s.tmp" "$SANDBOX/relpath/docs/features/login.md"
+assert_exit 1 bash "$W" "$SANDBOX/relpath"
+assert_eq "$OUT" "wiki-check: architecture.md: related is not a wikilink: docs/features/login.md
+wiki-check: features/login.md: related is not a wikilink: architecture.md" "related items are wikilinks"
+clone wiki-good "$SANDBOX/relempty"
+sed 's/^related: .*/related: []/' "$SANDBOX/relempty/docs/architecture.md" > "$SANDBOX/s.tmp" && mv "$SANDBOX/s.tmp" "$SANDBOX/relempty/docs/architecture.md"
+assert_exit 0 bash "$W" "$SANDBOX/relempty"
+assert_eq "$OUT" "" "related: [] passes"
+
+# I1: an untyped page is reported once by wiki-check, with no wiki-index noise on stderr.
+clone wiki-good "$SANDBOX/untyped"
+printf -- '---\nstatus: active\ndescription: no type\nfiles: []\nrelated: []\nupdated: 2026-11-06\n---\n\n# U\n' > "$SANDBOX/untyped/docs/u.md"
+bash "$SCRIPTS/wiki-index.sh" "$SANDBOX/untyped" >/dev/null 2>&1
+SO="$(bash "$W" "$SANDBOX/untyped" 2>"$SANDBOX/werr")"
+assert_eq "$SO" "wiki-check: u.md: missing front matter field type" "untyped page"
+assert_eq "$(cat "$SANDBOX/werr")" "" "wiki-check stderr with an untyped page"
 
 # Rules file and docs.
 assert_file "$PLUGIN/reference/wiki.md"

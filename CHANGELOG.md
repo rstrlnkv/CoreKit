@@ -15,9 +15,11 @@
   `CLAUDE.md` to Codex in that folder, so `second-opinion` runs can send its content to OpenAI.
 - New `scripts/wiki-migrate.sh` converts a 0.6 wiki to the new format (front matter, wikilinks,
   `docs/superpowers/` to `docs/specs/` and `docs/plans/`, INDEX); `adopt` runs it too.
-- Upgrade: once per existing project run
-  `bash <plugin>/scripts/wiki-migrate.sh <Core>/<project> --dry-run`, read the output, then run it
-  again without `--dry-run`.
+- Upgrade: the first `/corecrew:task` on a 0.6 project offers the migration: it shows a
+  `wiki-migrate.sh --dry-run` first and converts the wiki only on your ok, as its own commit.
+  The old lines in the project's `CLAUDE.md` (`docs/superpowers`, map lines) are reported for a
+  hand edit; the script never changes that file. By hand:
+  `bash <plugin>/scripts/wiki-migrate.sh <Core>/<project> --dry-run`, then again without it.
 
 ## 0.6.6 — 2026-11-05
 - The one-suite hook no longer lets several test runs through when many waiters (8 in the stress

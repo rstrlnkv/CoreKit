@@ -9,8 +9,12 @@
 # Output (--check): nothing when INDEX.md is current, "wiki-index: stale" when it differs or is missing.
 # Groups in order: brief architecture decision feature spec plan glossary; pages by name as
 # "[[name]] description". Done or superseded pages are left out and counted in a "history:" line.
-# Pages without a known type are left out (wiki-check reports them).
-# Exit: 0 ok; 1 stale (--check only); 2 usage error.
+# Pages without a known type are left out (wiki-check reports them); a page with no type at all is
+# also named on stderr: "wiki-index: skipped <page>: no type".
+# A wiki with pages but none with a type is a 0.6 wiki: in both modes it prints
+# "wiki-index: no page has a type; run wiki-migrate.sh first", writes nothing and exits 1
+# (WIKI_INDEX_UNTYPED=1, set by wiki-migrate.sh, generates it anyway).
+# Exit: 0 ok; 1 stale (--check only) or a 0.6 wiki; 2 usage error.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 mode=write; proj=""
@@ -29,10 +33,10 @@ rows="$tmp.rows"; out="$tmp.out"
 trap 'rm -f "$tmp" "$rows" "$out"' EXIT
 : > "$rows"
 
-# one awk reads the front matter: prints type, status, description (tab separated)
+# one awk reads the front matter: prints type, name, status, description, page (tab separated)
 while IFS= read -r page; do
   name="$(basename "$page" .md)"
-  awk -v n="$name" '
+  awk -v n="$name" -v p="$page" '
     function val(s) { sub(/^[^:]*:/, "", s); gsub(/^[ \t]+|[ \t]+$/, "", s)
       if (length(s) >= 2 && ((s ~ /^".*"$/) || (s ~ /^'"'"'.*'"'"'$/))) s = substr(s, 2, length(s) - 2)
       return s }
@@ -42,9 +46,13 @@ while IFS= read -r page; do
     /^type:/ { t = val($0) }
     /^status:/ { s = val($0) }
     /^description:/ { d = val($0) }
-    END { printf "%s\t%s\t%s\t%s\n", t, n, s, d }
+    END { printf "%s\t%s\t%s\t%s\t%s\n", t, n, s, d, p }
   ' "$docs/$page" >> "$rows"
 done < <("$HERE/wiki-pages.sh" "$docs")
+if [ -s "$rows" ] && [ "${WIKI_INDEX_UNTYPED:-0}" != 1 ] && ! awk -F'\t' '$1 != "" { f = 1 } END { exit !f }' "$rows"; then
+  echo "wiki-index: no page has a type; run wiki-migrate.sh first"; exit 1
+fi
+awk -F'\t' '$1 == "" { print "wiki-index: skipped " $5 ": no type" }' "$rows" >&2
 
 {
   printf '# %s wiki\nOne line per page; open only the page you need.\n' "$(basename "$proj")"

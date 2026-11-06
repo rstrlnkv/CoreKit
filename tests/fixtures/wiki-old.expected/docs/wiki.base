@@ -1,7 +1,7 @@
 filters:
   and:
     - 'file.ext == "md"'
-    - 'file.basename != "INDEX"'
+    - '!file.path.startsWith("INDEX.md")'
     - '!file.path.startsWith("knowledge/")'
     - '!file.path.startsWith("standards/")'
     - '!file.path.startsWith("superpowers/")'

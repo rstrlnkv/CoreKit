@@ -101,9 +101,20 @@ attribution value resolved at Start" instead of placeholders:
    and stop. `save` does `git add -A` on the same paths; the tree must be clean so it commits only
    this chain's work. On `question` check this only before writing accepted knowledge lines; `adopt`
    skips it (adopt.md has its own checks).
-6. **Base commits.** Record `git rev-parse HEAD` in the code root and in `<Core>`: these are the
+6. **Wiki.** Every path except `adopt` (adopt converts the wiki itself), before any crew is
+   briefed: run `bash "<scripts>/wiki-index.sh" "<Core>/<project>" --check`. When it prints
+   `wiki-index: no page has a type; run wiki-migrate.sh first`, the wiki is still in the 0.6 format:
+   run `bash "<scripts>/wiki-migrate.sh" "<Core>/<project>" --dry-run`, show its output to the user
+   and ask for an "ok". On "ok" run it again without `--dry-run` and commit it as its own step from
+   the code root: `bash "<scripts>/save" "wiki: migrate to the 0.7 format"` (with
+   attribution=forbid add `--no-attribution`). This needs the clean tree of step 5 (on `question`
+   check it now). Without that "ok", stop the chain. Then, in any case, run
+   `bash "<scripts>/wiki-check.sh" "<Core>/<project>"` once and note its lines as the **baseline**,
+   like the base commits: the wiki problems that were there before this chain. The verifier brief
+   and release postcondition 3 use it.
+7. **Base commits.** Record `git rev-parse HEAD` in the code root and in `<Core>`: these are the
    chain's base commits; release attribution ranges and `--changed` start from them.
-7. **Choose the path** (`fix`, `full`, `question`, `batch`, `release`, `adopt`; see
+8. **Choose the path** (`fix`, `full`, `question`, `batch`, `release`, `adopt`; see
    `references/paths.md`) and name it in the first line you say to the user.
 
 ## Running the chain

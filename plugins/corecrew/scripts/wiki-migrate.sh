@@ -28,10 +28,14 @@
 # Output (stdout, after success): "moved <old> -> <new>" or "updated docs/<page>" per changed page in
 # path order; "created|skipped docs/<vault file>"; the wiki-index.sh line; then, in page order,
 # "warning: <name>: set type" | "description over 80 chars" | "status <v>" | "anchor #<a> dropped" |
-# "reference to <page> § <rest of the line> not converted" | "front matter not closed" (such a page is
-# left as it is).
+# "reference to <page> § <rest of the line> not converted" | "description is not one line" (it starts
+# with > or |) | "front matter not closed" (such a page is left as it is); then
+# "warning: CLAUDE.md:<N>: still says docs/superpowers|map line; update it by hand" per 0.6 line of
+# <project_dir>/CLAUDE.md (never edited), and "warning: leftover <folder> from an interrupted run; check
+# and remove it by hand" per <project_dir>/.wiki-migrate.* left by a killed run (kept).
 # Exit: 0 done (or nothing to do); 1 a step failed, one line on stderr, nothing changed (also: a move
-# target exists, docs/ is a symlink); 2 usage error.
+# target exists; docs/, or docs/ superpowers, superpowers/specs, superpowers/plans, specs, plans or
+# .obsidian is a symlink); 2 usage error.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$HERE/../skills/new-project/templates/docs"
@@ -65,6 +69,10 @@ trap cleanup EXIT
 die() { printf 'wiki-migrate: %s\n' "$1" >&2; exit 1; }
 
 [ ! -L "$docs" ] || die "$docs is a symlink; nothing was changed"
+# A link inside docs/ would take the moves and writes out of the copy (and a dry run's cleanup with them).
+for k in superpowers superpowers/specs superpowers/plans specs plans .obsidian; do
+  [ ! -L "$docs/$k" ] || die "docs/$k is a symlink; nothing was changed"
+done
 # Refuse a move whose target exists before anything is copied.
 for k in specs plans; do
   [ -d "$docs/superpowers/$k" ] || continue
@@ -75,6 +83,9 @@ for k in specs plans; do
   done
 done
 
+# Taken before the temp folder exists, so this run's own folder is not among them.
+LEFT=""; for f in "$proj"/.wiki-migrate.*; do { [ -e "$f" ] || [ -L "$f" ]; } && LEFT="$LEFT$f
+"; done
 if [ "$dry" -eq 1 ]; then S="$(mktemp -d "${TMPDIR:-/tmp}/wiki-migrate.XXXXXX")" || die "cannot create a temp folder"
 else S="$(mktemp -d "$proj/.wiki-migrate.XXXXXX" 2>/dev/null)" || { S=""; die "cannot create a temp folder in $proj; nothing was changed"; }; fi
 SP="$S/new/$name"; SD="$SP/docs"; W="$S/.work"
@@ -286,7 +297,8 @@ END {
   emit("---")
   t = (("type" in at) ? val("type") : TYPE)
   if (t !~ /^(brief|architecture|decision|feature|spec|plan|glossary)$/) warn("set type")
-  if (ulen(val("description")) > 80) warn("description over 80 chars")
+  if (("description" in at) && trim(substr(L[at["description"]], index(L[at["description"]], ":") + 1)) ~ /^[>|]/) warn("description is not one line")
+  else if (ulen(val("description")) > 80) warn("description over 80 chars")
   s = val("status"); if (s != "" && s !~ /^(draft|active|done|superseded)$/) warn("status " s)
   if (start == 1) emit("")
   fence = 0
@@ -337,7 +349,17 @@ for pair in "wiki.base|wiki.base" "obsidian-app.json|.obsidian/app.json" "obsidi
   else mkdir -p "$(dirname "$SD/$dst")" && cp "$TPL/$src" "$SD/$dst" || die "could not create docs/$dst; nothing was changed"
     echo "created docs/$dst"; fi
 done >> "$W/sorted"
-bash "$HERE/wiki-index.sh" "$SP" >> "$W/sorted" || die "wiki-index.sh failed; nothing was changed"
+# (the pages' type warnings are above; wiki-index's own notes about them would repeat them)
+WIKI_INDEX_UNTYPED=1 bash "$HERE/wiki-index.sh" "$SP" >> "$W/sorted" 2>/dev/null || die "wiki-index.sh failed; nothing was changed"
+# 0.6 instructions in CLAUDE.md, and leftovers of a killed run: named, never touched.
+if [ -f "$proj/CLAUDE.md" ]; then
+  awk '/docs\/superpowers/ { print "warning: CLAUDE.md:" NR ": still says docs/superpowers; update it by hand"; next }
+       /map line/ { print "warning: CLAUDE.md:" NR ": still says map line; update it by hand" }' "$proj/CLAUDE.md" >> "$W/warn" \
+    || die "could not read $proj/CLAUDE.md; nothing was changed"
+fi
+printf '%s' "$LEFT" | while IFS= read -r f; do
+  [ -n "$f" ] && printf 'warning: leftover %s from an interrupted run; check and remove it by hand\n' "$f"
+done >> "$W/warn"
 
 # The swap: the old docs/ goes into the temp folder, the copy takes its place. TERM, INT and HUP wait
 # until both moves are done; a signal that came in between undoes the swap (docs/ as it was).

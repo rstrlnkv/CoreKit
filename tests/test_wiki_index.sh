@@ -45,7 +45,13 @@ One line per page; open only the page you need.
 history: 2 done or superseded pages, see wiki.base"
 IDX="$FX/wiki-index/docs/INDEX.md"
 assert_exit 0 bash "$I" "$FX/wiki-index"
-assert_eq "$OUT" "updated docs/INDEX.md" "existing INDEX is rewritten"
+assert_eq "$OUT" "wiki-index: skipped notype.md: no type
+updated docs/INDEX.md" "existing INDEX is rewritten; the untyped page is named"
+# M3: the untyped page is named on stderr, stdout keeps one line, exit 0
+SO="$(bash "$I" "$FX/wiki-index" 2>"$SANDBOX/ierr")"; RC=$?
+assert_eq "$RC" "0" "untyped page in a typed wiki: exit"
+assert_eq "$SO" "skipped docs/INDEX.md" "untyped page: stdout"
+assert_eq "$(cat "$SANDBOX/ierr")" "wiki-index: skipped notype.md: no type" "untyped page: stderr"
 assert_eq "$(cat "$IDX")" "$WANT" "INDEX content"
 # no CR in the output even for the CRLF page, no front matter noise, no left-out pages
 assert_eq "$(grep -c "$(printf '\r')" "$IDX")" "0" "no CR in INDEX"
@@ -62,27 +68,28 @@ assert_eq "$(tail -c1 "$IDX" | od -An -c | tr -d ' ')" '\n' "ends with newline"
 # second run: skipped, file untouched, --check clean
 before="$(cksum < "$IDX")"
 assert_exit 0 bash "$I" "$FX/wiki-index"
-assert_eq "$OUT" "skipped docs/INDEX.md" "second run"
+assert_eq "$OUT" "wiki-index: skipped notype.md: no type
+skipped docs/INDEX.md" "second run"
 assert_eq "$(cksum < "$IDX")" "$before" "INDEX untouched on skip"
 assert_exit 0 bash "$I" "$FX/wiki-index" --check
-assert_eq "$OUT" "" "--check silent when equal"
+assert_eq "$OUT" "wiki-index: skipped notype.md: no type" "--check: only the untyped page when equal"
 assert_exit 0 bash "$I" "$FX/wiki-index/" --check      # trailing slash
 
 # stale after one description edit
 cp "$FX/wiki-index/docs/features/login.md" "$SANDBOX/login.bak"
 { sed 's/^description: .*/description: sign-in with a passkey/' "$SANDBOX/login.bak"; } > "$FX/wiki-index/docs/features/login.md"
 assert_exit 1 bash "$I" "$FX/wiki-index" --check
-assert_eq "$OUT" "wiki-index: stale" "--check after edit"
+assert_eq "$(printf '%s\n' "$OUT" | grep -v 'no type$')" "wiki-index: stale" "--check after edit"
 assert_eq "$(cat "$IDX")" "$WANT" "--check does not write"
 assert_exit 0 bash "$I" "$FX/wiki-index"
-assert_eq "$OUT" "updated docs/INDEX.md" "regenerated"
+assert_eq "$(printf '%s\n' "$OUT" | grep -v 'no type$')" "updated docs/INDEX.md" "regenerated"
 assert_contains "$IDX" "[[login]] sign-in with a passkey"
 assert_exit 0 bash "$I" "$FX/wiki-index" --check
 
 # adding a typed page makes the INDEX stale
 printf -- '---\ntype: feature\nstatus: active\ndescription: added later\nfiles: []\nrelated: []\nupdated: 2026-11-06\n---\n' > "$FX/wiki-index/docs/features/added.md"
 assert_exit 1 bash "$I" "$FX/wiki-index" --check
-assert_eq "$OUT" "wiki-index: stale" "new page makes it stale"
+assert_eq "$(printf '%s\n' "$OUT" | grep -v 'no type$')" "wiki-index: stale" "new page makes it stale"
 
 # --- missing INDEX: --check is stale and creates nothing; a run says created
 assert_exit 1 bash "$I" "$FX/wiki-index-fresh" --check
@@ -98,6 +105,26 @@ One line per page; open only the page you need.
 ## feature
 [[feature-a]] a draft feature" "fresh INDEX: draft is listed, no history line without old pages"
 assert_not_contains "$FX/wiki-index-fresh/docs/INDEX.md" "history:"
+
+# --- I1: a 0.6 wiki (pages, none with a type) is refused: exit 1, one line, INDEX.md byte-identical
+OLD6="$SANDBOX/old6"; cp -R "$ROOT/tests/fixtures/wiki-old" "$OLD6"
+rm "$OLD6/docs/features/export.md"        # the one page of the fixture already in the new format
+grep -rlq '^type:' "$OLD6/docs" --include='*.md' && fail "0.6 copy still has a typed page" || pass
+cp "$OLD6/docs/INDEX.md" "$SANDBOX/old6.index"
+for m in "" --check; do
+  OUT="$(bash "$I" "$OLD6" $m 2>"$SANDBOX/ierr")"; RC=$?
+  assert_eq "$RC" "1" "0.6 wiki ${m:-write}: exit"
+  assert_eq "$OUT" "wiki-index: no page has a type; run wiki-migrate.sh first" "0.6 wiki ${m:-write}: stdout"
+  assert_eq "$(cat "$SANDBOX/ierr")" "" "0.6 wiki ${m:-write}: stderr"
+  cmp -s "$OLD6/docs/INDEX.md" "$SANDBOX/old6.index" && pass || fail "0.6 wiki ${m:-write}: INDEX.md changed"
+done
+ls "$OLD6/docs" | grep -q 'wiki-index' && fail "0.6 wiki: a temp file was left in docs/" || pass
+# an empty docs/ (no pages) still generates the header
+mkdir -p "$SANDBOX/emptyw/docs"
+assert_exit 0 bash "$I" "$SANDBOX/emptyw"
+assert_eq "$OUT" "created docs/INDEX.md" "empty docs/: created"
+assert_eq "$(cat "$SANDBOX/emptyw/docs/INDEX.md")" "# emptyw wiki
+One line per page; open only the page you need." "empty docs/: header only"
 
 # --- usage: exit 2
 assert_exit 2 bash "$I"

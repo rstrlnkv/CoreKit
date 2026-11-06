@@ -89,11 +89,33 @@ grep -qE 'wikilink|\[\[|Obsidian' "$R" && pass || fail "README does not mention 
 { grep -qF 'wiki-index' "$R" || grep -qi 'generated' "$R"; } && pass || fail "README does not say INDEX.md is generated"
 
 # 8. Round 1 rulings.
-# release.md: a 0.6 wiki (pages without type) is converted with wiki-migrate.sh before wiki-index.sh runs
-assert_contains "$REL" 'wiki-migrate.sh'
-mg="$(grep -n 'wiki-migrate\.sh' "$REL" | head -1 | cut -d: -f1)"
-[ -n "$mg" ] && [ -n "$wi" ] && [ "$mg" -le "$wi" ] && pass || fail "release.md: wiki-migrate.sh must be named before wiki-index.sh (migrate=$mg index=$wi)"
-grep -qiE '0\.6' "$REL" && pass || fail "release.md does not say the 0.6 format is converted"
+# release.md: a 0.6 wiki is migrated at task Start, never at release (I1)
+grep -qF 'converted first with' "$REL" && fail "release.md still migrates the wiki at release" || pass
+assert_contains "$REL" '`no page has a type`'
+assert_contains "$REL" '"migrate at Start"'
+assert_contains "$REL" 'baseline'
+assert_contains "$REL" 'pre-existing problem'
+assert_contains "$REL" 'Only new lines are ✗'
+grep -qiE '0\.6' "$REL" && pass || fail "release.md does not name the 0.6 format"
+# SKILL.md Start: dry run, the owner's ok, its own save step, and the wiki-check baseline
+SK="$PLUGIN/skills/task/SKILL.md"
+st="$(awk '$0 == "## Start" {f=1; next} /^## /{f=0} f' "$SK")"
+for w in 'wiki-index.sh" "<Core>/<project>" --check' 'no page has a type' \
+         'wiki-migrate.sh" "<Core>/<project>" --dry-run' 'show its output to the user' \
+         'wiki: migrate to the 0.7 format' 'Without that "ok", stop the chain' \
+         'wiki-check.sh" "<Core>/<project>"' '**baseline**'; do
+  printf '%s\n' "$st" | grep -qF -- "$w" && pass || fail "SKILL.md Start lacks: $w"
+done
+# the wiki step comes before the base commits are recorded (the migration commit is not chain work)
+ws="$(printf '%s\n' "$st" | grep -n 'wiki-migrate.sh' | head -1 | cut -d: -f1)"
+bs="$(printf '%s\n' "$st" | grep -n 'Base commits' | head -1 | cut -d: -f1)"
+[ -n "$ws" ] && [ -n "$bs" ] && [ "$ws" -lt "$bs" ] && pass || fail "SKILL.md Start: the wiki step must come before Base commits (wiki=$ws base=$bs)"
+# verifier does not report baseline lines as the task's findings; the brief carries the baseline
+VER="$PLUGIN/agents/verifier.md"
+grep 'wiki-check:' "$VER" | grep -qF 'baseline' && pass || fail "verifier.md still quotes every wiki-check line as a finding"
+grep -qF 'baseline' "$PLUGIN/skills/task/references/brief.md" && pass || fail "brief.md does not pass the Start baseline to verifier"
+# wiki.md: the refusal and the Start migration are taught
+assert_contains "$WK" 'no page has a type'
 # wiki.md: only ## headings must be unique
 grep -qiE 'all headings|every heading|(^|[^#`] )Headings are unique' "$WK" && fail "wiki.md says all headings are unique; only ## headings are" || pass
 grep -qE '`##` headings are unique|## headings are unique' "$WK" && pass || fail "wiki.md does not say the ## headings are unique"

@@ -49,6 +49,13 @@ assert_contains "$P/docs/brief.md" "type: brief"
 assert_contains "$P/docs/architecture.md" "type: architecture"
 assert_contains "$P/docs/decisions/001-stack-and-architecture.md" "type: decision"
 assert_contains "$P/docs/brief.md" "stage:"
+# CLAUDE.md: specs and plans are wiki pages with the six fields; no 0.6 wording wiki-migrate warns about
+grep 'docs/specs/' "$P/CLAUDE.md" | grep -qF 'six front-matter fields (`type: spec` / `type: plan`)' && pass || fail "CLAUDE.md: the specs/plans line does not name the six fields"
+grep -qE 'docs/superpowers|map line' "$P/CLAUDE.md" && fail "CLAUDE.md still has a 0.6 line: $(grep -nE 'docs/superpowers|map line' "$P/CLAUDE.md")" || pass
+# wiki.base excludes only the top-level INDEX.md, by path
+W0="$P/docs/wiki.base"
+assert_contains "$W0" "'!file.path.startsWith(\"INDEX.md\")'"
+assert_not_contains "$W0" 'file.basename != "INDEX"'
 # no page in the wiki carries a title: field; INDEX.md and wiki.base have no front matter
 grep -rl '^title:' "$P/docs" --include='*.md' >/dev/null 2>&1 && fail "a page has title:" || pass
 head -1 "$P/docs/INDEX.md" | grep -qx -- '---' && fail "INDEX.md has front matter" || pass

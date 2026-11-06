@@ -20,6 +20,12 @@ assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "Set up Core" "commit subje
 assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "worktree dirty after setup"
 assert_eq "$(git -C "$CORE_DIR" symbolic-ref HEAD)" "refs/heads/main" "branch"
 assert_not_contains "$CORE_DIR/.gitignore" "*/code/"
+# M2: the staging folders of a killed wiki-migrate or adopt are never committed by save
+assert_contains "$CORE_DIR/.gitignore" ".wiki-migrate.*/"
+assert_contains "$CORE_DIR/.gitignore" ".adopt.*/"
+mkdir -p "$CORE_DIR/p/.wiki-migrate.Ab12/docs" "$CORE_DIR/.adopt.Cd34"; touch "$CORE_DIR/p/.wiki-migrate.Ab12/docs/x.md" "$CORE_DIR/.adopt.Cd34/y" "$CORE_DIR/p/keep.md"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain --untracked-files=all)" "?? p/keep.md" "staging folders are ignored, other files are not"
+rm -rf "$CORE_DIR/p" "$CORE_DIR/.adopt.Cd34"
 assert_contains "$CORE_DIR/standards/README.md" "/corecrew:new-standard"
 assert_contains "$CORE_DIR/knowledge/README.md" "symptom"
 assert_contains "$CORE_DIR/knowledge/README.md" "/corecrew:task"

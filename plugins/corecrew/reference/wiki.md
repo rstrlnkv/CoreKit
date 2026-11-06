@@ -52,8 +52,9 @@ each: `[[name]] description`. Pages with status `done` or `superseded` are count
 ## Old wikis
 
 `bash scripts/wiki-migrate.sh <project_dir> [--dry-run]` converts a 0.6 wiki (Markdown links, a
-hand-written map, specs and plans in `docs/superpowers/`): front matter, links, specs and plans
-to `docs/specs/` and `docs/plans/`. `adopt` runs it too. A `warning:` line names what to fix by hand.
+hand-written map, specs and plans in `docs/superpowers/`): front matter, links, specs and plans to
+`docs/specs/` and `docs/plans/`; `adopt` runs it too. A `warning:` line names what to fix by hand (also
+old `CLAUDE.md` lines). `wiki-index.sh` refuses a wiki with `no page has a type`; `/corecrew:task` then offers the migration at Start.
 
 ## Checking
 
@@ -64,9 +65,9 @@ to `docs/specs/` and `docs/plans/`. `adopt` runs it too. A `warning:` line names
 |---|---|
 | `missing front matter field <f>` | a field is absent, or `type`, `status`, `description`, `updated` is empty |
 | `bad type: <v>`, `bad status: <v>`, `bad updated: <v>` | the value is not in the lists above, or not `YYYY-MM-DD` |
-| `description over 80 chars` | longer, without surrounding quotes |
+| `description over 80 chars`, `description not one line` | longer without surrounding quotes; a `>` or `\|` block |
 | `duplicate page name <name>` | a later page has a taken name |
-| `broken wikilink [[<target>]]` | no such page or file, or no such heading |
+| `broken wikilink [[<target>]]`, `related is not a wikilink: <item>` | no such page, file or heading; a `related` item is not `[[...]]` |
 | `use a wikilink: <target>`, `broken link <target>` | a Markdown link points to a wiki page, or to a missing file |
 | `unclosed front matter`, `duplicate heading <h>` | no closing `---`; the same `##` heading twice in a page |
 | `page over 8 KB without ## headings` | add headings or split the page |
