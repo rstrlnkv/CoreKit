@@ -264,6 +264,8 @@ for l in en ru; do
   assert_lacks_str "$t" "/f/settings" "env warning $l does not send to the file"
   t="$(wtext "$l" settings_file /f/settings file 'the defaults' /f/settings)"
   assert_contains_str "$t" "/f/settings" "unreadable file warning $l names the file"
+  t="$(wtext "$l" home '' env 'no Core' /f/settings)"
+  assert_contains_str "$t" "HOME" "home warning $l names HOME"
 done
 for k in core_dir attribution model_profile; do
   t="$(wtext ru "$k" bad option x /f/settings; wtext ru "$k" bad file x /f/settings; wtext ru "$k" bad env x /f/settings)"

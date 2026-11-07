@@ -14,8 +14,9 @@
 # Update hunk, where a header must start at column 0 (an indented one is context); in an Add body a line
 # starting with "+" is content. Lines and paths are trimmed as Rust trim() does (Codex): ASCII space, tab, VT,
 # FF, CR and the UTF-8 sequences of U+0085, U+00A0, U+1680, U+2000-200A, U+2028, U+2029, U+202F, U+205F,
-# U+3000 (matched as bytes; run under LC_ALL=C). A path is everything after "<header>: " so trimmed;
-# quotes, "~" and glob characters are not interpreted here. Text outside Begin..End is ignored (heredoc
+# U+3000 (matched as bytes; run under LC_ALL=C). A path is everything after "<header>: " so trimmed,
+# then with every TAB and CR inside it deleted (Codex does the same: "do<TAB>cs/a.md" writes docs/a.md; checked with
+# the CLI, `codex --codex-run-as-apply-patch`); quotes, "~" and glob characters are not interpreted here. Text outside Begin..End is ignored (heredoc
 # wrapper lines). At most 100 paths are printed, then one C line. The script never exits non-zero for odd text.
 
 BEGIN {
@@ -51,7 +52,7 @@ function emit(kind, p) {
 }
 function flush() { if (pending != "") { emit("W", pending); pending = "" } }
 function bad() { xd = 1; printf "X\tunreadable\n" }
-function pathof(t, prefix) { return trim(substr(t, length(prefix) + 1)) }
+function pathof(t, prefix,   p) { p = trim(substr(t, length(prefix) + 1)); gsub(/[\t\r]/, "", p); return p }
 {
   line = $0; sub(/\r$/, "", line)
   if (state == "out") {

@@ -4,9 +4,14 @@
 # body kept in the tools folder (see sync-tools.sh), so hooks stay current after plugin updates.
 # Usage: bash install-hooks.sh <project_dir> [--tools <dir>]   (project_dir = <Core>/<name>)
 # Env:   CORE_DIR (default: parent of project_dir)
-#        COREDEV_TOOLS (default: ${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/corecrew-corekit}/tools)
+#        COREDEV_TOOLS (default: ${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/corecrew-corekit}/tools; the
+#        $HOME default only when HOME is an absolute path, else the data folder is unknown and nothing is written)
 set -u
-P=""; TOOLS="${COREDEV_TOOLS:-${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/corecrew-corekit}/tools}"
+P=""; TOOLS="${COREDEV_TOOLS:-}"
+if [ -z "$TOOLS" ]; then
+  if [ -n "${CLAUDE_PLUGIN_DATA:-}" ]; then TOOLS="$CLAUDE_PLUGIN_DATA/tools"
+  else case "${HOME:-}" in /*) TOOLS="$HOME/.claude/plugins/data/corecrew-corekit/tools" ;; esac; fi
+fi
 while [ $# -gt 0 ]; do
   case "$1" in
     --tools) [ $# -ge 2 ] || { echo "usage: install-hooks.sh <project_dir> [--tools <dir>]" >&2; exit 2; }
@@ -15,6 +20,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$P" ] || { echo "usage: install-hooks.sh <project_dir> [--tools <dir>]" >&2; exit 2; }
+[ -n "$TOOLS" ] || { echo "corecrew: the data folder is unknown (HOME is empty or not an absolute path, and CLAUDE_PLUGIN_DATA and --tools are not set); hooks not installed." >&2; exit 1; }
 case "$TOOLS" in /*) ;; *) TOOLS="$PWD/$TOOLS" ;; esac
 TOOLS="${TOOLS%/}"
 CORE_DIR="${CORE_DIR:-$(dirname "$P")}"

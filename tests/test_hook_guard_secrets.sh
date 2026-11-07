@@ -731,7 +731,7 @@ sec_codex() {
   patch "$B${nl}*** Add File: a${nl}+x${nl}$(printf '\302\240')*** Add File: .env${nl}$E"; blocked "codex NBSP header after an Add body" ".env"
   patch "$B${nl}*** Add File: src/a.swift${nl}+x${nl}junk *** Add File: .env${nl}$E"; blocked "codex junk before a .env header (X)" ".env"
   # A patch handed to the shell is refused with one message (each of these was a bypass of the old judging)
-  local SM="corecrew: run patches with the apply_patch tool, not through the shell; the shell form cannot be checked." P
+  local SM="corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked." P
   refused() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_eq "$ERR" "$SM" "$1: message"; }
   fx pre-bash-applypatch-heredoc; refused "codex Bash apply_patch heredoc"
   fx pre-bash-applypatch-quotedarg; refused "codex Bash apply_patch quoted arg"
@@ -765,7 +765,7 @@ sec_codex() {
 bg sec_codex
 
 # --- core_dir only in the settings file (CORECREW_CONFIG; CORE_DIR and the plugin option unset, as in Codex): the project
-# is found after load_settings, so the shell form of apply_patch is refused there and a reader twin passes
+# is found after load_settings, so a patch run through the Bash command line is refused there and a reader twin passes
 sec_settings_only() {
   local cfg="$SANDBOX/only-settings" cmd
   printf 'core_dir: %s\n' "$CORE_DIR" > "$cfg"

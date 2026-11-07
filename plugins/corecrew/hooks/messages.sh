@@ -19,9 +19,9 @@
 # Portable bash 3.2: no associative arrays, no case-change expansions.
 
 MSG_KEYS="sync_failed hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
-session_rules schema_none run_starting layout_note old_hooks guard_code_blocked guard_code_public patch_too_many patch_unjudgeable patch_shell secrets_blocked secrets_ask
+session_rules schema_none run_starting layout_note old_hooks guard_code_blocked guard_code_public patch_too_many patch_unjudgeable patch_no_reader patch_shell secrets_blocked secrets_ask
 local_link_created agents_link_created agents_link_wrong local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind
-readonly_agent settings_invalid_path settings_invalid_value settings_unreadable allowed_attribution allowed_model_profile
+readonly_agent settings_invalid_path settings_invalid_value settings_unreadable settings_no_home allowed_attribution allowed_model_profile
 src_env src_option src_file fix_env fix_option fix_file"
 
 # _msg_text <lang> <key> — sets MSG_T to the text, or to nothing when there is none. Keep the keys and
@@ -63,10 +63,12 @@ _msg_text() {
     ru:guard_code_public) MSG_T='Документы, которые должны остаться публичными в папке кода, перечислите в строке "public-docs: <paths>" в @1.' ;;
     en:patch_too_many) MSG_T='corecrew: this patch names more than @1 files and cannot be checked. Split it into patches of at most @1 files.' ;;
     ru:patch_too_many) MSG_T='corecrew: патч затрагивает больше @1 файлов, проверить его нельзя. Разбейте его на патчи не более чем по @1 файлов.' ;;
-    en:patch_unjudgeable) MSG_T='corecrew: the patch cannot be judged (@1): the patch text is unreadable and a line names an internal path. Write the path out in full in a plain apply_patch call.' ;;
-    ru:patch_unjudgeable) MSG_T='corecrew: патч нельзя проверить (@1): текст патча нечитаем, а в одной из строк назван внутренний путь. Запишите путь целиком в обычном вызове apply_patch.' ;;
-    en:patch_shell) MSG_T='corecrew: run patches with the apply_patch tool, not through the shell; the shell form cannot be checked.' ;;
-    ru:patch_shell) MSG_T='corecrew: применяйте патчи инструментом apply_patch, а не через оболочку; в такой форме патч проверить нельзя.' ;;
+    en:patch_unjudgeable) MSG_T='corecrew: the patch cannot be judged: its text cannot be read, and the line "@1" names an internal path. Use the apply_patch tool and lines like "*** Add File: <full path>".' ;;
+    en:patch_no_reader) MSG_T='corecrew: the patch cannot be judged: patch-paths.awk is missing or failed, so no file of the patch can be checked. Reinstall the corecrew plugin.' ;;
+    ru:patch_no_reader) MSG_T='corecrew: патч нельзя проверить: patch-paths.awk отсутствует или не сработал, поэтому ни один файл патча не проверить. Переустановите плагин corecrew.' ;;
+    ru:patch_unjudgeable) MSG_T='corecrew: патч нельзя проверить: не удаётся прочитать текст патча, а строка "@1" называет внутренний путь. Используйте инструмент apply_patch и строки вида "*** Add File: <полный путь>".' ;;
+    en:patch_shell) MSG_T='corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked.' ;;
+    ru:patch_shell) MSG_T='corecrew: применяйте патчи инструментом apply_patch, а не через командную строку (Bash); в такой форме патч проверить нельзя.' ;;
     en:secrets_blocked) MSG_T='corecrew: reading secrets is blocked (@1)' ;;
     ru:secrets_blocked) MSG_T='corecrew: чтение секретов заблокировано (@1)' ;;
     en:secrets_ask) MSG_T='Ask the user to check the value themselves, or use .env.example.' ;;
@@ -95,8 +97,10 @@ _msg_text() {
     ru:settings_invalid_path) MSG_T='corecrew: core_dir "@1" (@2) недопустим: нужен абсолютный путь или путь, начинающийся с ~/. @3 Вместо него используется @4.' ;;
     en:settings_invalid_value) MSG_T='corecrew: @1 "@2" (@3) is not valid: use @4. @5 Using "@6" instead.' ;;
     ru:settings_invalid_value) MSG_T='corecrew: @1 "@2" (@3) недопустимо: допустимы @4. @5 Вместо него используется "@6".' ;;
-    en:settings_unreadable) MSG_T='corecrew: the settings file @1 cannot be read; its values are ignored and the defaults are used.' ;;
-    ru:settings_unreadable) MSG_T='corecrew: файл настроек @1 не читается; его значения игнорируются, используются значения по умолчанию.' ;;
+    en:settings_no_home) MSG_T='corecrew: HOME is empty or not an absolute path, so ~ (the default core_dir ~/Projects/Core) has no meaning and there is no Core. Set HOME or give core_dir as an absolute path.' ;;
+    ru:settings_no_home) MSG_T='corecrew: HOME пуст или не абсолютный путь, поэтому ~ (core_dir по умолчанию ~/Projects/Core) ничего не значит и Core нет. Задайте HOME или укажите core_dir абсолютным путём.' ;;
+    en:settings_unreadable) MSG_T='corecrew: the settings file @1 cannot be read (or is over 64 KB); its values are ignored and the defaults are used.' ;;
+    ru:settings_unreadable) MSG_T='corecrew: файл настроек @1 не читается (или больше 64 КБ); его значения игнорируются, используются значения по умолчанию.' ;;
     en:allowed_attribution) MSG_T='allow or forbid' ;;
     ru:allowed_attribution) MSG_T='allow или forbid' ;;
     en:allowed_model_profile) MSG_T='economy, balanced or strong' ;;
@@ -155,6 +159,7 @@ msg() {
 msg_settings_warning() {
   local sl fx
   if [ "$1" = settings_file ]; then msg settings_unreadable "$2"; return; fi
+  if [ "$1" = home ]; then msg settings_no_home; return; fi
   case "$3" in
     env) sl="$(msg src_env)"; fx="$(msg fix_env)" ;;
     option) sl="$(msg src_option)"; fx="$(msg fix_option)" ;;

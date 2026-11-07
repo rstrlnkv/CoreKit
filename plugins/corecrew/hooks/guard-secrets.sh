@@ -185,8 +185,10 @@ if [ "$tool" = apply_patch ]; then
 /g' | LC_ALL=C grep -F '***' | raw_hit)" && die "$hit"
     exit 0
   fi
-  found="$(patch_paths "$patch")"
-  unreadable=""; [ -n "$found" ] || unreadable=1
+  # the reader is missing or failed: nothing can be judged (a name may hide a TAB), refuse; ran with no output: pass
+  found="$(patch_paths "$patch")" || { printf '%s\n' "$(msg patch_no_reader)" >&2; exit 2; }
+  [ -n "$found" ] || exit 0
+  unreadable=""
   while IFS="$TAB" read -r kind a; do
     case "$kind" in
       C) printf '%s\n' "$(msg patch_too_many 100)" >&2; exit 2 ;;

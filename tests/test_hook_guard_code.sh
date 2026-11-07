@@ -438,6 +438,14 @@ printf '%s' '{"cwd":"'"$C"'","tool_name":"Bash","tool_input":{"command":"echo x 
 assert_eq "$RC" "0" "no awk files: Bash passes"; assert_eq "$(<"$OD/out")$(<"$OD/err")" "" "no awk files: silent"
 printf '%s' '{"cwd":"'"$C"'","tool_name":"Write","tool_input":{"file_path":"'"$C"'/docs/a.md"}}' | bash "$PL/hooks/guard-code.sh" >"$OD/out" 2>"$OD/err"; RC=$?
 assert_eq "$RC" "2" "no awk files: file tools are still judged"
+# the apply_patch reader (patch-paths.awk) is missing: no path is read, nothing can be judged, every patch is refused
+pj() { printf '{"cwd":"%s","tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\\n*** Add File: %s\\n+x\\n*** End Patch"}}' "$C" "$1"; }
+pj docs/a.md | bash "$PL/hooks/guard-code.sh" >"$OD/out" 2>"$OD/err"; RC=$?
+assert_eq "$RC" "2" "no patch-paths.awk: apply_patch on docs/ is refused (fails closed)"
+[ -s "$OD/err" ] && pass || fail "no patch-paths.awk: empty stderr on exit 2"
+pj src/a.swift | bash "$PL/hooks/guard-code.sh" >"$OD/out" 2>"$OD/err"; RC=$?
+assert_eq "$RC" "2" "no patch-paths.awk: a harmless apply_patch is refused too (nothing can be judged)"
+assert_contains "$OD/err" "patch-paths.awk is missing or failed"
 
 
 # --- new layout: the code lives in <Projects>/<Name>, the private CLAUDE.md in the Core
@@ -526,16 +534,16 @@ sec_codex() {
   # the Codex shell
   fx pre-bash; ok "codex Bash without a patch passes"
   fx pre-bash-subagent; ok "codex Bash in a subagent: no ro_agent for a Codex agent_type"
-  # A patch handed to the shell is refused with one message, wherever it points: the shell form cannot be checked
+  # A patch handed to the shell is refused with one message, wherever it points: a patch run through the Bash command line cannot be checked
   # (each of these was a bypass of the old path judging)
-  local SM="corecrew: run patches with the apply_patch tool, not through the shell; the shell form cannot be checked."
+  local SM="corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked."
   refused() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_eq "$ERR" "$SM" "$1: message"; }
   fx pre-bash-applypatch-heredoc; refused "codex Bash apply_patch heredoc"
   fx pre-bash-applypatch-quotedarg; refused "codex Bash apply_patch quoted arg"
   fx pre-bash-applypatch-cd; refused "codex Bash cd sub && apply_patch"
   patch "apply_patch <<'EOF'${nl}$B${nl}*** Update File: src/a.swift${nl}@@${nl}-a${nl}+b${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash even a harmless heredoc patch"
   patch "apply_patch <<'EOF'${nl}$B${nl}*** Delete File: docs/a.md${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash delete patch"
-  # no scope gate: the shell form is refused in every folder (a cwd or wrapper gate was bypassed twice)
+  # no scope gate: a patch run through the Bash command line is refused in every folder (a cwd or wrapper gate was bypassed twice)
   local O="$SANDBOX/elsewhere" PR; PR="$(dirname "$C")"
   patch "apply_patch <<'EOF'${nl}$B${nl}*** Add File: $D${nl}+x${nl}${E}${nl}EOF" "$O" Bash; refused "codex Bash plain relative apply_patch outside a project"
   patch "cd $C && apply_patch <<'EOF'${nl}$B${nl}*** Add File: $D${nl}+x${nl}${E}${nl}EOF" "$O" Bash; refused "codex Bash cd /project && apply_patch from outside"
@@ -602,6 +610,7 @@ sec_codex() {
   patch "$B${nl}	*** Add File: $D${nl}+x${nl}$E"; blocked "codex a tab-indented header" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
   patch "$B"$'\r'"${nl}*** Add File: $D"$'\r'"${nl}+x"$'\r'"${nl}$E"$'\r'; blocked "codex CRLF line ends" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
   patch "*** ADD FILE: $D"; blocked_any "codex uppercase header: unreadable text with an internal path in a *** line is refused"
+  assert_eq "$ERR" "corecrew: the patch cannot be judged: its text cannot be read, and the line \"*** ADD FILE: $D\" names an internal path. Use the apply_patch tool and lines like \"*** Add File: <full path>\"." "codex unreadable patch: the message quotes the offending line"
   # raw JSON: \r\n, \t and a \/ in the string
   run_json "$(printf '{"session_id":"s","cwd":"%s","tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\\r\\n*** Add File:\\tdocs\\/a.md\\r\\n+x\\r\\n*** End Patch\\r\\n"}}' "$C")"
   blocked "codex raw JSON escapes \\r\\n \\t \\/" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"

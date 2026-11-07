@@ -85,6 +85,8 @@ for sk in "$PLUGIN"/skills/*/SKILL.md; do
   assert_eq "$(grep -c '\${CLAUDE_SKILL_DIR}' "$sk")" "1" "$nm: \${CLAUDE_SKILL_DIR} appears once"
   paths="$(awk '/^## /{on = ($0 == "## Paths")} on' "$sk")"
   case "$paths" in *'${CLAUDE_SKILL_DIR}'*'lib.sh" plugin-root'*) pass ;; *) fail "$nm: ## Paths lacks CLAUDE_SKILL_DIR and plugin-root" ;; esac
+  # the location check (cache folder, no quote, $ or backtick) comes before the plugin-root command
+  case "$paths" in *'Check it'*'plugins/cache/'*'no `"`'*'run nothing'*'lib.sh" plugin-root'*) pass ;; *) fail "$nm: ## Paths must check <skill> before running plugin-root" ;; esac
   if grep -nE 'bash "[^<"]' "$sk" | grep -v '^[0-9]*:.*bash "\$' >/dev/null; then
     fail "$nm: a bash command not starting with a placeholder: $(grep -nE 'bash "[^<"]' "$sk" | head -2 | tr '\n' ' ')"
   else pass; fi

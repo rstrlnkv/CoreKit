@@ -8,7 +8,7 @@
 # Env:   CORE_DIR overrides the plugin option core_dir (see lib.sh).
 #
 # Refusals (exit 2, one line on stderr, nothing changed; all checked before any change, in this order):
-#   not a git repo | uncommitted changes | already inside Core | Core is inside the folder
+#   not a git repo | uncommitted changes | no Core (empty Core path) | already inside Core | Core is inside the folder
 #   not in <Projects>: move the folder to <Projects>/<Name> first   (not a direct child of <Projects>,
 #       and not an old-layout <Core>/<name>/code)
 #   old layout: only --purpose and --dry-run apply                  (--name, --public-docs, --check)
@@ -101,6 +101,7 @@ git -C "$FROM" rev-parse --verify -q HEAD >/dev/null 2>&1 || refuse "not a git r
 [ -z "$(git -C "$FROM" status --porcelain 2>&1)" ] || refuse "uncommitted changes"
 # The old layout: exactly <Core>/<name>/code of a project folder in the Core. Anything else in the Core
 # is refused.
+[ -n "$CORE_DIR" ] || refuse "adopt: no Core: set core_dir, CORE_DIR or HOME first"
 OLD=0; OLDNAME=""
 case "$FROM/" in
   "$CORE_DIR"/*)

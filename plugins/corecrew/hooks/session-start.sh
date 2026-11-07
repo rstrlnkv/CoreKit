@@ -8,13 +8,17 @@
 # Always exits 0: a hook must never block a session.
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)"
 ROOT="${CLAUDE_PLUGIN_ROOT:-$SELF}"
-DATA="${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/corecrew-corekit}"
+# The data folder: CLAUDE_PLUGIN_DATA, else under HOME when that is an absolute path; else unknown (empty): no tools
+# sync, no state marker, no save hint. An empty or relative HOME would write to /.claude or <cwd>/<HOME>/.claude.
+DATA="${CLAUDE_PLUGIN_DATA:-}"
+if [ -z "$DATA" ]; then case "${HOME:-}" in /*) DATA="$HOME/.claude/plugins/data/corecrew-corekit" ;; esac; fi
 in=""; [ -t 0 ] || in="$(cat)"
 
 # 1. Tools: quiet unless it failed.
 # A failure is reported below: on stdout inside a project, on stderr elsewhere (no context noise).
 syncerr=""
-syncout="$(bash "$ROOT/scripts/sync-tools.sh" "$ROOT" "$DATA/tools" 2>&1)" || syncerr=1
+syncout=""
+if [ -n "$DATA" ]; then syncout="$(bash "$ROOT/scripts/sync-tools.sh" "$ROOT" "$DATA/tools" 2>&1)" || syncerr=1; fi
 
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
@@ -42,13 +46,18 @@ json_text() { printf '%s' "$1" | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | 
 
 # 2. No Core yet, session elsewhere: the hint, once per machine.
 if ! core_ready && [ -z "$proj" ]; then
-  if [ ! -e "$DATA/state/core-hint-shown" ]; then
+  # No Core path at all (the settings_no_home warning says why): no hint with an empty path.
+  if [ -z "$CORE_DIR" ]; then
+    [ -z "$warn" ] || printf '{"systemMessage":"%s"}\n' "$(json_text "$warn")"
+    exit 0
+  fi
+  if [ -z "$DATA" ] || [ ! -e "$DATA/state/core-hint-shown" ]; then
     # For the person, once: a systemMessage. Plain stdout would go to the model only, and the marker
     # below would then mark a hint nobody read.
     if [ -d "$CORE_DIR" ]; then hint="$(msg hint_not_set_up "$CORE_DIR")"
     else hint="$(msg hint_not_found "$CORE_DIR")"; fi
     printf '{"systemMessage":"%s"}\n' "$(json_text "${warn:+$warn$WNL}$hint")"
-    { mkdir -p "$DATA/state" && : > "$DATA/state/core-hint-shown"; } 2>/dev/null
+    [ -z "$DATA" ] || { mkdir -p "$DATA/state" && : > "$DATA/state/core-hint-shown"; } 2>/dev/null
     exit 0
   fi
   [ -z "$warn" ] || printf '{"systemMessage":"%s"}\n' "$(json_text "$warn")"
@@ -66,7 +75,7 @@ P="$CORE_DIR/$proj"; T="$DATA/tools"
 printf '%s\n' "$(msg project_header "$proj" "$CORE_DIR")"
 printf '%s\n' "$(msg docs_index "$P/docs/INDEX.md")"
 noattr=""; [ "$ATTRIBUTION" = forbid ] && noattr=" --no-attribution"
-printf '%s\n' "$(msg save_hint "$T/save" "$noattr" "$T/undo-step")"
+[ -z "$DATA" ] || printf '%s\n' "$(msg save_hint "$T/save" "$noattr" "$T/undo-step")"
 names=""
 for f in "$CORE_DIR"/standards/*.md; do
   [ -f "$f" ] || continue

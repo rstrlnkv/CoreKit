@@ -67,7 +67,11 @@ assert_eq "$(pp "$b*** Add File: a$nl+x$nl$(printf '\302\240')*** Add File: docs
 # junk before a header: unreadable
 assert_eq "$(pp "$b*** Add File: a$nl+x${nl}junk *** Add File: .env$nl$e")" "W>a${nl}X>unreadable" "junk before a header is X"
 assert_eq "$(pp "x *** Add File: .env" )" "X>unreadable" "strict: text with a header outside Begin is X"
-# a missing awk file prints nothing and does not fail
-SELF="$SANDBOX/nowhere"
-assert_eq "$(patch_paths "$b*** Add File: a$nl$e")" "" "missing adapter prints nothing"
+# a missing awk file prints nothing and fails; a reader that ran with no path prints nothing and succeeds
+OUTP="$(SELF="$SANDBOX/nowhere"; patch_paths "$b*** Add File: a$nl$e")"; RCP=$?
+assert_eq "$OUTP" "" "missing adapter prints nothing"
+[ "$RCP" -ne 0 ] && pass || fail "missing adapter: status $RCP, want non-zero"
+OUTP="$(patch_paths "$b$e")"; RCP=$?
+assert_eq "$OUTP" "" "a patch that names no file prints nothing"
+assert_eq "$RCP" "0" "a patch that names no file: status 0"
 finish

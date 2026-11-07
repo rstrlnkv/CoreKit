@@ -29,14 +29,15 @@ This skill's folder is `${CLAUDE_SKILL_DIR}`. Claude Code replaces that text wit
 path before you read it. Codex does not: there the text stays as written, and the folder is the
 directory of the SKILL.md path Codex gave for this skill (`(file: …/SKILL.md)` in the skills
 list, or the path of the skill block it loaded; a path that starts with a root alias such as
-`r1/` starts with the folder listed under "Skill roots"). Call that folder `<skill>`. Run this
-first, with `<skill>` filled in: `bash "<skill>/../../scripts/lib.sh" plugin-root`. It prints
-`<plugin>`, the absolute plugin folder; `<scripts>` is `<plugin>/scripts`. Write every later
-command and every Read path with these filled in as absolute paths. If the command fails, or you
-cannot give `<skill>` as an absolute path, stop, tell the user the corecrew folder was not
-found, and do not guess a path. In Codex, `<skill>` must lie inside a
-`plugins/cache/<marketplace>/corecrew/<version>/skills/` folder; if it does not, ask the user
-before running anything from it.
+`r1/` starts with the folder listed under "Skill roots"). Call that folder `<skill>`. Check it
+before you run anything: in Codex, `<skill>` must lie inside a
+`plugins/cache/<marketplace>/corecrew/<version>/skills/` folder, its text must have no `..` component, and it must contain no `"`,
+`$` or backtick; if it fails that, ask the user and run nothing. Then run this first, with
+`<skill>` filled in: `bash "<skill>/../../scripts/lib.sh" plugin-root`. It prints `<plugin>`, the
+absolute plugin folder; `<scripts>` is `<plugin>/scripts`. Write every later command and every
+Read path with these filled in as absolute paths. If the command fails, or you cannot give
+`<skill>` as an absolute path, stop, tell the user the corecrew folder was not found, and do not
+guess a path.
 
 ## Language
 Talk to the user in their language, in plain words. Everything on disk (code, docs, commit

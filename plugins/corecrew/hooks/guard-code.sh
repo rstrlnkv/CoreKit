@@ -205,9 +205,11 @@ internal_hit() {
 }
 # refuse_raw <text with *** lines> — exit 2 when a *** line of an unreadable patch names an internal path
 refuse_raw() {
-  local hit
+  local hit line
   hit="$(printf '%s\n' "$1" | LC_ALL=C grep -F '***' | internal_hit)" || return 0
-  printf '%s\n' "$(msg patch_unjudgeable "$hit")" >&2
+  # the message quotes the first "***" line that holds the component (cut to 200 bytes), not the bare component
+  line="$(printf '%s\n' "$1" | LC_ALL=C grep -F '***' | LC_ALL=C grep -iFm1 -- "$hit" | LC_ALL=C cut -c1-200)"
+  printf '%s\n' "$(msg patch_unjudgeable "${line:-$hit}")" >&2
   exit 2
 }
 # judge_patch <kind> <path> — one line of patch_paths output (a W line is judged; a C line refuses the patch);
@@ -224,14 +226,18 @@ judge_patch() {
 # the destination of a move); a deleted file and a move source are not (cleaning up is legitimate).
 # Relative paths resolve against the stdin cwd. More than 100 paths (a C line) are refused. A text with an X line
 # (not a patch, or a header the reader cannot place) still has its W lines judged, and its *** lines are checked
-# raw for an internal path. A text with no string to read passes (exit 0).
+# raw for an internal path. A reader that is missing or failed (patch_paths status non-zero) refuses the call outright;
+# a reader that ran and printed nothing (a patch naming no file) passes. A text with no string to read passes (exit 0).
 if [ "$tool" = apply_patch ]; then
   patch="$(json_str "$in" command)"
   [ -n "$patch" ] || exit 0
   load_settings
   TAB="$(printf '\t')"
   PATCH_X=""
-  found="$(patch_paths "$patch")"
+  # The reader is missing or failed: nothing can be judged, not even raw (a path may be cwd-relative or hide a TAB),
+  # so the call is refused outright. A reader that ran and printed nothing: no path to judge, pass.
+  found="$(patch_paths "$patch")" || { printf '%s\n' "$(msg patch_no_reader)" >&2; exit 2; }
+  [ -n "$found" ] || exit 0
   while IFS="$TAB" read -r kind a; do
     judge_patch "$kind" "$a"
   done <<< "$found"

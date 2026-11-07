@@ -26,6 +26,7 @@ while [ $# -gt 0 ]; do
 done
 [ -z "$ARG" ] || CORE_DIR="$ARG"
 load_settings
+[ -n "$CORE_DIR" ] || { echo "setup-core: no Core path (give <core_dir>, or set core_dir, CORE_DIR or HOME); nothing was created." >&2; exit 2; }
 
 # schema_old — true when .coredev holds a schema number below this plugin's (core_ready is true).
 schema_old() {

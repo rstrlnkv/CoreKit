@@ -12,7 +12,7 @@ COREDEV_SCHEMA=2
 # HOME unset (a stripped environment): the account's home folder, so ~ and ~/.ssh still mean something.
 if [ -z "${HOME:-}" ]; then
   HOME="$(eval 'printf %s ~' 2>/dev/null)"
-  case "$HOME" in /*) ;; *) HOME="" ;; esac
+  case "${HOME:-}" in /*) ;; *) HOME="" ;; esac
 fi
 
 # expand_home <path> — a leading ~ or ~/ becomes $HOME.
@@ -104,36 +104,49 @@ opt_value() {
   printf '%s' "$1"
 }
 
-# settings_file_path — the settings file: $CORECREW_CONFIG, else $XDG_CONFIG_HOME/corecrew/settings
-# (an empty or relative XDG_CONFIG_HOME is ignored), else ~/.config/corecrew/settings.
+# settings_file_path — the settings file: $CORECREW_CONFIG (absolute; a relative one is ignored, as it would
+# follow the cwd), else $XDG_CONFIG_HOME/corecrew/settings (an empty or relative XDG_CONFIG_HOME is ignored),
+# else ~/.config/corecrew/settings. With no usable HOME there is no file: prints nothing, exit 1.
 settings_file_path() {
-  if [ -n "${CORECREW_CONFIG:-}" ]; then printf '%s' "$CORECREW_CONFIG"; return 0; fi
-  case "${XDG_CONFIG_HOME:-}" in
-    /*) printf '%s/corecrew/settings' "${XDG_CONFIG_HOME%/}" ;;
-    *) printf '%s/.config/corecrew/settings' "$HOME" ;;
-  esac
+  case "${CORECREW_CONFIG:-}" in /*) printf '%s' "$CORECREW_CONFIG"; return 0 ;; esac
+  case "${XDG_CONFIG_HOME:-}" in /*) printf '%s/corecrew/settings' "${XDG_CONFIG_HOME%/}"; return 0 ;; esac
+  case "${HOME:-}" in /*) printf '%s/.config/corecrew/settings' "$HOME" ;; *) return 1 ;; esac
 }
 
-# _sf_get <key> — the value of the first "key: value" line of the settings file: trimmed, one pair of
-# matching quotes removed, CR dropped, "#" inside a value is data; blanks before the colon and a leading
-# UTF-8 BOM are accepted. A missing file prints nothing.
+# _sf_big <file> — exit 0 when the settings file is over 64 KB: it is not read (a hook has 15 s), see _settings_file_check.
+_sf_big() { [ "$(wc -c < "$1" 2>/dev/null | tr -d ' ')" -gt 65536 ] 2>/dev/null; }
+
+# _sf_load — reads the settings file once per settings load (one linear awk pass, not in a subshell, so the result is
+# kept): _SF_DATA holds "key<TAB>value" of the first line of every key; load_settings and resolve_setting reset _SF_DONE.
+# A missing, unreadable or over-64 KB file leaves _SF_DATA empty.
+_sf_load() {
+  local f
+  [ -z "${_SF_DONE:-}" ] || return 0
+  _SF_DONE=1; _SF_DATA=""
+  f="$(settings_file_path)" || return 0
+  [ -f "$f" ] && [ -r "$f" ] && ! _sf_big "$f" || return 0
+  _SF_DATA="$(LC_ALL=C awk '
+      NR == 1 && substr($0, 1, 3) == "\357\273\277" { $0 = substr($0, 4) }
+      { sub(/\r$/, "") }
+      (i = index($0, ":")) == 0 { next }
+      {
+        k = substr($0, 1, i - 1); v = substr($0, i + 1)
+        sub(/^[[:space:]]+/, "", k); sub(/[[:space:]]+$/, "", k)
+        if (k == "" || (k in seen)) next
+        seen[k] = 1
+        sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+$/, "", v)
+        if (length(v) >= 2 && ((substr(v, 1, 1) == "\"" && substr(v, length(v), 1) == "\"") || (substr(v, 1, 1) == "\047" && substr(v, length(v), 1) == "\047")))
+          v = substr(v, 2, length(v) - 2)
+        printf "%s\t%s\n", k, v
+      }' "$f" 2>/dev/null)" || _SF_DATA=""
+}
+# _sf_get <key> — prints the value of the first "key: value" line of the settings file: trimmed, one pair of matching
+# quotes removed, CR dropped, "#" inside a value is data; blanks before the colon and a leading UTF-8 BOM are accepted.
 _sf_get() {
-  local f line v k first=1; f="$(settings_file_path)"
-  [ -f "$f" ] && [ -r "$f" ] || return 0
-  while IFS= read -r line || [ -n "$line" ]; do
-    if [ "$first" = 1 ]; then first=0; line="${line#$'\xef\xbb\xbf'}"; fi   # UTF-8 BOM
-    line="${line%$'\r'}"
-    line="${line#"${line%%[![:space:]]*}"}"
-    case "$line" in *:*) ;; *) continue ;; esac
-    k="${line%%:*}"; k="${k%"${k##*[![:space:]]}"}"
-    [ "$k" = "$1" ] || continue
-    v="${line#*:}"
-    v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
-    if [ "${#v}" -ge 2 ]; then
-      case "$v" in \"*\") v="${v#\"}"; v="${v%\"}" ;; \'*\') v="${v#\'}"; v="${v%\'}" ;; esac
-    fi
-    printf '%s' "$v"; return 0
-  done < "$f"
+  local k v
+  while IFS=$'\t' read -r k v; do
+    [ "$k" = "$1" ] && { printf '%s' "$v"; return 0; }
+  done <<< "$_SF_DATA"
   return 0
 }
 
@@ -154,7 +167,7 @@ _setting_valid() {
 # default. Empty, placeholder and invalid values fall through to the next source.
 _resolve_setting() {
   local key="$1" i v src bad="" k s
-  REPLY=""
+  REPLY=""; _sf_load
   for i in 1 2 3; do
     v=""; src=""
     case "$i:$key" in
@@ -185,17 +198,17 @@ _resolve_setting() {
   return 0
 }
 
-# _settings_file_check — a settings file that exists but cannot be read is named once (key settings_file).
+# _settings_file_check — a settings file that exists but cannot be read (or is over 64 KB) is named once (key settings_file).
 _settings_file_check() {
-  local f; f="$(settings_file_path)"
-  if [ -f "$f" ] && [ ! -r "$f" ]; then
+  local f; f="$(settings_file_path)" || return 0
+  if [ -f "$f" ] && { [ ! -r "$f" ] || _sf_big "$f"; }; then
     SETTINGS_WARN="${SETTINGS_WARN}settings_file"$'\t'"${f}"$'\t'"file"$'\t'"the defaults"$'\n'
   fi
   return 0
 }
 
 # resolve_setting <key> — prints the value (see _resolve_setting; warnings are not kept).
-resolve_setting() { local SETTINGS_WARN=""; _resolve_setting "$1"; printf '%s' "$REPLY"; }
+resolve_setting() { local SETTINGS_WARN=""; _SF_DONE=""; _resolve_setting "$1"; printf '%s' "$REPLY"; }
 
 # settings_warning_lines — SETTINGS_WARN as English lines for stderr, one per ignored value: what is wrong,
 # where to fix it, what is used instead. (hooks/messages.sh has the same texts in en and ru.)
@@ -203,8 +216,11 @@ settings_warning_lines() {
   local k v s e sl fx
   while IFS=$'\t' read -r k v s e; do
     [ -n "$k" ] || continue
+    if [ "$k" = home ]; then
+      printf 'corecrew: HOME is empty or not an absolute path, so ~ (the default core_dir ~/Projects/Core) has no meaning and there is no Core. Set HOME or give core_dir as an absolute path.\n'; continue
+    fi
     if [ "$k" = settings_file ]; then
-      printf 'corecrew: the settings file %s cannot be read; its values are ignored and the defaults are used.\n' "$v"; continue
+      printf 'corecrew: the settings file %s cannot be read (or is over 64 KB); its values are ignored and the defaults are used.\n' "$v"; continue
     fi
     case "$s" in
       env) sl="environment variable CORE_DIR"; fx="Unset or correct the CORE_DIR variable." ;;
@@ -222,6 +238,15 @@ settings_warning_lines() {
 
 # _core_raw <value> — sets CORE_RAW: the core_dir value with ~ expanded and no trailing slash.
 _core_raw() {
+  # a ~ with no usable HOME (empty or relative) has no meaning: no Core (CORE_RAW empty), one "home" warning
+  case "$1" in
+    "~"|"~/"*)
+      case "${HOME:-}" in /*) ;; *)
+        CORE_RAW=""
+        case "$SETTINGS_WARN" in home$'\t'*|*$'\n'home$'\t'*) ;; *) SETTINGS_WARN="${SETTINGS_WARN}home"$'\t'"${HOME}"$'\t'"env"$'\t'"no Core"$'\n' ;; esac
+        return 0 ;;
+      esac ;;
+  esac
   CORE_RAW="$(expand_home "$1")"
   while [ "${#CORE_RAW}" -gt 1 ] && [ "${CORE_RAW%/}" != "$CORE_RAW" ]; do CORE_RAW="${CORE_RAW%/}"; done
 }
@@ -229,13 +254,17 @@ _core_raw() {
 # load_settings — see the header. An invalid core_dir (not absolute, not ~...) is ignored with a warning,
 # never read as relative to the current folder.
 load_settings() {
-  SETTINGS_WARN=""
+  SETTINGS_WARN=""; _SF_DONE=""
   _settings_file_check
-  _resolve_setting core_dir; _core_raw "$REPLY"; CORE_DIR="$(canon_dir "$CORE_RAW")"
-  CORE_NAME="$(basename "$CORE_DIR")"
-  # beside the Core as typed: a core_dir that is a symlink keeps the code folders next to the link,
-  # not next to its target
-  PROJECTS_DIR="$(canon_dir "$(dirname "$CORE_RAW")")"
+  _resolve_setting core_dir; _core_raw "$REPLY"
+  if [ -z "$CORE_RAW" ]; then CORE_DIR=""; CORE_NAME=""; PROJECTS_DIR=""   # no usable HOME: no Core, hooks stay inert
+  else
+    CORE_DIR="$(canon_dir "$CORE_RAW")"
+    CORE_NAME="$(basename "$CORE_DIR")"
+    # beside the Core as typed: a core_dir that is a symlink keeps the code folders next to the link,
+    # not next to its target
+    PROJECTS_DIR="$(canon_dir "$(dirname "$CORE_RAW")")"
+  fi
   _resolve_setting attribution; ATTRIBUTION="$REPLY"
   _resolve_setting model_profile; MODEL_PROFILE="$REPLY"
   _resolve_setting ui_language; UI_LANGUAGE="$REPLY"
@@ -404,11 +433,11 @@ layout_of() {
 
 # patch_paths <text> — the file paths in a Codex apply_patch text, one "<kind>\t<path>" per line: W written, S move
 # source, D deleted, X unreadable, C more than 100 paths. See scripts/patch-paths.awk. Needs $SELF (the plugin
-# root); prints nothing when the adapter is missing or awk fails.
+# root). Status 1 when the reader (patch-paths.awk) is missing or awk failed; status 0 when it ran, even if it printed
+# nothing (a patch that names no file, e.g. Begin Patch + End Patch).
 patch_paths() {
-  [ -r "$SELF/scripts/patch-paths.awk" ] || return 0
+  [ -r "$SELF/scripts/patch-paths.awk" ] || return 1
   printf '%s\n' "$1" | LC_ALL=C awk -f "$SELF/scripts/patch-paths.awk" 2>/dev/null
-  return 0
 }
 
 # shell_patch_refused <command> — exit 0 when a Bash command applies a patch through the shell, which no hook can
@@ -738,7 +767,7 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     get) [ $# -eq 2 ] || { echo "Usage: lib.sh get <key>" >&2; exit 2; }; coredev_get "$2" ;;
     set) [ $# -eq 3 ] || { echo "Usage: lib.sh set <key> <value>" >&2; exit 2; }; coredev_set "$2" "$3" ;;
     ready) core_ready ;;
-    core-dir) printf '%s\n' "$CORE_DIR"; settings_warning_lines >&2 ;;
+    core-dir) [ -z "$CORE_DIR" ] || printf '%s\n' "$CORE_DIR"; settings_warning_lines >&2; [ -n "$CORE_DIR" ] ;;
     setting-path) settings_file_path; echo ;;
     settings)
       shift; keys=""; CORE_DIR="$_ORIG_CORE_DIR"; SETTINGS_WARN=""; _settings_file_check
@@ -756,7 +785,7 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
       [ -n "$keys" ] || keys="core_dir attribution model_profile ui_language"
       for k in $keys; do
         _resolve_setting "$k"
-        if [ "$k" = core_dir ]; then _core_raw "$REPLY"; printf 'core_dir: %s\n' "$(canon_dir "$CORE_RAW")"
+        if [ "$k" = core_dir ]; then _core_raw "$REPLY"; if [ -n "$CORE_RAW" ]; then printf 'core_dir: %s\n' "$(canon_dir "$CORE_RAW")"; else printf 'core_dir: \n'; fi
         else printf '%s: %s\n' "$k" "$REPLY"; fi
       done
       settings_warning_lines >&2 ;;
@@ -780,6 +809,7 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     layout) [ $# -eq 2 ] || { echo "Usage: lib.sh layout <name>" >&2; exit 2; }; layout_of "$2" ;;
     core-paths)
       [ $# -eq 2 ] && [ -n "$2" ] || { echo "Usage: lib.sh core-paths <project>" >&2; exit 2; }
+      [ -n "$CORE_DIR" ] || { echo "lib.sh core-paths: no Core path" >&2; exit 1; }
       . "$(dirname "${BASH_SOURCE[0]}")/_locate.sh" || exit 1
       core_paths "$CORE_DIR" "$2" ;;
     *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | settings [key[=value] ...] | setting-path | plugin-root | schema | core-paths <project> | project-of <path> | code-dir <name> | layout <name>" >&2; exit 2 ;;
