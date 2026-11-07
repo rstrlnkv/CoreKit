@@ -3,6 +3,41 @@
 Every entry starts with a badge: **NEW** is a new capability, **FIX** is a defect fixed, **UPD** is a change to existing behaviour, documentation or internal work.
 
 ## 0.8.0 — 2026-11-06
+- **NEW** The guards understand Codex's `apply_patch`: `scripts/patch-paths.awk` (through `lib.sh patch_paths`) lists the
+  files of a patch. `guard-code` blocks an internal file (`docs/`, `CLAUDE.md`, `AGENTS.md`, `.claude/`) as an Add, an Update
+  or a Move destination; `guard-secrets` blocks `.env` and `~/.ssh` as a written file or a move source, lets a delete pass,
+  and never scans patch bodies. A patch it cannot read (an `X` line: no `*** Begin Patch`, an unknown `***` line, a header after
+  other text on its line) still has its readable paths judged, and its `***` lines are checked raw: `guard-code` refuses a
+  component `docs`, `.claude`, `claude.md`, `claude.local.md` or `agents.md`, `guard-secrets` a secret-looking string; with no such line it passes.
+  Header lines and paths are trimmed like Codex does (ASCII blanks, VT, FF and the Unicode spaces NBSP, U+3000, ...).
+  More than 100 paths in one patch are refused by both guards ("corecrew: this patch names more than 100 files and cannot be checked. Split it into patches of at most 100 files."), because the hook
+  timeout is 15 s and a timeout does not block.
+- **NEW** Both guards refuse a patch handed to the shell (`guard-code` in every folder, `guard-secrets` inside a Core project), with "corecrew: run patches with the apply_patch tool,
+  not through the shell; the shell form cannot be checked." (exit 2, English and Russian). The rule (`lib.sh shell_patch_refused`)
+  reads no shell syntax. A hit: the command text, with every `'`, `"`, `\` and newline deleted, holds `apply_patch`, `applypatch` or
+  `apply-patch` in any letter case (also `--codex-run-as-apply-patch`); or `*** Begin Patch` is followed by an `Add File:`,
+  `Update File:`, `Delete File:` or `Move to:` marker; or `$'` is followed by a `\x`, `\u`, `\U` or octal escape; or an unquoted word
+  with `?`, `*` or `[` whose part after the last `/`, read as a glob, can match one of the three spellings (`../bin/apply_pat?h`,
+  `../bin/appl*_patch`). No hit: pass.
+  A hit passes only in the simple form: one read-only command (`grep`, `egrep`, `fgrep`, `rg`, `git log|show|diff|grep|status|blame`,
+  `git commit` with only `-m -a -am --message -s --amend --no-edit`, `cat`, `head`, `tail`, `ls`, `wc`, `find`) piped only through
+  `sort`, `uniq`, `cut`, `tr`, `nl`, `wc`, `head`, `tail`, `grep`, `rg`; quoted text is opaque (a single-quoted string, and a double-quoted
+  one without `$`, backtick or `\`, counts as one word), so `grep -E 'apply_patch|applypatch' f` and `git commit -m "x (apply_patch); y"` pass;
+  outside quotes no `$` at all (so `$IFS` word splitting cannot hide an option), no backtick, `\`, `;`, `&`, newline, `<`, `>`, parenthesis,
+  brace or `!`; no program-running option (git `-c -C -p -O --pag* --ext* --output* --open-files-in-pager*` and any `--o...` that abbreviates
+  `--output` or `--open-files-in-pager`, but `--oneline` passes; rg `--pre* --hostname-bin -z`, find `-exec -delete`, sort `--co*`); and an option word that holds the spelling only as `-e`, `--regexp=`, `--grep=`, `--author=`, `--committer=`, `-S`, `-G`,
+  `-m`, `--message=`, `-g`, `--glob=`, `-name`, `-iname`, `-path`, `-ipath` with `=`. Passes: `grep -rn apply_patch .`,
+  `git log --grep=apply_patch`, `git commit -m "Adds apply_patch guard"`, `cat docs/eval-apply_patch.md`, `find . -name apply_patch.rs`.
+  Over-blocking by design: `echo apply_patch`, `cd x && grep apply_patch .`, `grep apply_patch f > out.txt`, `man apply_patch`,
+  `command -v apply_patch`, `gh pr create --body "apply_patch"`, `FOO=apply_patch make`, `touch apply_patch.txt`, `grep apply_patch $FILE`. Earlier passes judged
+  paths inside shell text, then used a folder gate and a wrapper list, then a tokenizer; each was bypassed (seven review passes in all, five of them against the tokenizer rule: quotes
+  inside words, `-c` scripts, `eval`, assignment values, git `!` aliases, `$(...)`, size caps, `$'...'` escapes), so the rule no longer
+  parses shell words. A 981726-byte command was checked in about 0.1–0.2 s on the development machine. This is a best-effort guard, not a security boundary: it catches plain and accidental shell patches and many
+  disguised ones, it cannot see a name the shell builds at run time, and the `apply_patch` tool form is the checked path. Known ways past it: variables and `${...}` (`a=apply; ${a}_patch`),
+  $(...) and backticks (also empty ones), brace expansion, `$'...'`/`$"..."` splitting (`$'apply'$'_patch'`), a quoted part glued to a glob (`'apply_pat'?h`), extglob (`shopt -s extglob`, then `apply_pat@(c)h`), a glob that expands to a file whose name is an option (`-...`), `IFS` changes, a script file or interpreter that runs `apply_patch`, and `write_stdin`. Over-blocking also includes a pure-wildcard word outside the simple form (`chmod +x scripts/*`, `rm -rf dist/*`) is a hit by itself. A Delete of `.env` as a tool patch passes, like `rm`.
+- **UPD** `hooks.json` names `apply_patch` in the `guard-code` and `guard-secrets` matchers (re-trust the hooks in Codex `/hooks`).
+- **UPD** Tests run `one-suite` and `stop-remind` on Codex-shaped payloads (`tests/fixtures/codex/`, built from the Codex
+  source, not captured) and check that every exit 2 writes a non-empty stderr, which Codex requires for a block.
 - **NEW** A Codex manifest, `.codex-plugin/plugin.json` (Codex reads it instead of `.claude-plugin/plugin.json`; the
   name, version, description and license must match; there is no root `plugin.json`, which would make Codex skip the hooks).
 - **NEW** `agents/openai.yaml` with `allow_implicit_invocation: false` keeps `task`, `new-standard` and `ship` out of

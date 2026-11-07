@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code PreToolUse hook on Write|Edit|NotebookEdit (and Bash, best effort): a project's
+# Claude Code and Codex PreToolUse hook on Write|Edit|NotebookEdit|apply_patch (and Bash, best effort): a project's
 # internal files must not live in its code repo. It blocks writes of
 #   CLAUDE.md (and CLAUDE.local.md), AGENTS.md (the cross-tool agent instructions), docs/**, .claude/**
 # under the project's code folder (<Projects>/<Name>/**, or <Core>/<project>/code/** in the old layout),
@@ -20,15 +20,43 @@
 #   paths on a "public-docs: <paths>" line of <Core>/<p>/CLAUDE.md (space or comma separated, relative
 #   to the code root; a directory entry covers everything under it; a glob is not expanded), except
 #   docs/superpowers/** (git ignores it and the pre-commit hook blocks it, so it is always private).
+# - Codex: the tool is apply_patch (tool_input.command is the patch text) and the shell is "Bash"; Write and Edit
+#   are only matcher aliases there. The paths of Add File, Update File and Move to are judged
+#   (scripts/patch-paths.awk; a relative path against the stdin cwd; Delete File and the source of a move are
+#   not; the D kind is not consumed). More than 100 paths (a C line) are refused, with the message to split the patch.
+#   A text with an X line (no Begin Patch, an unknown "***" line, a header after other text on its line) still has its
+#   W lines judged; besides, its "***" lines are checked raw (internal_hit: a component docs, .claude, claude.md,
+#   claude.local.md or agents.md in any case, no public-docs exception) and a hit is refused; no hit passes. Header lines and
+#   paths are trimmed like Codex does (Unicode spaces too). A text with no string to read passes.
+#   A patch handed to the shell is refused, not judged, in every folder. This is BEST EFFORT, NOT A SECURITY BOUNDARY: it
+#   catches plain and accidental shell patches and many disguised ones, cannot see names the shell builds at run time, and the
+#   apply_patch tool form is the checked path (known ways past it: the Limits below, plus $'apply'$'_patch', 'apply_pat'?h,
+#   extglob, IFS changes, write_stdin) (a scope gate by cwd or by wrapper was bypassed
+#   twice; paths built by cd, quoting, $(...) or a variable cannot be checked from the command text). Rule, in lib.sh
+#   shell_patch_refused (no shell parsing): a hit is apply_patch, applypatch or apply-patch (any letter case) in the text
+#   once ' " \ and newlines are deleted (also --codex-run-as-apply-patch), or "*** Begin Patch" followed by an Add File,
+#   Update File, Delete File or Move to marker, or a $' with an escape, or an unquoted glob word that can match the name
+#   (../bin/apply_pat?h). A hit passes only in the simple form: one read-only
+#   command (grep egrep fgrep rg, git log|show|diff|grep|status|blame|commit -m, cat head tail ls wc find) piped only through
+#   sort uniq cut tr nl wc head tail grep rg; quoted text is opaque there, outside quotes no $ ` \ ; & < > ( ) { } ! or newline;
+#   no assignment first, and no program-running option (git -c -p -O --pag* --ext* --output* --open-files-in-pager* and their
+#   abbreviations, not --oneline; rg --pre -z, find -exec -delete, sort --co*). Exit 2 with
+#   "run patches with the apply_patch tool". Over-blocking by design: echo apply_patch, cd x && grep apply_patch .,
+#   grep apply_patch f > out, man apply_patch, FOO=apply_patch make, grep apply_patch $FILE. Limits: a name built at run time (a=apply;
+#   ${a}_patch, $(...) or backticks (also empty), brace expansion, $'apply'$'_patch', 'apply_pat'?h, extglob), a glob that expands to a file whose name is an option (-...), a script file or
+#   interpreter that runs it.
+#   Limit: Codex does send agent_type for subagents, but ro_agent never fires there: Codex agent names are neither
+#   corecrew:* nor the bare checker names (a Codex crew is started by text; task 4 adds a git status check).
+#   Limit: write_stdin into an open exec session: no evidence that it runs the hook (to be checked live).
 # - Bash is best effort. Targets of > >> 2> &> >| >&file, tee, touch, cp, mv (the destination; a
 #   destination directory also gets the sources' names), mkdir. mkdir follows the same rules as a
 #   write (docs, .claude/rules, ...) except the bare ".claude" dir, which holds settings.local.json.
 #   After a cd, pushd or popd only absolute (and ~) targets are judged: the new directory is unknown, so
-#   a relative target fails open (`cd .. && echo x >> docs/INDEX.md` is the Core wiki). A heredoc inside
+#   a relative target of a redirect or file command fails open (`cd .. && echo x >> docs/INDEX.md` is the Core wiki). A heredoc inside
 #   "$(...)" (the commit-message idiom) has its body skipped; <<"WORD" there stops the judging.
 #   Wrapper options with a value are skipped (timeout 5 tee, sudo -u x touch, nice -n 5). Documented limits:
-#   relative targets after cd, xargs, find -exec, bash -c "...", and the guard being inert outside a project
-#   cwd (spec D17).
+#   relative targets after cd, xargs, find -exec, bash -c "...", and the file-target judging being inert outside a project
+#   cwd (spec D17). That is about file-target judging only: the shell-patch refusal runs before it, in every folder.
 #   Not followed: variables, globs, `sh -c "..."`, ln, install, in-place sed, rsync, scripts. A target
 #   that has $ ` * ? [ { is not judged. Quoted text is not a command, heredoc bodies and comments are
 #   skipped. At most 100 targets are looked at. The tokenizer is one linear pass in awk. A command this
@@ -165,7 +193,52 @@ if [ "$tool" = Bash ] && agent="$(ro_agent)"; then
 fi
 
 # --- Write, Edit, MultiEdit, NotebookEdit: one path in the tool input. Any other tool passes.
-case "$tool" in Write|Edit|MultiEdit|NotebookEdit|Bash) ;; *) exit 0 ;; esac
+case "$tool" in Write|Edit|MultiEdit|NotebookEdit|apply_patch|Bash) ;; *) exit 0 ;; esac
+
+# internal_hit — stdin: raw text. Prints what looks like an internal path in it and exits 0, or exits 1. The text
+# is cut into components at / \ quotes, blanks and shell punctuation; a component docs, .claude, claude.md,
+# claude.local.md or agents.md (any letter case) is a hit. Used where a patch cannot be read as headers: no
+# public-docs entry or settings.local.json exception applies there, so this errs on the side of blocking.
+internal_hit() {
+  LC_ALL=C tr '\134\057\042[:space:]\054:;=()<>&|\173\175\140\047' '\n' | LC_ALL=C tr 'A-Z' 'a-z' \
+    | LC_ALL=C grep -xE -m1 'docs|\.claude|claude\.md|claude\.local\.md|agents\.md'
+}
+# refuse_raw <text with *** lines> — exit 2 when a *** line of an unreadable patch names an internal path
+refuse_raw() {
+  local hit
+  hit="$(printf '%s\n' "$1" | LC_ALL=C grep -F '***' | internal_hit)" || return 0
+  printf '%s\n' "$(msg patch_unjudgeable "$hit")" >&2
+  exit 2
+}
+# judge_patch <kind> <path> — one line of patch_paths output (a W line is judged; a C line refuses the patch);
+# $PATCH_X is set for X.
+judge_patch() {
+  case "$1" in
+    C) printf '%s\n' "$(msg patch_too_many 100)" >&2; exit 2 ;;
+    X) PATCH_X=1 ;;
+    W) check_path "$2" ;;
+  esac
+}
+
+# --- apply_patch (Codex): the paths of the patch text. W lines are judged (Add, Update without a move,
+# the destination of a move); a deleted file and a move source are not (cleaning up is legitimate).
+# Relative paths resolve against the stdin cwd. More than 100 paths (a C line) are refused. A text with an X line
+# (not a patch, or a header the reader cannot place) still has its W lines judged, and its *** lines are checked
+# raw for an internal path. A text with no string to read passes (exit 0).
+if [ "$tool" = apply_patch ]; then
+  patch="$(json_str "$in" command)"
+  [ -n "$patch" ] || exit 0
+  load_settings
+  TAB="$(printf '\t')"
+  PATCH_X=""
+  found="$(patch_paths "$patch")"
+  while IFS="$TAB" read -r kind a; do
+    judge_patch "$kind" "$a"
+  done <<< "$found"
+  [ -z "$PATCH_X" ] || refuse_raw "$patch"
+  exit 0
+fi
+
 if [ "$tool" != Bash ]; then
   key=file_path; [ "$tool" = NotebookEdit ] && key=notebook_path
   path="$(json_str "$in" "$key")"
@@ -178,6 +251,8 @@ fi
 # --- Bash: targets of redirects and file commands, found by one awk pass.
 cmd="$(json_str "$in" command)"
 [ -n "$cmd" ] || exit 0
+# A Codex patch applied through the shell is refused (see the header).
+if shell_patch_refused "$cmd"; then printf '%s\n' "$(msg patch_shell)" >&2; exit 2; fi
 # Cheap exit: nothing in the command can write a file.
 case "$cmd" in *">"*|*tee*|*touch*|*cp*|*mv*|*mkdir*) ;; *) exit 0 ;; esac
 

@@ -19,7 +19,7 @@
 # Portable bash 3.2: no associative arrays, no case-change expansions.
 
 MSG_KEYS="sync_failed hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
-session_rules schema_none run_starting layout_note old_hooks guard_code_blocked guard_code_public secrets_blocked secrets_ask
+session_rules schema_none run_starting layout_note old_hooks guard_code_blocked guard_code_public patch_too_many patch_unjudgeable patch_shell secrets_blocked secrets_ask
 local_link_created agents_link_created agents_link_wrong local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind
 readonly_agent settings_invalid_path settings_invalid_value settings_unreadable allowed_attribution allowed_model_profile
 src_env src_option src_file fix_env fix_option fix_file"
@@ -61,6 +61,12 @@ _msg_text() {
     ru:guard_code_blocked) MSG_T='corecrew: @1 — внутренний файл, ему не место в папке кода. Запишите его в @2.' ;;
     en:guard_code_public) MSG_T='Docs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in @1.' ;;
     ru:guard_code_public) MSG_T='Документы, которые должны остаться публичными в папке кода, перечислите в строке "public-docs: <paths>" в @1.' ;;
+    en:patch_too_many) MSG_T='corecrew: this patch names more than @1 files and cannot be checked. Split it into patches of at most @1 files.' ;;
+    ru:patch_too_many) MSG_T='corecrew: патч затрагивает больше @1 файлов, проверить его нельзя. Разбейте его на патчи не более чем по @1 файлов.' ;;
+    en:patch_unjudgeable) MSG_T='corecrew: the patch cannot be judged (@1): the patch text is unreadable and a line names an internal path. Write the path out in full in a plain apply_patch call.' ;;
+    ru:patch_unjudgeable) MSG_T='corecrew: патч нельзя проверить (@1): текст патча нечитаем, а в одной из строк назван внутренний путь. Запишите путь целиком в обычном вызове apply_patch.' ;;
+    en:patch_shell) MSG_T='corecrew: run patches with the apply_patch tool, not through the shell; the shell form cannot be checked.' ;;
+    ru:patch_shell) MSG_T='corecrew: применяйте патчи инструментом apply_patch, а не через оболочку; в такой форме патч проверить нельзя.' ;;
     en:secrets_blocked) MSG_T='corecrew: reading secrets is blocked (@1)' ;;
     ru:secrets_blocked) MSG_T='corecrew: чтение секретов заблокировано (@1)' ;;
     en:secrets_ask) MSG_T='Ask the user to check the value themselves, or use .env.example.' ;;

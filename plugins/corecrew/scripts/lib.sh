@@ -402,6 +402,142 @@ layout_of() {
   case "$d" in "$CORE_DIR"/*) echo old ;; *) echo new ;; esac
 }
 
+# patch_paths <text> — the file paths in a Codex apply_patch text, one "<kind>\t<path>" per line: W written, S move
+# source, D deleted, X unreadable, C more than 100 paths. See scripts/patch-paths.awk. Needs $SELF (the plugin
+# root); prints nothing when the adapter is missing or awk fails.
+patch_paths() {
+  [ -r "$SELF/scripts/patch-paths.awk" ] || return 0
+  printf '%s\n' "$1" | LC_ALL=C awk -f "$SELF/scripts/patch-paths.awk" 2>/dev/null
+  return 0
+}
+
+# shell_patch_refused <command> — exit 0 when a Bash command applies a patch through the shell, which no hook can
+# judge (a path may be built by cd, quoting, $(...) or a variable). The rule reads no shell syntax (seven review passes in all,
+# five of them against the tokenizer rule); it is a substring hit plus a narrow allowlist.
+# BEST EFFORT, NOT A SECURITY BOUNDARY: it catches plain and accidental shell patches and many disguised ones; it cannot
+# see a name the shell builds at run time. The apply_patch tool form is the checked path. Known ways past it: variables
+# and ${...}; $(...) and backticks (also empty ones); brace expansion; $'...' / $"..." splitting ($'apply'$'_patch');
+# a quoted part glued to a glob ('apply_pat'?h); extglob (shopt -s extglob, then apply_pat@(c)h); a glob that expands to
+# an option-named file; IFS changes; scripts and interpreters; write_stdin.
+# Hit (any letter case): the text, with every ' " \ and newline deleted, holds apply_patch, applypatch or apply-patch
+# (that covers --codex-run-as-apply-patch); or "*** Begin Patch" is followed by an Add File, Update File, Delete File or
+# Move to marker; or $' is followed by a \x, \u, \U or octal escape (an encoded name cannot be read); or an unquoted word
+# holds ? * or [ and its part after the last / read as a glob can match one of the three spellings (../bin/apply_pat?h,
+# ../bin/appl*_patch). No hit: pass.
+# A hit passes only in the simple form. Quoted text is opaque there: each single-quoted string and each double-quoted
+# string without $, backtick or \ is replaced by one placeholder byte (\001; a string that starts with - keeps that -, so
+# an option cannot hide in quotes), and then no $ ` \ quote, ; & newline < > ( ) { } ! may be left (so any $ outside single
+# quotes makes the line non-simple); the first word is no assignment; the line split on | gives elements whose first word
+# is a bare name; the first is a reader (grep egrep fgrep rg, git log|show|diff|grep|status|blame, git commit with only
+# -m -a -am --message -s --amend --no-edit, cat head tail ls wc find), the others a filter (sort uniq cut tr nl wc head
+# tail grep rg); an option word with a glued quote is only -e -S -G -m -g --regexp= --grep= --author= --committer=
+# --message= --glob=; no word is an option that runs a program or writes a file (git -c -C -p --paginate -O, --pag*,
+# --ext*, --output*, --open-files-in-pager*, and any --o... that abbreviates --output or --open-files-in-pager, but not
+# --oneline; rg --pre* --hostname-bin* --search-zip -z; find -exec -execdir -ok -okdir -delete -fprint* -fls; sort --co*);
+# and an option word that holds the spelling is one of -e --regexp= --grep= --author= --committer= -S -G -m --message=
+# -g --glob= -name -iname -path -ipath with the value glued by =.
+# Over-blocking by design: cd x && grep apply_patch ., a for loop, gh pr create --body "apply_patch", echo apply_patch,
+# a redirect, command -v, man, /usr/bin/grep, grep apply_patch $FILE, and a pure-wildcard word outside the simple form
+# (chmod +x scripts/*, rm -rf dist/*): it is a hit by itself (ls * in the simple form passes).
+# Limits (no hit, no refusal; pinned as LIMIT in tests/test_shell_patch.sh): a name built at run time (a variable:
+# a=apply; ${a}_patch; $(...) or backticks, also empty; brace expansion; $'apply'$'_patch'; 'apply_pat'?h; extglob), a glob
+# that expands to a file whose name is an option (-...), IFS changes, a script or an interpreter that runs it, write_stdin. Plain bash 3.2 + BSD
+# grep/sed/awk; linear in the text.
+shell_patch_refused() {
+  local q="'" flat plain hit="" out s one
+  one="$(printf '\001')"
+  flat="$(printf '%s' "$1" | LC_ALL=C tr '\n\r' '  ')"
+  plain="$(printf '%s' "$1" | LC_ALL=C tr -d '\047\042\134\012\015')"
+  # s: the text with its quoted strings opaque (see above); newline and CR become \005
+  s="$(printf '%s' "$1" | LC_ALL=C tr '\n\r' '\005\005' | LC_ALL=C sed -E 's/'"'"'(-?)[^'"'"']*'"'"'|"(-?)[^"$`\]*"/'"$one"'\1\2/g')"
+  printf '%s\n' "$plain" | LC_ALL=C grep -qiE 'apply_patch|applypatch|apply-patch' && hit=1
+  [ -n "$hit" ] || { printf '%s\n' "$flat" | LC_ALL=C grep -qE '\*\*\* Begin Patch.*\*\*\* (Add File|Update File|Delete File|Move to):' && hit=1; }
+  [ -n "$hit" ] || { printf '%s\n' "$flat" | LC_ALL=C grep -qE "\\\$$q.*\\\\([xuU]|[0-7])" && hit=1; }
+  if true; then
+    out="$(printf '%s\n' "$s" | LC_ALL=C awk '
+      function glob_re(w,   re, i, j, c, L, cls) {
+        re = "^"; L = length(w)
+        for (i = 1; i <= L; i++) {
+          c = substr(w, i, 1)
+          if (c == "?") re = re "."
+          else if (c == "*") re = re ".*"
+          else if (c == "[") {
+            j = i + 1
+            if (substr(w, j, 1) == "!" || substr(w, j, 1) == "^") j++
+            if (substr(w, j, 1) == "]") j++
+            while (j <= L && substr(w, j, 1) != "]") j++
+            if (j > L) re = re "\\["
+            else {
+              cls = substr(w, i, j - i + 1)
+              if (substr(cls, 2, 1) == "!") cls = "[^" substr(cls, 3)
+              re = re cls; i = j
+            }
+          }
+          else if (c ~ /[.+(){}^$|\\]/) re = re "\\" c
+          else re = re c
+        }
+        return re "$"
+      }
+      BEGIN { N[1] = "apply_patch"; N[2] = "applypatch"; N[3] = "apply-patch"; hit = 0 }
+      {
+        gsub(/[\001"\047`$\\]/, "")
+        n = split($0, W, /[ \t\005|;&()<>]+/)
+        for (i = 1; i <= n && !hit; i++) {
+          if (W[i] !~ /[?*[]/) continue
+          m = split(W[i], P, "/"); w = P[m]
+          if (w !~ /[?*[]/) continue
+          gsub(/\*+/, "*", w)
+          if (length(w) > 200) { hit = 1; break }
+          re = glob_re(tolower(w))
+          for (k = 1; k <= 3; k++) if (N[k] ~ re) hit = 1
+        }
+      }
+      END { print (hit ? "hit" : "none") }' 2>/dev/null)"
+    [ "$out" = none ] || hit=1
+  fi
+  [ -n "$hit" ] || return 1
+  # the simple form: no construct that runs or hides a command (quoted text is already opaque in $s)
+  printf '%s\n' "$s" | LC_ALL=C grep -q '[;&<>(){}!`$"\'"$q$(printf '\005')"']' && return 0
+  out="$(printf '%s\n' "$s" | LC_ALL=C awk '
+    BEGIN { ok = 1 }
+    {
+      n = split($0, E, "|")
+      for (i = 1; i <= n && ok; i++) {
+        m = split(E[i], W, " "); nm = W[1]
+        if (m == 0 || nm ~ /^[A-Za-z_][A-Za-z0-9_]*=/ || nm !~ /^[A-Za-z0-9._+-]+$/) { ok = 0; break }
+        sub_ = W[2]; commit = 0
+        if (i == 1) {
+          if (nm == "git") {
+            if (sub_ !~ /^(log|show|diff|grep|status|blame|commit)$/) { ok = 0; break }
+            commit = (sub_ == "commit")
+          } else if (nm !~ /^(grep|egrep|fgrep|rg|cat|head|tail|ls|wc|find)$/) { ok = 0; break }
+        } else if (nm !~ /^(sort|uniq|cut|tr|nl|wc|head|tail|grep|rg)$/) { ok = 0; break }
+        for (j = 2; j <= m; j++) {
+          w = W[j]; b = w; sub(/^\001+/, "", b)
+          if (substr(b, 1, 1) != "-") continue
+          if (index(w, "\001") > 0) {
+            p = w; sub(/\001.*/, "", p)
+            if (p !~ /^(--regexp=|--grep=|--author=|--committer=|--message=|--glob=|-e|-S|-G|-m|-g)$/) { ok = 0; break }
+            w = p
+          }
+          if (tolower(w) ~ /apply[_-]?patch/ && w !~ /^(-e|--regexp|--grep|--author|--committer|-S|-G|-m|--message|-g|--glob|-name|-iname|-path|-ipath)=/) { ok = 0; break }
+          if (commit && j > 2 && w !~ /^(-m|-a|-am|--message(=.*)?|-s|--amend|--no-edit)$/) { ok = 0; break }
+          if (nm == "git") {
+            x = w; sub(/=.*/, "", x)
+            if (w ~ /^(-c|-C|-p|-O)$/ || w ~ /^--(output|open-files-in-pager|ext|pag)/ || w ~ /^-[A-Za-z]*O/ || \
+                (x ~ /^--o/ && (index("--output", x) == 1 || index("--open-files-in-pager", x) == 1))) { ok = 0; break }
+          }
+          if (nm == "rg" && (w ~ /^--(pre|hostname-bin|search-zip)/ || w ~ /^-[A-Za-z]*z/)) { ok = 0; break }
+          if (nm == "find" && w ~ /^-(exec|execdir|ok|okdir|delete|fprint|fprint0|fprintf|fls)$/) { ok = 0; break }
+          if (nm == "sort" && w ~ /^--co/) { ok = 0; break }
+        }
+      }
+    }
+    END { print (ok ? "ok" : "no") }' 2>/dev/null)"
+  [ "$out" = ok ] && return 1
+  return 0
+}
+
 # --- Path helpers for the path-judging hooks (guard-code.sh, guard-secrets.sh).
 
 # lc <text> — ASCII lower case (bytes above 127 are left alone, so Cyrillic stays as it is).

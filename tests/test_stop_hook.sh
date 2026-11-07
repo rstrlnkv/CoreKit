@@ -89,4 +89,22 @@ echo more >> "$C/new.txt"
 OUT=$(input "$C" false | bash "$H" 2>&1)
 echo "$OUT" | grep -qF -- "--no-attribution" && fail "allow: reminder has --no-attribution: $OUT" || pass
 
+# Codex Stop payloads (fixtures built from the rust-v0.166.0 structs): same rules, and an exit 2 carries a
+# non-empty stderr (Codex treats exit 2 with an empty one as a failed hook, not a block)
+FX="$ROOT/tests/fixtures/codex"
+(cd "$C" && bash "$SCRIPTS/save" "s-codex0") >/dev/null 2>&1
+cstop() { sed "s|@CWD@|$C|g" "$FX/$1.json" | bash "$H" 2>"$SANDBOX/cerr" >"$SANDBOX/cout"; CRC=$?; }
+cstop stop; assert_eq "$CRC" "0" "codex Stop: clean repo passes"
+echo c > "$C/codex-new.txt"
+cstop stop; assert_eq "$CRC" "2" "codex Stop: dirty code blocks"
+[ -s "$SANDBOX/cerr" ] && pass || fail "codex Stop: exit 2 with an empty stderr"
+assert_eq "$(cat "$SANDBOX/cout")" "" "codex Stop: nothing on stdout"
+grep -q 'save' "$SANDBOX/cerr" && pass || fail "codex Stop: the reminder lacks save"
+cstop stop-active; assert_eq "$CRC" "0" "codex Stop: stop_hook_active exits 0"
+cstop stop; assert_eq "$CRC" "0" "codex Stop: the same change set is not reminded twice"
+echo more >> "$C/codex-new.txt"
+cstop stop; assert_eq "$CRC" "2" "codex Stop: new edits remind again"
+[ -s "$SANDBOX/cerr" ] && pass || fail "codex Stop: second exit 2 with an empty stderr"
+(cd "$C" && bash "$SCRIPTS/save" "s-codex") >/dev/null 2>&1
+
 finish

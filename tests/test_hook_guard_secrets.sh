@@ -54,6 +54,8 @@ ok() { assert_eq "$RC" "0" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_eq "$E
 # blocked <label> <path shown> — exit 2, the exact message, nothing on stdout
 blocked() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_eq "$ERR" "$(msg "$2")" "$1: message"; }
 # closed <label> — exit 2 with the first line of the message (the shown text is whatever matched), nothing on stdout
+# blocked_any <label> — exit 2, nothing on stdout, a non-empty message
+blocked_any() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; [ -n "$ERR" ] && pass || fail "$1: empty stderr"; }
 closed() {
   assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"
   case "$ERR" in "corecrew: reading secrets is blocked ("*")"*) pass ;; *) fail "$1: message: $ERR" ;; esac
@@ -635,6 +637,149 @@ printf '{"cwd":"%s","tool_name":"Write","tool_input":{"content":"%s","file_path"
 timed_json "$SANDBOX/big8.json"; closed "truncated 1 MB Write with .env.local in the content"; [ "$T" -lt 10 ] && pass || fail "1 MB odd took ${T} s"
 }
 bg sec_size
+
+# Codex: apply_patch and a patch handed to Bash (fixtures built from the rust-v0.166.0 structs)
+FX="$ROOT/tests/fixtures/codex"
+sec_codex() {
+  fx() { run_json "$(sed "s|@CWD@|${2-$C}|g" "$FX/$1.json")"; }
+  # patch <patch text> [cwd] [tool] — a Codex tool call with the given patch text
+  patch() { run_json "$(printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"command":"%s"}}' "${2-$C}" "${3-apply_patch}" "$(jesc "$1")")"; }
+  # bigjson <paths> <tool> — a hook input with that many harmless Add File entries, built by awk (bash 3.2 is
+  # quadratic on a string this long)
+  bigjson() {
+    awk -v n="$1" -v tool="$2" -v cwd="$C" 'BEGIN {
+      printf "{\"session_id\":\"s\",\"cwd\":\"%s\",\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"%s\",\"tool_input\":{\"command\":\"", cwd, tool
+      if (tool == "Bash") printf "apply_patch <<\x27EOF\x27\\n"
+      printf "*** Begin Patch\\n"
+      for (i = 1; i <= n; i++) printf "*** Add File: src/f%d.c\\n+x\\n", i
+      printf "*** End Patch"
+      if (tool == "Bash") printf "\\nEOF"
+      printf "\"}}" }' > "$OD/big.json"
+  }
+  local nl=$'\n' B='*** Begin Patch' E='*** End Patch'
+  fx pre-apply-patch-secret; blocked "codex Add .env" ".env"
+  fx pre-apply-patch-add; ok "codex Add docs/a.md passes"
+  fx pre-apply-patch-multi; ok "codex multi-file legitimate patch passes"
+  patch "$B${nl}*** Update File: .env.local${nl}@@${nl}-a${nl}+b${nl}$E"; blocked "codex Update .env.local" ".env.local"
+  patch "$B${nl}*** Add File: ~/.ssh/x${nl}+k${nl}$E"; blocked "codex ~/.ssh/x" "~/.ssh/x"
+  patch "$B${nl}*** Add File: $HOME/.ssh/x${nl}+k${nl}$E"; blocked "codex absolute path under HOME/.ssh" "$HOME/.ssh/x"
+  patch "$B${nl}*** Update File: .env${nl}*** Move to: src/x${nl}@@${nl}-a${nl}+b${nl}$E"; blocked "codex move source .env" ".env"
+  patch "$B${nl}*** Update File: src/x${nl}*** Move to: .env${nl}@@${nl}-a${nl}+b${nl}$E"; blocked "codex move destination .env" ".env"
+  patch "$B${nl}*** Delete File: .env${nl}$E"; ok "codex Delete .env passes"
+  patch "$B${nl}*** Add File: .env.example${nl}+K=${nl}$E"; ok "codex .env.example passes"
+  patch "$B${nl}*** Update File: src/a.swift${nl}@@${nl}-a${nl}+b${nl}*** Add File: src/b.swift${nl}+x${nl}$E"; ok "codex legitimate patch"
+  patch "$B${nl}*** Add File: README.md${nl}+copy .env.example to .env${nl}+keys live in ~/.ssh/id_rsa and ssh://host/.ssh/config${nl}$E"; ok "codex content mentioning .env and .ssh passes"
+  patch "*** Add File: .env${nl}+k"; blocked "codex unparseable text with a *** .env line fails closed" ".env"
+  patch "*** Bogus .env/.env${nl}"; closed "codex unknown *** line naming .env fails closed"
+  patch "nothing to see; .env and .ssh in prose"; ok "codex unparseable text without a *** line passes"
+  patch ""; ok "codex empty command passes"
+  run_json "$(printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"apply_patch","tool_input":{"command":["*** Add File: .env"]}}' "$C")"
+  closed "codex command that is not a string, *** .env line, fails closed"
+  run_json "$(printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"apply_patch","tool_input":{"command":["*** Add File: src/x"]}}' "$C")"
+  ok "codex command that is not a string, no secret, passes"
+  patch "$B${nl}*** Add File: .env${nl}+k${nl}$E" "$SANDBOX/elsewhere"; ok "codex outside a project is inert"
+  # the Codex shell
+  fx pre-bash; ok "codex Bash swift test passes"
+  patch "cat .env" "$C" Bash; blocked "codex Bash cat .env" ".env"
+  patch "cat .env.example" "$C" Bash; ok "codex Bash cat .env.example passes"
+  # --- tester: inputs nobody fed
+  local P
+  patch "$B${nl}*** Add File: a${nl}+x${nl}$E${nl}$B${nl}*** Add File: .env${nl}+x${nl}$E"; blocked "codex two Begin blocks: the second is judged" ".env"
+  patch "echo '$B'" "$C" Bash; ok "codex Bash echo of Begin Patch passes"
+  patch "echo '$B'; cat .env" "$C" Bash; blocked "codex Bash a quoted Begin Patch does not hide a cat .env" ".env"
+  for P in ./.env src/../.env .env/ "$C/.env" "$C/src/../.env" .env.production; do
+    patch "$B${nl}*** Add File: $P${nl}+x${nl}$E"; blocked "codex path $P" "$P"
+  done
+  patch "$B${nl}*** Add File:	.env${nl}+x${nl}$E"; blocked "codex a tab after the colon" ".env"
+  patch "$B${nl}*** Add File:.env${nl}+x${nl}$E"; blocked "codex no space after the colon" ".env"
+  patch "$B${nl}	*** Add File: .env${nl}+x${nl}$E"; blocked "codex a tab-indented header" ".env"
+  patch "$B"$'\r'"${nl}*** Update File: .env"$'\r'"${nl}@@${nl}-a${nl}+b${nl}$E"$'\r'; blocked "codex CRLF line ends, Update .env" ".env"
+  patch "$B"$'\r'"${nl}*** Update File: src/a"$'\r'"${nl}*** Move to: .env"$'\r'"${nl}@@${nl}$E"$'\r'; blocked "codex CRLF line ends, Move to .env" ".env"
+  patch "*** ADD FILE: .env${nl}+x"; blocked "codex uppercase header fails closed" ".env"
+  patch "$B${nl}*** ADD FILE: .env${nl}+x${nl}$E"; blocked "codex uppercase header inside a patch fails closed" ".env"
+  patch "$B${nl}*** Update File: .env${nl}*** Move to: src/x${nl}@@${nl}-a${nl}+b${nl}*** Delete File: .env${nl}$E"; blocked "codex move source .env then a delete" ".env"
+  patch "$B${nl}*** Update File: src/a${nl}*** Move to: .env${nl}@@${nl}$E" "$C" ; blocked "codex harmless source, secret destination" ".env"
+  patch "$B${nl}*** Add File: x${nl}+y${nl}*** Move to: .env${nl}$E"; blocked "codex Move to after an Add fails closed" ".env"
+  # raw JSON escapes: \r\n, \t, * for the stars, . for the dot
+  run_json "$(printf '{"session_id":"s","cwd":"%s","tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\\r\\n*** Update File:\\t.env\\r\\n@@\\r\\n-a\\r\\n+b\\r\\n*** End Patch"}}' "$C")"; blocked "codex raw JSON \\r\\n \\t" ".env"
+  run_json "$(printf '{"session_id":"s","cwd":"%s","tool_name":"apply_patch","tool_input":{"command":"\\u002a\\u002a\\u002a Begin Patch\\n\\u002a\\u002a\\u002a Add File: .env\\n+x\\n\\u002a\\u002a\\u002a End Patch"}}' "$C")"; blocked "codex raw JSON \\u002a stars" ".env"
+  run_json "$(printf '{"session_id":"s","cwd":"%s","tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\\n*** Add File: \\u002eenv\\n+x\\n*** End Patch"}}' "$C")"; blocked "codex raw JSON \\u002e dot" ".env"
+  # a symlink named innocently that points at .env is a Write/Read matter, not a name; a link folder into ~/.ssh
+  patch "$B${nl}*** Add File: sshlink/id${nl}+x${nl}$E"; blocked "codex path through a symlinked folder into ~/.ssh" "sshlink/id"
+  patch "$B${nl}*** Update File: notes.txt${nl}@@${nl}-a${nl}+b${nl}$E"; blocked "codex Update of a file link that points at .env" "notes.txt"
+  # non-string command
+  run_json "$(printf '{"session_id":"s","cwd":"%s","tool_name":"apply_patch","tool_input":{"command":null}}' "$C")"; ok "codex command null passes"
+  run_json "$(printf '{"session_id":"s","cwd":"%s","tool_name":"apply_patch","tool_input":{"command":5}}' "$C")"; ok "codex command number passes"
+  run_json "$(printf '{"session_id":"s","cwd":"%s","tool_name":"apply_patch","tool_input":{"command":["*** Begin Patch\\n*** Update File: .env\\n*** End Patch"]}}' "$C")"; closed "codex command array holding a .env header fails closed"
+  run_json "$(printf '{"session_id":"s","cwd":"%s","tool_name":"apply_patch","tool_input":{"command":5,"x":"*** Add File: .env"}}' "$C")"; closed "codex command number with a .env header elsewhere fails closed"
+  # the Bash command that is not a string
+  run_json "$(printf '{"session_id":"s","cwd":"%s","tool_name":"Bash","tool_input":{"command":["cat",".env"]}}' "$C")"; closed "codex Bash command array naming .env fails closed"
+  # the cap (was a DEFECT): 101 paths are refused, whatever the 101st is
+  local big="$B${nl}" i=1; while [ "$i" -le 100 ]; do big="$big*** Add File: src/f$i.txt${nl}+x${nl}"; i=$((i + 1)); done
+  patch "$big*** Add File: .env${nl}+x${nl}$E"; blocked_any "codex 101st path (.env) is refused"
+  grep -q 'at most 100' "$OD/err" && pass || fail "the cap message must say at most 100 files: $ERR"
+  patch "$big*** Update File: src/a${nl}*** Move to: .env${nl}@@${nl}$E"; blocked_any "codex 101st-102nd, Move to .env is refused"
+  local t0=$SECONDS
+  bigjson 5000 apply_patch; run_json "$(<"$OD/big.json")"; blocked_any "codex 5000 harmless paths are refused"
+  [ $((SECONDS - t0)) -lt 10 ] && pass || fail "5000 paths took $((SECONDS - t0)) s (hook timeout 15 s)"
+  grep -q 'at most 100' "$OD/err" && pass || fail "the cap message must say at most 100 files"
+  # whitespace as Codex trims it
+  patch "$B${nl}$(printf '\302\240')*** Add File: .env${nl}+x${nl}$E"; blocked "codex NBSP-indented header" ".env"
+  patch "$B${nl}*** Add File: .env$(printf '\302\240')${nl}+x${nl}$E"; blocked "codex trailing NBSP in the path" ".env"
+  patch "$B${nl}*** Add File: .env$(printf '\f')${nl}+x${nl}$E"; blocked "codex trailing form feed in the path" ".env"
+  patch "$B${nl}$(printf '\343\200\200')*** Add File: .env${nl}+x${nl}$E"; blocked "codex U+3000-indented header" ".env"
+  patch "$B${nl}*** Add File: a${nl}+x${nl}$(printf '\302\240')*** Add File: .env${nl}$E"; blocked "codex NBSP header after an Add body" ".env"
+  patch "$B${nl}*** Add File: src/a.swift${nl}+x${nl}junk *** Add File: .env${nl}$E"; blocked "codex junk before a .env header (X)" ".env"
+  # A patch handed to the shell is refused with one message (each of these was a bypass of the old judging)
+  local SM="corecrew: run patches with the apply_patch tool, not through the shell; the shell form cannot be checked." P
+  refused() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_eq "$ERR" "$SM" "$1: message"; }
+  fx pre-bash-applypatch-heredoc; refused "codex Bash apply_patch heredoc"
+  fx pre-bash-applypatch-quotedarg; refused "codex Bash apply_patch quoted arg"
+  fx pre-bash-applypatch-cd; refused "codex Bash cd sub && apply_patch"
+  patch "apply_patch <<'EOF'${nl}$B${nl}*** Add File: .env${nl}+k${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash heredoc apply_patch .env"
+  patch "apply_patch <<'EOF'${nl}$B${nl}*** Add File: src/a.swift${nl}+k${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash a harmless heredoc patch"
+  for P in "cd sub && " "cd . && " "cd - && " "cd nonexistent; " "( cd sub ); " "popd; " "cd ~/.ssh && " "cd \$OLDPWD && " "echo cd; "; do
+    patch "${P}apply_patch <<'EOF'${nl}$B${nl}*** Add File: authorized_keys${nl}+k${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash prefix [$P]"
+  done
+  for P in ".e''nv" "\$X" "\$(printf .e)nv" '.e${Z}nv' '`echo .env`' '.e\nv'; do
+    patch "X=.env; apply_patch <<EOF${nl}$B${nl}*** Add File: $P${nl}+x${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash unquoted heredoc, path $P"
+  done
+  patch "apply_patch <<EOF${nl}$B${nl}*** Add File: src/a${nl}\$(printf '*** Add File: .env')${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash \$(...) in a heredoc body forging a header"
+  patch "apply_patch \$'$B\\n*** Add File: .env\\n+x\\n$E'" "$C" Bash; refused "codex Bash one-line patch naming .env"
+  patch "printf '%s\\n' '$B' '*** Add File: .env' '+x' '$E' | apply_patch" "$C" Bash; refused "codex Bash printf-piped patch naming .env"
+  patch "cat p.txt | apply_patch" "$C" Bash; refused "codex Bash cat p.txt | apply_patch"
+  patch "echo '*** Begin Pat''ch' | apply_patch" "$C" Bash; refused "codex Bash quote-split Begin Patch into apply_patch"
+  for P in applypatch apply-patch /usr/local/bin/apply_patch "sudo apply_patch" "xargs apply_patch" "alias ap=apply_patch; ap" "F=apply_patch; \$F" "bash -c apply_patch"; do
+    patch "$P <<'EOF'${nl}x${nl}EOF" "$C" Bash; refused "codex Bash spelling [$P]"
+  done
+  patch "git commit -m \"$B${nl}*** Add File: .env\"" "$C" Bash; ok "a multi-line commit message that quotes a patch header is quoted text and passes"
+  bigjson 5000 Bash; run_json "$(<"$OD/big.json")"; refused "codex Bash 5000 paths are refused as a shell patch"
+  # twins: talking about apply_patch or a patch, and reading, is not applying one
+  for P in "grep -rn apply_patch src" "rg 'apply_patch' tests" "rg '\\*\\*\\* Begin Patch' tests" "git log --grep=apply_patch" "git commit -m \"fix apply_patch docs\"" "git commit -m \"apply_patch notes: .env.example is fine\"" "echo '$B' | wc -l" "cat src/a.swift" "ls apply_patch_notes"; do
+    patch "$P" "$C" Bash; ok "codex Bash twin [$P] passes"
+  done
+  # the apply_patch TOOL still edits src/ files
+  patch "$B${nl}*** Update File: src/a.swift${nl}@@${nl}-a${nl}+b${nl}*** Add File: src/b.swift${nl}+x${nl}$E"; ok "codex apply_patch tool on src/ files passes"
+}
+
+bg sec_codex
+
+# --- core_dir only in the settings file (CORECREW_CONFIG; CORE_DIR and the plugin option unset, as in Codex): the project
+# is found after load_settings, so the shell form of apply_patch is refused there and a reader twin passes
+sec_settings_only() {
+  local cfg="$SANDBOX/only-settings" cmd
+  printf 'core_dir: %s\n' "$CORE_DIR" > "$cfg"
+  for cmd in 'apply_patch' 'xargs --max-args 1 apply_patch' "env -Sapply_patch" 'cat p | apply_patch'; do
+    printf '%s' "$(printf '{"session_id":"s","cwd":"%s","tool_name":"Bash","tool_input":{"command":"%s"}}' "$C" "$cmd")" \
+      | env -u CORE_DIR -u CLAUDE_PLUGIN_OPTION_CORE_DIR CORECREW_CONFIG="$cfg" bash "$H" >"$OD/out" 2>"$OD/err"; RC=$?
+    [ "$RC" = 2 ] && pass || fail "settings-only core_dir: [$cmd] rc=$RC (want 2)"
+    grep -qF "run patches with the apply_patch tool" "$OD/err" && pass || fail "settings-only core_dir: [$cmd] message: $(<"$OD/err")"
+  done
+  printf '%s' "$(printf '{"session_id":"s","cwd":"%s","tool_name":"Bash","tool_input":{"command":"grep -rn apply_patch src"}}' "$C")" \
+    | env -u CORE_DIR -u CLAUDE_PLUGIN_OPTION_CORE_DIR CORECREW_CONFIG="$cfg" bash "$H" >"$OD/out" 2>"$OD/err"; RC=$?
+  [ "$RC" = 0 ] && pass || fail "settings-only core_dir: reader twin rc=$RC"
+}
+bg sec_settings_only
 
 bg_wait
 

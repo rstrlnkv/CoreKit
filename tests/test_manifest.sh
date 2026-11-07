@@ -72,10 +72,15 @@ WIRED="$(awk '
 ' "$H")"
 want_wired="SessionStart|startup|resume|clear|compact|fork|session-start.sh|30
 PreToolUse|Bash|one-suite.sh|540
-PreToolUse|Write|Edit|MultiEdit|NotebookEdit|Bash|guard-code.sh|15
-PreToolUse|Read|Grep|Glob|Edit|MultiEdit|Write|NotebookEdit|Bash|guard-secrets.sh|15
+PreToolUse|Write|Edit|MultiEdit|NotebookEdit|apply_patch|Bash|guard-code.sh|15
+PreToolUse|Read|Grep|Glob|Edit|MultiEdit|Write|NotebookEdit|apply_patch|Bash|guard-secrets.sh|15
 Stop||stop-remind.sh|10"
 assert_eq "$WIRED" "$want_wired" "hooks.json events, matchers, scripts, timeouts"
+# Codex edits files with apply_patch: both guards must be matched on that name (Codex lists it explicitly)
+for g in guard-code guard-secrets; do
+  m="$(printf '%s\n' "$WIRED" | awk -F'|' -v g="$g.sh" '$(NF-1) == g { print }')"
+  case "|$m|" in *"|apply_patch|"*) pass ;; *) fail "hooks.json: the $g matcher lacks apply_patch" ;; esac
+done
 for s in session-start one-suite guard-code guard-secrets stop-remind; do
   assert_contains "$H" "/hooks/$s.sh"
   assert_file "$PLUGIN/hooks/$s.sh"

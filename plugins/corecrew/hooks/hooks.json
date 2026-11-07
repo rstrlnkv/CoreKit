@@ -25,7 +25,7 @@
         ]
       },
       {
-        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|apply_patch|Bash",
         "hooks": [
           {
             "type": "command",
@@ -35,7 +35,7 @@
         ]
       },
       {
-        "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|NotebookEdit|Bash",
+        "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|NotebookEdit|apply_patch|Bash",
         "hooks": [
           {
             "type": "command",

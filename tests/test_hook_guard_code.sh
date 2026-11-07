@@ -51,6 +51,8 @@ msg() {
 ok() { assert_eq "$RC" "0" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_eq "$ERR" "" "$1: stderr"; }
 # blocked <label> <path shown> <target in the Core> — exit 2, the exact message, nothing on stdout
 blocked() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_eq "$ERR" "$(msg "$2" "$3")" "$1: message"; }
+# blocked_any <label> — exit 2, nothing on stdout, a non-empty message (Codex ignores exit 2 with an empty one)
+blocked_any() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; [ -n "$ERR" ] && pass || fail "$1: empty stderr"; }
 
 
 # Write, Edit, NotebookEdit, MultiEdit: paths, worktrees, public-docs, symlinks
@@ -476,6 +478,171 @@ sec_new_odd_path() {
   run_file Write "$N/src/a.sh" "$N"; ok "odd path: src/a.sh"
 }
 bg sec_new_odd_path
+
+# Codex: apply_patch and a patch handed to Bash (fixtures built from the rust-v0.166.0 structs)
+FX="$ROOT/tests/fixtures/codex"
+mkdir -p "$CORE_DIR/r/code/docs" "$CORE_DIR/r/code/sub"; printf 'public-docs: docs/pub/\n' > "$CORE_DIR/r/CLAUDE.md"
+sec_codex() {
+  local R="$CORE_DIR/r/code" q
+  # fx <fixture> [cwd] — runs a fixture with @CWD@ replaced
+  fx() { run_json "$(sed "s|@CWD@|${2-$C}|g" "$FX/$1.json")"; }
+  # patch <patch text> [cwd] [tool] — a Codex tool call with the given patch text
+  patch() {
+    local t="$1"; t="${t//\\/\\\\}"; t="${t//\"/\\\"}"; t="${t//$'\n'/\\n}"
+    run_json "$(printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"command":"%s"}}' "${2-$C}" "${3-apply_patch}" "$t")"
+  }
+  # bigjson <paths> <tool> — a hook input with that many harmless Add File entries, built by awk (bash 3.2 is
+  # quadratic on a string this long)
+  bigjson() {
+    awk -v n="$1" -v tool="$2" -v cwd="$C" 'BEGIN {
+      printf "{\"session_id\":\"s\",\"cwd\":\"%s\",\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"%s\",\"tool_input\":{\"command\":\"", cwd, tool
+      if (tool == "Bash") printf "apply_patch <<\x27EOF\x27\\n"
+      printf "*** Begin Patch\\n"
+      for (i = 1; i <= n; i++) printf "*** Add File: src/f%d.c\\n+x\\n", i
+      printf "*** End Patch"
+      if (tool == "Bash") printf "\\nEOF"
+      printf "\"}}" }' > "$OD/big.json"
+  }
+  local nl=$'\n' B='*** Begin Patch' E='*** End Patch'
+  fx pre-apply-patch-add;    blocked "codex add docs/a.md" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  fx pre-apply-patch-update; blocked "codex update CLAUDE.md" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
+  fx pre-apply-patch-delete; ok "codex delete docs/a.md passes"
+  fx pre-apply-patch-move;   blocked "codex move into docs" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  fx pre-apply-patch-multi;  blocked "codex multi names the internal path" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  fx pre-apply-patch-secret; ok "codex .env is not guard-code's business"
+  patch "$B${nl}*** Add File: AGENTS.md${nl}+x${nl}$E"; blocked "codex AGENTS.md" "$C/AGENTS.md" "$CORE_DIR/p/AGENTS.md"
+  patch "$B${nl}*** Add File: .claude/rules/x.md${nl}+x${nl}$E"; blocked "codex .claude/rules" "$C/.claude/rules/x.md" "$CORE_DIR/p/.claude/rules/x.md"
+  patch "$B${nl}*** Update File: docs/a.md${nl}*** Move to: src/a.md${nl}@@${nl}-a${nl}+b${nl}$E"; ok "codex move out of docs passes"
+  patch "$B${nl}*** Add File: docs/pub/a.md${nl}+x${nl}$E" "$R"; ok "codex public-docs entry passes"
+  patch "$B${nl}*** Add File: docs/a.md${nl}+x${nl}$E" "$R"; assert_eq "$RC" "2" "codex public-docs does not cover the rest of docs/"
+  patch "$B${nl}*** Update File: src/a.swift${nl}@@${nl}-a${nl}+b${nl}*** Add File: src/b.swift${nl}+x${nl}*** Update File: .claude/settings.local.json${nl}@@${nl}-a${nl}+b${nl}$E"; ok "codex legitimate patch"
+  patch "$B${nl}*** Add File: docs/a.md${nl}+x${nl}$E" "$C/src"; ok "codex relative docs/a.md from src/ is src/docs/a.md, not the root docs"
+  patch "$B${nl}*** Add File: ../docs/a.md${nl}+x${nl}$E" "$C/src"; blocked "codex ../docs/a.md from src/" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  patch "$B${nl}*** Add File: docs/a.md${nl}+x${nl}$E" "$SANDBOX/elsewhere"; ok "codex outside a project is inert"
+  patch "hello, not a patch"; ok "codex unparseable text passes"
+  patch ""; ok "codex empty command passes"
+  patch "$B${nl}*** Add File: src/a.md${nl}+see docs/a.md and CLAUDE.md${nl}+*** Add File: docs/x${nl}$E"; ok "codex content lines mentioning docs/ pass"
+  patch "$B${nl}*** Bogus${nl}*** Add File: docs/a.md${nl}$E"; blocked "codex a path before an unknown line is still judged" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  # the Codex shell
+  fx pre-bash; ok "codex Bash without a patch passes"
+  fx pre-bash-subagent; ok "codex Bash in a subagent: no ro_agent for a Codex agent_type"
+  # A patch handed to the shell is refused with one message, wherever it points: the shell form cannot be checked
+  # (each of these was a bypass of the old path judging)
+  local SM="corecrew: run patches with the apply_patch tool, not through the shell; the shell form cannot be checked."
+  refused() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_eq "$ERR" "$SM" "$1: message"; }
+  fx pre-bash-applypatch-heredoc; refused "codex Bash apply_patch heredoc"
+  fx pre-bash-applypatch-quotedarg; refused "codex Bash apply_patch quoted arg"
+  fx pre-bash-applypatch-cd; refused "codex Bash cd sub && apply_patch"
+  patch "apply_patch <<'EOF'${nl}$B${nl}*** Update File: src/a.swift${nl}@@${nl}-a${nl}+b${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash even a harmless heredoc patch"
+  patch "apply_patch <<'EOF'${nl}$B${nl}*** Delete File: docs/a.md${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash delete patch"
+  # no scope gate: the shell form is refused in every folder (a cwd or wrapper gate was bypassed twice)
+  local O="$SANDBOX/elsewhere" PR; PR="$(dirname "$C")"
+  patch "apply_patch <<'EOF'${nl}$B${nl}*** Add File: $D${nl}+x${nl}${E}${nl}EOF" "$O" Bash; refused "codex Bash plain relative apply_patch outside a project"
+  patch "cd $C && apply_patch <<'EOF'${nl}$B${nl}*** Add File: $D${nl}+x${nl}${E}${nl}EOF" "$O" Bash; refused "codex Bash cd /project && apply_patch from outside"
+  patch "cd sub && apply_patch <<'EOF'${nl}x${nl}EOF" "$O" Bash; refused "codex Bash cd sub && apply_patch from outside"
+  patch "c''d $C && apply_patch" "$O" Bash; refused "codex Bash quoted cd from outside"
+  patch "env -C $C apply_patch" "$O" Bash; refused "codex Bash env -C from outside"
+  patch "apply_patch <<'EOF'${nl}$B${nl}*** Add File: $(basename "$C")/$D${nl}+x${nl}${E}${nl}EOF" "$PR" Bash; refused "codex Bash Proj/docs/x.md from the Projects folder"
+  patch "apply_patch <<'EOF'${nl}$B${nl}*** Add File: ~/$D${nl}+x${nl}${E}${nl}EOF" "$O" Bash; refused "codex Bash ~ path in the patch from outside"
+  patch "apply_patch \"\$(cat p)\"" "$O" Bash; refused "codex Bash \$ from outside"
+  patch "$C/bin/apply_patch" "$O" Bash; refused "codex Bash absolute command from outside"
+  patch "grep -rn apply_patch src" "$O" Bash; ok "codex Bash reader twin outside a project passes"
+  patch "apply_patch <<'EOF'${nl}x${nl}EOF" "$C" Bash; refused "codex Bash plain relative apply_patch inside a project"
+  for P in "cd src && " "cd . && " "cd && " "cd \$X && " "cd - && " "cd nonexistent; " "( cd src ); " "popd; " "pushd src && " "cd \$OLDPWD && " "echo cd; " "git log --grep='cd'; "; do
+    patch "${P}apply_patch <<'EOF'${nl}$B${nl}*** Add File: $D${nl}+x${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash prefix [$P]"
+  done
+  for P in "do''cs/a.md" ".e''nv" "\$X" "\$(printf docs)/a.md" 'd${Z}ocs/a.md' '`echo docs`/a.md' 'docs\/a.md'; do
+    patch "X=docs; apply_patch <<EOF${nl}$B${nl}*** Add File: $P${nl}+x${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash unquoted heredoc, path $P"
+  done
+  patch "apply_patch <<EOF${nl}$B${nl}*** Add File: src/a${nl}\$(printf '*** Add File: docs/a.md')${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash \$(...) in a heredoc body forging a header"
+  patch "apply_patch \$'$B\\n*** Add File: CLAUDE.md\\n+x\\n$E'" "$C" Bash; refused "codex Bash \$'..\\n..' one-line patch"
+  patch "printf '%s\\n' '$B' '*** Add File: $D' '+x' '$E' | apply_patch" "$C" Bash; refused "codex Bash printf-piped patch"
+  patch "printf '%s\\n' '$B' '*** Add File: src/a.swift' '+x' '$E' | apply_patch" "$C" Bash; refused "codex Bash printf-piped harmless patch"
+  patch "apply_patch \"\$(printf '$B\\n*** Add File: .claude/rules/x.md\\n$E')\"" "$C" Bash; refused "codex Bash \"\$(printf ...)\" patch"
+  patch "cat p.txt | apply_patch" "$C" Bash; refused "codex Bash cat p.txt | apply_patch"
+  patch "apply_patch \"\$(cat p.txt)\"" "$C" Bash; refused "codex Bash apply_patch \"\$(cat p.txt)\""
+  patch "apply_patch < p.txt" "$C" Bash; refused "codex Bash apply_patch < p.txt"
+  patch "echo '*** Begin Pat''ch' | apply_patch" "$C" Bash; refused "codex Bash quote-split Begin Patch into apply_patch"
+  patch "apply_pa''tch <<'EOF'${nl}x${nl}EOF" "$C" Bash; refused "codex Bash quote-split apply_patch"
+  for P in applypatch apply-patch /usr/local/bin/apply_patch "sudo apply_patch" "env X=1 apply_patch" "FOO=1 apply_patch" "time apply_patch" "command apply_patch" "xargs apply_patch" "xargs -0 -n1 apply_patch" "alias ap=apply_patch; ap" "F=apply_patch; \$F" "eval apply_patch" "bash -c apply_patch" "sh -c 'cat p | apply_patch'"; do
+    patch "$P <<'EOF'${nl}x${nl}EOF" "$C" Bash; refused "codex Bash spelling [$P]"
+  done
+  patch "cat > src/fixture.txt <<'EOF'${nl}$B${nl}*** Add File: $D${nl}$E${nl}EOF" "$C" Bash; refused "LIMIT: a heredoc that writes patch text to src/ is a hit outside the simple form (over-block)"
+  patch "cat > src/fixture.txt <<'EOF'${nl}$B${nl}*** Add File: $D${nl}$E${nl}EOF${nl}sh src/fixture.txt" "$C" Bash; refused "codex Bash patch text written to a file, then a shell: not all readers"
+  patch "git commit -m \"$B${nl}*** Add File: src/a.swift\"" "$C" Bash; ok "a multi-line commit message that quotes a patch header is quoted text and passes"
+  # legitimate twins: reading, searching and talking about apply_patch or a patch is not applying one
+  for P in "grep -rn apply_patch src" "grep -rn apply_patch src | head" "rg 'apply_patch' tests" "rg '\\*\\*\\* Begin Patch' tests" "git log --grep=apply_patch" "git log --grep apply-patch" "git commit -m \"fix apply_patch docs\"" "git commit -m 'applypatch: Begin Patch notes'" "echo '$B' | wc -l" "cat src/a.swift" "ls apply_patch_notes"; do
+    patch "$P" "$C" Bash; ok "codex Bash twin [$P] passes"
+  done
+  # the apply_patch TOOL still edits src/ files
+  patch "$B${nl}*** Update File: src/a.swift${nl}@@${nl}-a${nl}+b${nl}*** Add File: src/b.swift${nl}+x${nl}$E"; ok "codex apply_patch tool on src/ files passes"
+  patch "$B${nl}*** Add File: docs/a.md${nl}+x${nl}$E"; blocked "codex apply_patch tool on docs/ is still judged" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  patch "echo '*** Begin Patch' | wc -l" "$C" Bash; ok "codex Bash mentioning Begin Patch without paths passes"
+  # --- tester: inputs nobody fed
+  local D="docs/a.md" P
+  # several patches / blocks in one text
+  patch "$B${nl}*** Add File: a${nl}+x${nl}$E${nl}$B${nl}*** Add File: $D${nl}+x${nl}$E"; blocked "codex two Begin blocks: the second is judged" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  patch "echo '$B'" "$C" Bash; ok "codex Bash echo of Begin Patch alone passes"
+  patch "echo '$B' > src/notes.txt" "$C" Bash; ok "codex Bash echo of Begin Patch into src/ passes"
+  patch "echo '$B' > docs/notes.txt" "$C" Bash; blocked "codex Bash echo of Begin Patch into docs/ is still the redirect rule" "$C/docs/notes.txt" "$CORE_DIR/p/docs/notes.txt"
+  # the patch inside a shell wrapper
+  # path spellings
+  for P in ./docs/../docs/a.md src/../docs/a.md docs//a.md ./docs/a.md; do
+    patch "$B${nl}*** Add File: $P${nl}+x${nl}$E"; blocked "codex path $P" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  done
+  patch "$B${nl}*** Add File: docs/${nl}+x${nl}$E"; blocked "codex path with a trailing slash" "$C/docs" "$CORE_DIR/p/docs"
+  ln -s "$C" "$OD/linkcode"; ln -s "$CORE_DIR/p/docs" "$OD/linkdocs"
+  patch "$B${nl}*** Add File: $OD/linkcode/docs/a.md${nl}+x${nl}$E"; blocked "codex absolute path through a symlinked folder into code/docs" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  patch "$B${nl}*** Add File: $OD/linkdocs/a.md${nl}+x${nl}$E"; ok "codex absolute path through a symlink into the Core's docs is the right place"
+  ln -s "$C/docs" "$C/src/dl"
+  patch "$B${nl}*** Add File: src/dl/a.md${nl}+x${nl}$E"; blocked "codex relative path through a symlink inside the tree" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  # header spellings
+  patch "$B${nl}*** Add File:$D${nl}+x${nl}$E"; blocked "codex no space after the colon" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  patch "$B${nl}*** Add File:	$D${nl}+x${nl}$E"; blocked "codex a tab after the colon" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  patch "$B${nl}	*** Add File: $D${nl}+x${nl}$E"; blocked "codex a tab-indented header" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  patch "$B"$'\r'"${nl}*** Add File: $D"$'\r'"${nl}+x"$'\r'"${nl}$E"$'\r'; blocked "codex CRLF line ends" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  patch "*** ADD FILE: $D"; blocked_any "codex uppercase header: unreadable text with an internal path in a *** line is refused"
+  # raw JSON: \r\n, \t and a \/ in the string
+  run_json "$(printf '{"session_id":"s","cwd":"%s","tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\\r\\n*** Add File:\\tdocs\\/a.md\\r\\n+x\\r\\n*** End Patch\\r\\n"}}' "$C")"
+  blocked "codex raw JSON escapes \\r\\n \\t \\/" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  # a move whose source is harmless and destination internal; a move out of docs; a second Move to
+  patch "$B${nl}*** Update File: src/a${nl}*** Move to: $D${nl}@@${nl}-a${nl}+b${nl}$E"; blocked "codex move into docs from src" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  for P in "man apply_patch" "which apply_patch" "FOO=apply_patch_x make"; do
+    patch "$P" "$C" Bash; refused "LIMIT: [$P] is a hit outside the allowlist (over-block)"
+  done
+  # non-string command: nothing to read, passes (as an unreadable text)
+  run_json "$(printf '{"session_id":"s","cwd":"%s","tool_name":"apply_patch","tool_input":{"command":null}}' "$C")"; ok "codex command null passes"
+  run_json "$(printf '{"session_id":"s","cwd":"%s","tool_name":"apply_patch","tool_input":{"command":5}}' "$C")"; ok "codex command number passes"
+  run_json "$(printf '{"session_id":"s","cwd":"%s","tool_name":"apply_patch","tool_input":{"command":["x"]}}' "$C")"; ok "codex command array passes"
+  # pinned limit: a heredoc that merely writes patch text into a file is judged like a patch (over-block)
+  # one-line and constructed patches: no header at line start, so the text after each marker is checked
+  patch "grep -rn apply_patch src | head" "$C" Bash; ok "codex Bash grep for the word apply_patch passes"
+  patch "echo apply_patch > src/notes.txt" "$C" Bash; refused "LIMIT: echo of the word apply_patch is a hit outside the simple form (over-block)"
+  patch "sed s/a/apply_patch/ f" "$C" Bash; refused "LIMIT: sed is no reader: sed with the word apply_patch is refused"
+  patch "git -c core.x=1 log --grep=apply_patch" "$C" Bash; refused "LIMIT: git with an option before the subcommand is no reader"
+  # unreadable (X) patch: the *** lines are checked raw for an internal target
+  patch "$B${nl}*** Add File: src/a.swift${nl}+x${nl}junk *** Add File: docs/a.md${nl}$E"; blocked_any "codex junk before a docs/ header (X) is refused"
+  patch "$B${nl}*** Add File: src/a.swift${nl}+x${nl}junk *** Add File: src/b.swift${nl}$E"; ok "codex junk before a src/ header (X) passes"
+  patch "$B${nl}*** Add File: src/a.swift${nl}+x${nl}$(printf '\302\240')*** Add File: docs/a.md${nl}$E"; blocked "codex NBSP-indented header (trimmed like Codex)" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  patch "$B${nl}$(printf '\343\200\200')*** Add File: AGENTS.md${nl}+x${nl}$E"; blocked "codex U+3000-indented header" "$C/AGENTS.md" "$CORE_DIR/p/AGENTS.md"
+  patch "$B${nl}*** Add File: docs/a.md$(printf '\f')${nl}+x${nl}$E"; blocked "codex trailing form feed in the path" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  patch "$(printf '\f')$B${nl}*** Add File: docs/a.md${nl}+x${nl}$E"; blocked "codex leading form feed before Begin" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  # the cap: the 101st path blocks (was a DEFECT: the adapter dropped it), 5000 paths are refused fast with the split message
+  local big="$B${nl}" i=1; while [ "$i" -le 100 ]; do big="$big*** Add File: src/f$i.txt${nl}+x${nl}"; i=$((i + 1)); done
+  patch "$big*** Add File: $D${nl}+x${nl}$E"; blocked_any "codex 101st path (docs/a.md) is refused"
+  patch "$big*** Add File: src/last.txt${nl}+x${nl}$E"; blocked_any "codex 101 harmless paths are refused"
+  grep -q 'at most 100' "$OD/err" && pass || fail "the cap message must say at most 100 files: $ERR"
+  local t0=$SECONDS
+  bigjson 5000 apply_patch; run_json "$(<"$OD/big.json")"; blocked_any "codex 5000 harmless paths are refused"
+  [ $((SECONDS - t0)) -lt 10 ] && pass || fail "5000 paths took $((SECONDS - t0)) s (hook timeout 15 s)"
+  grep -q 'at most 100' "$OD/err" && pass || fail "the cap message must say at most 100 files"
+  t0=$SECONDS
+  bigjson 5000 Bash; run_json "$(<"$OD/big.json")"; refused "codex Bash 5000 paths are refused as a shell patch"
+  [ $((SECONDS - t0)) -lt 10 ] && pass || fail "Bash form: 5000 paths took $((SECONDS - t0)) s (hook timeout 15 s)"
+  # every exit-2 path writes a non-empty stderr (Codex ignores exit 2 with an empty one)
+  fx pre-apply-patch-add; [ -n "$ERR" ] && pass || fail "exit 2 with an empty stderr"
+}
+bg sec_codex
 
 bg_wait
 

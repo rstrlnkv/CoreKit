@@ -296,4 +296,18 @@ for p in "bash $H" "bash $HOOKS/../tests/test_hook_one_suite.sh" 'bash tests/run
   matches "$p" && fail "default pattern matches a non-test process: $p" || pass
 done
 
+# --- Codex payloads (fixtures built from the rust-v0.166.0 structs): tool_input.command is a string, cwd the
+# command's workdir, and an exit 2 carries a non-empty stderr (Codex ignores exit 2 with an empty one)
+FX="$ROOT/tests/fixtures/codex"
+cfx() { sed "s|@CWD@|$C|g" "$FX/$1.json" | bash "$H" >"$SANDBOX/out" 2>"$SANDBOX/err"; RC=$?; OUT="$(cat "$SANDBOX/out")"; ERR="$(cat "$SANDBOX/err")"; }
+kill "$dummy" 2>/dev/null; dummy=""; sleep 1
+cfx pre-bash; assert_eq "$RC" "0" "codex: no run in progress passes"
+cfx pre-bash-subagent; assert_eq "$RC" "0" "codex: a subagent's call passes"
+bash -c "exec -a $FAKE sleep 120" >/dev/null 2>&1 & dummy=$!; disown "$dummy" 2>/dev/null
+sleep 1
+cfx pre-bash; assert_eq "$RC" "2" "codex: a test run while another one is on is refused"
+assert_eq "$OUT" "" "codex: stdout"
+[ -n "$ERR" ] && pass || fail "codex: exit 2 with an empty stderr"
+cfx pre-bash-applypatch-heredoc; assert_eq "$RC" "0" "codex: a patch through Bash is not a test run"
+
 finish

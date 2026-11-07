@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Claude Code PreToolUse hook on Read|Edit|MultiEdit|Write|NotebookEdit|Grep|Glob|Bash: secrets are not
-# read. Inside a Core project it blocks .env, .env.* and ~/.ssh/**, with exit 2 and the message
+# Claude Code and Codex PreToolUse hook on Read|Edit|MultiEdit|Write|NotebookEdit|Grep|Glob|apply_patch|Bash:
+# secrets are not read. Inside a Core project it blocks .env, .env.* and ~/.ssh/**, with exit 2 and the message
 #   corecrew: reading secrets is blocked (<path>)
 #   Ask the user to check the value themselves, or use .env.example.
 # (spec section 14, item 4). <path> is the path as the tool was given it (a "~" stays a "~", a relative
@@ -23,6 +23,27 @@
 #   path + glob, Glob path + pattern), so path ~ with glob .ssh/* is blocked; an absolute glob or an
 #   exclusion is not joined.
 #   Grep and Glob only list or search, but the spec lists them, so they are judged like a read.
+# Codex: its shell is "Bash" and its file edits are "apply_patch" (tool_input.command is the patch text);
+#   Read, Grep, Glob, MultiEdit and NotebookEdit never fire there, so a read goes through Bash only. apply_patch:
+#   the paths of Add File, Update File and Move to (the file written) and the source of a move are judged like
+#   a file tool; Delete File passes (like `rm .env`). The patch body is never scanned (it may mention .env).
+#   A text this hook cannot read as a patch (an X line, or no path at all) fails closed on a secret-looking string
+#   in any line that holds "***"; with no such line it passes. More than 100 paths (a C line) are refused. Header
+#   lines and paths are trimmed like Codex does (Unicode spaces too). A patch handed to the shell is refused, not judged
+#   (a substring hit on apply_patch, applypatch or apply-patch once quotes, backslashes and newlines are deleted, or a
+#   "*** Begin Patch" with a file marker, or a $' with an escape, or an unquoted glob word that can match the name, unless the
+#   command is in the simple form: one read-only reader piped only through sort, uniq, cut, tr, nl, wc, head, tail, grep, rg,
+#   with no $ outside single quotes, substitution, list, redirect or program-running option (quoted text is opaque);
+#   BEST EFFORT, NOT A SECURITY BOUNDARY (the apply_patch tool form is the checked path; the real boundary for secrets in
+#   Codex is a sandbox profile, see the plan 3c); limits: a name built at run time (variable, ${...}, $(...) or backticks,
+#   brace expansion, $'apply'$'_patch', 'apply_pat'?h, extglob, IFS changes), a glob that expands to a file named like an
+#   option, a script or interpreter, write_stdin; see lib.sh shell_patch_refused and guard-code.sh): a path built
+#   by cd, quoting or $(...) cannot be checked from the command text. Plain mentions in a reader (grep, git commit -m) pass.
+#   This refusal keeps the project gate of the hook (secrets are judged only in a project; guard-code refuses in every folder);
+#   load_settings runs before project_of, so a core_dir that lives only in the settings file counts.
+#   Limits: view_image (reads an image file) does not run the hook in Codex, so a secret reached through it is not
+#   caught; write_stdin (typing into an open exec session): no evidence that it runs the hook (to be checked live).
+#   The D kind (a delete) is not consumed.
 # Bash is best effort. The arguments of the file-reading commands cat less more head tail source "." grep
 #   egrep fgrep rg ag sed awk cp scp base64 xxd od strings diff open vim nano code (and some more, see
 #   scripts/bashlex-guard-secrets.awk) and the word after an input redirect (< .env) are judged. grep/rg/sed/
@@ -74,7 +95,7 @@ in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 
 tool="$(json_str "$in" tool_name)"
-case "$tool" in Read|Edit|MultiEdit|Write|NotebookEdit|Grep|Glob|Bash) ;; *) exit 0 ;; esac
+case "$tool" in Read|Edit|MultiEdit|Write|NotebookEdit|Grep|Glob|apply_patch|Bash) ;; *) exit 0 ;; esac
 cwd="$(json_str "$in" cwd)"
 [ -n "$cwd" ] || exit 0
 load_settings
@@ -154,6 +175,31 @@ raw_hit() {
   return 1
 }
 
+# --- apply_patch (Codex): the paths written or moved are judged like a file tool's; a delete passes.
+if [ "$tool" = apply_patch ]; then
+  patch="$(json_str "$in" command)"
+  TAB="$(printf '\t')"
+  if [ -z "$patch" ]; then
+    # no string to read (missing, empty, not a string): only the "***" header lines of the raw text count
+    hit="$(printf '%s' "$in" | sed 's/\\n/\
+/g' | LC_ALL=C grep -F '***' | raw_hit)" && die "$hit"
+    exit 0
+  fi
+  found="$(patch_paths "$patch")"
+  unreadable=""; [ -n "$found" ] || unreadable=1
+  while IFS="$TAB" read -r kind a; do
+    case "$kind" in
+      C) printf '%s\n' "$(msg patch_too_many 100)" >&2; exit 2 ;;
+      W|S) if is_secret "$a"; then die "$a"; fi ;;
+      X) unreadable=1 ;;
+    esac
+  done <<< "$found"
+  if [ -n "$unreadable" ]; then
+    hit="$(printf '%s\n' "$patch" | LC_ALL=C grep -F '***' | raw_hit)" && die "$hit"
+  fi
+  exit 0
+fi
+
 # --- Bash: the candidates found by one awk pass, judged here.
 if [ "$tool" = Bash ]; then
   cmd="$(json_str "$in" command)"
@@ -161,6 +207,8 @@ if [ "$tool" = Bash ]; then
     hit="$(printf '%s' "$in" | raw_hit)" && die "$hit"
     exit 0
   fi
+  # A Codex patch handed to the shell is refused (see the header).
+  if shell_patch_refused "$cmd"; then printf '%s\n' "$(msg patch_shell)" >&2; exit 2; fi
   # Cheap exit: a secret path has a dot in it (.env, .ssh; quotes or a backslash in the name are
   # removed by the lexer, so the raw text is not searched for ".env"). Everything else is lexed.
   case "$cmd" in *.*) ;; *) exit 0 ;; esac
