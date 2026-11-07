@@ -75,7 +75,8 @@ rule "subagent_type for feature-dev" '`corecrew:<role>` for corecrew roles, the 
 rule "no model for feature-dev" 'Do not pass `model` to feature-dev agents'
 assert_contains "$SK" 'applies-to'
 assert_not_contains "$SK" 'docs/specs/'
-assert_contains "$SK" 'worktrees/<w>'
+assert_contains "$SK" 'lib.sh" code-root "$PWD"'
+assert_contains "$SK" 'prepare.sh'
 assert_contains "$SK" 'If the user declines'
 c="$(grep -n 'lib.sh" core-dir' "$SK" | head -1 | cut -d: -f1)"; r="$(grep -n 'lib.sh" ready' "$SK" | head -1 | cut -d: -f1)"
 [ -n "$c" ] && [ -n "$r" ] && [ "$c" -lt "$r" ] && pass || fail "core-dir must come before ready in Start"

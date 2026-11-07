@@ -11,7 +11,7 @@
 # Rules, all compared on the canonical path (".." and symlinks resolved, letter case as on disk
 # for the part that exists, then folded to lower case for the comparison, ASCII only):
 # - The code root is <Projects>/<Name>/ (the first folder of the path under <Projects>; the CLAUDE.local.md symlink there resolves into the
-#   Core and so passes), or <Core>/<p>/code/ in the old layout, or a worktree root <code root>/.claude/worktrees/<w>/;
+#   Core and so passes), or <Core>/<p>/code/ in the old layout, or a worktree root <code root>/.claude/worktrees/<w>/ or any other linked git worktree of the code folder (worktree_of);
 #   inside a worktree the path relative to the worktree root is what counts.
 # - Blocked: docs and docs/** and .claude/** at the root, and CLAUDE.md / CLAUDE.local.md / AGENTS.md at
 #   ANY depth (the same as scripts/git-hooks/blocked-patterns, so the hook and the commit check agree).
@@ -101,11 +101,20 @@ check_path() {
   proj="$(project_of "$ABS")" || return 0
   # the code root: the project folder in <Projects> taken from the path itself (new layout; so no case
   # clash between folders can switch the guard off), or <Core>/<p>/code for a path inside the Core (old)
-  case "$ABS" in
-    "$CORE_DIR"/*) root="$CORE_DIR/$proj/code" ;;
-    "$PROJECTS_DIR"/*) first="${ABS#"$PROJECTS_DIR"/}"; root="$PROJECTS_DIR/${first%%/*}" ;;
-    *) return 0 ;;
-  esac
+  # A linked git worktree wherever it lives (Codex keeps them outside Projects) is its own code root.
+  # Only a worktree its main folder knows, of this project's own code folder (worktree_of, wt_is_main_of). One inside
+  # the main folder is its own root too, except under docs/ or .claude/ there (a worktree must not unprotect them;
+  # Claude's .claude/worktrees/<w> is read from the main root below).
+  if worktree_of "$ABS" && wt_is_main_of "$proj" && case "$(lc "$WT_ROOT")/" in
+      "$(lc "$WT_MAIN")"/docs/*|"$(lc "$WT_MAIN")"/.claude/*) false ;; *) true ;; esac; then
+    root="$WT_ROOT"
+  else
+    case "$ABS" in
+      "$CORE_DIR"/*) root="$CORE_DIR/$proj/code" ;;
+      "$PROJECTS_DIR"/*) first="${ABS#"$PROJECTS_DIR"/}"; root="$PROJECTS_DIR/${first%%/*}" ;;
+      *) return 0 ;;
+    esac
+  fi
   abs_l="$(lc "$ABS")"; root_l="$(lc "$root")"
   case "$abs_l" in "$root_l"/?*) ;; *) return 0 ;; esac
   sub="${ABS:$((${#root} + 1))}"; sub_l="${abs_l:$((${#root} + 1))}"

@@ -50,7 +50,7 @@ defaults are `core_dir` `~/Projects/Core`, `attribution` `allow`.
 1. **Core.** Resolve `<Core>` to an absolute path and show it:
    `CORE_DIR='${user_config.core_dir}' bash "<scripts>/lib.sh" core-dir`.
    If that command prints a line on stderr, tell the user in plain words that their core_dir setting was ignored and why.
-   Then do steps 1, 2 and 4–6 of Start in the task skill (set-up, project and code root, the
+   Then do steps 1, 2 and 4–6 of Start in the task skill (set-up with its Prepare step, project and code root, the
    `check:` line and the standards, clean tree, base commits), with the same stops.
 2. **Branch.** In the code root: `git rev-parse --abbrev-ref HEAD` is the branch. On `main`
    (or on a detached HEAD) say there is no branch to ship and stop. Then

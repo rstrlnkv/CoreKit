@@ -367,14 +367,14 @@ json_str() {
   return 0
 }
 
-# project_of <path> — with CORE_DIR loaded (load_settings), prints <project> and exits 0 when the path is
+# _project_of_path <path> — with CORE_DIR loaded (load_settings), prints <project> and exits 0 when the path is
 # inside a project; otherwise prints nothing and exits 1. Two places count:
 #  - inside the Core: <Core>/<project> or anything below it (old layout, worktrees under code/ included);
 #    a project is a top-level folder of the Core that holds a CLAUDE.md or a code/ folder; dot-folders,
 #    standards/ and knowledge/ never count.
 #  - beside the Core: the first folder under <Projects> (the Core's parent) is <Name>; it is a project
 #    when lc <Name> is a valid project name and <Core>/<name>/CLAUDE.md exists.
-project_of() {
+_project_of_path() {
   local p rest first name pd
   [ -n "${CORE_DIR:-}" ] && [ -n "${1:-}" ] || return 1
   p="$(canon_dir "$1")"
@@ -395,6 +395,123 @@ project_of() {
       [ -f "$CORE_DIR/$name/CLAUDE.md" ] || return 1
       printf '%s\n' "$name" ;;
   esac
+}
+
+# worktree_of <path> — exit 0 and sets WT_ROOT (the worktree folder) and WT_MAIN (the main checkout it belongs to)
+# when the path lies in a linked git worktree, wherever that worktree is; else exit 1 and both empty. Reads files
+# only (no git process): from the nearest existing folder it walks up to the first ".git"; a ".git" folder
+# means a main checkout or a clone (1); a ".git" file must say "gitdir: <main>/.git/worktrees/<name>" and <main>/.git
+# must be a folder, which knows this worktree: <main>/.git/worktrees/<name>/gitdir names "<this folder>/.git" (a submodule,
+# a dangling, a forged or a renamed-main file gives 1). Callers that give a worktree any power (project_of, the guard's
+# root, the links) also check that WT_MAIN is the project's own code folder (wt_is_main_of).
+worktree_of() {
+  local d g x e b
+  WT_ROOT=""; WT_MAIN=""
+  [ -n "${1:-}" ] || return 1
+  d="$(canon_dir "$1")"
+  while [ ! -d "$d" ] && [ "$d" != "/" ]; do d="${d%/*}"; [ -n "$d" ] || d=/; done
+  while :; do
+    [ -d "$d/.git" ] && return 1
+    if [ -f "$d/.git" ]; then
+      g=""; { IFS= read -r g < "$d/.git"; } 2>/dev/null || [ -n "$g" ] || return 1
+      g="${g%$'\r'}"
+      while case "$g" in *[[:blank:]]) true ;; *) false ;; esac; do g="${g%?}"; done
+      case "$g" in "gitdir: "?*) x="${g#gitdir: }" ;; *) return 1 ;; esac
+      case "$x" in /*) ;; *) x="$d/$x" ;; esac
+      case "$x" in */.git/worktrees/?*) ;; *) return 1 ;; esac
+      e="$x"; x="${x%/.git/worktrees/*}"
+      x="$(canon_dir "$x")"
+      [ -d "$x/.git" ] || return 1
+      b=""; { IFS= read -r b < "$e/gitdir"; } 2>/dev/null || [ -n "$b" ] || return 1
+      b="${b%$'\r'}"
+      case "$b" in /*) ;; *) b="$e/$b" ;; esac
+      case "$b" in */.git) b="$(canon_dir "${b%/.git}")/.git" ;; *) return 1 ;; esac
+      [ "$b" = "$d/.git" ] || return 1
+      WT_ROOT="$d"; WT_MAIN="$x"
+      return 0
+    fi
+    [ "$d" = "/" ] && return 1
+    d="${d%/*}"; [ -n "$d" ] || d=/
+  done
+}
+
+# project_of <path> — as _project_of_path, and a path in a linked git worktree of a project's code folder (the
+# worktree can be anywhere) counts as the project of that main folder.
+project_of() {
+  local n
+  _project_of_path "$1" && return 0
+  worktree_of "$1" || return 1
+  n="$(_project_of_path "$WT_MAIN")" || return 1
+  wt_is_main_of "$n" || return 1
+  printf '%s\n' "$n"
+}
+
+# wt_is_main_of <project> — exit 0 when WT_MAIN (set by worktree_of) is the project's own main code folder.
+wt_is_main_of() {
+  local c
+  c="$(code_dir_of "$1" 2>/dev/null)" || return 1
+  [ -n "$WT_MAIN" ] && [ "$(canon_dir "$c")" = "$WT_MAIN" ]
+}
+
+# code_root_of <path> — prints the code root git sees from <path>: the worktree folder in a linked worktree, else the
+# project's main code folder; exit 1 when that is not a project's code folder. (git runs; for skills, not for hooks.)
+code_root_of() {
+  local t n r here
+  here="$(canon_dir "${1:-.}")"
+  t="$(git -C "${1:-.}" rev-parse --show-toplevel 2>/dev/null)" || t=""
+  if [ -n "$t" ] && project_of "$t" >/dev/null; then
+    # only a root that holds the folder asked about: a forged gitfile or core.worktree must not point elsewhere
+    r="$(canon_dir "$t")"
+    case "$here/" in "$r"/*) printf '%s\n' "$t"; return 0 ;; esac
+    echo "code-root: $here is not inside $r" >&2; return 1
+  fi
+  # a session in <Core>/<name>/ (git sees the Core): the project's main code folder
+  n="$(project_of "${1:-.}")" || return 1
+  case "$here/" in "$CORE_DIR/$n"/*) ;; *) echo "code-root: $here is not inside $CORE_DIR/$n" >&2; return 1 ;; esac
+  code_dir_of "$n" 2>/dev/null
+}
+
+# host — "claude" or "codex": COREKIT_HOST when it says so (tests), else codex when this plugin lies under
+# ${CODEX_HOME:-$HOME/.codex} (an absolute base), else claude.
+host() {
+  local base="${CODEX_HOME:-}" r
+  case "${COREKIT_HOST:-}" in claude|codex) printf '%s' "$COREKIT_HOST"; return 0 ;; esac
+  if [ -z "$base" ]; then case "${HOME:-}" in /*) base="$HOME/.codex" ;; esac; fi
+  case "$base" in
+    /*) r="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd -P)"
+        case "$r" in "$(canon_dir "$base")"/*|"${base%/}"/*) printf codex; return 0 ;; esac ;;
+  esac
+  printf claude
+}
+
+# tools_dir — where the tools copy (git hook shims run it) lives: COREDEV_TOOLS, else $CLAUDE_PLUGIN_DATA/tools, else
+# the host's data folder under an absolute HOME or CODEX_HOME; prints nothing when none is known.
+tools_dir() {
+  local base
+  if [ -n "${COREDEV_TOOLS:-}" ]; then printf '%s' "$COREDEV_TOOLS"; return 0; fi
+  if [ -n "${CLAUDE_PLUGIN_DATA:-}" ]; then printf '%s/tools' "$CLAUDE_PLUGIN_DATA"; return 0; fi
+  if [ "$(host)" = codex ]; then
+    base="${CODEX_HOME:-}"
+    if [ -z "$base" ]; then case "${HOME:-}" in /*) base="$HOME/.codex" ;; esac; fi
+    case "$base" in /*) printf '%s/plugins/data/corecrew-corekit/tools' "${base%/}" ;; esac
+  else
+    case "${HOME:-}" in /*) printf '%s/.claude/plugins/data/corecrew-corekit/tools' "$HOME" ;; esac
+  fi
+}
+
+# hooks_marker_path — the file session-start writes the plugin version into once the hooks run (Codex runs them only
+# after the person trusts them); empty when no settings folder is known.
+hooks_marker_path() {
+  local f; f="$(settings_file_path)" || return 0
+  [ -n "$f" ] || return 0
+  printf '%s/state/hooks-seen-%s' "$(dirname "$f")" "$(host)"
+}
+
+# plugin_version <plugin root> — the version in the manifest, nothing when there is none.
+plugin_version() {
+  local m="$1/.claude-plugin/plugin.json"
+  [ -r "$m" ] || m="$1/.codex-plugin/plugin.json"
+  sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$m" 2>/dev/null | head -1
 }
 
 # code_dir_of <name> — prints the main code folder of a project: <Core>/<name>/code when that is a
@@ -708,7 +825,7 @@ put_project_docs() {
 # symlink to <core_project_dir>/CLAUDE.md. Prints "created|skipped <path>" ("would create" with DRY=1,
 # nothing written). Exit 1 when the target CLAUDE.md is missing (no dangling link). A real file or a link to somewhere else is never touched: exit 1 with a plain line.
 link_file_to_claude() {
-  local link="$1/$3" target="$2/CLAUDE.md"
+  local link="$1/$3" target="$2/CLAUDE.md" lnerr lnrc
   # (a DRY=1 plan for a project folder that is not there yet, as scaffold --dry-run, is let through)
   if [ ! -f "$target" ] && { [ "${DRY:-0}" -ne 1 ] || [ -d "$2" ]; }; then echo "$target does not exist; nothing to link $3 to" >&2; return 1; fi
   if [ -L "$link" ] && [ "$(readlink "$link")" = "$target" ]; then
@@ -720,7 +837,20 @@ link_file_to_claude() {
   fi
   if [ "${DRY:-0}" -eq 1 ]; then echo "would create $(rel_core "$link")"; return 0; fi
   mkdir -p "$1" || return 1
-  ln -s "$target" "$link" || return 1
+  # (a directory that appeared at $link since the -e test would take the link inside itself: BSD and GNU ln -n
+  # only cover a link to a directory, so look again right after and take our stray link out)
+  lnerr="$(ln -s "$target" "$link" 2>&1)"; lnrc=$?
+  if [ -d "$link" ] && [ ! -L "$link" ]; then
+    [ ! -L "$link/CLAUDE.md" ] || [ "$(readlink "$link/CLAUDE.md")" != "$target" ] || rm -f "$link/CLAUDE.md"
+    echo "$3 exists and is not a link to $target; leave it or remove it yourself" >&2
+    return 1
+  fi
+  if [ "$lnrc" -ne 0 ]; then
+    # another run may have made the same link a moment ago: that counts as skipped
+    if [ -L "$link" ] && [ "$(readlink "$link")" = "$target" ]; then echo "skipped $(rel_core "$link")"; return 0; fi
+    [ -z "$lnerr" ] || echo "$lnerr" >&2
+    return 1
+  fi
   echo "created $(rel_core "$link")"
 }
 
@@ -759,7 +889,7 @@ projects_entry() {
 #      | plugin-root (the absolute plugin folder this script is in; exit 1 when it is not the corecrew plugin)
 #      | schema (the plugin's schema number) | core-paths <project> (the Core paths `save` commits for
 #      the project, one line, space-separated; from _locate.sh next to this file)
-#      | project-of <path> | code-dir <name> | layout <name> (see project_of, code_dir_of, layout_of)
+#      | project-of <path> | code-root <path> | code-dir <name> | layout <name> (see project_of, code_root_of, code_dir_of, layout_of)
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   _ORIG_CORE_DIR="${CORE_DIR:-}"
   load_settings
@@ -804,6 +934,7 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
         echo "corecrew: not a plugin folder: $r" >&2; exit 1
       fi ;;
     schema) printf '%s\n' "$COREDEV_SCHEMA" ;;
+    code-root) [ $# -eq 2 ] || { echo "Usage: lib.sh code-root <path>" >&2; exit 2; }; code_root_of "$2" ;;
     project-of) [ $# -eq 2 ] || { echo "Usage: lib.sh project-of <path>" >&2; exit 2; }; project_of "$2" ;;
     code-dir) [ $# -eq 2 ] || { echo "Usage: lib.sh code-dir <name>" >&2; exit 2; }; code_dir_of "$2" ;;
     layout) [ $# -eq 2 ] || { echo "Usage: lib.sh layout <name>" >&2; exit 2; }; layout_of "$2" ;;
@@ -812,6 +943,6 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
       [ -n "$CORE_DIR" ] || { echo "lib.sh core-paths: no Core path" >&2; exit 1; }
       . "$(dirname "${BASH_SOURCE[0]}")/_locate.sh" || exit 1
       core_paths "$CORE_DIR" "$2" ;;
-    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | settings [key[=value] ...] | setting-path | plugin-root | schema | core-paths <project> | project-of <path> | code-dir <name> | layout <name>" >&2; exit 2 ;;
+    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | settings [key[=value] ...] | setting-path | plugin-root | schema | core-paths <project> | project-of <path> | code-root <path> | code-dir <name> | layout <name>" >&2; exit 2 ;;
   esac
 fi

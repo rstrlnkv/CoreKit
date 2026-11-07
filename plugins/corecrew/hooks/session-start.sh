@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
 # Claude Code SessionStart hook (startup, resume, clear, compact, fork). Stdout becomes context.
-#  1. refreshes ${CLAUDE_PLUGIN_DATA}/tools (runs everywhere; it only touches the plugin's own folder);
+#  1. refreshes the tools copy (scripts/prepare.sh; runs everywhere; it only touches the plugin's own folder);
 #  2. Core not set up and the session is not in a project: one hint per machine (marker in state/), shown to the person as a systemMessage;
 #  3. inside a project (<Core>/<project>/ or its code folder beside the Core, worktrees included): project name, docs index, tools, standards,
-#     session rules, layout notes, old git hooks that need re-installing.
+#     session rules, then scripts/prepare.sh's layout note, links and old git hooks note. On Codex it also records that the
+#     hooks ran (the marker prepare.sh looks for).
 # Outside a project it prints nothing else.
 # Always exits 0: a hook must never block a session.
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)"
 ROOT="${CLAUDE_PLUGIN_ROOT:-$SELF}"
-# The data folder: CLAUDE_PLUGIN_DATA, else under HOME when that is an absolute path; else unknown (empty): no tools
-# sync, no state marker, no save hint. An empty or relative HOME would write to /.claude or <cwd>/<HOME>/.claude.
+# The data folder (state markers): CLAUDE_PLUGIN_DATA, else under HOME when that is an absolute path; else unknown (empty): no
+# state marker, no save hint. An empty or relative HOME would write to /.claude or <cwd>/<HOME>/.claude.
+# The tools copy (lib.sh tools_dir) follows the same rule, host by host.
 DATA="${CLAUDE_PLUGIN_DATA:-}"
 if [ -z "$DATA" ]; then case "${HOME:-}" in /*) DATA="$HOME/.claude/plugins/data/corecrew-corekit" ;; esac; fi
 in=""; [ -t 0 ] || in="$(cat)"
 
-# 1. Tools: quiet unless it failed.
+# 1. Tools: quiet unless it failed (scripts/prepare.sh --part tools).
 # A failure is reported below: on stdout inside a project, on stderr elsewhere (no context noise).
-syncerr=""
-syncout=""
-if [ -n "$DATA" ]; then syncout="$(bash "$ROOT/scripts/sync-tools.sh" "$ROOT" "$DATA/tools" 2>&1)" || syncerr=1; fi
+syncerr="$(bash "$SELF/scripts/prepare.sh" --part tools 2>&1)"
 
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
@@ -27,8 +27,14 @@ cwd="$(json_str "$in" cwd)"
 [ -n "$cwd" ] || cwd="$PWD"
 proj="$(project_of "$cwd")"
 if [ -n "$syncerr" ]; then
-  syncerr="$(msg sync_failed "$(printf '%s' "$syncout" | head -1)")"
   if [ -n "$proj" ]; then printf '%s\n' "$syncerr"; else printf '%s\n' "$syncerr" >&2; fi
+fi
+# Codex runs hooks only after they are trusted: this run proves it. The marker holds the plugin version (prepare.sh reads it).
+if [ "$(host)" = codex ]; then
+  mk="$(hooks_marker_path)"; v="$(plugin_version "$ROOT")"
+  if [ -n "$mk" ] && [ -n "$v" ] && [ "$(cat "$mk" 2>/dev/null)" != "$v" ]; then
+    { mkdir -p "$(dirname "$mk")" && printf '%s\n' "$v" > "$mk"; } 2>/dev/null
+  fi
 fi
 
 # An invalid setting is named once per session start (not on resume, clear or compact).
@@ -70,12 +76,12 @@ if [ -z "$proj" ]; then
 fi
 
 # 3. Inside a project.
-P="$CORE_DIR/$proj"; T="$DATA/tools"
+P="$CORE_DIR/$proj"; T="$(tools_dir)"
 [ -z "$warn" ] || printf '%s\n' "$warn"
 printf '%s\n' "$(msg project_header "$proj" "$CORE_DIR")"
 printf '%s\n' "$(msg docs_index "$P/docs/INDEX.md")"
 noattr=""; [ "$ATTRIBUTION" = forbid ] && noattr=" --no-attribution"
-[ -z "$DATA" ] || printf '%s\n' "$(msg save_hint "$T/save" "$noattr" "$T/undo-step")"
+[ -z "$T" ] || printf '%s\n' "$(msg save_hint "$T/save" "$noattr" "$T/undo-step")"
 names=""
 for f in "$CORE_DIR"/standards/*.md; do
   [ -f "$f" ] || continue
@@ -89,47 +95,6 @@ if [ -f "$CORE_DIR/session-rules.md" ]; then
   [ -z "$(tail -c 1 "$CORE_DIR/session-rules.md")" ] || echo   # no final newline: end the line
 fi
 
-# Layout notes: .coredev has no schema line, or an older schema than this plugin writes.
-sv="$(coredev_get schema | tr -d '[:space:]')"
-case "$sv" in
-  ""|*[!0-9]*) old=1; shown="$(msg schema_none)" ;;
-  *) shown="$sv"; if [ $((10#$sv)) -lt "$COREDEV_SCHEMA" ]; then old=1; else old=0; fi ;;
-esac
-if [ "$old" -eq 1 ]; then
-  printf '%s\n' "$(msg layout_note "$shown" "$COREDEV_SCHEMA" "$ROOT/scripts/setup-core.sh" "$CORE_DIR")"
-fi
-
-# Code folder: new layout gets the CLAUDE.local.md and AGENTS.md links (AGENTS.md: a link elsewhere is named, any other refusal is silent) (the main folder, also from a worktree or the
-# Core project folder); old layout is named. No code folder, or a case clash: nothing to do.
-code=""; code="$(code_dir_of "$proj" 2>/dev/null)" || code=""
-if [ -n "$code" ]; then
-  if [ "$(layout_of "$proj" 2>/dev/null)" = old ]; then
-    printf '%s\n' "$(msg old_layout "$code" "$code" "$PROJECTS_DIR/$proj")"
-  else
-    if lout="$(link_local_claude "$code" "$P" 2>/dev/null)"; then
-      case "$lout" in created*) printf '%s\n' "$(msg local_link_created "$P/CLAUDE.md")" ;; esac
-    elif [ -e "$code/CLAUDE.local.md" ] || [ -L "$code/CLAUDE.local.md" ]; then
-      printf '%s\n' "$(msg local_link_wrong "$code/CLAUDE.local.md" "$P/CLAUDE.md")"
-    else   # nothing there, yet ln failed (for example a read-only folder)
-      printf '%s\n' "$(msg local_link_failed "$code/CLAUDE.local.md" "$P/CLAUDE.md")"
-    fi
-    if aout="$(link_agents "$code" "$P" 2>/dev/null)"; then
-      case "$aout" in created*) printf '%s\n' "$(msg agents_link_created "$P/CLAUDE.md")" ;; esac
-    elif [ -L "$code/AGENTS.md" ]; then   # a link elsewhere (or dangling); a real file stays silent
-      printf '%s\n' "$(msg agents_link_wrong "$code/AGENTS.md" "$P/CLAUDE.md")"
-    fi
-  fi
-fi
-
-# Old git hooks: from before the plugin ("new-project hook") or 0.2.x shims of coredev, which run a
-# tools copy that is no longer updated. A current shim, or a hook of the user's own, is left alone.
-stale=""
-for h in "${code:-$P/code}/.git/hooks/pre-commit" "${code:-$P/code}/.git/hooks/pre-push" "$CORE_DIR/.git/hooks/pre-push"; do
-  [ -f "$h" ] || continue
-  grep -qF "# corecrew hook shim" "$h" && continue
-  grep -qF -e "new-project hook" -e "# coredev hook shim" "$h" && stale="${stale:+$stale, }$h"
-done
-if [ -n "$stale" ]; then
-  printf '%s\n' "$(msg old_hooks "$stale" "$ROOT/scripts/install-hooks.sh" "$P")"
-fi
+# Layout note, the CLAUDE.local.md and AGENTS.md links, the old git hooks note: scripts/prepare.sh.
+bash "$SELF/scripts/prepare.sh" --part project --cwd "$cwd"
 exit 0

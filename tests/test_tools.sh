@@ -100,4 +100,20 @@ assert_eq "$(cat "$SANDBOX/tfile")" "file" "file target changed"
 mkdir -p "$SANDBOX/empty/tools"
 assert_exit 0 bash "$SYNC" "$PLUGIN" "$SANDBOX/empty/tools"
 assert_file "$SANDBOX/empty/tools/save"
+
+# --- a stale lock (dead owner) is taken over by an atomic rename, so only one waiter wins
+SL="$SANDBOX/stale"; mkdir -p "$SL"; STUB="$SANDBOX/stub"; mkdir -p "$STUB"
+REALMV="$(command -v mv)"
+printf '#!/bin/sh\necho "$@" >> "%s/mv.log"\nexec "%s" "$@"\n' "$SANDBOX" "$REALMV" > "$STUB/mv"; chmod +x "$STUB/mv"
+mkdir "$SL/tools.lock"; echo 99999999 > "$SL/tools.lock/pid"
+PATH="$STUB:$PATH" bash "$SYNC" "$PLUGIN" "$SL/tools" > "$SANDBOX/stale.out" 2>&1
+assert_contains "$SANDBOX/stale.out" "tools updated" "stale lock: tools made"
+assert_contains "$SANDBOX/mv.log" "$SL/tools.lock $SL/tools.lock.dead." "stale lock: taken over with an atomic mv"
+assert_eq "$(ls -A "$SL" | grep -c 'lock\|\.dead\|\.new')" "0" "stale lock: no leftovers"
+for i in 1 2 3 4 5 6; do
+  rm -rf "$SL/tools"; mkdir "$SL/tools.lock"; echo 99999999 > "$SL/tools.lock/pid"
+  bash "$SYNC" "$PLUGIN" "$SL/tools" > "$SANDBOX/w1" 2>&1 & bash "$SYNC" "$PLUGIN" "$SL/tools" > "$SANDBOX/w2" 2>&1 & wait
+  assert_eq "$(ls -A "$SL" | grep -vc '^tools$')" "0" "two waiters on a dead lock, round $i: nothing but tools in the folder"
+  assert_eq "$(ls -A "$SL/tools" | grep -c 'new')" "0" "two waiters, round $i: no stray .new in tools"
+done
 finish

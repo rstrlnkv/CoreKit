@@ -90,7 +90,8 @@ plain words that a one-time setup is needed and list what it creates in `<Core>`
 `standards/README.md`, `knowledge/README.md` and `.coredev`, in one commit "Set up Core". Existing
 files are never overwritten. Wait for their "ok", then run
 `CORE_DIR="<Core>" bash "<scripts>/setup-core.sh" "<Core>"`.
-Then preflight: `CORE_DIR="<Core>" bash "<skill>/scripts/preflight.sh"`.
+Then `CORE_DIR="<Core>" bash "<scripts>/prepare.sh"` (it brings the tools copy up to date, which
+`install-hooks.sh` below needs; relay any lines it prints in plain words). Then preflight: `CORE_DIR="<Core>" bash "<skill>/scripts/preflight.sh"`.
 Explain any FAIL in plain words with the fix; WARN about
 non-Latin paths means Android/Flutter builds may break — say so. Stop on FAIL.
 

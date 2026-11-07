@@ -25,7 +25,7 @@ branches="$(grep -oE '^[[:space:]]*(en|ru):[a-z_]+\)' "$M" | sed -E 's/^[[:space
 wanted="$(. "$M" 2>/dev/null; for k in $MSG_KEYS; do echo "en:$k"; echo "ru:$k"; done | LC_ALL=C sort)"
 assert_eq "$branches" "$wanted" "MSG_KEYS and the en:/ru: branches agree"
 used="$(grep -ohE '\bmsg[[:space:]]+[a-z_]+' "$HOOKS"/session-start.sh "$HOOKS"/guard-code.sh "$HOOKS"/guard-secrets.sh \
-  "$HOOKS"/one-suite.sh "$HOOKS"/stop-remind.sh "$M" | awk '{print $2}' | LC_ALL=C sort -u)"
+  "$HOOKS"/one-suite.sh "$HOOKS"/stop-remind.sh "$SCRIPTS"/prepare.sh "$M" | awk '{print $2}' | LC_ALL=C sort -u)"
 [ -n "$used" ] && pass || fail "no hook calls msg"
 for k in $used; do (. "$M"; msg_has "$k" en) && pass || fail "hook uses key $k that is not in the table"; done
 for k in $(. "$M" 2>/dev/null; echo $MSG_KEYS); do

@@ -4,14 +4,13 @@
 # body kept in the tools folder (see sync-tools.sh), so hooks stay current after plugin updates.
 # Usage: bash install-hooks.sh <project_dir> [--tools <dir>]   (project_dir = <Core>/<name>)
 # Env:   CORE_DIR (default: parent of project_dir)
-#        COREDEV_TOOLS (default: ${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/corecrew-corekit}/tools; the
-#        $HOME default only when HOME is an absolute path, else the data folder is unknown and nothing is written)
+#        COREDEV_TOOLS (default: lib.sh tools_dir: $CLAUDE_PLUGIN_DATA/tools, else the host's data folder under an
+#        absolute HOME or CODEX_HOME, else the data folder is unknown and nothing is written)
 set -u
-P=""; TOOLS="${COREDEV_TOOLS:-}"
-if [ -z "$TOOLS" ]; then
-  if [ -n "${CLAUDE_PLUGIN_DATA:-}" ]; then TOOLS="$CLAUDE_PLUGIN_DATA/tools"
-  else case "${HOME:-}" in /*) TOOLS="$HOME/.claude/plugins/data/corecrew-corekit/tools" ;; esac; fi
-fi
+P=""
+HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$HERE/lib.sh"
+TOOLS="$(tools_dir)"   # COREDEV_TOOLS, else the host's data folder; empty when HOME is not absolute
 while [ $# -gt 0 ]; do
   case "$1" in
     --tools) [ $# -ge 2 ] || { echo "usage: install-hooks.sh <project_dir> [--tools <dir>]" >&2; exit 2; }
@@ -31,7 +30,6 @@ OLD_SHIM="# coredev hook shim" # 0.2.x shims (plugin was called coredev)
 # Run from the plugin (plugin.json is one level up): bring the tools copy up to date first, so
 # the shims have something to run. From the tools copy itself (save's reinstall) there is no
 # plugin.json and this is skipped.
-HERE="$(cd "$(dirname "$0")" && pwd)"
 if [ -f "$HERE/../.claude-plugin/plugin.json" ] && [ -f "$HERE/sync-tools.sh" ]; then
   bash "$HERE/sync-tools.sh" "$(cd "$HERE/.." && pwd)" "$TOOLS" >/dev/null || \
     { echo "corecrew: could not update the tools in $TOOLS; hooks not installed." >&2; exit 1; }
@@ -63,7 +61,6 @@ install_shim() {  # install_shim <name in tools/git-hooks> <dest hook path>
 }
 
 # The code folder comes from lib.sh (a folder beside the Core, else <Core>/<name>/code).
-. "$HERE/lib.sh"
 export CORE_DIR; load_settings
 NAME="$(basename "$P")"
 # A case clash (exit 3): code_dir_of's line on stderr names the two folders; nothing is installed.

@@ -3,6 +3,28 @@
 Every entry starts with a badge: **NEW** is a new capability, **FIX** is a defect fixed, **UPD** is a change to existing behaviour, documentation or internal work.
 
 ## 0.8.0 — 2026-11-06
+- **NEW** Git worktrees are found wherever they live (Codex keeps them outside `<Projects>`): `lib.sh worktree_of` reads the
+  `.git` file of the worktree (`gitdir: <main>/.git/worktrees/<name>`, the main `.git` folder must exist; no git process), and
+  `project_of` falls back to it, so `guard-code`, `guard-secrets`, `one-suite` and `stop-remind` are active in such a worktree.
+  `guard-code` takes the worktree folder as the code root there. A normal clone outside `<Projects>`, a submodule, a dangling
+  or forged `.git` file stay inert. New `lib.sh code-root <path>` prints the code root (the worktree folder, or the main code folder).
+  A worktree is trusted only when its main folder knows it (`<main>/.git/worktrees/<name>/gitdir` names `<worktree>/.git`) and the main
+  folder is the project's own code folder, so a forged `.git` file in a downloaded folder, in `docs/` or in `.claude/` never moves the guard
+  root, gets no links from `prepare.sh` and makes no project. A worktree placed inside the main code folder (`<code>/other/wt`) is its own root
+  for `guard-code`, except one placed in `docs/` or `.claude/`, which keeps the main folder's root; a worktree whose main folder was renamed is not judged
+  (limit, ADR 005). `code-root` prints a root that holds the folder asked about (a forged gitfile or `core.worktree` cannot point elsewhere), except from `<Core>/<name>/`, where it prints the main code folder.
+- **FIX** Several `prepare.sh` or `sync-tools.sh` runs at once no longer report a false "link to somewhere other" or "tools not refreshed" and
+  leave no `tools.new.*` behind: a link another run just made counts as skipped, and the tools swap takes a lock folder `<tools>.lock`
+  (a dead owner's lock is taken over by an atomic rename, so only one waiter wins; no lock within 10 s: "tools busy", exit 0).
+- **UPD** The failures `prepare.sh` relays are a translated message per sync failure kind (a folder that is not ours, a failed copy), in
+  host-neutral wording ("start a new session"), and a message when an `AGENTS.md` in the Core blocks the link.
+- **NEW** `scripts/prepare.sh [--cwd <dir>] [--part tools|project|host]`: the tools copy, the CLAUDE.local.md and AGENTS.md links
+  (also in a worktree outside the main folder), the layout note and the old git hooks note, without waiting for the SessionStart
+  hook; on Codex it also says that the corecrew hooks must be trusted (`/hooks`) until `session-start` has run once. A real file
+  where a link should go is reported, never replaced. The task, ship and new-project skills run it at Start.
+- **UPD** `session-start.sh` hands the tools sync and the project notes to `prepare.sh` (its Claude output is unchanged) and, on
+  Codex, records the plugin version in `<settings folder>/state/hooks-seen-codex`. `install-hooks.sh` and `session-start.sh` take the
+  tools folder from `lib.sh tools_dir`. New `lib.sh` helpers `host`, `tools_dir`, `hooks_marker_path`, `plugin_version`.
 - **NEW** The guards understand Codex's `apply_patch`: `scripts/patch-paths.awk` (through `lib.sh patch_paths`) lists the
   files of a patch. `guard-code` blocks an internal file (`docs/`, `CLAUDE.md`, `AGENTS.md`, `.claude/`) as an Add, an Update
   or a Move destination; `guard-secrets` blocks `.env` and `~/.ssh` as a written file or a move source, lets a delete pass,

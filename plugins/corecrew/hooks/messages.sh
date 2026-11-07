@@ -18,19 +18,25 @@
 #
 # Portable bash 3.2: no associative arrays, no case-change expansions.
 
-MSG_KEYS="sync_failed hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
+MSG_KEYS="sync_failed sync_not_ours agents_in_core hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
 session_rules schema_none run_starting layout_note old_hooks guard_code_blocked guard_code_public patch_too_many patch_unjudgeable patch_no_reader patch_shell secrets_blocked secrets_ask
 local_link_created agents_link_created agents_link_wrong local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind
 readonly_agent settings_invalid_path settings_invalid_value settings_unreadable settings_no_home allowed_attribution allowed_model_profile
-src_env src_option src_file fix_env fix_option fix_file"
+src_env src_option src_file fix_env fix_option fix_file codex_trust"
 
 # _msg_text <lang> <key> — sets MSG_T to the text, or to nothing when there is none. Keep the keys and
 # the en:/ru: branches in step with MSG_KEYS.
 _msg_text() {
   MSG_T=""
   case "$1:$2" in
-    en:sync_failed) MSG_T='corecrew: tools not refreshed: @1' ;;
-    ru:sync_failed) MSG_T='corecrew: инструменты не обновлены: @1' ;;
+    en:sync_failed) MSG_T='corecrew: tools not refreshed: could not update @1' ;;
+    en:sync_not_ours) MSG_T='corecrew: tools not refreshed: @1 is not a corecrew tools folder; move it away and start a new session' ;;
+    ru:sync_not_ours) MSG_T='corecrew: инструменты не обновлены: @1 — не папка инструментов corecrew; уберите её и начните новую сессию' ;;
+    en:agents_in_core) MSG_T='corecrew: AGENTS.md exists in the Core at @1; fold it into CLAUDE.md and remove it, then the AGENTS.md link can be made' ;;
+    ru:agents_in_core) MSG_T='corecrew: AGENTS.md есть в Core в @1; перенесите его в CLAUDE.md и удалите, тогда можно будет создать ссылку AGENTS.md' ;;
+    en:codex_trust) MSG_T="corecrew's guards (project docs in code, secrets) and the save reminder are not active in Codex until you trust the corecrew hooks: open /hooks, review them, trust them, then start a new session (or restart if you just did)." ;;
+    ru:codex_trust) MSG_T='Защита corecrew (внутренние документы в коде, секреты) и напоминание сохранить изменения не работают в Codex, пока вы не доверите хуки corecrew: откройте /hooks, просмотрите хуки и доверьте их, затем начните новую сессию (или перезапустите Codex, если только что это сделали).' ;;
+    ru:sync_failed) MSG_T='corecrew: инструменты не обновлены: не удалось обновить @1' ;;
     en:hint_not_set_up) MSG_T='corecrew: Core at @1 is not set up — /corecrew:new-project or /corecrew:task adopt <folder> will set it up' ;;
     ru:hint_not_set_up) MSG_T='corecrew: Core в @1 не настроен — /corecrew:new-project или /corecrew:task adopt <folder> настроят его' ;;
     en:hint_not_found) MSG_T='corecrew: Core not found at @1 — /corecrew:new-project or /corecrew:task adopt <folder> will set it up' ;;

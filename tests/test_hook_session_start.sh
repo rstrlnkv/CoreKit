@@ -173,7 +173,7 @@ assert_eq "$RC" "0" "read-only folder: exit"
 echo "$OUT" | grep -qF "exists and is not a link" && fail "read-only folder: claims a file exists: $OUT" || pass
 echo "$OUT" | grep -qF "corecrew: could not create $NC/CLAUDE.local.md, so the private CLAUDE.md is not loaded. Run: ln -s \"$NP/CLAUDE.md\" \"$NC/CLAUDE.local.md\"" \
   && pass || fail "read-only folder: could-not-create line missing: $OUT"
-# --- AGENTS.md link (M7): made once with one line; kept silently when it cannot be made
+# --- AGENTS.md link (M7): made once with one line; a Core AGENTS.md gets one line
 rm -f "$NC/AGENTS.md" "$NP/AGENTS.md"; [ -L "$NC/CLAUDE.local.md" ] || ln -s "$NP/CLAUDE.md" "$NC/CLAUDE.local.md"
 run_rc "$NC"; assert_eq "$RC" "0" "AGENTS link: exit"
 [ -L "$NC/AGENTS.md" ] && pass || fail "hook did not create the AGENTS.md link"
@@ -204,11 +204,12 @@ echo "$OUT" | grep 'AGENTS.md' | grep -q 'somewhere' && fail "ru link elsewhere 
 # a dangling link elsewhere is named too
 rm "$NC/AGENTS.md"; ln -s "$SANDBOX/gone.md" "$NC/AGENTS.md"
 run_rc "$NC"; echo "$OUT" | grep -qF "corecrew: $NC/AGENTS.md is a link to somewhere other than" && pass || fail "dangling AGENTS.md link: no line: $OUT"
-# a Core AGENTS.md: no link, nothing printed, the Core file stays
+# a Core AGENTS.md: no link, one line that names it (ADR 005), the Core file stays
 rm "$NC/AGENTS.md"; printf 'core\n' > "$NP/AGENTS.md"
 run_rc "$NC"
 [ -e "$NC/AGENTS.md" ] || [ -L "$NC/AGENTS.md" ] && fail "AGENTS.md linked despite the Core copy" || pass
-echo "$OUT" | grep -qF "AGENTS.md" && fail "Core AGENTS.md: noise: $OUT" || pass
+assert_eq "$(echo "$OUT" | grep -c 'AGENTS.md')" "1" "Core AGENTS.md: one line"
+echo "$OUT" | grep 'AGENTS.md' | grep -qF "$NP/AGENTS.md" && pass || fail "Core AGENTS.md line lacks the path: $OUT"
 assert_eq "$(cat "$NP/AGENTS.md")" "core" "Core AGENTS.md changed"
 rm "$NP/AGENTS.md"; ln -s "$NP/CLAUDE.md" "$NC/AGENTS.md"
 # the old layout: its line, no link

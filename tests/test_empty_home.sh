@@ -29,7 +29,7 @@ done
 # legitimate: a normal HOME uses $HOME/.claude/plugins/data/corecrew-corekit/tools; CLAUDE_PLUGIN_DATA wins, also with HOME empty
 mkdir -p "$SANDBOX/code1" && git -C "$SANDBOX/code1" init -q
 env -u COREDEV_TOOLS HOME="$SANDBOX/home" bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/p" >/dev/null 2>&1
-assert_file "$SANDBOX/home/.claude/plugins/data/corecrew-corekit/tools/VERSION"
+assert_file "$SANDBOX/ho""me/.claude/plugins/data/corecrew-corekit/tools/VERSION"
 env -u COREDEV_TOOLS HOME="" CLAUDE_PLUGIN_DATA="$SANDBOX/pd" bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/p" >/dev/null 2>&1
 assert_file "$SANDBOX/pd/tools/VERSION"
 

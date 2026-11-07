@@ -79,6 +79,9 @@ attribution value resolved at Start" instead of placeholders:
    creates (a git repo `<Core>` with `standards/`, `knowledge/`, `.coredev`, `PROJECTS.md`); on
    "ok" run `CORE_DIR="<Core>" bash "<scripts>/setup-core.sh" "<Core>"`.
    If the user declines setup, stop; change nothing.
+   **Prepare.** Run `CORE_DIR="<Core>" bash "<scripts>/prepare.sh"` from the working directory; relay any
+   lines it prints in plain words (a failed tools sync, a missing link, an old git hook, or that the corecrew
+   hooks are not trusted yet in Codex). It changes only what is missing and is silent when all is current.
 2. **Project.** Find the project of the working directory:
    `CORE_DIR="<Core>" bash "<scripts>/lib.sh" project-of "$PWD"`
    prints `<name>` (exit 1: the directory is not in a project). Not a project: for `adopt`
@@ -88,10 +91,11 @@ attribution value resolved at Start" instead of placeholders:
    `CORE_DIR="<Core>" bash "<scripts>/lib.sh" layout <name>`:
    - `old`: say in one line "this project uses the old layout; run `/corecrew:task adopt <path>`"
      and stop (`adopt` itself goes on, as above).
-   - `new`: the code root is the worktree root when the directory is inside
-     `<Projects>/<Name>/.claude/worktrees/<w>/`, else the output of
-     `CORE_DIR="<Core>" bash "<scripts>/lib.sh" code-dir <name>`
-     (`<Projects>/<Name>`, the folder beside the Core). Use the code root for briefs, tests,
+   - `new`: the code root is the output of `CORE_DIR="<Core>" bash "<scripts>/lib.sh" code-root "$PWD"`
+     (the worktree folder in a linked git worktree, wherever it lives; else the project's main code folder
+     `<Projects>/<Name>` beside the Core; exit 1 means the directory is in neither: fall back to
+     `CORE_DIR="<Core>" bash "<scripts>/lib.sh" code-dir <name>`).
+     Use the code root for briefs, tests,
      release and `git`. The wiki and `CLAUDE.md` stay in `<Core>/<name>/`.
    - exit 1 from `layout` or `code-dir`: the project has no code folder (for example the Core is
      synced to this machine but the code is not cloned). Say so in one line, name where the code
