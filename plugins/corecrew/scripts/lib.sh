@@ -964,6 +964,47 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
         '*[sS]ervice?[aA]ccount*.json' '*[sS]ervice[aA]ccount*.json' '*SERVICE?ACCOUNT*.json'; do
         printf '"**/%s" = "none"\n' "$g"
       done ;;
+    host) host; echo ;;
+    role-model)
+      # The model for a crew role: claude prints the model alone (empty line for architect and explorer, which are
+      # feature-dev agents in Claude), codex prints "<model> <reasoning effort>". Same table as the task SKILL.md.
+      [ $# -eq 4 ] || { echo "Usage: lib.sh role-model <claude|codex> <economy|balanced|strong> <role>" >&2; exit 2; }
+      case "$2:$3" in
+        claude:economy) rm_e=haiku; rm_c=sonnet ;; claude:balanced) rm_e=sonnet; rm_c=sonnet ;; claude:strong) rm_e=sonnet; rm_c=opus ;;
+        codex:economy) rm_e="gpt-6-luna medium"; rm_c="gpt-6.1-sol low" ;;
+        codex:balanced) rm_e="gpt-6.1-sol medium"; rm_c="gpt-6.1-sol medium" ;;
+        codex:strong) rm_e="gpt-6.1-sol high"; rm_c="gpt-6-astra high" ;;
+        *) echo "Usage: lib.sh role-model <claude|codex> <economy|balanced|strong> <role>" >&2; exit 2 ;;
+      esac
+      case "$4" in
+        engineer|tester) printf '%s\n' "$rm_e" ;;
+        security|verifier|localizer|designer) printf '%s\n' "$rm_c" ;;
+        architect|explorer) if [ "$2" = claude ]; then echo; else printf '%s\n' "$rm_c"; fi ;;
+        *) echo "Usage: lib.sh role-model <claude|codex> <economy|balanced|strong> <role>" >&2; exit 2 ;;
+      esac ;;
+    core-writable)
+      # Exit 0 when <dir> accepts a new file (a mktemp probe, removed at once; only the probe is removed).
+      [ $# -eq 2 ] && case "$2" in /*) true ;; *) false ;; esac || { echo "Usage: lib.sh core-writable <absolute dir>" >&2; exit 2; }
+      cw_probe="$(mktemp "$2/.corecrew-probe.XXXXXX" 2>/dev/null)" || {
+        echo "corecrew: $2 is not writable from this session. Start Codex with: codex --add-dir \"$2\"" >&2; exit 1; }
+      rm -f "$cw_probe" ;;
+    tree-state)
+      # One line fingerprinting a work tree: HEAD, status, diff against HEAD, the index, and the content of untracked
+      # files that are not ignored (an untracked nested repo by its own tree-state). Ignored files are NOT covered (a change there is not seen).
+      [ $# -eq 2 ] && [ -n "$2" ] || { echo "Usage: lib.sh tree-state <dir>" >&2; exit 2; }
+      [ "$(git -C "$2" rev-parse --is-inside-work-tree 2>/dev/null)" = true ] || { echo "corecrew: $2 is not a git work tree" >&2; exit 1; }
+      {
+        git -C "$2" rev-parse HEAD 2>/dev/null
+        git -C "$2" status --porcelain -uall 2>/dev/null
+        git -C "$2" diff HEAD --binary 2>/dev/null
+        git -C "$2" ls-files -s 2>/dev/null
+        git -C "$2" ls-files -z --others --exclude-standard 2>/dev/null | while IFS= read -r -d '' ts_f; do
+          printf '%s ' "$ts_f"
+          if [ -L "$2/$ts_f" ]; then readlink "$2/$ts_f"
+          elif [ -d "$2/$ts_f" ]; then bash "${BASH_SOURCE[0]}" tree-state "$2/$ts_f" 2>/dev/null   # untracked nested repo
+          else cksum < "$2/$ts_f" 2>/dev/null; fi
+        done
+      } | cksum | tr ' ' '-' ;;
     schema) printf '%s\n' "$COREDEV_SCHEMA" ;;
     code-root) [ $# -eq 2 ] || { echo "Usage: lib.sh code-root <path>" >&2; exit 2; }; code_root_of "$2" ;;
     project-of) [ $# -eq 2 ] || { echo "Usage: lib.sh project-of <path>" >&2; exit 2; }; project_of "$2" ;;
@@ -974,6 +1015,6 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
       [ -n "$CORE_DIR" ] || { echo "lib.sh core-paths: no Core path" >&2; exit 1; }
       . "$(dirname "${BASH_SOURCE[0]}")/_locate.sh" || exit 1
       core_paths "$CORE_DIR" "$2" ;;
-    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | settings [key[=value] ...] | setting-path | plugin-root | codex-profile | schema | core-paths <project> | project-of <path> | code-root <path> | code-dir <name> | layout <name>" >&2; exit 2 ;;
+    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | settings [key[=value] ...] | setting-path | plugin-root | codex-profile | host | role-model <host> <profile> <role> | core-writable <dir> | tree-state <dir> | schema | core-paths <project> | project-of <path> | code-root <path> | code-dir <name> | layout <name>" >&2; exit 2 ;;
   esac
 fi

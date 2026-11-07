@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+# Codex task chain (port task 4): lib.sh role-model, core-writable, tree-state, and the Codex docs of the task skill.
+source "$(dirname "$0")/lib.sh"
+new_sandbox
+trap 'chmod -R u+w "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
+LIB="$SCRIPTS/lib.sh"
+TASK="$PLUGIN/skills/task"
+
+# --- role-model: every host x profile x role
+rm_check() { # host profile role want
+  local out err rc
+  out="$(bash "$LIB" role-model "$1" "$2" "$3" 2>"$SANDBOX/err")"; rc=$?
+  assert_eq "$rc" "0" "role-model $1 $2 $3 exits 0"
+  assert_eq "$out" "$4" "role-model $1 $2 $3"
+  [ "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" = "1" ] && pass || fail "role-model $1 $2 $3 prints one line"
+}
+# columns: economy balanced strong
+for role in engineer tester; do
+  rm_check claude economy "$role" haiku; rm_check claude balanced "$role" sonnet; rm_check claude strong "$role" sonnet
+  rm_check codex economy "$role" "gpt-6-luna medium"; rm_check codex balanced "$role" "gpt-6.1-sol medium"; rm_check codex strong "$role" "gpt-6.1-sol high"
+done
+for role in security verifier localizer designer; do
+  rm_check claude economy "$role" sonnet; rm_check claude balanced "$role" sonnet; rm_check claude strong "$role" opus
+  rm_check codex economy "$role" "gpt-6.1-sol low"; rm_check codex balanced "$role" "gpt-6.1-sol medium"; rm_check codex strong "$role" "gpt-6-astra high"
+done
+for role in architect explorer; do
+  for p in economy balanced strong; do rm_check claude "$p" "$role" ""; done
+  rm_check codex economy "$role" "gpt-6.1-sol low"; rm_check codex balanced "$role" "gpt-6.1-sol medium"; rm_check codex strong "$role" "gpt-6-astra high"
+done
+rm_bad() { # args...
+  local out rc
+  out="$(bash "$LIB" role-model "$@" 2>"$SANDBOX/err")"; rc=$?
+  assert_eq "$rc" "2" "role-model $* exits 2"
+  assert_eq "$out" "" "role-model $* prints nothing on stdout"
+  [ -s "$SANDBOX/err" ] && grep -qi usage "$SANDBOX/err" && pass || fail "role-model $* prints a usage line on stderr"
+}
+rm_bad gemini balanced engineer
+rm_bad claude turbo engineer
+rm_bad codex balanced janitor
+rm_bad claude balanced
+rm_bad
+rm_bad claude balanced engineer extra
+rm_bad "" balanced engineer
+rm_bad claude "" engineer
+rm_bad claude balanced ""
+rm_bad Claude balanced engineer
+
+# --- core-writable
+D="$SANDBOX/cw dir"; mkdir -p "$D"; : > "$D/keep.txt"
+before="$(ls -A "$D")"
+out="$(bash "$LIB" core-writable "$D" 2>&1)"; rc=$?
+assert_eq "$rc" "0" "core-writable on a writable dir exits 0"
+assert_eq "$out" "" "core-writable is silent when writable"
+assert_eq "$(ls -A "$D")" "$before" "core-writable leaves no probe behind"
+assert_file "$D/keep.txt"
+if [ "$(id -u)" != "0" ]; then
+  RO="$SANDBOX/ro dir"; mkdir -p "$RO"; : > "$RO/f"; chmod a-w "$RO"
+  err="$(bash "$LIB" core-writable "$RO" 2>&1 >/dev/null)"; rc=$?
+  assert_eq "$rc" "1" "core-writable on a read-only dir exits 1"
+  case "$err" in *--add-dir*"$RO"*|*"$RO"*--add-dir*) pass ;; *) fail "stderr names --add-dir and the dir: $err" ;; esac
+  assert_eq "$(ls -A "$RO")" "f" "read-only dir untouched"
+  chmod u+w "$RO"
+else
+  echo "SKIP core-writable read-only case: running as root"
+fi
+MISSING="$SANDBOX/no such dir"
+err="$(bash "$LIB" core-writable "$MISSING" 2>&1 >/dev/null)"; rc=$?
+assert_eq "$rc" "1" "core-writable on a missing dir exits 1"
+case "$err" in *--add-dir*) pass ;; *) fail "missing dir stderr names --add-dir: $err" ;; esac
+case "$err" in *"$MISSING"*) pass ;; *) fail "missing dir stderr names the dir: $err" ;; esac
+assert_no_file "$MISSING"
+bash "$LIB" core-writable "relative/dir" >/dev/null 2>&1; assert_eq "$?" "2" "core-writable relative path exits 2"
+bash "$LIB" core-writable >/dev/null 2>&1; assert_eq "$?" "2" "core-writable no args exits 2"
+bash "$LIB" core-writable "$D" extra >/dev/null 2>&1; assert_eq "$?" "2" "core-writable two args exits 2"
+bash "$LIB" core-writable "" >/dev/null 2>&1; [ "$?" -ne 0 ] && pass || fail "core-writable empty path fails"
+
+# --- tree-state
+R="$SANDBOX/repo with space"; mkdir -p "$R/sub dir"; git -C "$R" init -q
+printf '*.log\n' > "$R/.gitignore"; printf 'aaaa\n' > "$R/tracked file.txt"; printf 'one\n' > "$R/sub dir/other.txt"
+git -C "$R" add -A && git -C "$R" commit -q -m init
+ts() { bash "$LIB" tree-state "$R" 2>/dev/null; }
+base="$(ts)"; rc=0
+[ -n "$base" ] && pass || fail "tree-state prints a line"
+assert_eq "$(printf '%s\n' "$base" | wc -l | tr -d ' ')" "1" "tree-state prints one line"
+assert_eq "$(ts)" "$base" "tree-state is stable across two runs"
+changed() { # label: state must differ from $base, then reset base
+  local now; now="$(ts)"
+  [ -n "$now" ] && [ "$now" != "$base" ] && pass || fail "tree-state changes after: $1"
+  base="$now"
+}
+printf 'aaab\n' > "$R/tracked file.txt"; changed "editing a tracked file by one byte (same size)"
+printf 'aaaa\n' > "$R/tracked file.txt"; changed "restoring the tracked file"
+printf 'bbbb\n' > "$R/tracked file.txt"; git -C "$R" add "tracked file.txt"; changed "staging a change"
+git -C "$R" reset -q; changed "unstaging"
+git -C "$R" checkout -q -- "tracked file.txt"; base="$(ts)"
+printf 'new\n' > "$R/untracked one.txt"; changed "a new untracked file"
+printf 'neW\n' > "$R/untracked one.txt"; changed "changing an untracked file (same size)"
+printf 'x\n' > "$R/sub dir/deep.txt"; changed "a new untracked file in a subfolder with a space"
+rm "$R/sub dir/other.txt"; changed "deleting a tracked file"
+git -C "$R" add -A; git -C "$R" commit -q -m two; changed "a new commit"
+# documented limit: ignored files are not part of the state
+base="$(ts)"
+printf 'log\n' > "$R/x.log"; assert_eq "$(ts)" "$base" "creating an ignored x.log does not change the state"
+printf 'log2\n' > "$R/x.log"; assert_eq "$(ts)" "$base" "editing an ignored x.log does not change the state"
+# untracked nested git repo: a change inside it changes the line
+base="$(ts)"
+mkdir -p "$R/nested repo"; git -C "$R/nested repo" init -q; printf 'n1\n' > "$R/nested repo/n.txt"
+changed "a new untracked nested repo"
+git -C "$R/nested repo" add -A; git -C "$R/nested repo" -c user.name=t -c user.email=t@t commit -q -m i; changed "a commit inside the nested repo"
+printf 'n2\n' > "$R/nested repo/n.txt"; changed "editing a tracked file inside the nested repo"
+printf 'u\n' > "$R/nested repo/u.txt"; changed "a new untracked file inside the nested repo"
+# not a work tree
+N="$SANDBOX/plain"; mkdir -p "$N"
+out="$(bash "$LIB" tree-state "$N" 2>/dev/null)"; rc=$?
+assert_eq "$rc" "1" "tree-state outside a git work tree exits 1"
+assert_eq "$out" "" "tree-state prints nothing outside a work tree"
+bash "$LIB" tree-state "$SANDBOX/nope" >/dev/null 2>&1; assert_eq "$?" "1" "tree-state on a missing dir exits 1"
+bash "$LIB" tree-state "$R/.git" >/dev/null 2>&1; assert_eq "$?" "1" "tree-state inside .git (not a work tree) exits 1"
+
+# --- docs
+CX="$TASK/references/codex.md"
+assert_file "$CX"
+for w in spawn_agent fork_turns wait_agent followup_task role-model core-writable tree-state -- --add-dir '<plugin>/agents/<role>.md'; do
+  [ "$w" = "--" ] && continue
+  assert_contains "$CX" "$w"
+done
+assert_file "$TASK/references/codex-roles.md"
+assert_contains "$TASK/references/codex-roles.md" "## Architect"
+assert_contains "$TASK/references/codex-roles.md" "## Explorer"
+assert_contains "$TASK/SKILL.md" "references/codex.md"
+# the SKILL.md Claude table agrees with role-model
+for row in "engineer, tester|engineer" "security, verifier, localizer, designer|security"; do
+  names="${row%%|*}"; role="${row##*|}"
+  line="$(grep -F "| $names |" "$TASK/SKILL.md" | head -1)"
+  e="$(printf '%s' "$line" | awk -F'|' '{gsub(/ /,"",$3); print $3}')"
+  b="$(printf '%s' "$line" | awk -F'|' '{gsub(/ /,"",$4); print $4}')"
+  s="$(printf '%s' "$line" | awk -F'|' '{gsub(/ /,"",$5); print $5}')"
+  [ -n "$e" ] && pass || fail "SKILL.md table row for $names parsed"
+  for pair in "economy $e" "balanced $b" "strong $s"; do
+    p="${pair%% *}"; want="${pair#* }"
+    for r in $(printf '%s' "$names" | tr -d ',' ); do
+      assert_eq "$(bash "$LIB" role-model claude "$p" "$r" 2>/dev/null)" "$want" "SKILL.md table vs role-model claude $p $r"
+    done
+  done
+done
+# --- host
+unset COREKIT_HOST
+assert_eq "$(COREKIT_HOST=codex bash "$LIB" host)" "codex" "host: COREKIT_HOST=codex"
+assert_eq "$(COREKIT_HOST=claude bash "$LIB" host)" "claude" "host: COREKIT_HOST=claude"
+assert_eq "$(CODEX_HOME="$SANDBOX/cxh" bash "$LIB" host)" "claude" "host: default is claude"
+mkdir -p "$SANDBOX/cxh/plugins/cache/corekit/corecrew"; cp -R "$PLUGIN" "$SANDBOX/cxh/plugins/cache/corekit/corecrew/9.9.9"
+assert_eq "$(CODEX_HOME="$SANDBOX/cxh" bash "$SANDBOX/cxh/plugins/cache/corekit/corecrew/9.9.9/scripts/lib.sh" host)" "codex" "host: plugin under CODEX_HOME is codex"
+assert_eq "$(COREKIT_HOST=codex bash "$LIB" host | wc -l | tr -d ' ')" "1" "host prints one line"
+finish

@@ -18,6 +18,7 @@ Detail lives in references, read when you reach that step:
 - `<skill>/references/report.md` — the final report
 - `<skill>/references/release.md` — the release postconditions (every chain that changed files)
 - `<skill>/references/adopt.md` — bringing an existing project into the Core layout
+- `<skill>/references/codex.md` — running the chain in Codex (agents, Core access, read-only checks); `codex-roles.md` holds architect and explorer there
 
 Shared files: `<plugin>/reference/wiki.md` (wiki rules),
 `<plugin>/reference/knowledge.md` (knowledge format),
@@ -79,6 +80,8 @@ attribution value resolved at Start" instead of placeholders:
    creates (a git repo `<Core>` with `standards/`, `knowledge/`, `.coredev`, `PROJECTS.md`); on
    "ok" run `CORE_DIR="<Core>" bash "<scripts>/setup-core.sh" "<Core>"`.
    If the user declines setup, stop; change nothing.
+   **Codex Core access.** In Codex, run `bash "<scripts>/lib.sh" core-writable "<Core>"`; on exit 1 follow
+   `references/codex.md` (restart with `codex --add-dir`) and stop.
    **Prepare.** Run `CORE_DIR="<Core>" bash "<scripts>/prepare.sh"` from the working directory; relay any
    lines it prints in plain words (a failed tools sync, a missing link, an old git hook, or that the corecrew
    hooks are not trusted yet in Codex). It changes only what is missing and is silent when all is current.
@@ -104,7 +107,7 @@ attribution value resolved at Start" instead of placeholders:
    - exit 3: two folders in `<Projects>` differ only in letter case. Show the
      `two folders differ only in case: …` line it printed, say one of them has to be renamed, and
      stop.
-3. **feature-dev.** Look at the agent types listed for your Agent tool. If
+3. **feature-dev.** In Codex skip this step (see `references/codex.md`). Look at the agent types listed for your Agent tool. If
    `feature-dev:code-architect` or `feature-dev:code-explorer` is missing, name the install
    command `/plugin install feature-dev@claude-plugins-official`. Paths that need them stop
    until it is installed: `full`, `fix` when more than one module is affected, and `question`
@@ -141,7 +144,7 @@ attribution value resolved at Start" instead of placeholders:
    `references/paths.md`) and name it in the first line you say to the user.
 
 ## Running the chain
-Briefs follow `references/brief.md`. A corecrew agent's `subagent_type` is `corecrew:<role>`:
+Briefs follow `references/brief.md`. In Codex there is no Agent tool: see `references/codex.md`. A corecrew agent's `subagent_type` is `corecrew:<role>`:
 `corecrew:engineer`, `corecrew:tester`, `corecrew:security`, `corecrew:verifier`,
 `corecrew:localizer`, `corecrew:designer`. A feature-dev agent's `subagent_type` is its full name,
 `feature-dev:code-architect` or `feature-dev:code-explorer`.
@@ -152,15 +155,15 @@ Briefs follow `references/brief.md`. A corecrew agent's `subagent_type` is `core
 3. Budget: each agent has `maxTurns: 60`, and every brief tells it to reply by about turn 50.
    An agent that hits the cap returns only a turn-limit note with no report: send it one
    `SendMessage`: "Report now: what is done, what is left; no more tool calls." If there is still
-   no report, stop the chain and put it in `Open`. The `SendMessage` is part of the same pass.
+   no report, stop the chain and put it in `Open`. The `SendMessage` is part of the same pass. In Codex see `references/codex.md`.
 4. At most three engineer passes per chain (a checkers' wave counts as one). The third failed
    pass: stop and report. Two fixes on one premise that fail the same check: state the premise
    in one sentence; make no third attempt on it.
 5. Dispatch in the foreground, always: pass `run_in_background: false` on every Agent call. A
-   wave is several Agent calls in one message.
+   wave is several Agent calls in one message. In Codex see `references/codex.md`.
 6. Every Agent call passes `subagent_type`: `corecrew:<role>` for corecrew roles, the full name for
    feature-dev agents. CoreCrew calls also pass `model` from the table above.
-   Do not pass `model` to feature-dev agents.
+   Do not pass `model` to feature-dev agents. In Codex see `references/codex.md`.
 7. Only the touched modules' tests per pass; the full `check:` once, at the end, as its own
    tester call.
 8. Never retell `CLAUDE.md` in a brief; give paths.

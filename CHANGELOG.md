@@ -16,6 +16,7 @@ Every entry starts with a badge: **NEW** is a new capability, **FIX** is a defec
 - **FIX** Several `prepare.sh` or `sync-tools.sh` runs at once no longer report a false "link to somewhere other" or "tools not refreshed" and
   leave no `tools.new.*` behind: a link another run just made counts as skipped, and the tools swap takes a lock folder `<tools>.lock`
   (a dead owner's lock is taken over by an atomic rename, so only one waiter wins; no lock within 10 s: "tools busy", exit 0).
+- **NEW** The `/corecrew:task` chain in Codex: `skills/task/references/codex.md` (each step a `spawn_agent` with model and effort from `lib.sh role-model`, `wait_agent`, `followup_task` instead of a turn cap, read-only steps checked by `lib.sh tree-state` before and after, since Codex subagents cannot be made read-only) and `codex-roles.md` (architect and explorer without feature-dev). `lib.sh core-writable <dir>` checks that Codex can write to the Core and names `codex --add-dir`. `tree-state` does not cover ignored files.
 - **NEW** A Codex sandbox profile for secrets: `lib.sh codex-profile` prints a TOML fragment for `~/.codex/config.toml` (profile `corecrew`: the project folder
   and temp folders writable, minimal system paths readable, `.env*`, keys, credentials, `.kube`, `.docker/config.json`, `.htpasswd`, `.pgpass` and named token and
   secret files unreadable, `~/.ssh` closed; `default_permissions` applies it to every Codex session). It is a default, not a hard boundary: `--sandbox`,
