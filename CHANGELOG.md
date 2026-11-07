@@ -16,6 +16,14 @@ Every entry starts with a badge: **NEW** is a new capability, **FIX** is a defec
 - **FIX** Several `prepare.sh` or `sync-tools.sh` runs at once no longer report a false "link to somewhere other" or "tools not refreshed" and
   leave no `tools.new.*` behind: a link another run just made counts as skipped, and the tools swap takes a lock folder `<tools>.lock`
   (a dead owner's lock is taken over by an atomic rename, so only one waiter wins; no lock within 10 s: "tools busy", exit 0).
+- **NEW** A Codex sandbox profile for secrets: `lib.sh codex-profile` prints a TOML fragment for `~/.codex/config.toml` (profile `corecrew`: the project folder
+  and temp folders writable, minimal system paths readable, `.env*`, keys, credentials, `.kube`, `.docker/config.json`, `.htpasswd`, `.pgpass` and named token and
+  secret files unreadable, `~/.ssh` closed; `default_permissions` applies it to every Codex session). It is a default, not a hard boundary: `--sandbox`,
+  `--full-auto` or `-c sandbox_mode=...` on the command line and a trusted project's `.codex/config.toml` switch it off; it guards files in the working tree, not
+  git history (`git show HEAD:.env`) or a hard link made outside; `/tmp` and `/var/tmp` stay readable and writable; environment variables are not filtered.
+  corecrew never writes `~/.codex`: on Codex `prepare.sh` only says, once per run, to paste the fragment while `config.toml` does not set a top-level
+  `default_permissions = "corecrew"` (read as data, never written; either quote style, a quoted key and a BOM are understood; the path only from an absolute
+  `CODEX_HOME` or `HOME`; strings are not parsed: a triple or escaped quote before the key makes the note show). Checked with `codex sandbox` (codex 0.166). ADR 006.
 - **UPD** The failures `prepare.sh` relays are a translated message per sync failure kind (a folder that is not ours, a failed copy), in
   host-neutral wording ("start a new session"), and a message when an `AGENTS.md` in the Core blocks the link.
 - **NEW** `scripts/prepare.sh [--cwd <dir>] [--part tools|project|host]`: the tools copy, the CLAUDE.local.md and AGENTS.md links

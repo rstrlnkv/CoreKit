@@ -22,7 +22,7 @@ MSG_KEYS="sync_failed sync_not_ours agents_in_core hint_not_set_up hint_not_foun
 session_rules schema_none run_starting layout_note old_hooks guard_code_blocked guard_code_public patch_too_many patch_unjudgeable patch_no_reader patch_shell secrets_blocked secrets_ask
 local_link_created agents_link_created agents_link_wrong local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind
 readonly_agent settings_invalid_path settings_invalid_value settings_unreadable settings_no_home allowed_attribution allowed_model_profile
-src_env src_option src_file fix_env fix_option fix_file codex_trust"
+src_env src_option src_file fix_env fix_option fix_file codex_trust codex_profile"
 
 # _msg_text <lang> <key> — sets MSG_T to the text, or to nothing when there is none. Keep the keys and
 # the en:/ru: branches in step with MSG_KEYS.
@@ -36,6 +36,8 @@ _msg_text() {
     ru:agents_in_core) MSG_T='corecrew: AGENTS.md есть в Core в @1; перенесите его в CLAUDE.md и удалите, тогда можно будет создать ссылку AGENTS.md' ;;
     en:codex_trust) MSG_T="corecrew's guards (project docs in code, secrets) and the save reminder are not active in Codex until you trust the corecrew hooks: open /hooks, review them, trust them, then start a new session (or restart if you just did)." ;;
     ru:codex_trust) MSG_T='Защита corecrew (внутренние документы в коде, секреты) и напоминание сохранить изменения не работают в Codex, пока вы не доверите хуки corecrew: откройте /hooks, просмотрите хуки и доверьте их, затем начните новую сессию (или перезапустите Codex, если только что это сделали).' ;;
+    en:codex_profile) MSG_T="corecrew's sandbox profile is not the default in Codex, so secrets (.env files, keys) are protected only partly, by corecrew's hooks. To protect them better, run this in a terminal (it only prints text): bash \"@1\" codex-profile    then copy what it prints and paste it into @2. The profile applies to every Codex session, and afterwards Codex asks for approval before each git commit. It is a default only: command-line sandbox flags or a trusted project's settings can switch it off (the comments in the pasted text say how). corecrew never writes that file." ;;
+    ru:codex_profile) MSG_T='Профиль песочницы corecrew в Codex не выбран по умолчанию, поэтому секреты (файлы .env, ключи) защищены лишь частично — только хуками corecrew. Чтобы защита стала надёжнее, выполните в терминале (команда только печатает текст): bash "@1" codex-profile    затем скопируйте напечатанное и вставьте в @2. Профиль действует на все сессии Codex, а после этого Codex будет спрашивать подтверждение перед каждым git commit. Это лишь значение по умолчанию: флаги песочницы в командной строке или настройки доверенного проекта могут его отключить (подробности — в комментариях вставленного текста). corecrew этот файл никогда не меняет.' ;;
     ru:sync_failed) MSG_T='corecrew: инструменты не обновлены: не удалось обновить @1' ;;
     en:hint_not_set_up) MSG_T='corecrew: Core at @1 is not set up — /corecrew:new-project or /corecrew:task adopt <folder> will set it up' ;;
     ru:hint_not_set_up) MSG_T='corecrew: Core в @1 не настроен — /corecrew:new-project или /corecrew:task adopt <folder> настроят его' ;;

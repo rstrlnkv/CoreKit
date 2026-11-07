@@ -7,7 +7,8 @@
 #           Nothing happens when no data folder is known (no usable HOME).
 #  project  when --cwd is in a project: the layout note, the CLAUDE.local.md and AGENTS.md links in the main code
 #           folder and in the worktree root when that is a worktree outside the main folder, the old git hooks note.
-#  host     on Codex, until the hooks are known to have run (the marker session-start writes): the trust note.
+#  host     on Codex: the trust note until the hooks are known to have run (the marker session-start writes), and the
+#           sandbox profile note while config.toml names no default_permissions (read as data, never written).
 # Idempotent, silent when everything is current. Output lines are for the person (the model relays them). Exit 0 always.
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 ROOT="${CLAUDE_PLUGIN_ROOT:-$SELF}"
@@ -105,6 +106,20 @@ if [ "$part" = all ] || [ "$part" = host ]; then
     mk="$(hooks_marker_path)"; v="$(plugin_version "$ROOT")"
     if [ -z "$mk" ] || [ -z "$v" ] || [ "$(cat "$mk" 2>/dev/null)" != "$v" ]; then
       printf '%s\n' "$(msg codex_trust)"
+    fi
+    # The corecrew sandbox profile is not the default in config.toml (read as data, never written; the path only from an
+    # absolute CODEX_HOME or HOME): secrets are guarded best-effort only. Only a top-level key counts (before the first
+    # [table] line; a line with a triple quote or an escaped quote before it makes the answer unsure, so the note shows); either quote style, a quoted key and a BOM are read; the value must be corecrew.
+    cfg=""; base="${CODEX_HOME:-}"
+    if [ -z "$base" ]; then case "${HOME:-}" in /*) base="$HOME/.codex" ;; esac; fi
+    case "$base" in /*) cfg="${base%/}/config.toml" ;; esac
+    if [ -n "$cfg" ] && ! { tr -d '\r' < "$cfg" | tr "'" '"' | awk 'NR == 1 { sub(/^\357\273\277/, "") }
+        { if ($0 ~ /"""/ || $0 ~ /\\"/) exit 1
+          if ($0 ~ /^[ \t]*\[/) exit 1
+          if ($0 ~ /^[ \t]*"?default_permissions"?[ \t]*=[ \t]*"corecrew"[ \t]*(#.*)?$/) { ok = 1; exit 0 }
+        }
+        END { exit !ok }'; } 2>/dev/null; then
+      printf '%s\n' "$(msg codex_profile "$ROOT/scripts/lib.sh" "$cfg")"
     fi
   fi
 fi

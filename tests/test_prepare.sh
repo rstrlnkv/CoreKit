@@ -14,6 +14,8 @@ git -C "$C" commit -q --allow-empty -m init
 mkdir -p "$SANDBOX/elsewhere"
 VER="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN/.claude-plugin/plugin.json" | head -1)"
 MARK="$XDG_CONFIG_HOME/corecrew/state/hooks-seen-codex"
+# a sandbox profile is chosen (the codex_profile note is tested below), so the other Codex runs stay silent
+mkdir -p "$CODEX_HOME"; CFG="$CODEX_HOME/config.toml"; printf 'default_permissions = "corecrew"\n' > "$CFG"
 # run <host> [args] — stdout+stderr in OUT, exit code in RC
 run() { local h="$1"; shift; OUT="$(COREKIT_HOST="$h" bash "$PREP" "$@" 2>&1)"; RC=$?; }
 
@@ -45,6 +47,41 @@ OUT="$(COREKIT_HOST=codex bash "$PREP" --part host --cwd "$C" 2>&1)"
 echo "$OUT" | grep -qF "/hooks" && pass || fail "--part host: $OUT"
 OUT="$(COREKIT_HOST=codex CLAUDE_PLUGIN_OPTION_UI_LANGUAGE=ru bash "$PREP" --part host 2>&1)"
 echo "$OUT" | grep -qF "Защита corecrew" && pass || fail "ru trust note: $OUT"
+
+# --- the sandbox profile note (Codex only; config.toml is read as data, never written)
+echo "$VER" > "$MARK"; CFGHASH="$(cksum < "$CFG")"
+run codex --cwd "$C"; assert_eq "$OUT" "" "profile chosen: silent"
+assert_eq "$(cksum < "$CFG")" "$CFGHASH" "config.toml untouched"
+for body in '# default_permissions = "x"' 'default_permissions = ""' 'model = "o3"' ; do
+  printf '%s\n' "$body" > "$CFG"; run codex --part host
+  assert_eq "$(printf '%s\n' "$OUT" | grep -c 'codex-profile')" "1" "no profile ($body): the note once"
+  echo "$OUT" | grep -qF "$PLUGIN/scripts/lib.sh" && echo "$OUT" | grep -qF "$CFG" && pass || fail "note names lib.sh and config.toml: $OUT"
+  assert_eq "$(cat "$CFG")" "$body" "config.toml untouched ($body)"
+done
+# spellings of a chosen corecrew profile: silent (CRLF, tabs, no spaces, trailing comment, no final newline, single quotes, quoted key, BOM,
+# the key after other top-level keys)
+for body in 'default_permissions = "corecrew"\r\n' 'default_permissions="corecrew"\n' '  default_permissions\t=\t"corecrew"\n' \
+  'default_permissions = "corecrew" # mine\n' 'default_permissions = "corecrew"' "default_permissions = 'corecrew'\n" '"default_permissions" = "corecrew"\n' \
+  "'default_permissions' = 'corecrew'\n" '\xef\xbb\xbfdefault_permissions = "corecrew"\n' 'model = "o3"\ndefault_permissions = "corecrew"\n[profiles.x]\nmodel = "y"\n'; do
+  printf "$body" > "$CFG"; run codex --part host; assert_eq "$OUT" "" "profile chosen ($body): silent"
+done
+# another profile is the default, or the key is not at the top level, or it sits in a multi-line string: the corecrew profile is not the default
+for body in 'default_permissions = "my profile"\n' 'default_permissions = ":workspace"\n' "default_permissions = 'other'\n" 'default_permissions = "corecrew2"\n' \
+  '[profiles.x]\ndefault_permissions = "corecrew"\n' 'x = """\ndefault_permissions = "corecrew"\n"""\n' "x = '''\ndefault_permissions = 'corecrew'\n'''\n" \
+  'default_permissions = corecrew\n' 'xdefault_permissions = "corecrew"\n' \
+  'x = """\n\\"""\ndefault_permissions = "corecrew"\n"""\n' 'x = """a \\""" b\ndefault_permissions = "corecrew"\n' \
+  "x = '''\n\"\"\"\ndefault_permissions = 'corecrew'\n'''\n"; do
+  printf "$body" > "$CFG"; run codex --part host
+  assert_eq "$(printf '%s\n' "$OUT" | grep -c 'codex-profile')" "1" "corecrew profile not the default or unsure ($body): the note once"
+done
+# a relative CODEX_HOME names no config path (and does not fall back to HOME): no note
+mkdir -p "$SANDBOX/rel/cx"; n="$(cd "$SANDBOX/rel" && CODEX_HOME=cx COREKIT_HOST=codex bash "$PREP" --part host 2>&1 | grep -c codex-profile)"; assert_eq "$n" "0" "relative CODEX_HOME: no profile note"
+rm -f "$CFG"; run codex --part host
+echo "$OUT" | grep -qF "codex-profile" && pass || fail "no config.toml: note expected: $OUT"
+assert_no_file "$CFG"
+CLAUDE_PLUGIN_OPTION_UI_LANGUAGE=ru run codex --part host; echo "$OUT" | grep -qF "Профиль песочницы corecrew" && pass || fail "ru profile note: $OUT"
+run claude --part host; assert_eq "$OUT" "" "claude host: no profile note"
+printf 'default_permissions = "corecrew"\n' > "$CFG"
 
 # --- a worktree outside the project gets both links; the main folder is left as it is
 W="$SANDBOX/codex-home/worktrees/ab12/prep"
@@ -99,6 +136,7 @@ mkdir -p "$SANDBOX/cwdempty"
 for H in "" "relhome"; do
   OUT="$(cd "$SANDBOX/cwdempty" && env -u COREDEV_TOOLS -u CLAUDE_PLUGIN_DATA -u XDG_CONFIG_HOME -u CODEX_HOME -u CORECREW_CONFIG HOME="$H" CORE_DIR="$CORE_DIR" COREKIT_HOST=codex bash "$PREP" --cwd "$SANDBOX/elsewhere" 2>&1)"; RC=$?
   assert_eq "$RC" "0" "HOME='$H': exit 0"
+  echo "$OUT" | grep -qF "codex-profile" && fail "HOME='$H': profile note names a config.toml that is not under a real home: $OUT" || pass
   assert_eq "$(ls -A "$SANDBOX/cwdempty")" "" "HOME='$H': nothing written in the cwd"
   [ ! -e "/.claude" ] && [ ! -e "/.codex" ] && [ ! -e "/.config" ] && pass || fail "HOME='$H': wrote at /"
   assert_no_file "$COREDEV_TOOLS"
