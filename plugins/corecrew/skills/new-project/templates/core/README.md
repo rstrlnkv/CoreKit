@@ -13,6 +13,6 @@ Each project's `docs/` is an Obsidian vault; `docs/INDEX.md` is generated, never
 Start your agent in the code folder, `../<Name>/`: Claude Code as is, or Codex with
 `codex --add-dir "<Core>"` (the path of this folder), so it may also write here.
 Shared: `standards/` (your standards), `knowledge/` (lessons for all projects),
-`session-rules.md` (optional: your rules, shown at every session start),
+`session-rules.md` (optional: your rules, shown at every session start and read by the engineer agent),
 `.coredev` (layout version and settings).
 Project list: [PROJECTS.md](PROJECTS.md).

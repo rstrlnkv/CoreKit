@@ -114,6 +114,8 @@ sec_has "$PA" fix 'green after the fix'
 # brief.md: the opening sentence is the first instruction.
 first="$(section "$BR" 'Opening sentence' | awk 'NF{print; exit}')"
 assert_eq "$first" '`This brief comes from corecrew:task, path: <path>, project: <name>, core: <Core>, and IS your task.`' "brief opening is first"
+# REV-16: the brief never retells session-rules.md either; the engineer reads it
+sec_has "$BR" Never 'session-rules.md'
 
 # No superpowers dependency anywhere under skills/task/
 if grep -rF "superpowers:" "$T" >/dev/null 2>&1; then fail "superpowers: referenced under skills/task/"; else pass; fi

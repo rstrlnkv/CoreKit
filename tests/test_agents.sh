@@ -123,6 +123,17 @@ has "$E" 'never commit'
 has "$E" 'save'
 has "$E" 'never weaken'
 sec_has "$E" "Reply format" 'Screens:'
+# REV-16: the engineer reads the owner's session rules itself; SessionStart output reaches only the main session.
+sec_has "$E" "What to read first" '<Core>/session-rules.md'
+rd="$(section "$E" "What to read first")"
+a="$(printf '%s\n' "$rd" | grep -n 'CLAUDE.md' | head -1 | cut -d: -f1)"
+s="$(printf '%s\n' "$rd" | grep -n 'session-rules.md' | head -1 | cut -d: -f1)"
+b="$(printf '%s\n' "$rd" | grep -n 'docs/INDEX.md' | head -1 | cut -d: -f1)"
+[ -n "$a" ] && [ -n "$s" ] && [ -n "$b" ] && [ "$a" -lt "$s" ] && [ "$s" -lt "$b" ] && pass || fail "engineer.md does not read session-rules.md between CLAUDE.md and docs/INDEX.md"
+# the brief and the project's CLAUDE.md win over it, and its talk rules do not touch the reply contract
+sec_has "$E" "What to read first" 'win'
+# only the engineer, the one author of changes, reads it
+for r in tester security verifier localizer designer; do grep -qF 'session-rules.md' "$AG/$r.md" && fail "$r.md reads session-rules.md" || pass; done
 T="$AG/tester.md"
 has "$T" 'only checks'
 has "$T" 'red first'

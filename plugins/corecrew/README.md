@@ -144,7 +144,8 @@ the code in `<Core>/<name>/code/`; there `/corecrew:task` asks you to run
 `/corecrew:task adopt <Core>/<name>/code` first, which moves it to this layout.
 
 Rules for every session can go into `<Core>/session-rules.md` (optional): when it exists, session
-start prints it into the conversation.
+start prints it into the conversation, and the engineer agent reads it before it writes code (its
+rules for code; the brief and the project's `CLAUDE.md` win where they differ).
 
 ### What the hooks do
 
