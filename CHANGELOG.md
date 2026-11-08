@@ -9,6 +9,16 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+### Changed
+
+- `ship` pushes the branch and waits for its CI checks (`gh run watch`) after the go-ahead and before
+  the fast-forward merge, so a protected default branch that requires the checks accepts the push. A
+  red or cancelled run stops ship with the failed jobs and the branch left pushed; without `gh`, or
+  not on GitHub, the user confirms the merge. The remote branch stays; the report gives the command
+  to delete it.
+- `save --push` always says that the code is published by `ship`, before the Core push is attempted,
+  so a Core push that fails no longer hides the line.
+
 ## [0.10.0] - 2026-11-09
 
 ### Changed
