@@ -2,28 +2,26 @@
 
 Knowledge is what a project (or all of them) learned the hard way, kept as short lines an agent
 reads before it works. It is not a wiki page and not a standard: it is the raw lesson.
-A lesson that keeps recurring becomes a standard through `/corecrew:new-standard`.
 
 ## Two levels
 
 | Level | File | Holds |
 |---|---|---|
-| This project | `<Core>/<project>/docs/knowledge/<role>.md` | lessons about this project |
-| All projects | `<Core>/knowledge/<role>.md` | lessons that hold in any project |
+| This project | `<Core>/<project>/docs/knowledge/<role>.md` | every new lesson, by default |
+| All projects | `<Core>/knowledge/<role>.md` | a lesson that recurred in another project, or one the user calls general |
 
 `<role>` is an agent name: engineer, tester, security, verifier, localizer or designer.
 Both folders are outside the wiki checks (`reference/wiki.md`). An agent reads the project
 file first, then the all-projects file, and skips lines tagged with another stack.
 
-## A role file (at most 80 lines)
+## A role file
 
-Four sections, in this order:
-1. `## How proof is made here` — the commands and checks that show the work is right.
-2. `## Where things are` — paths and entry points an agent would otherwise search for.
-3. `## What has broken here` — one line per case (the line form below), or a link to a family.
-4. `## What you must not do here` — hard prohibitions, one line each.
+A title line `# <role> — <project>` (or `# <role> — all projects`), then one list: one `- ` line
+per lesson, newest last. No sections, no size limit, no sub-files. A file in the older form, with
+four sections and family links, is read as it is and never restructured:
+`<plugin>/reference/older-formats.md`, section Knowledge with sections.
 
-## The case line
+## The line
 
 `symptom → cause → guard address | no guard`
 
@@ -33,21 +31,20 @@ Four sections, in this order:
   words `no guard` when nothing checks it yet.
 - An optional stack tag opens the line: `[swift] symptom → cause → guard`. A line with no tag
   holds for every stack.
+- The arrow is `→`. A line a person wrote by hand with `->` reads the same; `task` writes `→`.
 
-Example: `[swift] build passes, app crashes on launch → entitlement missing in release config → tests/test_entitlements.sh`
-
-## Families
-
-When a role file would pass 80 lines, cases of one kind move to `<role>/<Family>.md`
-(a `.md` file named for the family, e.g. `engineer/Concurrency.md`), one case line per
-line. The role file keeps a link line:
-
-`- [Family](<role>/Family.md): symptom → cause`
+Example: `- [swift] build passes, app crashes on launch → entitlement missing in release config → tests/test_entitlements.sh`
 
 ## Who writes it
 
 Only `/corecrew:task`, and only after the user's ok. An agent never edits these files; it ends
-its reply with `Knowledge line: <symptom → cause → guard | none>`; `task` shows it in plain
-words and asks whether to keep it and at which level (this project or all projects). The line
-goes into the file of the role that proposed it, in the right section; when that file would
-pass 80 lines, `task` moves a family out.
+its reply with `Knowledge line: <symptom → cause → guard | none>`. `task` shows the line in plain
+words, with its level and why, and asks ok / no. The line goes to the end of the file of the role
+that proposed it:
+- This project, by default.
+- All projects when the lesson recurs: its cause already appears in another project's
+  `docs/knowledge/<role>.md`. The earlier line stays where it is (a step commits only its own
+  project folder and the shared Core files); the user may delete it by hand. The user may also
+  choose all projects for a new lesson that is plainly general.
+- Its cause is already in `<Core>/knowledge/`: the lesson keeps recurring. `task` writes it
+  nowhere and offers to turn it into a standard with `/corecrew:new-standard` (pass the line).
