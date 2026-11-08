@@ -52,6 +52,25 @@ for l in 'Merged:' 'Pushed:' 'Version:' 'Tag:' 'Release:' 'Open:'; do
   printf '%s\n' "$steps" | grep -qF -- "$l" && pass || fail "the report has $l"
 done
 
+# Step order (REV-11): the version and changelog edit first, then check: on that tree, then the go-ahead,
+# merge, push, tag. A red check: stop with the edit left uncommitted, no repair.
+names="$(printf '%s\n' "$steps" | sed -nE 's/^[0-9]+\. \*\*([^*]+)\.\*\*.*/\1/p' | tr '\n' '|')"
+assert_eq "$names" 'Version and tag names|Release|Go-ahead|Merge|Push|Tag and release|Report|' "the ship steps, in order"
+ne="$(printf '%s\n' "$steps" | grep -n 'engineer writes the version' | head -1 | cut -d: -f1)"
+nc="$(printf '%s\n' "$steps" | grep -n 'check:' | head -1 | cut -d: -f1)"
+[ -n "$ne" ] && [ -n "$nc" ] && [ "$ne" -lt "$nc" ] && pass || fail "the version edit comes before the check: run (lines $ne $nc)"
+for w in 'do not run the suite again' 'postcondition 1 is the run of step 1'; do
+  case "$steps" in *"$w"*) fail "Steps still says: $w" ;; *) pass ;; esac
+done
+case "$steps" in *'postconditions 1–7'*) pass ;; *) fail "Release runs release.md postconditions 1–7 on the tree with the new version" ;; esac
+case "$steps" in *'no repair'*) pass ;; *) fail "a red check: stops ship with no repair" ;; esac
+case "$steps" in *'git status --short'*) pass ;; *) fail "a red check: names the uncommitted files (git status --short)" ;; esac
+# The version question has one owner: ship step 1 asks it; release.md defers to ship.
+REL="$PLUGIN/skills/task/references/release.md"; PATHS="$PLUGIN/skills/task/references/paths.md"
+assert_eq "$(cat "$SK" "$REL" "$PATHS" | grep -c 'where the version lives')" "1" "the version question is asked in one place"
+rp="$(awk '/^\*\*Release path/{f=1} f && /^$/{exit} f' "$REL")"
+case "$rp" in *ship*) pass ;; *) fail "release.md Release path defers the version question to ship" ;; esac
+
 # The README lists the command.
 assert_contains "$ROOT/README.md" '/corecrew:ship'
 finish

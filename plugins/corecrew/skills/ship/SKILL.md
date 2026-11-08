@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Release the current branch (tests, version, changelog, commit), merge it into the default branch and push, then tag it and publish a GitHub release, each after your go-ahead. Use /corecrew:ship [patch|minor|major|<version>].
+description: Release the current branch (version, changelog, tests on that tree, commit), merge it into the default branch and push, then tag it and publish a GitHub release, each after your go-ahead. Use /corecrew:ship [patch|minor|major|<version>].
 disable-model-invocation: true
 argument-hint: "[patch | minor | major | <version>]"
 ---
@@ -9,7 +9,7 @@ argument-hint: "[patch | minor | major | <version>]"
 
 ## Overview
 Ship takes a finished branch of a project's code repo to the repo's default branch on its remote:
-tests, a version with a changelog entry and one commit, a stop for the user's go-ahead, a
+a version with a changelog entry, the tests on that tree and one commit, a stop for the user's go-ahead, a
 fast-forward merge and a push, then, after a second yes, a tag and a GitHub release. The release
 commit itself is the `release` path of the task skill; this skill adds the version choice, the
 merge, the push, the tag and the GitHub release. It never forces anything: no forced push, no
@@ -65,13 +65,12 @@ defaults are `core_dir` `~/Projects/Core`, `attribution` `allow`.
    the GitHub release will be skipped, and go on.
 
 ## Steps
-1. **Tests.** Run the `check:` command once from the code root (release.md postcondition 1, release
-   path). A failing run: stop and show its output.
-2. **Version and tag names.** The argument picks the version: empty or `patch` raises the last
+1. **Version and tag names.** The argument picks the version: empty or `patch` raises the last
    number, `minor` the middle one (last becomes 0), `major` the first (the others become 0); an
    explicit `<version>` is used as given. Read the current version where the versioning standard in
    `<Core>/standards/` says it lives (a standard whose `applies-to` names `release`). No such
-   standard: ask the user where the version lives and how it is written, before anything changes.
+   standard: ask the user where the version lives and how it is written, before anything changes;
+   this is the one place that asks, and the answer goes into the brief of step 2.
    A repo with several versioned parts (several packages or plugins): raise each part the branch
    changed (`git diff --name-only <main>...HEAD`), each by the same rule, and list them.
    The tag of each new version follows that standard; when it says nothing, a repo with one
@@ -79,25 +78,28 @@ defaults are `core_dir` `~/Projects/Core`, `attribution` `allow`.
    name as its manifest gives it). A tag that already exists
    (`git rev-parse --verify --quiet "refs/tags/<tag>"` prints a hash, here or after
    `git fetch origin --tags`): stop and name it before anything changes.
-3. **Release.** Run the `release` path of the task skill with that version: engineer writes the
-   version and the changelog entry, then release.md postconditions 2–7 (postcondition 1 is the
-   run of step 1; do not run the suite again). A ✗ that release.md says stops the chain stops
-   ship too: report and do not merge.
-4. **Go-ahead.** Show the user: the branch, the commits that will land on `<main>`
+2. **Release.** Run the `release` path of the task skill with that version:
+   engineer writes the version and the changelog entry (the version answer of step 1 in its
+   brief), then release.md postconditions 1–7 in order. Postcondition 1 runs `check:` on the tree
+   that has the new version, so the release commit itself is what was tested. A ✗ at
+   postcondition 1 stops ship: show the output, name the uncommitted version and changelog files
+   (`git status --short`), no repair, no merge; the user decides. Any other ✗ follows release.md;
+   one that stops the chain stops ship too: report and do not merge.
+3. **Go-ahead.** Show the user: the branch, the commits that will land on `<main>`
    (`git log --oneline <main>..HEAD`), the new version(s), the push target (or that there is no
-   remote), and the tag(s) and GitHub release that step 7 will ask about after the push.
+   remote), that the tests passed on the release commit, and the tag(s) and GitHub release that step 6 will ask about after the push.
    Wait for the user's explicit yes in their own message. Anything else: stop here; the release commit stays
    on the branch.
-5. **Merge.** Fast-forward only, so `<main>` gets exactly the branch's commits:
+4. **Merge.** Fast-forward only, so `<main>` gets exactly the branch's commits:
    - `<main>` is checked out in a worktree (`git worktree list --porcelain` shows
      `branch refs/heads/<main>`): there run `git -C "<that worktree>" status --short`; not empty →
      stop and name the files. Then `git -C "<that worktree>" merge --ff-only <branch>`.
    - otherwise: `git fetch . <branch>:<main>` (it refuses anything but a fast-forward).
    A refusal: stop, show it, change nothing more.
-6. **Push.** With `origin`: `git push origin <main>`. A rejected push (the remote moved, or a
+5. **Push.** With `origin`: `git push origin <main>`. A rejected push (the remote moved, or a
    pre-push hook blocked it): stop and show the output; the local `<main>` keeps the merge, and the
    user decides. Never retry with force. The Core repo is not pushed by this skill.
-7. **Tag and release.** Only after the push went through (no `origin`: offer the local tag alone).
+6. **Tag and release.** Only after the push went through (no `origin`: offer the local tag alone).
    Ask, naming each tag: "Tag `<tag>` on `<main>` and publish a GitHub release with this version's
    changelog entry as its notes?" Only on the user's explicit yes in their own message:
    - for each tag: `git tag -a "<tag>" -m "<tag>" <main>`, then `git push origin "refs/tags/<tag>"`;
@@ -108,7 +110,7 @@ defaults are `core_dir` `~/Projects/Core`, `attribution` `allow`.
      the file. Without `gh`, or not on GitHub: say the release was not made and why; the tag stays.
    A no: nothing is tagged; give the user the two commands above to run later. A failed tag push or
    release: stop and show the output. Never move, delete or force a tag.
-8. **Report.**
+7. **Report.**
    - `Merged: <short hash of <main>> (<branch> → <main>)` and `Pushed: origin/<main>` or `Pushed: no — <why>`
    - `Version: <old> → <new>` (one line per versioned part)
    - `Tag: <tag> (pushed | local only)` or `Tag: none — <why>`; `Release: <url gh printed>` or `Release: none — <why>`
