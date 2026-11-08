@@ -1,0 +1,14 @@
+# ShellCheck settings for tests/ (ShellCheck uses the nearest .shellcheckrc, so this one replaces the root one here).
+shell=bash
+# Files are sourced by paths known only at run time ("$(dirname "$0")/lib.sh", "$SCRIPTS/lib.sh").
+disable=SC1090,SC1091
+# `check && pass || fail`: pass always returns 0, so fail runs only when the check fails.
+disable=SC2015
+# Commands, JSON and paths under test are kept as literal text in single quotes on purpose ($, \, ~).
+disable=SC2016,SC1003,SC2088
+# A section run in a subshell keeps its variable changes there on purpose (counts come back through a file).
+disable=SC2030,SC2031
+# `VAR= cmd` runs one command with an empty value on purpose.
+disable=SC1007
+# `ls | grep` reads folders the test made itself, with plain names.
+disable=SC2010

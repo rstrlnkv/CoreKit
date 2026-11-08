@@ -9,7 +9,6 @@ new_sandbox
 H="$HOOKS/guard-secrets.sh"
 assert_file "$H"
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
-trap 'chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
 
 mkdir -p "$CORE_DIR/p/code/src" "$SANDBOX/elsewhere" "$HOME/.ssh"
 : > "$CORE_DIR/p/CLAUDE.md"
@@ -20,21 +19,8 @@ ln -s "$C/.env" "$C/second-link"           # (same, second link)
 ln -s "$C/src/nothing" "$C/.env.link"          # a link NAMED .env.link that points elsewhere
 ln -s "$HOME/.ssh" "$C/sshlink"                # a folder link into ~/.ssh
 
-# Sections that share nothing run at the same time (bg <function>), as in test_hook_guard_code.sh.
-OD="$SANDBOX"; BGN=0
-bg() { # bg <function>
-  BGN=$((BGN + 1)); local n=$BGN
-  ( OD="$SANDBOX/bg$n"; mkdir -p "$OD"; FAILS=0; PASSES=0; "$1"; echo "$PASSES $FAILS" > "$SANDBOX/bg$n.count" ) > "$SANDBOX/bg$n.log" 2>&1 &
-}
-bg_wait() {
-  local n p f
-  wait
-  for n in $(seq 1 $BGN); do
-    cat "$SANDBOX/bg$n.log"
-    if [ -f "$SANDBOX/bg$n.count" ]; then read -r p f < "$SANDBOX/bg$n.count"; PASSES=$((PASSES + p)); FAILS=$((FAILS + f))
-    else fail "background section $n did not finish"; fi
-  done
-}
+# Sections that share nothing run at the same time (bg <function>, lib.sh). The foreground uses OD="$SANDBOX".
+OD="$SANDBOX"
 
 # run_json <json> — stdout in OUT, stderr in ERR, exit code in RC
 run_json() { printf '%s' "$1" | bash "$H" >"$OD/out" 2>"$OD/err"; RC=$?; OUT="$(<"$OD/out")"; ERR="$(<"$OD/err")"; }
@@ -814,6 +800,80 @@ sec_host_gate() {
   COREKIT_HOST=codex cl 'cat p | apply_patch' "$C"; named "host codex without turn_id" "apply_patch"
 }
 bg sec_host_gate
+
+
+# Bash: quotes and backslashes inside a secret name, globs, wrapper options, zip -x, HOME unset, a core_dir that is
+# a symlink, a command line handed to another shell, HOME="/"
+sec_bypass() {
+  sec_blocked() { run_bash "$1"; assert_eq "$RC" "2" "secrets blocked: $1"; }
+  sec_ok() { run_bash "$1"; assert_eq "$RC" "0" "secrets pass: $1"; }
+  # quotes and backslashes inside the name
+  sec_blocked "cat .e'n'v"
+  sec_blocked 'cat .e""nv'
+  sec_blocked 'cat .\env'
+  sec_blocked 'cat ~/.s""sh/id_rsa'
+  sec_blocked 'cat ".e"nv'
+  # globs that can match a secret name
+  sec_blocked 'cat .e*'
+  sec_blocked 'cat .en?'
+  sec_blocked 'cat .[e]nv'
+  sec_blocked 'cat .{e,x}nv'
+  sec_blocked 'cat ~/.s*/id_rsa'
+  sec_blocked 'cat ~/.[s]sh/id_rsa'
+  sec_blocked 'head -n 3 .e*'
+  sec_ok 'cat *'
+  sec_ok 'cat .*'
+  sec_ok 'cat *.env'
+  sec_ok 'cat .e*.md'
+  sec_ok 'cat .git*'
+  sec_ok 'cat README.md'
+  sec_ok 'cat .env.example'
+  # wrapper options take their values
+  sec_blocked 'timeout 5 cat .env'
+  sec_blocked 'timeout -s KILL 5 cat .env'
+  sec_blocked 'nice -n 5 cat .env'
+  sec_blocked 'sudo -u root cat .env'
+  sec_blocked 'env -u X cat .env'
+  sec_blocked 'stdbuf -o0 cat .env'
+  sec_blocked 'stdbuf -o 0 cat .env'
+  sec_blocked 'sudo nice -n 5 timeout 5 cat .env'
+  sec_blocked 'sudo -E -u root cat .env'
+  sec_ok 'timeout 5 cat README.md'
+  sec_ok 'nice -n 5 cat README.md'
+  # zip -x takes patterns
+  sec_ok 'zip a.zip src -x .env'
+  sec_ok 'zip -r a.zip . -x .env .env.local'
+  sec_blocked 'zip a.zip .env'
+  # HOME unset
+  printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"}}' "$C" 'cat ~/.ssh/id_rsa' \
+    | env -u HOME bash "$H" >/dev/null 2>"$OD/err"; RC=$?
+  assert_eq "$RC" "2" "HOME unset: ~/.ssh/id_rsa is blocked"
+  # a core_dir that is a symlink: the code folder beside the link's own path is still seen
+  local S2="$OD/sl"; mkdir -p "$S2/Projects/Proj" "$S2/elsewhere/Core/proj"
+  ln -s "$S2/elsewhere/Core" "$S2/Projects/Core"
+  : > "$S2/elsewhere/Core/proj/CLAUDE.md"; echo "F=1" > "$S2/Projects/Proj/.env"
+  local oc="$CORE_DIR"; export CORE_DIR="$S2/Projects/Core"
+  run_bash 'cat .env' "$S2/Projects/Proj"; assert_eq "$RC" "2" "symlinked core_dir: guard-secrets sees the code folder"
+  CORE_DIR="$oc"
+  # a command line handed to another shell is judged too: bash -c, sh -c, zsh -c, eval
+  sec_blocked 'bash -c "cat .env"'
+  sec_blocked "sh -c 'cat .env'"
+  sec_blocked 'zsh -c "head -n 2 .env"'
+  sec_blocked 'bash -lc "cat .env"'
+  sec_blocked 'sudo bash -c "cat ~/.ssh/id_rsa"'
+  sec_blocked 'bash -c "echo hi; cat .env"'
+  sec_blocked 'eval "cat .env"'
+  sec_blocked 'eval cat .env'
+  sec_ok 'bash -c "echo hello"'
+  sec_ok 'bash -c "cat .env.example"'
+  sec_ok 'bash scripts/run.sh .env'
+  sec_ok 'bash -c "grep .env README.md"'
+  sec_ok 'eval "$(ssh-agent -s)"'
+  # HOME="/" (absolute, but the root): no crash, a plain write passes
+  printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"%s/a.txt","content":"x"}}' "$OD" "$OD" \
+    | env -u CORE_DIR HOME=/ XDG_CONFIG_HOME= bash "$H" >/dev/null 2>"$OD/e"; assert_eq "$?" "0" "HOME=/: guard-secrets passes a plain write"
+}
+bg sec_bypass
 
 bg_wait
 

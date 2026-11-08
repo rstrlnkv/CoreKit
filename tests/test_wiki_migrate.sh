@@ -155,9 +155,6 @@ assert_eq "$(snap_all "$P")" "$after1" "second --dry-run changed the project"
 # --- fields outside the six: stage: of a brief moves to ## Progress, anything else stays and is warned about
 # mkpage <file> <front matter lines...> — one page: front matter from the arguments, body "# T", "", "Text."
 mkpage() { local f="$1"; shift; mkdir -p "$(dirname "$f")"; { echo '---'; printf '%s\n' "$@"; printf -- '---\n\n# T\n\nText.\n'; } > "$f"; }
-SIX_TAIL='files: []
-related: []
-updated: 2026-01-01'
 # (a) a non-brief page with tags: x
 new_sandbox
 mkdir -p "$SANDBOX/xa/p"

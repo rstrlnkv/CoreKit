@@ -3,7 +3,7 @@
 source "$(dirname "$0")/lib.sh"
 
 # C1: undo-step must only touch the current project's steps
-new_sandbox; setup_core; sync_tools; S="$SKILL/scripts/scaffold.sh"
+new_sandbox; setup_core; sync_tools
 scaffold_old app-a; scaffold_old app-b
 SAVE="$SCRIPTS/save"; UNDO="$SCRIPTS/undo-step"
 (cd "$CORE_DIR/app-a/code" && bash "$SAVE" init) >/dev/null 2>&1
@@ -47,7 +47,7 @@ assert_eq "$(git -C "$C" status --porcelain)" "" "code left dirty"
 assert_eq "$(git -C "$CORE_DIR" status --porcelain -- cf-app)" "" "docs left dirty"
 
 # I4: paths with spaces
-SANDBOX="$(mktemp -d)"; export CORE_DIR="$SANDBOX/my projects/Core"
+SANDBOX="$(mktemp -d "$TEST_TMP/sb.XXXXXX")"; export CORE_DIR="$SANDBOX/my projects/Core"
 export CLAUDE_PLUGIN_DATA="$SANDBOX/plugin data"; export COREDEV_TOOLS="$CLAUDE_PLUGIN_DATA/tools"; sync_tools; setup_core
 scaffold_old sp-app; C="$CORE_DIR/sp-app/code"
 (cd "$C" && bash "$SCRIPTS/save" init) >/dev/null 2>&1

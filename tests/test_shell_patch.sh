@@ -7,8 +7,8 @@
 source "$(dirname "$0")/lib.sh"
 new_sandbox
 . "$SCRIPTS/lib.sh"
+# shellcheck disable=SC2034  # SELF is read by the functions of the sourced lib.sh
 SELF="$PLUGIN"
-trap 'rm -rf "$SANDBOX"' EXIT
 nl="
 "
 refused() { shell_patch_refused "$1" && pass || fail "$2: not refused: ${1:0:160}"; }
@@ -313,8 +313,8 @@ hit_is "apply_pa''tch x" 'apply_patch' "the hit names the spelling with quotes r
 hit_is "cat <<'E' | x${nl}*** Begin Patch${nl}*** Add File: a${nl}E" '*** Begin Patch' "the hit names a patch text"
 hit_is "\$'\\x61pply' x" "\$'\\...'" "the hit names an escape"
 # the hit is cut at 80 bytes, never inside a UTF-8 character
-e2="$(printf '\303\251')"; long="x"; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50; do long="$long$e2"; done
-want="x"; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39; do want="$want$e2"; done
+e2="$(printf '\303\251')"; long="x"; for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50; do long="$long$e2"; done
+want="x"; for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39; do want="$want$e2"; done
 hit_is "$long/a* x" "$want" "a long hit is cut before a split UTF-8 character"
 
 # --- documented over-blocking (LIMIT): a hit outside the simple form is refused
@@ -356,10 +356,22 @@ timed "1 MB of shells without a hit" 1 "$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 
 timed "1 MB of quotes, then apply_patch" 0 "$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 300000; i++) printf "\"\"x"; print "; apply_patch" }')"
 timed "1 MB of \$' escapes" 0 "$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 100000; i++) printf "$'"'"'a'"'"' "; print "$'"'"'\\x61'"'"'" }')"
 
+# --- find's program-running primaries with the terminator in QUOTES. Quoted text is opaque to the structure checks,
+# so `';'` leaves no ; for the "no list" check: only the find rule refuses these (a copy of the rule without it stayed
+# green). test_shell_patch_exec.sh shows that such a find really starts apply_patch.
+for c in "find . -exec apply_patch ';'" "find . -ok apply_patch ';'" "find . -execdir apply_patch ';'" "find . -okdir apply_patch ';'" \
+         "find . -name f -exec apply_patch ';'" "find f -exec apply_patch \"+\""; do
+  refused "$c" "find with a quoted terminator"
+done
+# twins that must pass: the same find reading only
+passes "find . -name apply_patch -print" "find -name apply_patch"
+passes "find . -iname 'apply_patch*'" "find -iname quoted glob"
+
 # --- the rule needs no file of the plugin
 SELF="$SANDBOX/nowhere"
 refused 'apply_patch' "no scripts dir: bare word"
 passes 'grep -rn apply_patch src' "no scripts dir: simple form"
 passes 'ls' "no scripts dir: ls"
+# shellcheck disable=SC2034  # SELF is read by the functions of the sourced lib.sh
 SELF="$PLUGIN"
 finish

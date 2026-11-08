@@ -1,18 +1,78 @@
 #!/usr/bin/env bash
-# Runs every tests/test_*.sh; exits non-zero if any fails.
+# Runs tests/test_*.sh; exits non-zero if any fails.
+#   bash tests/run.sh [-j N] [word ...]
+#   word ...        run only the files whose name contains one of the words (run.sh guard patch)
+#   -j N            run N files at a time (each file has its own HOME, TMPDIR and sandboxes)
+#   VERBOSE=1       print every file's output, not only a failing file's
+#   KEEP_SANDBOX=1  keep the run's temp folder and print its path
+# Prints one line per file with its time, then ALL TESTS PASSED or SOME TESTS FAILED, then every skip.
+# Every file runs with HOME, XDG_CONFIG_HOME, CODEX_HOME, GIT_CONFIG_GLOBAL and TMPDIR in its own folder
+# under one throwaway root, so a file that forgets new_sandbox still cannot touch the developer's files.
 cd "$(dirname "$0")" || exit 1
-rc=0
-skipped=""
-for t in test_*.sh; do
-  out="$(bash "$t" 2>&1)" || rc=1
-  [ -n "$out" ] && printf '%s\n' "$out"
-  # a whole file that skipped (a tool is missing) is named in the summary, not hidden behind PASSED
-  s="$(printf '%s\n' "$out" | sed -n 's/^SKIP \([^:]*\):.*/\1/p' | head -1)"
-  [ -n "$s" ] && skipped="${skipped:+$skipped, }$s"
-done
-if [ $rc -eq 0 ]; then
-  if [ -n "$skipped" ]; then echo "ALL TESTS PASSED (skipped: $skipped)"; else echo "ALL TESTS PASSED"; fi
-else
-  echo "SOME TESTS FAILED"
+HERE="$(pwd)"
+
+# run.sh --one <n> <file> — runs one file in $RUN_ROOT/<n>; writes out, rc and secs there (xargs calls this)
+if [ "${1:-}" = "--one" ]; then
+  d="$RUN_ROOT/$2"; mkdir -p "$d/home" "$d/xdg" "$d/codex" "$d/tmp"; : > "$d/gitconfig"
+  start=$(date +%s)
+  HOME="$d/home" XDG_CONFIG_HOME="$d/xdg" CODEX_HOME="$d/codex" GIT_CONFIG_GLOBAL="$d/gitconfig" \
+    GIT_CONFIG_NOSYSTEM=1 TMPDIR="$d/tmp" bash "$HERE/$3" > "$d/out" 2>&1 < /dev/null
+  echo $? > "$d/rc"; echo $(( $(date +%s) - start )) > "$d/secs"
+  exit 0
 fi
+
+jobs=1
+if [ "${1:-}" = "-j" ]; then
+  case "${2:-}" in ''|*[!0-9]*|0) echo "run.sh: -j needs a number of files at a time" >&2; exit 2 ;; esac
+  jobs="$2"; shift 2
+fi
+files=""
+for t in test_*.sh; do
+  if [ $# -gt 0 ]; then
+    m=0; for w in "$@"; do case "$t" in *"$w"*) m=1 ;; esac; done
+    [ $m = 1 ] || continue
+  fi
+  files="$files $t"
+done
+[ -n "$files" ] || { echo "run.sh: no test file matches: $*" >&2; exit 2; }
+
+RUN_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/np-run.XXXXXX")" || exit 1
+RUN_ROOT="$(cd -P "$RUN_ROOT" && pwd)"; export RUN_ROOT
+cleanup() {
+  if [ -n "${KEEP_SANDBOX:-}" ]; then echo "kept: $RUN_ROOT"
+  else chmod -R u+rwx "$RUN_ROOT" 2>/dev/null; rm -rf "$RUN_ROOT"; fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
+rc=0
+# report <n> <file> — the file's line, its output when it failed (or VERBOSE=1), its skips into $RUN_ROOT/skips
+report() {
+  local d="$RUN_ROOT/$1" r s
+  r="$(cat "$d/rc" 2>/dev/null)"; s="$(cat "$d/secs" 2>/dev/null)"
+  if [ "$r" = 0 ]; then
+    printf 'ok   %s (%s s)\n' "$2" "${s:-?}"
+    [ -z "${VERBOSE:-}" ] || cat "$d/out"
+  else
+    rc=1; printf 'FAIL %s (%s s)\n' "$2" "${s:-?}"; cat "$d/out"
+  fi
+  # SKIP lines (the old forms name no file: the file is added), and old notes that say a part did not run
+  sed -n -E -e 's/^[[:space:]]*SKIP //p' -e 's/^[[:space:]]*note: (.*(skipped|not checked|not run).*)/\1/p' "$d/out" \
+    | while IFS= read -r l; do
+        case "$l" in "$2: "*) echo "SKIP $l" ;; *) echo "SKIP $2: $l" ;; esac
+      done >> "$RUN_ROOT/skips"
+}
+
+t0=$(date +%s); n=0
+if [ "$jobs" = 1 ]; then
+  for t in $files; do n=$((n + 1)); bash "$HERE/run.sh" --one "$n" "$t"; report "$n" "$t"; done
+else
+  for t in $files; do n=$((n + 1)); echo "$n $t"; done | xargs -P "$jobs" -n 2 bash "$HERE/run.sh" --one
+  n=0; for t in $files; do n=$((n + 1)); report "$n" "$t"; done
+fi
+if [ $rc -eq 0 ]; then echo "ALL TESTS PASSED"; else echo "SOME TESTS FAILED"; fi
+if [ -s "$RUN_ROOT/skips" ]; then
+  echo "Skipped parts ($(wc -l < "$RUN_ROOT/skips" | tr -d ' ')):"; cat "$RUN_ROOT/skips"
+fi
+echo "wall time: $(( $(date +%s) - t0 )) s, $n files, -j $jobs"
 exit $rc

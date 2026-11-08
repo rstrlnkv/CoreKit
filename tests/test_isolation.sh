@@ -20,5 +20,29 @@ git -C "$SANDBOX/r" check-ignore -q .claude/settings.local.json && fail "setting
 git config --global test.isolation yes
 assert_contains "$SANDBOX/gitconfig" "isolation = yes"
 
+# Every test file that runs code (a script by a variable path, claude, codex) calls new_sandbox. A file run on
+# its own has no throwaway HOME from run.sh, so without new_sandbox it would write the developer's files.
+# runs_code <file> — the file runs code (comment lines and the lib.sh line do not count)
+runs_code() {
+  grep -v '^[[:space:]]*#' "$1" | grep -vF 'source "$(dirname "$0")/lib.sh"' \
+    | grep -qE '(^|[^[:alnum:]_-])(bash|sh|source|\.) +"?\$|(^|[;&|(`]|then |do |assert_exit [0-9]+ )[[:space:]]*(command +)?(claude|codex) '
+}
+has_sandbox() { grep -qE '(^|[;&(]|then |do )[[:space:]]*new_sandbox' "$1"; }
+# self-check on fixtures: a hook run, claude and codex count; a comment or a read does not; new_sandbox clears it
+F="$SANDBOX/fx"; mkdir -p "$F"
+printf 'source "$(dirname "$0")/lib.sh"\nbash "$HOOKS/guard-code.sh" < x\n' > "$F/hook"
+printf 'source "$(dirname "$0")/lib.sh"\nassert_exit 0 claude plugin validate "$P"\n' > "$F/claude"
+printf 'source "$(dirname "$0")/lib.sh"\nif true; then codex exec x; fi\n' > "$F/codex"
+printf 'source "$(dirname "$0")/lib.sh"\n# bash "$HOOKS/x.sh"\nassert_contains "$SCRIPTS/save" bash\n' > "$F/reads"
+printf 'source "$(dirname "$0")/lib.sh"\nnew_sandbox\nbash "$HOOKS/guard-code.sh" < x\n' > "$F/sandboxed"
+for x in hook claude codex; do runs_code "$F/$x" && pass || fail "runs_code misses the $x fixture"; done
+runs_code "$F/reads" && fail "runs_code counts a comment or a read" || pass
+has_sandbox "$F/sandboxed" && pass || fail "has_sandbox misses new_sandbox"
+has_sandbox "$F/hook" && fail "has_sandbox sees a sandbox in a file without one" || pass
+for t in "$ROOT"/tests/test_*.sh; do
+  runs_code "$t" || continue
+  has_sandbox "$t" && pass || fail "$(basename "$t") runs code without new_sandbox"
+done
+
 [ -z "${CORECREW_CONFIG:-}" ] && pass || fail "CORECREW_CONFIG leaks into the sandbox"
 finish

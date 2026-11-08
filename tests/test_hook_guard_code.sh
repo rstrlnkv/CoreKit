@@ -8,29 +8,15 @@ new_sandbox
 H="$HOOKS/guard-code.sh"
 assert_file "$H"
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
-trap 'chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
 
 mkdir -p "$CORE_DIR/p/code/src" "$CORE_DIR/p/docs" "$CORE_DIR/q/code" "$SANDBOX/elsewhere"
 : > "$CORE_DIR/p/CLAUDE.md"; : > "$CORE_DIR/q/CLAUDE.md"
 C="$CORE_DIR/p/code"
 
-# The sections below that share nothing run at the same time (bg <function>): each in a subshell with its
-# own scratch folder OD and its own counts, and the output and counts are collected by bg_wait. This keeps
-# the file near 5 s (a hook run is about 40 ms and there are about 350 of them).
-OD="$SANDBOX"; BGN=0
-bg() { # bg <function>
-  BGN=$((BGN + 1)); local n=$BGN
-  ( OD="$SANDBOX/bg$n"; mkdir -p "$OD"; FAILS=0; PASSES=0; "$1"; echo "$PASSES $FAILS" > "$SANDBOX/bg$n.count" ) > "$SANDBOX/bg$n.log" 2>&1 &
-}
-bg_wait() {
-  local n p f
-  wait
-  for n in $(seq 1 $BGN); do
-    cat "$SANDBOX/bg$n.log"
-    if [ -f "$SANDBOX/bg$n.count" ]; then read -r p f < "$SANDBOX/bg$n.count"; PASSES=$((PASSES + p)); FAILS=$((FAILS + f))
-    else fail "background section $n did not finish"; fi
-  done
-}
+# The sections below that share nothing run at the same time (bg <function>, lib.sh): each in a subshell with
+# its own scratch folder OD and its own counts. This keeps the file near 5 s (a hook run is about 40 ms and
+# there are about 350 of them). The foreground uses OD="$SANDBOX".
+OD="$SANDBOX"
 
 # run_json <json> — stdout in OUT, stderr in ERR, exit code in RC
 run_json() { printf '%s' "$1" | bash "$H" >"$OD/out" 2>"$OD/err"; RC=$?; OUT="$(<"$OD/out")"; ERR="$(<"$OD/err")"; }
@@ -273,7 +259,7 @@ if [ -d "$SANDBOX/cs/A" ]; then
   run_bash 'echo x > DOCS/a.md' "$SANDBOX/casecore/ядро/myapp/code"; blocked "Bash, cwd in other case" "$CP/code/DOCS/a.md" "$CP/docs/a.md"
   run_file Write "$SANDBOX/CASECORE/ЯДРО/myapp/docs/a.md" "$CP/code"; ok "other case, the Core's own docs"
 else
-  echo "  note: case-sensitive volume, letter-case test skipped"; pass
+  skip "core_dir letter case" "case-sensitive volume"; pass
 fi
 export CORE_DIR="$SANDBOX/Projects/Core"
 
@@ -450,11 +436,10 @@ assert_contains "$OD/err" "patch-paths.awk is missing or failed"
 
 # --- new layout: the code lives in <Projects>/<Name>, the private CLAUDE.md in the Core
 sec_new_layout() {
-  local PR="$SANDBOX/Projects" N="$SANDBOX/Projects/Foo" W
+  local PR="$SANDBOX/Projects" N="$SANDBOX/Projects/Foo"
   mkdir -p "$N/src" "$N/.claude" "$CORE_DIR/foo/docs" "$PR/Brain"
   echo '# foo' > "$CORE_DIR/foo/CLAUDE.md"; : > "$PR/Brain/CLAUDE.md"
   ln -s "$CORE_DIR/foo/CLAUDE.md" "$N/CLAUDE.local.md"
-  local nmsg
   nmsg() { printf 'corecrew: %s is an internal file and must not live in the code folder. Write it to %s instead.\nDocs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in %s.' "$1" "$2" "$CORE_DIR/foo/CLAUDE.md"; }
   run_file Write "$N/CLAUDE.md" "$N"; assert_eq "$RC" "2" "new: Write CLAUDE.md"; assert_eq "$ERR" "$(nmsg "$N/CLAUDE.md" "$CORE_DIR/foo/CLAUDE.md")" "new: message"
   run_file Write "$N/docs/x.md" "$N"; assert_eq "$RC" "2" "new: Write docs/x.md"
@@ -491,7 +476,7 @@ bg sec_new_odd_path
 FX="$ROOT/tests/fixtures/codex"
 mkdir -p "$CORE_DIR/r/code/docs" "$CORE_DIR/r/code/sub"; printf 'public-docs: docs/pub/\n' > "$CORE_DIR/r/CLAUDE.md"
 sec_codex() {
-  local R="$CORE_DIR/r/code" q
+  local R="$CORE_DIR/r/code"
   # fx <fixture> [cwd] — runs a fixture with @CWD@ replaced
   fx() { run_json "$(sed "s|@CWD@|${2-$C}|g" "$FX/$1.json")"; }
   # patch <patch text> [cwd] [tool] — a Codex tool call with the given patch text
@@ -698,6 +683,41 @@ sec_host_gate() {
   COREKIT_HOST=claude cx 'cat p | apply_patch' "$C"; named "turn_id says Codex even when the path does not (fails closed)" "apply_patch"
 }
 bg sec_host_gate
+
+
+# Bash through wrapper options and through another shell; a file directly under .claude/worktrees; a core_dir
+# that is a symlink. Own project folder bp, so the worktree folder it makes does not touch the other sections.
+sec_wrappers() {
+  local B="$CORE_DIR/bp/code"; mkdir -p "$B/src"; : > "$CORE_DIR/bp/CLAUDE.md"
+  code() { run_bash "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" "$B"; }
+  # wrapper options take their values
+  code 'timeout 5 tee docs/a'; assert_eq "$RC" "2" "timeout 5 tee docs/a"
+  code 'sudo -u x touch CLAUDE.md'; assert_eq "$RC" "2" "sudo -u x touch CLAUDE.md"
+  code 'nice -n 5 tee docs/a'; assert_eq "$RC" "2" "nice -n 5 tee docs/a"
+  code 'timeout 5 tee src/a'; assert_eq "$RC" "0" "timeout 5 tee src/a passes"
+  # a file directly under .claude/worktrees
+  run_file Write "$B/.claude/worktrees/notes.md" "$B"; assert_eq "$RC" "2" "file directly under .claude/worktrees is blocked"
+  mkdir -p "$B/.claude/worktrees/w"
+  run_file Write "$B/.claude/worktrees/w" "$B"; assert_eq "$RC" "0" "an existing worktree dir passes"
+  run_file Write "$B/.claude/worktrees/w/src/a.sh" "$B"; assert_eq "$RC" "0" "code inside a worktree passes"
+  # a command line handed to another shell is judged too: bash -c, sh -c, eval
+  code 'bash -c "echo hi > CLAUDE.md"'; assert_eq "$RC" "2" "bash -c writes CLAUDE.md"
+  code "sh -c 'touch docs/a.md'"; assert_eq "$RC" "2" "sh -c touches docs/a.md"
+  code 'eval "tee AGENTS.md"'; assert_eq "$RC" "2" "eval tee AGENTS.md"
+  code 'bash -c "echo hi > src/a.ts"'; assert_eq "$RC" "0" "bash -c writes src/a.ts passes"
+  code 'bash -c "ls docs"'; assert_eq "$RC" "0" "bash -c ls docs passes"
+  # a core_dir that is a symlink: the code folder beside the link's own path is still seen
+  local S2="$OD/sl"; mkdir -p "$S2/Projects/Proj" "$S2/elsewhere/Core/proj"
+  ln -s "$S2/elsewhere/Core" "$S2/Projects/Core"; : > "$S2/elsewhere/Core/proj/CLAUDE.md"
+  local oc="$CORE_DIR"; export CORE_DIR="$S2/Projects/Core"
+  run_file Write "$S2/Projects/Proj/CLAUDE.md" "$S2/Projects/Proj"
+  assert_eq "$RC" "2" "symlinked core_dir: guard-code sees the code folder"
+  CORE_DIR="$oc"
+  # HOME="/" (absolute, but the root): no crash, a plain write passes
+  printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"%s/a.txt","content":"x"}}' "$OD" "$OD" \
+    | env -u CORE_DIR HOME=/ XDG_CONFIG_HOME= bash "$H" >/dev/null 2>"$OD/e"; assert_eq "$?" "0" "HOME=/: guard-code passes a plain write"
+}
+bg sec_wrappers
 
 bg_wait
 

@@ -6,7 +6,6 @@
 # fake is reachable that way, so the refusal is not guarding an empty danger.
 source "$(dirname "$0")/lib.sh"
 new_sandbox
-trap 'rm -rf "$SANDBOX"' EXIT
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
 W="$SANDBOX/work"; BIN="$SANDBOX/fakebin"; LOG="$SANDBOX/fake.log"
 mkdir -p "$W" "$BIN" "$CORE_DIR/p/code"
@@ -29,7 +28,6 @@ ran_fake() { # ran_fake <cmd> — run it for real with the fake first on PATH; 0
 }
 command -v timeout >/dev/null 2>&1 || timeout() { shift; "$@"; }
 
-pad50="$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 51; i++) printf "ls; "; }')"
 q51="$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 51; i++) printf "bash -c '"'"'ls; ls'"'"'; " }')"
 nl="
 "
@@ -126,7 +124,7 @@ for c in "${bypass[@]}"; do
     [ "$rc" = 2 ] && pass || fail "$h rc=$rc (want 2) for: ${c:0:120}"
   done
   # Sanity of the danger: where the command can start the fake at all, record it (not asserted: a tool may be absent).
-  if ran_fake "$c"; then echo "  note: really starts the fake: ${c:0:70}"; fi
+  if ran_fake "$c"; then note "really starts the fake: ${c:0:70}"; fi
 done
 for c in "${twins[@]}"; do
   for h in guard-code.sh guard-secrets.sh; do
@@ -137,6 +135,8 @@ for c in "${twins[@]}"; do
 done
 # The word-splitting bypass is real: the fake is started by it (not only refused by the hook).
 ran_fake 'git grep $IFS--open-files-in-pager=apply_patch one' && pass || fail "the \$IFS git grep pager case no longer starts the fake: the bypass test is blind"
+# find with the terminator in quotes really starts the fake (test_shell_patch.sh: only the find rule refuses it)
+ran_fake "find . -name f.txt -exec apply_patch ';'" && pass || fail "find -exec ';': the fake did not start, so the case proves nothing"
 # Control: the fake itself works, and a plain apply_patch line is refused (the test is not blind).
 ran_fake "apply_patch x" && pass || fail "the fake apply_patch does not run: the check would be blind"
 [ "$(hook_rc guard-code.sh "apply_patch x")" = 2 ] && pass || fail "plain apply_patch not refused"

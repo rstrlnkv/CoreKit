@@ -6,8 +6,6 @@ source "$(dirname "$0")/lib.sh"
 new_sandbox
 . "$SCRIPTS/lib.sh"
 SELF="$PLUGIN"
-T="$(printf '\t')"
-trap 'rm -rf "$SANDBOX"' EXIT
 
 # pp <text> — the adapter output with the TAB shown as '>'
 pp() { patch_paths "$1" | tr '\t' '>'; }
@@ -68,10 +66,42 @@ assert_eq "$(pp "$b*** Add File: a$nl+x$nl$(printf '\302\240')*** Add File: docs
 assert_eq "$(pp "$b*** Add File: a$nl+x${nl}junk *** Add File: .env$nl$e")" "W>a${nl}X>unreadable" "junk before a header is X"
 assert_eq "$(pp "x *** Add File: .env" )" "X>unreadable" "strict: text with a header outside Begin is X"
 # a missing awk file prints nothing and fails; a reader that ran with no path prints nothing and succeeds
+# shellcheck disable=SC2034  # SELF is read by patch_paths (the sourced lib.sh)
 OUTP="$(SELF="$SANDBOX/nowhere"; patch_paths "$b*** Add File: a$nl$e")"; RCP=$?
 assert_eq "$OUTP" "" "missing adapter prints nothing"
 [ "$RCP" -ne 0 ] && pass || fail "missing adapter: status $RCP, want non-zero"
 OUTP="$(patch_paths "$b$e")"; RCP=$?
 assert_eq "$OUTP" "" "a patch that names no file prints nothing"
 assert_eq "$RCP" "0" "a patch that names no file: status 0"
+
+# --- against the real Codex parser: a path with a TAB or CR at its start or end, and CR-only line endings. What the real
+# parser writes, the guards must refuse (it reads such paths after trimming them, as the adapter above does).
+if ! command -v codex >/dev/null 2>&1; then skip "real-parser parity" "codex not on PATH"; finish; fi
+unset CLAUDE_PLUGIN_OPTION_CORE_DIR; mkdir -p "$CODEX_HOME" "$CORE_DIR/p/docs"; : > "$CORE_DIR/p/CLAUDE.md"
+C="$CORE_DIR/p/code"; nl=$'\n'; B='*** Begin Patch'; En='*** End Patch'; TAB=$'\t'; CR=$'\r'
+reset() { rm -rf "$C"; mkdir -p "$C/src" "$C/docs" "$C/.claude"; printf 'one\n' > "$C/src/m.txt"; printf 'one\n' > "$C/docs/e.md"; printf 'K=1\n' > "$C/.env"; printf 'one\n' > "$C/CLAUDE.md"; }
+real() { ( cd "$C" && codex --codex-run-as-apply-patch "$1" </dev/null >"$SANDBOX/real.out" 2>&1 ); RC_REAL=$?; }
+hook() {
+  local j; j="$(printf '%s' "$2" | LC_ALL=C awk 'BEGIN { ORS = "" } { gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t"); gsub(/\r/, "\\r"); if (NR > 1) printf "\\n"; printf "%s", $0 }')"
+  printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"apply_patch","tool_input":{"command":"%s"}}' "$C" "$j" | bash "$HOOKS/$1.sh" >/dev/null 2>"$SANDBOX/hook.err"
+}
+# edge <guard> <label> <file the real parser writes> <patch>: the real parser writes it, the guard refuses
+edge() {
+  reset; real "$4"
+  if [ "$RC_REAL" = 0 ] && [ -f "$C/$3" ]; then pass; else fail "$2: the real Codex did not write $3 (rc $RC_REAL: $(head -c 200 "$SANDBOX/real.out"))"; fi
+  reset; hook "$1" "$4"; assert_eq "$?" "2" "$2: $1 must refuse"
+}
+edge guard-code "TAB at the start"  docs/a.md "$B${nl}*** Add File: ${TAB}docs/a.md${nl}+x${nl}$En"
+edge guard-code "TAB at the end"    docs/a.md "$B${nl}*** Add File: docs/a.md${TAB}${nl}+x${nl}$En"
+edge guard-code "CR at the end"     docs/a.md "$B${nl}*** Add File: docs/a.md${CR}${nl}+x${nl}$En"
+edge guard-code "CR at the start"   docs/a.md "$B${nl}*** Add File: ${CR}docs/a.md${nl}+x${nl}$En"
+edge guard-code "Move to TAB end"   docs/m.md "$B${nl}*** Update File: src/m.txt${nl}*** Move to: docs/m.md${TAB}${nl}@@${nl}-one${nl}+two${nl}$En"
+edge guard-secrets "TAB at the start .env.new" .env.new "$B${nl}*** Add File: ${TAB}.env.new${nl}+K=1${nl}$En"
+edge guard-secrets "TAB at the end .env.new"   .env.new "$B${nl}*** Add File: .env.new${TAB}${nl}+K=1${nl}$En"
+# CR-only line endings: what the real parser does, the guards must do too (refuse when it writes an internal file)
+cr_only="${B}${CR}*** Add File: docs/a.md${CR}+x${CR}${En}"
+reset; real "$cr_only"; rr="$RC_REAL"; wrote=0; [ -f "$C/docs/a.md" ] && wrote=1
+reset; hook guard-code "$cr_only"; rc=$?
+if [ "$wrote" = 1 ]; then assert_eq "$rc" "2" "CR-only patch: the real parser wrote docs/a.md, guard-code must refuse"
+else assert_eq "$rc" "2" "CR-only patch the real parser rejects (rc $rr): guard-code fails closed"; fi
 finish
