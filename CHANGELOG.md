@@ -9,6 +9,18 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-08
+
+### Fixed
+
+- guard-code and guard-secrets no longer print "write error: Broken pipe" beside their message
+  when the host runs hooks with SIGPIPE ignored.
+- The Bash tokenizer of guard-secrets and the read-only rule reads a large command about twice as
+  fast (1 MB: 1.2 s to 0.65 s).
+- In Codex, a `config.toml` that starts with a UTF-8 BOM and sets `default_permissions =
+  "corecrew"` is read correctly under a UTF-8 locale; the "profile is not the default" note no
+  longer shows by mistake.
+
 ## [0.9.0] - 2026-11-08
 
 ### Added
