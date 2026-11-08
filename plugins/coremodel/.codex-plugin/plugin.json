@@ -1,0 +1,21 @@
+{
+  "name": "coremodel",
+  "version": "0.6.0",
+  "description": "Picks the model and the effort level each prompt needs, for code and office work; asks before Fable, xhigh or max, and names the token cost of a model switch mid-chat.",
+  "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
+  "homepage": "https://github.com/rstrlnkv/CoreKit",
+  "repository": "https://github.com/rstrlnkv/CoreKit",
+  "license": "MIT",
+  "keywords": ["effort", "model", "cost", "workflow"],
+  "hooks": "./codex/hooks.json",
+  "interface": {
+    "displayName": "CoreModel",
+    "shortDescription": "Hints which model and effort a prompt needs",
+    "developerName": "rstrlnkv",
+    "category": "Coding",
+    "websiteURL": "https://github.com/rstrlnkv/CoreKit",
+    "brandColor": "#3A3FA0",
+    "composerIcon": "./.claude-plugin/icon.png",
+    "logo": "./.claude-plugin/icon.png"
+  }
+}

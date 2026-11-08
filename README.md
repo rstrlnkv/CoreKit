@@ -81,7 +81,7 @@ Run them after `/plugin marketplace add rstrlnkv/CoreKit` (above). Details are i
 | Feature | What it does |
 |---|---|
 | `corecrew` | Starts a project from an interview, runs tasks with a crew of agents, releases, and keeps your standards and lessons in one private repo of your own (the Core) |
-| `coremodel` | Before Claude starts on a prompt, picks the model (Haiku, Sonnet, Opus, Fable) and the effort level the work needs; asks before Fable, Extra high and Max. Details: [plugins/coremodel/README.md](plugins/coremodel/README.md) |
+| `coremodel` | Before Claude starts on a prompt, picks the model (Haiku, Sonnet, Opus, Fable) and the effort level the work needs; asks before Fable, Extra high and Max. In Codex it only hints which model to switch to with `/model`. Details: [plugins/coremodel/README.md](plugins/coremodel/README.md) |
 | `coreopinion` | Asks OpenAI's GPT, through the Codex CLI with a narrow read-only permission profile, for a second opinion or a review (`/coreopinion:second-opinion`). Only Claude edits, after your yes. Details: [plugins/coreopinion/README.md](plugins/coreopinion/README.md) |
 
 ### Commands (corecrew)
@@ -189,7 +189,7 @@ Outside a Core project there are two exceptions: the session-start hook refreshe
 ### Network
 
 - `corecrew`: the GitHub API through `gh`, only when you approve a repo creation or a push (`gh repo create`, `git push`), and the Core pre-push hook asks `api.github.com` whether the Core repo is private. Stack generators you approve (Flutter, Node, Rust, uv) reach their own package hosts.
-- `coremodel`: no host of its own; its classifier call goes through your Claude Code account.
+- `coremodel`: no host of its own; in Claude Code its classifier call goes through your Claude Code account. In Codex every prompt is sent a second time to OpenAI (`gpt-6-luna`) through `codex exec`.
 - `coreopinion`: OpenAI, through the Codex CLI, with the files you confirmed (see [plugins/coreopinion/README.md](plugins/coreopinion/README.md)).
 
 ### Changes outside the repo

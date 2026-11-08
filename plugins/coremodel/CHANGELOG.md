@@ -2,6 +2,10 @@
 
 Every entry starts with a badge: **NEW** is a new capability, **FIX** is a defect fixed, **UPD** is a change to existing behaviour, documentation or internal work.
 
+## 0.6.0 — 2026-11-08
+
+- **NEW** **A hint in Codex.** Codex hooks cannot switch the model, so a `UserPromptSubmit` hook asks `gpt-6-luna` which model and effort the prompt needs and adds one line of context ("switch with /model"). About one small call per prompt, at most 20 seconds, silent on any failure; `coremodel_mode: off` in the corecrew settings file turns it off. The Claude Code module is unchanged.
+
 ## 0.5.2 — 2026-11-06
 
 - **UPD** **The classifier picks the effort and the model more accurately**, Haiku most of all. Its prompt now:

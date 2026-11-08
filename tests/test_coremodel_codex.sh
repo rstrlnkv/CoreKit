@@ -1,0 +1,320 @@
+#!/usr/bin/env bash
+# coremodel in Codex (port task 5): Codex hooks cannot change the model, so a UserPromptSubmit hook
+# (plugins/coremodel/codex/hint.sh) asks a small model which model and effort the prompt needs and adds
+# that as context ("switch with /model"). Checks: the Codex manifest and hooks file (and, offline, that
+# Codex 0.166.0 lists exactly that hook and not the Claude module hooks/hooks.json), then hint.sh against
+# a FAKE `codex` on PATH. No network; CODEX_HOME and HOME are the test sandbox. The manifest key was found by
+# experiment on codex 0.166.0: "hooks" in .codex-plugin/plugin.json (a string or an array of paths, relative
+# to the plugin root), seen through the app-server request `hooks/list` (sourcePath, key, eventName).
+# HINT_SH=<path> runs the behaviour checks against another copy of hint.sh (used to mutate copies).
+source "$(dirname "$0")/lib.sh"
+new_sandbox
+trap 'pkill -f "sleep 10.37" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
+CM="$ROOT/plugins/coremodel"
+HINT="${HINT_SH:-$CM/codex/hint.sh}"
+CX_MAN="$CM/.codex-plugin/plugin.json"; CL_MAN="$CM/.claude-plugin/plugin.json"
+HJSON="$CM/codex/hooks.json"
+
+json_ok() { # json_ok <file> — valid JSON (node or python3; without either, only a brace check)
+  if command -v node >/dev/null 2>&1; then node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$1" 2>/dev/null
+  elif command -v python3 >/dev/null 2>&1; then python3 -I -c 'import json,sys; json.load(open(sys.argv[1]))' "$1" 2>/dev/null
+  else head -c1 "$1" | grep -q '{'; fi
+}
+field() { sed -n "s/^ *\"$2\": *\"\(.*\)\",\{0,1\}\$/\1/p" "$1" | head -1; }
+
+# ---- A. manifest ----
+echo "  -- A. manifest and hooks file"
+assert_file "$CX_MAN"
+if [ -f "$CX_MAN" ]; then
+  json_ok "$CX_MAN" && pass || fail "$CX_MAN is not valid JSON"
+  for k in name version description; do
+    v="$(field "$CX_MAN" $k)"
+    [ -n "$v" ] && pass || fail "codex manifest has no $k"
+    assert_eq "$v" "$(field "$CL_MAN" $k)" "codex manifest $k = claude manifest $k"
+  done
+  grep -qE '"hooks": *("\./codex/hooks\.json"|\[ *"\./codex/hooks\.json" *\])' "$CX_MAN" && pass || fail "codex manifest does not point \"hooks\" at ./codex/hooks.json"
+fi
+# the Claude module file stays as it is and is not what Codex reads
+assert_contains "$CM/hooks/hooks.json" '"modules"'
+assert_file "$HJSON"
+if [ -f "$HJSON" ]; then
+  json_ok "$HJSON" && pass || fail "$HJSON is not valid JSON"
+  assert_eq "$(grep -c '"UserPromptSubmit"' "$HJSON")" "1" "one UserPromptSubmit entry"
+  assert_eq "$(grep -c '"command"' "$HJSON")" "1" "one hook command"
+  assert_eq "$(grep -cE '"(PreToolUse|PostToolUse|SessionStart|Stop|PermissionRequest)"' "$HJSON")" "0" "no other event"
+  assert_contains "$HJSON" 'bash \"${CLAUDE_PLUGIN_ROOT}/codex/hint.sh\"'
+  t="$(sed -n 's/.*"timeout": *\([0-9][0-9]*\).*/\1/p' "$HJSON" | head -1)"
+  if [ -n "$t" ] && [ "$t" -ge 1 ] && [ "$t" -le 30 ]; then pass; else fail "explicit timeout 1..30 s in hooks.json (got '${t:-none}')"; fi
+  # the hook's own wait (default 20 s) fits inside the hook timeout
+  if [ -n "$t" ] && [ "$t" -gt 20 ]; then pass; else fail "hook timeout ($t) must exceed hint.sh's own 20 s limit"; fi
+fi
+
+# offline install into the sandbox CODEX_HOME and ask Codex which hooks it sees
+if command -v codex >/dev/null 2>&1; then
+  mkdir -p "$CODEX_HOME" "$SANDBOX/work"
+  cx() { codex --disable remote_plugin --disable plugin_discovery_prefetch "$@"; }
+  assert_exit 0 cx plugin marketplace add "$ROOT"
+  assert_exit 0 cx plugin add coremodel@corekit
+  ver="$(field "$CL_MAN" version)"
+  inst="$CODEX_HOME/plugins/cache/corekit/coremodel/$ver"
+  assert_file "$inst/codex/hint.sh"
+  assert_file "$inst/.codex-plugin/plugin.json"
+  req="$SANDBOX/req.jsonl"
+  printf '%s\n' '{"id":1,"method":"initialize","params":{"clientInfo":{"name":"t","version":"1"}}}' '{"method":"initialized"}' \
+    "{\"id\":2,\"method\":\"hooks/list\",\"params\":{\"cwds\":[\"$SANDBOX/work\"]}}" > "$req"
+  (cat "$req"; sleep 4) | codex --disable remote_plugin app-server --listen stdio:// > "$SANDBOX/hooks-list.out" 2> "$SANDBOX/hooks-list.err"
+  grep '"id":2' "$SANDBOX/hooks-list.out" | sed 's/{"key":/\
+&/g' | grep '^{"key":"coremodel@' > "$SANDBOX/hooks.lines"
+  assert_eq "$(wc -l < "$SANDBOX/hooks.lines" | tr -d ' ')" "1" "Codex lists exactly one coremodel hook"
+  assert_contains "$SANDBOX/hooks.lines" '"key":"coremodel@corekit:codex/hooks.json:user_prompt_submit:0:0"'
+  assert_contains "$SANDBOX/hooks.lines" '"eventName":"userPromptSubmit"'
+  assert_contains "$SANDBOX/hooks.lines" "\"sourcePath\":\"$inst/codex/hooks.json\""
+  assert_contains "$SANDBOX/hooks.lines" "$inst/codex/hint.sh"
+  assert_not_contains "$SANDBOX/hooks.lines" 'hooks/hooks.json'
+  assert_not_contains "$SANDBOX/hooks.lines" 'CLAUDE_PLUGIN_ROOT'
+else
+  echo "  note: codex not on PATH: the offline install and hooks/list checks are skipped"
+fi
+
+# ---- C. hint.sh against a fake codex ----
+echo "  -- C. hint.sh"
+assert_file "$HINT"
+BIN="$SANDBOX/bin"; mkdir -p "$BIN"
+STUB_ANSWER="$SANDBOX/answer"; CALLS="$SANDBOX/calls"; ARGV="$SANDBOX/argv"; STDIN="$SANDBOX/stdin"; ENVREC="$SANDBOX/env"
+cat > "$BIN/codex" <<'STUB'
+#!/bin/bash
+# fake codex: records argv (NUL-separated), stdin, COREMODEL_NESTED; answers with $STUB_ANSWER (or fails as $STUB_MODE says)
+echo x >> "$STUB_DIR/calls"
+printf '%s\0' "$@" > "$STUB_DIR/argv"
+cat > "$STUB_DIR/stdin"
+echo "NESTED=${COREMODEL_NESTED:-}" > "$STUB_DIR/env"
+echo $$ > "$STUB_DIR/pid"
+case "${STUB_MODE:-ok}" in
+  fail) echo "boom" >&2; exit 1 ;;
+  empty) exit 0 ;;
+  sleep) sleep 10.37; exit 0 ;;
+esac
+# an answer file given as -o / --output-last-message is written too
+prev=""; for a in "$@"; do
+  case "$prev" in -o|--output-last-message) cat "$STUB_DIR/answer" > "$a" ;; esac
+  prev="$a"
+done
+cat "$STUB_DIR/answer"
+STUB
+chmod +x "$BIN/codex"
+export STUB_DIR="$SANDBOX"
+PATHSTUB="$BIN:/usr/bin:/bin:/usr/sbin:/sbin"
+PATHNONE="$SANDBOX/nobin:/usr/bin:/bin:/usr/sbin:/sbin"; mkdir -p "$SANDBOX/nobin"
+
+# run_hint <path> <stdin-text> [VAR=value ...] — stdout in $SANDBOX/out, stderr in $SANDBOX/err, exit code in $RC
+run_hint() {
+  local p="$1" in="$2"; shift 2
+  rm -f "$CALLS" "$ARGV" "$STDIN" "$ENVREC" "$SANDBOX/pid"
+  { printf "%s" "$in"; } 2>/dev/null | env PATH="$p" "$@" /bin/bash "$HINT" > "$SANDBOX/out" 2> "$SANDBOX/err"; RC=$?
+}
+ncalls() { [ -f "$CALLS" ] && wc -l < "$CALLS" | tr -d ' ' || echo 0; }
+# event <prompt> — the hook's stdin JSON for a prompt that needs no escaping
+event() { printf '{"hook_event_name":"UserPromptSubmit","session_id":"s1","cwd":"/tmp","prompt":"%s"}' "$1"; }
+silent() { # silent <label> — exit 0, nothing on stdout
+  assert_eq "$RC" "0" "$1: exit 0"
+  assert_eq "$(cat "$SANDBOX/out")" "" "$1: no stdout"
+}
+answer() { printf '%s' "$1" > "$STUB_ANSWER"; }
+
+# the classifier template, straight from the Claude module
+TPL="$SANDBOX/template.txt"
+sed -n '/^export const TEMPLATE = `/,/^\/\/ TEMPLATE-END/p' "$CM/hooks/classifier.ts" | sed '1s/^export const TEMPLATE = `//' | sed '$d' > "$TPL"
+[ -s "$TPL" ] && pass || fail "could not extract the template from classifier.ts"
+T_FIRST="$(head -1 "$TPL")"
+T_LAST="$(tail -1 "$TPL" | sed 's/`$//')"
+
+# main path: high, opus
+answer '{"why":"flaky test, cause unknown","level":"high","model":"opus"}'
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
+assert_eq "$RC" "0" "main: exit 0"
+assert_eq "$(ncalls)" "1" "main: codex called once"
+if [ -f "$ARGV" ]; then
+  tr '\0' '\n' < "$ARGV" > "$SANDBOX/argv.txt"
+  assert_eq "$(sed -n 1p "$SANDBOX/argv.txt")" "exec" "main: first argument is exec"
+  # --model gpt-6-luna (or -m, or --model=...)
+  if grep -qxF -- 'gpt-6-luna' "$SANDBOX/argv.txt" && { grep -qxE -- '--model|-m' "$SANDBOX/argv.txt" || grep -qxF -- '--model=gpt-6-luna' "$SANDBOX/argv.txt"; }; then pass; else fail "main: argv lacks --model gpt-6-luna"; fi
+  if grep -A1 -xE -- '--sandbox|-s' "$SANDBOX/argv.txt" | grep -qxF read-only || grep -qxF -- '--sandbox=read-only' "$SANDBOX/argv.txt"; then pass; else fail "main: argv lacks a read-only sandbox"; fi
+  grep -qE 'danger|full-auto|workspace-write|bypass' "$SANDBOX/argv.txt" && fail "main: argv widens the sandbox" || pass
+  cat "$SANDBOX/argv.txt" "$STDIN" > "$SANDBOX/sent.txt"   # the prompt may go as an argument or on stdin
+  assert_contains "$SANDBOX/sent.txt" "$T_FIRST"
+  assert_contains "$SANDBOX/sent.txt" "$T_LAST"
+  assert_contains "$SANDBOX/sent.txt" 'First decide if it is keep.'
+  assert_contains "$SANDBOX/sent.txt" 'fix the flaky login test'
+  assert_not_contains "$SANDBOX/sent.txt" '{{PROMPT}}'
+  assert_not_contains "$SANDBOX/sent.txt" '{{REPLY}}'
+  assert_not_contains "$SANDBOX/sent.txt" '{{NOW}}'
+fi
+assert_contains "$ENVREC" 'NESTED=1'
+out="$(cat "$SANDBOX/out")"
+case "$out" in
+  '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"'*'"}}') pass ;;
+  *) fail "main: stdout is not the hookSpecificOutput object: $out" ;;
+esac
+assert_eq "$(printf '%s' "$out" | wc -l | tr -d ' ')" "0" "main: stdout is one line"
+json_ok "$SANDBOX/out" && pass || fail "main: stdout is not valid JSON"
+case "$out" in *gpt-6-astra*) pass ;; *) fail "main: context lacks gpt-6-astra: $out" ;; esac
+case "$out" in *high*) pass ;; *) fail "main: context lacks the effort 'high'" ;; esac
+case "$out" in *xhigh*) fail "main: effort high reported as xhigh" ;; *) pass ;; esac
+case "$out" in */model*) pass ;; *) fail "main: context lacks /model" ;; esac
+case "$out" in *'fix the flaky login test'*) fail "main: the prompt is printed back" ;; *) pass ;; esac
+
+# the map: model and effort
+check_map() { # <level> <model word> <expected codex model> <other model names that must not appear>
+  answer "{\"why\":\"x\",\"level\":\"$1\",\"model\":\"$2\"}"
+  run_hint "$PATHSTUB" "$(event 'do the thing')"
+  local o; o="$(cat "$SANDBOX/out")"
+  assert_eq "$RC" "0" "map $1/$2: exit 0"
+  case "$o" in *"$3"*) pass ;; *) fail "map $1/$2: context lacks $3: $o" ;; esac
+  case "$o" in *"$1"*) pass ;; *) fail "map $1/$2: context lacks effort $1: $o" ;; esac
+  case "$o" in */model*) pass ;; *) fail "map $1/$2: context lacks /model" ;; esac
+  local m; for m in $4; do case "$o" in *"$m"*) fail "map $1/$2: context names $m too: $o" ;; *) pass ;; esac; done
+}
+check_map low haiku gpt-6-luna "gpt-6.1-sol gpt-6-astra"
+check_map medium sonnet gpt-6.1-sol "gpt-6-luna gpt-6-astra"
+check_map high opus gpt-6-astra "gpt-6-luna gpt-6.1-sol"
+check_map xhigh fable gpt-6-astra "gpt-6-luna gpt-6.1-sol"
+check_map max fable gpt-6-astra "gpt-6-luna gpt-6.1-sol"
+check_map max opus gpt-6-astra "gpt-6-luna gpt-6.1-sol"
+# the answer may come wrapped in prose or a fence, as the Claude parser also accepts
+answer 'Sure! ```json
+{"why":"x","level":"medium","model":"sonnet"}
+```'
+run_hint "$PATHSTUB" "$(event 'add a field')"
+case "$(cat "$SANDBOX/out")" in *gpt-6.1-sol*) pass ;; *) fail "fenced answer is not read: $(cat "$SANDBOX/out")" ;; esac
+
+# keep: nothing to add
+answer '{"why":"approval","level":"keep","model":"sonnet"}'
+run_hint "$PATHSTUB" "$(event 'yes')"
+silent "keep"; assert_eq "$(ncalls)" "1" "keep: codex was asked"
+
+# recursion guard
+answer '{"why":"x","level":"high","model":"opus"}'
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_NESTED=1
+silent "nested"; assert_eq "$(ncalls)" "0" "nested: codex not called"
+
+# settings: off, default on
+SF="$(bash "$SCRIPTS/lib.sh" setting-path)"; mkdir -p "$(dirname "$SF")"
+printf 'coremodel_mode: off\n' > "$SF"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
+silent "off"; assert_eq "$(ncalls)" "0" "off: codex not called"
+printf 'ui_language: en\n  coremodel_mode :   off  \r\n' > "$SF"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
+silent "off (spaces, CRLF)"; assert_eq "$(ncalls)" "0" "off (spaces, CRLF): codex not called"
+printf 'coremodel_mode: on\n' > "$SF"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
+assert_eq "$(ncalls)" "1" "mode on: codex called"
+printf 'ui_language: en\n' > "$SF"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
+assert_eq "$(ncalls)" "1" "other keys only: on by default"
+rm -f "$SF"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
+assert_eq "$(ncalls)" "1" "no settings file: on by default"
+# CORECREW_CONFIG points the settings elsewhere
+printf 'coremodel_mode: off\n' > "$SANDBOX/alt-settings"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" CORECREW_CONFIG="$SANDBOX/alt-settings"
+silent "off via CORECREW_CONFIG"; assert_eq "$(ncalls)" "0" "off via CORECREW_CONFIG: codex not called"
+
+# failures are silent and never block the prompt
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" STUB_MODE=fail
+silent "stub exits 1"; assert_eq "$(ncalls)" "1" "stub exits 1: it was called"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" STUB_MODE=empty
+silent "stub prints nothing"
+for g in 'garbage, no json here' '{"level":"high"' '{"why":"x","level":"enormous","model":"opus"}' '{"why":"x","level":"high","model":"gpt-9"}' '[1,2,3]' ''; do
+  answer "$g"
+  run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
+  silent "garbage answer '$g'"
+done
+answer '{"why":"x","level":"high","model":"opus"}'
+run_hint "$PATHNONE" "$(event 'fix the flaky login test')"
+silent "no codex on PATH"
+for bad in '' '   ' 'not json at all' '{"hook_event_name":"UserPromptSubmit"' '{"hook_event_name":"UserPromptSubmit"}' '{"hook_event_name":"UserPromptSubmit","prompt":""}' '{"hook_event_name":"UserPromptSubmit","prompt":"   "}' '{"hook_event_name":"UserPromptSubmit","prompt":42}' '{"prompt":'; do
+  run_hint "$PATHSTUB" "$bad"
+  silent "stdin '$bad'"
+  assert_eq "$(ncalls)" "0" "stdin '$bad': codex not called"
+done
+# a hook event that is not a prompt: no call
+run_hint "$PATHSTUB" '{"hook_event_name":"SessionStart","prompt":"fix the flaky login test"}'
+silent "other event"
+
+# timeout: the stub sleeps 10 s, the limit is 2 s
+t0="$(date +%s)"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" STUB_MODE=sleep COREMODEL_HINT_TIMEOUT=2
+t1="$(date +%s)"
+silent "timeout"
+if [ $((t1 - t0)) -lt 6 ]; then pass; else fail "timeout: hint.sh took $((t1 - t0)) s with COREMODEL_HINT_TIMEOUT=2"; fi
+assert_eq "$(ncalls)" "1" "timeout: stub was started"
+sleep 1
+spid="$(cat "$SANDBOX/pid" 2>/dev/null)"
+if [ -n "$spid" ] && kill -0 "$spid" 2>/dev/null; then fail "timeout: the stub (pid $spid) is still running"; else pass; fi
+if pgrep -f 'sleep 10.37' >/dev/null 2>&1; then fail "timeout: the stub's sleep child is still running"; pkill -f 'sleep 10.37'; else pass; fi
+# a bad limit value does not break the hook
+answer '{"why":"x","level":"high","model":"opus"}'
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_HINT_TIMEOUT=abc
+case "$(cat "$SANDBOX/out")" in *gpt-6-astra*) pass ;; *) fail "COREMODEL_HINT_TIMEOUT=abc: no hint (a bad value should mean the default)" ;; esac
+
+# the prompt reaches codex unchanged: quotes, $(...), backticks, newlines, Cyrillic, backslashes
+answer '{"why":"x","level":"high","model":"opus"}'
+P='say "hi" and '"'"'bye'"'"' $(touch '"$SANDBOX"'/pwned) `touch '"$SANDBOX"'/pwned2` ${HOME} $HOME \n literal
+вторая строка: почини авторизацию, "ёжик" \\ end *'
+esc="$(printf '%s' "$P" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS=""} NR>1{printf "\\n"} {print}')"
+run_hint "$PATHSTUB" "{\"hook_event_name\":\"UserPromptSubmit\",\"prompt\":\"$esc\"}"
+assert_eq "$RC" "0" "odd prompt: exit 0"
+assert_no_file "$SANDBOX/pwned"; assert_no_file "$SANDBOX/pwned2"
+if [ -f "$ARGV" ]; then
+  tr '\0' '\n' < "$ARGV" > "$SANDBOX/argv.txt"; cat "$SANDBOX/argv.txt" "$STDIN" > "$SANDBOX/sent.txt"
+  sent="$(cat "$SANDBOX/sent.txt")"
+  case "$sent" in *"$P"*) pass ;; *) fail "odd prompt: the text did not reach codex unchanged" ;; esac
+else fail "odd prompt: codex was not called"; fi
+case "$(cat "$SANDBOX/out")" in *почини*|*pwned*|*literal*) fail "odd prompt: printed back" ;; *) pass ;; esac
+# a very long prompt still gets an answer and does not break the call
+long="$(awk 'BEGIN{for(i=0;i<20000;i++) printf "word%d ", i}')"
+run_hint "$PATHSTUB" "$(event "$long")"
+assert_eq "$RC" "0" "long prompt: exit 0"
+assert_eq "$(ncalls)" "1" "long prompt: one call"
+# nothing on stdout other than the one object, in every case above the prompt text stays out
+# (stderr is free)
+
+# ---- pass 2: stdin, ephemeral, big prompt, SIGTERM, clamp ----
+echo "  -- C2. stdin, big prompt, signals"
+answer '{"why":"x","level":"high","model":"opus"}'
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
+tr '\0' '\n' < "$ARGV" > "$SANDBOX/argv.txt"
+assert_contains "$SANDBOX/argv.txt" '--ephemeral'
+assert_not_contains "$SANDBOX/argv.txt" 'fix the flaky login test'
+assert_contains "$STDIN" 'fix the flaky login test'
+assert_eq "$(tail -1 "$SANDBOX/argv.txt")" "-" "prompt read from stdin (last argument -)"
+# a 1 MB prompt with many \n escapes
+awk 'BEGIN{printf "{\"hook_event_name\":\"UserPromptSubmit\",\"prompt\":\""; for(i=0;i<100000;i++) printf "line%d\\n", i; printf "\"}"}' > "$SANDBOX/big.json"
+t0="$(date +%s)"
+rm -f "$CALLS"; env PATH="$PATHSTUB" /bin/bash "$HINT" < "$SANDBOX/big.json" > "$SANDBOX/out" 2>/dev/null; RC=$?
+t1="$(date +%s)"
+assert_eq "$RC" "0" "1 MB prompt: exit 0"
+if [ $((t1 - t0)) -lt 5 ]; then pass; else fail "1 MB prompt took $((t1 - t0)) s"; fi
+# SIGTERM to hint.sh while the stub sleeps: nothing is left running
+rm -f "$SANDBOX/pid"
+( printf '%s' "$(event 'fix the flaky login test')" | env PATH="$PATHSTUB" STUB_MODE=sleep /bin/bash "$HINT" > /dev/null 2>&1 ) &
+sleep 2
+hp="$(pgrep -f "bash $HINT" | head -1)"
+[ -n "$hp" ] && kill -TERM "$hp" 2>/dev/null
+sleep 1.5
+spid="$(cat "$SANDBOX/pid" 2>/dev/null)"
+if [ -n "$spid" ] && kill -0 "$spid" 2>/dev/null; then fail "SIGTERM: the stub is still running"; else pass; fi
+if pgrep -f 'sleep 10.37' >/dev/null 2>&1; then fail "SIGTERM: the stub's sleep is still running"; pkill -f 'sleep 10.37'; else pass; fi
+# the limit is clamped to 20 s
+if grep -qE 'to=20' "$HINT" && grep -q -- '-gt 20' "$HINT"; then pass; else fail "COREMODEL_HINT_TIMEOUT is not clamped to 20"; fi
+
+# ---- D. portability scan covers the new script ----
+echo "  -- D. portability"
+assert_file "$CM/codex/hint.sh"
+if [ -f "$CM/codex/hint.sh" ]; then
+  head -1 "$CM/codex/hint.sh" | grep -qE '^#!.*bash' && pass || fail "hint.sh starts with a bash shebang"
+  # test_portability.sh finds every .sh under plugins/ by find; its self-check lists the same way
+  (cd "$ROOT" && find skills scripts hooks tests plugins -type f 2>/dev/null) | grep -qx 'plugins/coremodel/codex/hint.sh' && pass || fail "portability scan list misses hint.sh"
+  grep -qE 'sed[[:space:]]+-i|mapfile|readarray|grep[[:space:]]+-P|declare[[:space:]]+-A|local[[:space:]]+-n|\$\{[A-Za-z_]+(,,|\^\^)|\|[&]|date[[:space:]]+-d|readlink[[:space:]]+-f|\bjq\b' "$CM/codex/hint.sh" && fail "hint.sh uses a non-portable construct or jq" || pass
+fi
+finish

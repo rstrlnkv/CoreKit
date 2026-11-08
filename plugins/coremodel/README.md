@@ -143,11 +143,22 @@ prompt goes on unchanged. Slash commands and messages that come neither from the
 (the phone or the web) are never checked. Errors are written to `~/.claude/mods-logs/coremodel.log` and never block the
 prompt.
 
+## Codex
+
+In Codex the plugin gives a **hint only**: Codex hooks cannot switch the model or the effort. A `UserPromptSubmit` hook
+(`codex/hint.sh`) asks `gpt-6-luna` (`codex exec`, read-only) which model and effort the prompt needs and, when they differ
+from "keep", adds one line to the context, for example "this prompt needs gpt-6-astra at high effort; switch with /model if the
+current one differs". You switch yourself with `/model`. Mapping: Haiku to `gpt-6-luna`, Sonnet to `gpt-6.1-sol`, Opus and Fable to `gpt-6-astra`.
+
+- It costs about one `gpt-6-luna` call per prompt and waits at most 20 seconds (`COREMODEL_HINT_TIMEOUT`); any failure is silent and the prompt goes on.
+- Turn it off with `coremodel_mode: off` in `~/.config/corecrew/settings`.
+- Codex asks you to trust the hook the first time: review and enable it in `/hooks`.
+
 ## Requirements
 
 - **OS:** whatever Claude Code runs on (terminal and desktop app); the plugin is a TypeScript module with no native code.
 - **Claude Code** 2.1.287 or newer: its hooks run as a module.
-- **Network:** no host of its own. The classifier call goes through your own Claude Code account, so it reaches the same Anthropic service Claude Code does.
+- **Network:** no host of its own. In Claude Code the classifier call goes through your own Claude Code account, so it reaches the same Anthropic service Claude Code does. In Codex every prompt is sent a second time to OpenAI (`gpt-6-luna`) through `codex exec`; the Codex hint needs `bash` and the `codex` CLI.
 - **Permissions:** it asks for none beyond the plugin hooks. It puts the pick on this chat's requests only and never writes your model or effort setting.
 - **Changes outside its own folder:** errors are written to `~/.claude/mods-logs/coremodel.log` (the plugin never blocks a prompt on an error).
 - **Known limitation:** it uses an early-access plugin API that can change between Claude Code releases.
