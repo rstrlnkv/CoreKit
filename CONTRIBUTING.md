@@ -25,7 +25,7 @@ claude plugin validate .          # the marketplace
 claude plugin validate plugins/corecrew   # one plugin; also plugins/coremodel, plugins/coreopinion
 ```
 
-The full run takes a few minutes on a laptop and needs no network. Every test runs in a sandbox
+The full run takes about ten minutes on a laptop and needs no network; run one file while you work. Every test runs in a sandbox
 made by `new_sandbox` in `tests/lib.sh`: its own `HOME`, XDG folders, git config, `CODEX_HOME` and
 Core. A test never touches your real `~/.claude`, `~/.codex`, Core or global git config. Stub
 `gh` on `PATH` instead of calling GitHub.
