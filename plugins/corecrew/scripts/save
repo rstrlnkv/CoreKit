@@ -27,12 +27,15 @@ if [ ! -x "$MAIN/.git/hooks/pre-commit" ] || [ ! -x "$MAIN/.git/hooks/pre-push" 
   case "$rc" in 0|4) ;; *) exit 1 ;; esac
 fi
 
-ID=$(date +%Y%m%d-%H%M%S); n=1; base="$ID"
-# Keep Step-Ids unique even for several saves within one second.
-while git -C "$CODE" log --all --format=%B 2>/dev/null | grep -qx "Step-Id: $ID" || \
-      git -C "$CORE" log --format=%B 2>/dev/null | grep -qx "Step-Id: $ID"; do
-  n=$((n + 1)); ID="$base-$n"
+# Step-Id = <time>-<NN>-<random>. NN counts this project's steps within one second, so undo-step can
+# order them (commit times have one-second resolution); the random part (process id and $RANDOM)
+# keeps another project's step of the same second apart: its code-only step is not in our repos.
+base="$(date +%Y%m%d-%H%M%S)"; n=1; nn=01
+while git -C "$CODE" log --all --format=%B 2>/dev/null | grep -q "^Step-Id: $base-$nn-" || \
+      git -C "$CORE" log --format=%B 2>/dev/null | grep -q "^Step-Id: $base-$nn-"; do
+  n=$((n + 1)); nn="$(printf '%02d' "$n")"
 done
+ID="$base-$nn-$(printf '%x%04x' "$$" "$RANDOM")"
 saved=0
 git -C "$CODE" add -A || { echo "save: git could not write $CODE/.git (read-only? in Codex allow the commit when asked); nothing saved." >&2; exit 1; }
 if ! git -C "$CODE" diff --cached --quiet; then

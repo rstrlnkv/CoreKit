@@ -57,9 +57,10 @@ in_head() { git -C "$1" cat-file -e "HEAD:$2" 2>/dev/null; }
 
 ID="${1:-}"
 if [ -z "$ID" ]; then
-  # Latest not-yet-undone step of this project, by commit time (robust to clock changes).
+  # Latest not-yet-undone step of this project, by commit time (robust to clock changes); steps of
+  # the same second are ordered by the Step-Id, whose <time>-<NN> part save makes increasing.
   ID=$( { log_of code --format='%ct %B'; log_of core --format='%ct %B'; } \
-        | awk '/^[0-9]+ /{t=$1} /^Step-Id: /{print t, $2}' | sort -rn -k1,1 | awk '{print $2}' \
+        | awk '/^[0-9]+ /{t=$1} /^Step-Id: /{print t, $2}' | sort -rn -k1,1 -k2,2r | awk '{print $2}' \
         | while read -r i; do is_undone "$i" || { echo "$i"; break; }; done )
 fi
 [ -n "$ID" ] || { echo "No saved step to undo." >&2; exit 1; }

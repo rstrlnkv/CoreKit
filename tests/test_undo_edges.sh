@@ -82,6 +82,16 @@ EDGE=$(step_id "$CORE_DIR")
 assert_exit 0 bash "$UNDO" "$EDGE"
 assert_file "$K/edge.md"; assert_contains "$CORE_DIR/edge-app/CLAUDE.md" edited
 
+# two projects that save in the same second get different Step-Ids (a fake date pins the clock)
+FD="$SANDBOX/fakedate"; mkdir -p "$FD"
+# (a past time: a step saved later in the same real second must still sort after these two)
+printf '#!/bin/sh\necho 20000101-000000\n' > "$FD/date"; chmod +x "$FD/date"
+echo s1 > "$C/same1.txt"; PATH="$FD:$PATH" bash "$SAVE" "same second A" >/dev/null 2>&1
+SA=$(git -C "$C" log -1 --format=%B | sed -n 's/^Step-Id: //p')
+(cd "$CORE_DIR/edge-app/code" && echo s2 > same2.txt && PATH="$FD:$PATH" bash "$SAVE" "same second B") >/dev/null 2>&1
+SB=$(git -C "$CORE_DIR/edge-app/code" log -1 --format=%B | sed -n 's/^Step-Id: //p')
+[ -n "$SA" ] && [ -n "$SB" ] && [ "$SA" != "$SB" ] && pass || fail "same-second saves share a Step-Id: '$SA' '$SB'"
+
 # another project's step whose Core commit touches only shared files (its code + knowledge/): plain
 # undo-step here still undoes this project's own last step, the other step's Step-Id changes nothing,
 # and the other project undoes its step in full
