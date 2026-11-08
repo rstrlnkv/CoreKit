@@ -80,7 +80,7 @@ for (const source of ['clear', 'resume', 'fork'] as const) {
     await $.classic.SessionStart({ source } as never)
     await step($, 'medium', 0)
     expect(w.efforts).toEqual(['low', 'medium'])
-    expect(w.models).toEqual(['claude-haiku-5-5', 'claude-sonnet-5-5'])
+    expect(w.models).toEqual(['haiku', 'claude-sonnet-5-5'])
   })
 }
 
@@ -93,7 +93,7 @@ test('a compacted chat keeps its held model and level', { options: { mode: 'auto
   await $.classic.SessionStart({ source: 'compact' } as never)
   await step($, 'medium', 0)
   expect(w.efforts).toEqual(['low', 'low'])
-  expect(w.models).toEqual(['claude-haiku-5-5', 'claude-haiku-5-5'])
+  expect(w.models).toEqual(['haiku', 'haiku'])
 })
 
 test('a pick still running when a new chat starts is dropped', { options: { mode: 'auto' } }, async ($, on) => {
@@ -303,14 +303,14 @@ test('moving the menu releases the hold', async ($, on) => {
   expect(w.efforts).toEqual(['high', 'low', 'low'])
 })
 
-test('the payload is cut and the classifier model follows the setting', async ($, on) => {
+test('the payload is cut and the classifier model follows the setting, by its alias', async ($, on) => {
   const w = world(on)
   w.answer = '{"level":"keep","why":"w"}'
   w.lastReply = 'r'.repeat(1000)
   await start($)
   await submit($, 'p'.repeat(5000))
   await step($, 'medium')
-  expect(w.model).toEqual(['claude-sonnet-5-5'])
+  expect(w.model).toEqual(['sonnet'])
   expect(w.prompts[0]!.includes('p'.repeat(2000))).toBe(true)
   expect(w.prompts[0]!.includes('p'.repeat(2001))).toBe(false)
   expect(w.prompts[0]!.includes('r'.repeat(600))).toBe(true)
@@ -323,7 +323,7 @@ test('haiku when the setting says so', { options: { classifier: 'haiku' } }, asy
   await start($)
   await submit($, 'fix the login')
   await step($, 'medium')
-  expect(w.model).toEqual(['claude-haiku-5-5'])
+  expect(w.model).toEqual(['haiku'])
 })
 
 test('a Russian prompt gets the question in Russian', async ($, on) => {
@@ -347,7 +347,7 @@ test('first prompt in auto switches the model silently', { options: { mode: 'aut
   await submit($, 'refactor the module')
   await step($, 'medium')
   expect(w.asked.length).toBe(0)
-  expect(w.models).toEqual(['claude-opus-5-5'])
+  expect(w.models).toEqual(['opus'])
 })
 
 test('first prompt in suggest asks the model', async ($, on) => {
@@ -359,7 +359,7 @@ test('first prompt in suggest asks the model', async ($, on) => {
   await step($, 'medium')
   expect(w.asked[0]).toEqual(['Opus (recommended)', 'Keep Sonnet', 'Fable', 'Haiku'])
   expect(w.headers[0]).toBe('Model')
-  expect(w.models).toEqual(['claude-opus-5-5'])
+  expect(w.models).toEqual(['opus'])
 })
 
 test('fable always asks', { options: { mode: 'auto' } }, async ($, on) => {
@@ -386,7 +386,7 @@ test('suggest mode asks the model, then the effort, the pick first', async ($, o
     [['High (recommended)', 'Keep Medium', 'Extra high', '← Back to the model']],
   ])
   expect(w.headers).toEqual(['Model', 'Effort'])
-  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+  expect(w.models.at(-1)).toBe('opus')
   expect(w.efforts.at(-1)).toBe('high')
 })
 
@@ -430,7 +430,7 @@ test('a question left unanswered keeps its part; the other part is applied', asy
   await start($)
   await submit($, 'fix the login')
   await step($, 'medium')
-  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+  expect(w.models.at(-1)).toBe('opus')
   expect(w.efforts.at(-1)).toBe('medium')
 })
 
@@ -454,7 +454,7 @@ test('the Fable question lists the pick first', { options: { mode: 'auto' } }, a
   await submit($, 'build the whole app, work alone')
   await step($, 'medium')
   expect(w.asked[0]).toEqual(['Fable (recommended)', 'Keep Sonnet', 'Opus', 'Haiku'])
-  expect(w.models).toEqual(['claude-fable-5-1'])
+  expect(w.models).toEqual(['fable'])
 })
 
 test('the Extra high and Max questions list the pick first', { options: { mode: 'auto' } }, async ($, on) => {
@@ -493,7 +493,7 @@ test('mid-chat stronger pick asks with the cost',{ options: { mode: 'auto' } }, 
   expect(w.questions[0]).toContain('≈ 100k tokens')
   expect(w.questions[0]).toContain('about $0.50')
   expect(w.questions[0]).toContain('(x)')
-  expect(w.models).toEqual(['claude-opus-5-5'])
+  expect(w.models).toEqual(['opus'])
 })
 
 test('mid-chat question without a known size says it costs tokens', { options: { mode: 'auto' } }, async ($, on) => {
@@ -537,19 +537,19 @@ test('a model switched off is replaced by the nearest one below it', { options: 
   await step($, 'medium')
   // auto: Opus on the first prompt is switched silently, the note says why
   expect(w.asked.length).toBe(0)
-  expect(w.models).toEqual(['claude-opus-5-5'])
+  expect(w.models).toEqual(['opus'])
   expect(w.efforts).toEqual(['high'])
 })
 
-test('unknown current model asks nothing', { options: { mode: 'auto' } }, async ($, on) => {
+test('a current model of no known family asks nothing mid-chat', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.lastReply = MID
   w.answer = '{"level":"medium","model":"opus","why":"x"}'
   await start($)
   await submit($, 'now the hard part')
-  await step($, 'medium', 0, undefined, 'claude-opus-4-8')
+  await step($, 'medium', 0, undefined, 'my-gateway-model')
   expect(w.asked.length).toBe(0)
-  expect(w.models).toEqual(['claude-opus-4-8'])
+  expect(w.models).toEqual(['my-gateway-model'])
 })
 
 test('pickModel off keeps CoreEffort behaviour', { options: { mode: 'auto', pickModel: 'off' } }, async ($, on) => {
@@ -576,7 +576,7 @@ test('the held model goes on every main-chat request', { options: { mode: 'auto'
   await holdOpusHigh($, w)
   await step($, 'medium', 1)
   await step($, 'medium', 0)
-  expect(w.models).toEqual(['claude-opus-5-5', 'claude-opus-5-5', 'claude-opus-5-5'])
+  expect(w.models).toEqual(['opus', 'opus', 'opus'])
 })
 
 test('model and effort release on their own', { options: { mode: 'auto' } }, async ($, on) => {
@@ -599,7 +599,7 @@ test('a model without effort gets none', { options: { mode: 'auto' } }, async ($
   await holdOpusHigh($, w)
   await step($, undefined, 1)
   expect(w.efforts.at(-1)).toBe(undefined)
-  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+  expect(w.models.at(-1)).toBe('opus')
 })
 
 test('subagent requests keep their model', { options: { mode: 'auto' } }, async ($, on) => {
@@ -650,15 +650,42 @@ test('a one-model list still gives two options', { options: { useHaiku: false, u
   expect(w.asked[0]).toEqual(['Opus (recommended)', 'Keep Sonnet'])
 })
 
-test('an unknown current model gets a plain Keep', async ($, on) => {
+test('a current model of no known family is never switched or asked about', async ($, on) => {
   const w = world(on)
   w.answer = '{"level":"medium","model":"opus","why":"x"}'
-  w.reply = ['Keep the current model']
   await start($)
   await submit($, 'refactor it')
-  await step($, 'medium', 0, undefined, 'claude-opus-4-8')
-  expect(w.asked[0]?.[1]).toBe('Keep the current model')
-  expect(w.models).toEqual(['claude-opus-4-8'])
+  await step($, 'medium', 0, undefined, 'my-gateway-model')
+  expect(w.asked.length).toBe(0)
+  expect(w.models).toEqual(['my-gateway-model'])
+})
+
+test('auto on the first prompt does not switch away from a model of no known family', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"medium","model":"opus","why":"x"}'
+  await start($)
+  await submit($, 'refactor it')
+  await step($, 'medium', 0, undefined, 'my-gateway-model')
+  expect(w.asked.length).toBe(0)
+  expect(w.models).toEqual(['my-gateway-model'])
+})
+
+test('a provider id of a known family is switched by the alias', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"medium","model":"opus","why":"x"}'
+  await start($)
+  await submit($, 'refactor it')
+  await step($, 'medium', 0, undefined, 'us.anthropic.claude-sonnet-5-5-v1:0')
+  expect(w.models).toEqual(['opus'])
+})
+
+test('a newer generation of the same family counts as that family', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"medium","model":"opus","why":"x"}'
+  await start($)
+  await submit($, 'refactor it')
+  await step($, 'medium', 0, undefined, 'claude-opus-6')
+  expect(w.models).toEqual(['claude-opus-6'])
 })
 
 test('the held model keeps the context suffix of the request', { options: { mode: 'auto' } }, async ($, on) => {
@@ -667,7 +694,7 @@ test('the held model keeps the context suffix of the request', { options: { mode
   await start($)
   await submit($, 'refactor it')
   await step($, 'medium', 0, undefined, 'claude-sonnet-5-5[1m]')
-  expect(w.models).toEqual(['claude-opus-5-5[1m]'])
+  expect(w.models).toEqual(['opus[1m]'])
 })
 
 // The waiting prompt belongs to the next turn only.
@@ -742,7 +769,7 @@ test('a model the account does not list is never picked or asked about; the near
   await submit($, 'build the whole app, work alone')
   await step($, 'medium')
   expect(w.asked.length).toBe(0)
-  expect(w.models).toEqual(['claude-opus-5-5'])
+  expect(w.models).toEqual(['opus'])
 })
 
 test('suggest mode asks about the stand-in and says why', async ($, on) => {
@@ -756,7 +783,7 @@ test('suggest mode asks about the stand-in and says why', async ($, on) => {
   expect(w.asked[0]![0]).toBe('Opus (recommended)')
   expect(w.asked[0]).not.toContain('Fable')
   expect(w.questions[0]).toContain('Fable is not available, Opus instead')
-  expect(w.models).toEqual(['claude-opus-5-5'])
+  expect(w.models).toEqual(['opus'])
 })
 
 test('with nothing below, the nearest model above stands in', { options: { mode: 'auto', useHaiku: false } }, async ($, on) => {
@@ -766,7 +793,7 @@ test('with nothing below, the nearest model above stands in', { options: { mode:
   await submit($, 'fix a typo')
   await step($, 'medium', 0, undefined, 'claude-opus-5-5')
   // Haiku is off; Sonnet is the nearest above, and the chat runs on Opus: Sonnet is applied on the first prompt
-  expect(w.models).toEqual(['claude-sonnet-5-5'])
+  expect(w.models).toEqual(['sonnet'])
 })
 
 test('a stand-in equal to the current model changes nothing', { options: { mode: 'auto', useFable: false } }, async ($, on) => {
@@ -797,7 +824,7 @@ test('a model the account lists is offered as before', { options: { mode: 'auto'
   await submit($, 'build the whole app, work alone')
   await step($, 'medium')
   expect(w.asked[0]![0]).toBe('Fable (recommended)')
-  expect(w.models).toEqual(['claude-fable-5-1'])
+  expect(w.models).toEqual(['fable'])
 })
 
 test('a model that becomes available later is offered from the next pick, no restart', { options: { mode: 'auto' } }, async ($, on) => {
@@ -813,7 +840,7 @@ test('a model that becomes available later is offered from the next pick, no res
   await submit($, 'build the whole app, work alone')
   await step($, 'medium')
   expect(w.asked.length).toBe(1)
-  expect(w.models.at(-1)).toBe('claude-fable-5-1')
+  expect(w.models.at(-1)).toBe('fable')
 })
 
 test('the model switches and the account list both apply (their intersection)', { options: { mode: 'auto', useHaiku: false } }, async ($, on) => {
@@ -832,7 +859,7 @@ test('the model switches and the account list both apply (their intersection)', 
   w.reply = ['Fable (recommended)']
   await submit($, 'build everything')
   await step($, 'medium')
-  expect(w.models.at(-1)).toBe('claude-fable-5-1')
+  expect(w.models.at(-1)).toBe('fable')
 })
 
 test('an unreadable settings list filters nothing', { options: { mode: 'auto' } }, async ($, on) => {
@@ -844,7 +871,7 @@ test('an unreadable settings list filters nothing', { options: { mode: 'auto' } 
   await submit($, 'build the whole app, work alone')
   await step($, 'medium')
   expect(w.asked.length).toBe(1)
-  expect(w.models).toEqual(['claude-fable-5-1'])
+  expect(w.models).toEqual(['fable'])
 })
 
 test('a row with no known model, or no row, filters nothing', { options: { mode: 'auto' } }, async ($, on) => {

@@ -793,7 +793,7 @@ test('pane model press on an empty chat holds at once', async ($, on) => {
   await pressPane($, 'model-opus')
   await step($, 'medium')
   expect(w.asked.length).toBe(0)
-  expect(w.models).toEqual(['claude-opus-5-5'])
+  expect(w.models).toEqual(['opus'])
 })
 
 test('pane model press mid-chat asks the cost', async ($, on) => {
@@ -806,7 +806,7 @@ test('pane model press mid-chat asks the cost', async ($, on) => {
   await pressPane($, 'model-opus')
   expect(w.questions[0]).toContain('about $0.50')
   await step($, 'medium', 1)
-  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+  expect(w.models.at(-1)).toBe('opus')
 })
 
 test('pane counts per model', { options: { mode: 'auto' } }, async ($, on) => {
@@ -830,7 +830,7 @@ test('an unavailable model is dropped for the session', { options: { mode: 'auto
   w.row = null
   await start($)
   await switchPair($, w, 'opus', 'medium')
-  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+  expect(w.models.at(-1)).toBe('opus')
   await $.classic.StopFailure({ error: 'model_not_found', error_details: 'model: claude-opus-5-5' } as never)
   await step($, 'medium', 1)
   expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
@@ -936,7 +936,7 @@ test('other failures leave the model alone', { options: { mode: 'auto' } }, asyn
   await switchPair($, w, 'opus', 'medium')
   await $.classic.StopFailure({ error: 'rate_limit' } as never)
   await step($, 'medium', 1)
-  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+  expect(w.models.at(-1)).toBe('opus')
 })
 
 test('with pickModel off the pane shows no model buttons or model counts', { options: { mode: 'auto', pickModel: 'off' } }, async ($, on) => {
@@ -1033,7 +1033,7 @@ test('a subagent failing with model_not_found does not drop the held model', { o
   await switchPair($, w, 'opus', 'medium')
   await $.classic.StopFailure({ error: 'model_not_found', agent_id: 'a1' } as never)
   await step($, 'medium', 1)
-  expect(w.models.at(-1)).toBe('claude-opus-5-5')
+  expect(w.models.at(-1)).toBe('opus')
   expect(await has($, /not available/)).toBe(false)
 })
 

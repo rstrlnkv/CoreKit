@@ -1,11 +1,16 @@
 import { expect, test } from 'claude-code/testing'
 
-import { detectModels, enabledModels, LADDER, MODELS, standIn, stronger, switchUsd, toModel } from '../hooks/models'
+import { detectModels, enabledModels, LADDER, requestModel, standIn, stronger, switchUsd, toModel } from '../hooks/models'
 
-test('the ladder and ids follow the spec', () => {
+test('the ladder runs from the weakest model to the strongest', () => {
   expect(LADDER).toEqual(['haiku', 'sonnet', 'opus', 'fable'])
-  expect(MODELS.opus.id).toBe('claude-opus-5-5')
-  expect(MODELS.fable.id).toBe('claude-fable-5-1')
+})
+
+test('a held model goes out as its alias and keeps the context suffix of the request', () => {
+  expect(requestModel('opus', 'claude-sonnet-5-5')).toBe('opus')
+  expect(requestModel('opus', 'claude-sonnet-5-5[1m]')).toBe('opus[1m]')
+  expect(requestModel('haiku', 'sonnet[1m]')).toBe('haiku[1m]')
+  expect(requestModel('fable', 'us.anthropic.claude-sonnet-5-5-v1:0')).toBe('fable')
 })
 
 test('switchUsd is one cache write of the chat on the new model, at API prices', () => {
@@ -23,11 +28,22 @@ test('stronger follows the ladder and is false for an unknown model', () => {
   expect(stronger('opus', '')).toBe(false)
 })
 
-test('toModel reads keys, names and ids', () => {
+test('toModel reads the family from keys, names, aliases and the ids of every provider', () => {
   expect(toModel('claude-opus-5-5[1m]')).toBe('opus')
   expect(toModel('Fable 5.1')).toBe('fable')
   expect(toModel('HAIKU')).toBe('haiku')
-  expect(toModel('claude-opus-4-8')).toBe('')
+  expect(toModel('sonnet[1m]')).toBe('sonnet')
+  // an older or a newer generation is still the same family
+  expect(toModel('claude-opus-4-8')).toBe('opus')
+  expect(toModel('claude-opus-6')).toBe('opus')
+  // Bedrock, Vertex and gateway spellings
+  expect(toModel('anthropic.claude-haiku-5-5-v1:0')).toBe('haiku')
+  expect(toModel('us.anthropic.claude-sonnet-5-5-v1:0')).toBe('sonnet')
+  expect(toModel('claude-fable-5-1@20261001')).toBe('fable')
+  // a word that only contains a family name, or no model at all
+  expect(toModel('opusplan')).toBe('')
+  expect(toModel('default')).toBe('')
+  expect(toModel('my-gateway-model')).toBe('')
   expect(toModel('gpt')).toBe('')
   expect(toModel(3)).toBe('')
 })

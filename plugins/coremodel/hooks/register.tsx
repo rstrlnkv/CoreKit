@@ -3,7 +3,7 @@ import type { EngineInterface, ModelCompleteResult, Register } from 'claude-code
 
 import type { Band, Level, Mark, Stats } from '../types'
 import { buildPrompt, parseAnswer, type Pick, toLevel } from './classifier'
-import { detectModels, enabledModels, LADDER, MODELS, type ModelKey, standIn, switchUsd, toModel } from './models'
+import { detectModels, enabledModels, LADDER, MODELS, type ModelKey, requestModel, standIn, switchUsd, toModel } from './models'
 import { decide, decideModel, effortOptions, type Lang, type Mode, modelOptions, texts, uiLang } from './policy'
 
 const PLUGIN = 'coremodel'
@@ -12,7 +12,6 @@ const override = atom({ plugin: 'coremodel', key: 'override' } as const, null)
 const marks = atom({ plugin: 'coremodel', key: 'marks' } as const, {})
 const stats = atom({ plugin: 'coremodel', key: 'stats' } as const, null)
 const NO_STATS: Stats = { picks: { low: 0, medium: 0, high: 0, xhigh: 0, max: 0 }, kept: 0, last: null, marks: 0, models: { haiku: 0, sonnet: 0, opus: 0, fable: 0 } }
-const CLASSIFIERS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5' } as const
 const MODES: readonly Mode[] = ['suggest', 'auto', 'off']
 const LOG_KEEP = 20_000
 const BAND_MS = 15_000
@@ -272,7 +271,7 @@ async function runPick(
   }
   let pick: Pick
   try {
-    pick = await classify($, h.text, now, options.classifier === 'haiku' ? CLASSIFIERS.haiku : CLASSIFIERS.sonnet)
+    pick = await classify($, h.text, now, options.classifier === 'haiku' ? 'haiku' : 'sonnet')
   } catch (err) {
     await log($, 'classify', err)
     return
@@ -546,7 +545,7 @@ export const register: Register = (on, options) => {
     seen = want ?? (toLevel(asked) || seen)
     if (seen !== was) $.ui.invalidate('ui.render')
     // The request's context suffix (`[1m]`) stays on the held model: a long chat must still fit.
-    const model = modelHold ? MODELS[modelHold.key].id + (/\[[^\]]*\]$/.exec(e.model)?.[0] ?? '') : e.model
+    const model = modelHold ? requestModel(modelHold.key, e.model) : e.model
     if ((!want || want === e.effort) && model === e.model) return yield* next(e)
     return yield* next({ ...e, effort: want ?? e.effort, model })
   })

@@ -36,6 +36,8 @@ export function decideModel(i: {
   allowed: readonly ModelKey[]
 }): 'none' | 'apply' | 'ask' {
   if (i.mode === 'off' || !i.pickModel || !i.pick || !i.allowed.includes(i.pick) || i.pick === i.now) return 'none'
+  // A model of no known family (a gateway's own name) is the person's choice: never switched or asked about.
+  if (!i.now) return 'none'
   // Mid-chat a switch re-reads the whole chat: only a stronger model, and only with a question.
   if (!i.isFirst && !stronger(i.pick, i.now)) return 'none'
   if (i.mode === 'suggest' || i.pick === 'fable' || !i.isFirst) return 'ask'
