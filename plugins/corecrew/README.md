@@ -52,8 +52,9 @@ Then:
    you do, the guards do not run. Do it again after each update.
 2. **Write the settings file.** Codex has no options screen; see [Settings](#settings).
 3. **Give Codex your Core.** Codex writes only in the working folder and `--add-dir` folders, so
-   start it as `codex --add-dir "<Core>"` (`~/Projects/Core` by default). `/corecrew:task` checks
-   this and tells you when it is missing.
+   start it as `codex --add-dir "<Core>"` (`~/Projects/Core` by default). For new-project, start it
+   as `codex --add-dir "<Projects>"` (the folder that holds the Core): the Core may not exist yet,
+   and the new code folder goes there. Every skill checks this and tells you the command.
 4. **Name the skills.** Codex may pick `new-project` by itself. Name the others in your prompt
    (`$corecrew:task <task>`, `$corecrew:ship`, `$corecrew:new-standard`) or pick them from the
    skill list.
@@ -62,10 +63,15 @@ Then:
 What differs from Claude Code:
 
 - The crew roles are role files that `/corecrew:task` hands to Codex subagents as text, with the
-  model and effort from `model_profile`. `feature-dev` is not used.
+  model and effort from `model_profile`, or from `codex_model` / `codex_model_<role>` when set.
+  `feature-dev` is not used.
+- The crew needs Codex subagents (`multi_agent`, on by default). Without them the chain stops and
+  says to run `codex features enable multi_agent`.
 - Commits ask for your approval: the Codex sandbox keeps `.git` read-only, so `save` runs outside
   it after you approve. In non-interactive `codex exec` the task stops with
   `Commit: stopped — Codex sandbox keeps .git read-only` and the files stay uncommitted.
+- `gh`, pushes and project generators also run outside the sandbox after your approval: the
+  sandbox has no network.
 - Codex subagents cannot be made read-only, so the read-only steps are checked, not enforced: the
   chain compares `git status` before and after and stops on a change.
 
@@ -103,7 +109,7 @@ from 0.1.x: follow [docs/migration-0.2.md](../../docs/migration-0.2.md) first.
 | `/corecrew:task <task>` | Runs a task through the crew of agents and ends with a report and one commit |
 | `/corecrew:task release <version>` | Prepares a release: version, changelog and the other release checks |
 | `/corecrew:task adopt <folder>` | Brings an existing project into the Core layout |
-| `/corecrew:ship [patch\|minor\|major\|<version>]` | Releases the current branch, then, after your yes, fast-forwards `main` and pushes it |
+| `/corecrew:ship [patch\|minor\|major\|<version>]` | Releases the current branch, then, after your yes, fast-forwards the default branch and pushes it; after a second yes, tags the version and publishes a GitHub release |
 | `/corecrew:new-standard` | Helps you write a standard of your own into the Core |
 
 ### `new-project`
@@ -148,7 +154,10 @@ Inside a Core project (the Core folder, or a code folder beside it):
   lists what it does not see.
 - **Code guard** refuses to write `CLAUDE.md`, `AGENTS.md`, `docs/` and `.claude/` into the code
   folder; they belong in the Core. List docs that should stay public in the code folder on a
-  `public-docs: <paths>` line of the project's `CLAUDE.md`.
+  `public-docs: <paths>` line of the project's `CLAUDE.md`. It judges the paths of the file tools,
+  and reads Bash plainly for the common write commands (redirects, `tee`, `touch`, `mkdir`, `cp`,
+  `mv`, `install`, `ln`, `git mv`, `sed -i`, `perl -i`); [SECURITY.md](../../SECURITY.md#known-limits-of-the-hooks)
+  lists what it does not follow.
 - **One suite at a time** holds a test run (up to 120 s) while another runs in the same project
   folder, so two runs do not break each other.
 - **Stop** reminds Claude to save a step that is left uncommitted.
@@ -168,6 +177,8 @@ The Core's pre-push hook refuses to push unless the Core's GitHub repo is privat
 | `attribution` | `allow` / `forbid` | `allow` | Whether Claude may add `Co-Authored-By` and "Generated with" lines to commits and pull requests |
 | `model_profile` | `economy` / `balanced` / `strong` | `balanced` | Which models the crew uses per role |
 | `ui_language` | `en` / `ru` | `en` | Language of the hook messages |
+| `codex_model` | `<model> [<effort>]` or `inherit` | — | Codex only: the model (and effort) of every crew role, over `model_profile`; `inherit` leaves Codex's own default |
+| `codex_model_<role>` | `<model> [<effort>]` or `inherit` | — | Codex only: the same for one role (`engineer`, `tester`, ...), over `codex_model` |
 | `coremodel_mode` | see the [coremodel README](../coremodel/README.md#codex) | — | Read only by coremodel's Codex hint, from the settings file; corecrew ignores it |
 
 In Claude Code the settings are plugin options (`/plugin` → Installed → corecrew → Configure
@@ -193,16 +204,22 @@ the same way, except `ui_language`, which falls back to `en` silently.
   portable bash and use no macOS-only tools, but no test run covers Linux yet. Windows needs
   [Git for Windows](https://git-scm.com/download/win), because the hooks run in Git Bash; it is untested.
 - **Claude Code** 2.1.271 or newer (its settings with a list of choices need it), or the **Codex CLI**.
-- **git**, and the **GitHub CLI** `gh`, logged in with `gh auth login`. `gh` is used to create repos
-  and to check that the Core repo is private before a push.
+- **git**, and the **GitHub CLI** `gh`, logged in with `gh auth login`. `gh` is used to create repos,
+  to check that a new project's name is free, to check that the Core repo is private before a push,
+  and to publish a GitHub release.
 - **Stack tools** (Flutter, Xcode, Node, Rust, uv) only for the stack you pick; `new-project` checks them.
 
 ### What it runs and sends
 
 - **Scripts:** portable bash scripts from the plugin (`scripts/`, `hooks/`), `git`, and `gh`.
-- **Network:** GitHub, through `gh` and `git`, only when you approve a repo creation or a push; the
-  Core pre-push hook asks `api.github.com` whether the Core repo is private. Stack generators you
-  approve reach their own package hosts. corecrew sends nothing anywhere else.
+- **Network:** GitHub, through `gh` and `git`. Read-only checks run without a prompt (in Codex,
+  whose sandbox has no network, every network call asks first):
+  `new-project` checks that `gh` is logged in (`gh auth status`) and that the project name is free
+  on GitHub (`gh repo view <name>`); `/corecrew:ship` fetches tags from `origin` to check for a
+  clash; the Core pre-push hook asks `api.github.com` whether the Core repo is private. Writes
+  happen only after your yes: each repo creation, each push, and the tag and GitHub release of
+  `/corecrew:ship`. Stack generators you approve reach their own package hosts. corecrew sends
+  nothing anywhere else.
 
 ### Changes outside the repo
 

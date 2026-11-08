@@ -44,7 +44,7 @@ case "$l" in *wiki-check.sh*wiki-index.sh*) fail "release.md: wiki-check.sh name
 
 # 4. reference/wiki.md teaches the new wiki.
 for fld in type status description files related updated; do assert_contains "$WK" "\`$fld\`"; done
-for v in brief architecture decision feature spec plan glossary draft active done superseded; do assert_contains "$WK" "$v"; done
+for v in brief architecture decision feature spec plan glossary draft active 'done' superseded; do assert_contains "$WK" "$v"; done
 assert_contains "$WK" 'YYYY-MM-DD'
 grep -qiE '80 char' "$WK" && pass || fail "wiki.md lacks the 80-character description limit"
 assert_contains "$WK" '[[name]]'

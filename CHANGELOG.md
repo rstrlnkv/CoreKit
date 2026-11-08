@@ -20,6 +20,9 @@ commit log has the full detail.
 - `task`'s architect and explorer steps run without the feature-dev plugin, on Claude Code's
   built-in Plan and Explore agents.
 - A README for corecrew itself, with settings, uninstall steps and a glossary.
+- guard-code also judges `install`, `ln`, `git mv`, and files edited in place by `sed -i` and
+  `perl -i`. The Core link at the code root (`CLAUDE.local.md`, `AGENTS.md`) passes, as session
+  start asks for it.
 
 ### Changed
 
@@ -41,6 +44,21 @@ commit log has the full detail.
   brief stage field and the old layout moved to `reference/older-formats.md`.
 - Step-Ids are `<time>-<NN>-<random>`.
 - Plugin icons moved to `assets/icon.png` and are named in every manifest.
+- guard-code reads Bash commands with its own plain reader, built for honest mistakes. Command
+  lines handed to `bash -c`, `sh -c` or `eval`, script files, targets with variables or globs,
+  xargs and `find -exec` are documented limits (SECURITY.md); the host's permissions are the
+  boundary.
+- guard-code refuses a Bash command that names too many internal-looking files to check within
+  the hook timeout, and asks to split it. Outside a project it stays inert.
+- `lib.sh` is split into parts it sources (`lib-paths.sh`, `lib-settings.sh`, `lib-layout.sh`,
+  `lib-host.sh`, `lib-scaffold.sh`, `lib-json.sh` and the subcommand parts); the shell-patch check
+  moved to `scripts/shell-patch.sh`. Commands and function names are unchanged.
+- `save` writes a `Project: <name>` trailer to its Core commit, and `undo-step` to its Core undo
+  commit, so a step that changed only shared Core files stays with its project.
+- The Stop reminder fingerprints untracked files by name, size and time instead of reading them.
+- The guard hooks are no longer matched on `MultiEdit`.
+- In Codex, `new-project` and adopt tell you to open the project with `codex --add-dir "<Core>"`,
+  and the Core README written by `new-project` gives the command for both hosts.
 
 ### Removed
 
@@ -58,6 +76,34 @@ commit log has the full detail.
   explains how to chain corecrew's checks, and `save` still saves.
 - `one-suite` never held a run in a folder whose name has non-ASCII letters.
 - `ship` ran `task`'s Start by step numbers that had moved; steps are referred to by name.
+- `save` checks that both repos can commit (git identity, writable `.git`, no `index.lock`)
+  before the code commit. When the docs commit fails after it, `save` names the code commit and
+  how to finish. A code-only step no longer needs a git identity in the Core.
+- `save` and `undo-step` work with `CDPATH` exported, and refuse a project name with a space
+  before committing anything (it used to leave a half-saved step).
+- `undo-step` reads the `Project:` name only from the trailer block.
+- A project whose code folder beside the Core has a non-ASCII name (`Uni-проект`) is found by
+  `project-of`, `code-root`, the hooks, `save` and `undo-step`.
+- `one-suite` reads whole command lines with `ps -ww` instead of `pgrep -l`, so it recognises
+  test runs on Linux and with no terminal; it keeps one turn per place, and lets the call through
+  when `ps` is missing.
+- In Codex, Markdown emphasis in a heredoc body (`**Patch**`) is no longer refused as a shell
+  patch.
+- guard-code judged nothing past its 100th target; past the cap it now still judges targets that
+  name internal files. Path resolution no longer starts two processes per missing path part
+  (100 deep new paths: about 0.7 s instead of 14 s).
+- guard-code no longer refuses BSD `sed -i .bak`, a link made as a worktree folder, or the Core
+  link written with a variable; a heredoc with a quoted delimiter inside `"$(...)"` no longer
+  stops the judging of the commands after it.
+- `scaffold.sh` no longer loops forever on `--name` or `--purpose` without a value, and stops
+  when a code-side step fails.
+- `merge-generated.sh` no longer deletes a user's `.gitignore.add`, never overwrites an existing
+  file, and names every copy that failed.
+- `adopt` no longer warns when `install-hooks` only reports a `core.hooksPath` setting.
+- A tools copy run by hand, without `CLAUDE_PLUGIN_DATA`, finds its own data folder.
+- README: ship's row names the default branch, the tag and the release; Codex setup gives
+  `--add-dir "<Projects>"` for new-project and the `codex_model` settings; the network notes say
+  which GitHub calls are read-only checks.
 
 ### Security
 

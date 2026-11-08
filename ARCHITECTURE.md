@@ -15,13 +15,31 @@ plugins/corecrew/                 project workflow
   skills/                         new-project, task, ship, new-standard (SKILL.md + references/)
     */agents/openai.yaml          Codex: keeps task, ship and new-standard out of implicit invocation
     task/references/codex.md      Codex: the task chain with Codex subagents
-    task/references/codex-roles.md  Codex: the architect and explorer roles without feature-dev
+    task/references/architect-explorer.md  the architect and explorer roles when feature-dev is
+                                  absent (Claude Code's Plan/Explore agents, and Codex)
   agents/                         engineer, tester, security, verifier, localizer, designer
   hooks/                          hooks.json and the five hook scripts, messages.sh for their texts
-  scripts/                        the machinery in portable bash: lib.sh, prepare.sh, setup-core.sh,
-                                  install-hooks.sh, sync-tools.sh, adopt.sh, save, undo-step, wiki-*.sh,
-                                  patch-paths.awk (Codex apply_patch), the bash-lex*.awk readers, git-hooks/
-  reference/                      wiki.md and knowledge.md: the rules the agents follow
+  scripts/                        the machinery in portable bash; each file's header says what it does
+    lib.sh                        shared helpers: scripts and hooks source it, or run it as a command
+    lib-*.sh                      the parts lib.sh sources: lib-paths.sh, lib-settings.sh, lib-layout.sh,
+                                  lib-host.sh, lib-scaffold.sh, lib-json.sh; and, each for one subcommand
+                                  only, lib-codex-profile.sh, lib-role-model.sh, lib-tree-state.sh
+    shell-patch.sh                the check for a Codex patch handed to the shell (sourced by both guards)
+    bashlex-guard-code.awk        the code guard's own reader of a Bash command: the files it writes
+    bash-lex.awk                  the shared Bash tokenizer, for bashlex-guard-secrets.awk (the secrets
+                                  guard) and bashlex-readonly.awk (the read-only checker rule)
+    patch-paths.awk               the paths of a Codex apply_patch patch, for both guards
+    prepare.sh, setup-core.sh     a host and project brought up to date; the Core created or completed
+    sync-tools.sh                 the scripts copied into the plugin's data folder (tools/)
+    install-hooks.sh, git-hooks/  the git hook shims and their installer
+    save, undo-step, _locate.sh   one step saved or undone in both repos; _locate.sh finds the repos
+    adopt.sh                      an existing project brought into the layout
+    wiki-*.sh                     the wiki: pages, index, checks, migration from an older format
+    check-standard.sh             the checks of one standard file (new-standard)
+  reference/                      texts the skills share: wiki.md and knowledge.md (the rules the
+                                  agents follow), and these two:
+    codex-host.md                 the Codex host reference that every skill follows in Codex
+    older-formats.md              how a project made by an older version is brought up to date
   evals/                          trigger evals
 plugins/coremodel/                model and effort picker
   hooks/                          the Claude Code module (TypeScript)
@@ -47,8 +65,9 @@ hook trust           on install                          after you enable them i
 ```
 
 - **Manifests.** Each host reads its own manifest. The shared fields (name, version, description,
-  licence) must match; `tests/test_manifest.sh` checks it. A root `plugin.json` would make Codex
-  skip the hooks, so there is none.
+  licence) must match; `tests/test_manifest.sh` checks it. coremodel's Codex description differs
+  on purpose: in Codex it only hints. A root `plugin.json` would make Codex skip the hooks, so there
+  is none.
 - **Hooks in Codex.** Codex fires PreToolUse for its shell (`Bash`) and for `apply_patch`; it has no
   read, search or list tools to hook. The guards therefore read `apply_patch` patches with
   `scripts/patch-paths.awk`. A rule that exists for one host runs only on that host: the refusal of
@@ -70,9 +89,12 @@ hook trust           on install                          after you enable them i
   stop. They guard secrets and the public code folder, keep one test suite running at a time and
   remind the agent to save. Outside a Core project only the session-start hook (tools refresh and
   a one-time "Core not set up" hint) and the read-only checker rule act; every other hook exits at once.
-- **Scripts** hold the logic, so hooks stay thin. `sync-tools.sh` copies them into the plugin's data
-  folder (`tools/`), the one place git hooks run them from, so a plugin update reaches the git hooks
-  without reinstalling them.
+- **Scripts** hold the logic, so hooks stay thin. A script or hook sources `lib.sh`, and `lib.sh`
+  sources its parts (`lib-*.sh`). The guards read a Bash command with awk, not with a shell: the
+  code guard with `bashlex-guard-code.awk`; the secrets guard and the read-only checker rule with
+  the shared tokenizer `bash-lex.awk` and their own part. `sync-tools.sh` copies the scripts into
+  the plugin's data folder (`tools/`), the one place git hooks run them from, so a plugin update
+  reaches the git hooks without reinstalling them.
 - **Git hooks** (`scripts/git-hooks/`) are shims installed by `install-hooks.sh` into the code repo
   (pre-commit, pre-push: no `CLAUDE.md`, `AGENTS.md`, `.claude/`, secrets or keys in commits) and
   into the Core (pre-push: the GitHub repo must be private).

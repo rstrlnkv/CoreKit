@@ -85,5 +85,6 @@ never run `adopt.sh` before "ok".
    - the wiki result
    - `Open Claude Code in: <code folder>` (the script's last line, `open: ...`), and tell the
      user to restart Claude Code in that folder: the private `CLAUDE.md` loads through
-     `CLAUDE.local.md` only in a new session. Old layout: this session still runs in the old
+     `CLAUDE.local.md` only in a new session. In Codex, say `Open Codex in: <code folder>` with
+     the command `<plugin>/reference/codex-host.md` gives. Old layout: this session still runs in the old
      folder, which is gone, and Claude Code's history for the old path does not move with it.

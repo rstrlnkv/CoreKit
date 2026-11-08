@@ -136,7 +136,8 @@ test/check command, run in `<Projects>/<name>`; hooks and the verifier read it).
 `bash "<scripts>/wiki-check.sh" "<Core>/<name>"` and fix every
 `wiki-check:` line it prints (silent = green). Set `Stage: ready` and, from `<Projects>/<name>`,
 run `bash "<scripts>/save" "Ready"`. Report in the user's language: what was created and where; how to open it
-(`cd <Projects>/<name> && claude`); how to check it themselves; what may break.
+(`cd <Projects>/<name> && claude`; in Codex, the command `<plugin>/reference/codex-host.md`
+gives); how to check it themselves; what may break.
 
 **7. Offer a plan.** Offer a v1 plan, saved to `<Core>/<name>/docs/plans/`: if a planning skill
 is available (for example `superpowers:writing-plans`), use it; otherwise write a short plan

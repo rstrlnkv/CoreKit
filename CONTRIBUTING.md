@@ -30,6 +30,10 @@ made by `new_sandbox` in `tests/lib.sh`: its own `HOME`, XDG folders, git config
 Core. A test never touches your real `~/.claude`, `~/.codex`, Core or global git config. Stub
 `gh` on `PATH` instead of calling GitHub.
 
+CI also runs [ShellCheck](https://www.shellcheck.net/) at `--severity=warning` on the shell files
+of the plugins and the tests. Run it on the files you changed before you push:
+`shellcheck --severity=warning <files>` (settings: `.shellcheckrc`, `tests/.shellcheckrc`).
+
 Trigger evals (does a skill start when it should) make real model calls and are not part of the
 run: `claude plugin eval plugins/corecrew --ablation none --no-publish`.
 
@@ -76,4 +80,6 @@ exists, `.codex-plugin/plugin.json`), and its own CHANGELOG in
    `tests/test_manifest.sh` fails when they differ.
 3. Check the plugin live in a git repo and in a fresh temp folder that is not one.
 4. Merge and push, then tag the merged commit `<plugin>-vX.Y.Z` (for example `corecrew-v0.9.0`)
-   and publish a GitHub release for that tag. Nothing else makes tags.
+   and publish a GitHub release for that tag. `/corecrew:ship` does all of it: the merge and the
+   push after your yes, the tag and the release after a second yes. Make them by hand only when you
+   do not use it.

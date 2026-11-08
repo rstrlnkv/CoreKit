@@ -25,8 +25,9 @@ claude plugin install coreopinion@corekit
 
 Inside a running session the same steps are `/plugin marketplace add rstrlnkv/CoreKit`, then
 `/plugin install corecrew@corekit`, `/plugin install coremodel@corekit` or
-`/plugin install coreopinion@corekit`. corecrew also uses `feature-dev`:
-`/plugin install feature-dev@claude-plugins-official`. Restart Claude Code after an install.
+`/plugin install coreopinion@corekit`. Optional: `feature-dev` gives `/corecrew:task` deeper
+architect and explorer agents: `/plugin install feature-dev@claude-plugins-official`. Restart
+Claude Code after an install.
 
 ### Codex
 
@@ -64,7 +65,7 @@ Each plugin's README has the full description, its commands and its settings:
 
 ## Requirements
 
-- **Hosts:** Claude Code 2.1.271 or newer (coremodel needs 2.1.287), or the Codex CLI.
+- **Hosts:** Claude Code 2.1.271 or newer (coremodel needs 2.1.309), or the Codex CLI.
 - **OS:** macOS is tested. Linux is expected to work (portable bash, no macOS-only tools), but no
   test run covers it yet. Windows needs Git for Windows and is untested.
 - **Per plugin:** corecrew needs git and the GitHub CLI (`gh`); coreopinion needs the Codex CLI

@@ -24,6 +24,10 @@ stays literal in Codex, and the scripts treat it as unset and read the settings 
 Codex calls a skill `$corecrew:<skill>`. Where a skill says `/corecrew:<skill>` (to the user, or in a
 hint), say `$corecrew:<skill>`. task, ship and new-standard start only when the user names them.
 
+Where a skill tells the user to open or restart Claude Code in a folder (`cd <folder> && claude`),
+say instead: open Codex there with `cd "<folder>" && codex --add-dir "<Core>"`. The private
+`CLAUDE.md` loads in Codex through the folder's `AGENTS.md` link, also only in a new session.
+
 ## Writable folders
 Codex writes only inside the folder it was started in and the folders given with `--add-dir`.
 corecrew writes into the Core, and new-project also into `<Projects>` (the folder that holds the

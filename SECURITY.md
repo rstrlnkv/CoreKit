@@ -85,9 +85,11 @@ to Bash commands as well. A deny rule wins over an allow rule, so `Read(**/.env.
 
 **Codex.** corecrew prints a permission profile that keeps `.env*`, keys, credentials and `~/.ssh`
 unreadable: run `bash <plugin folder>/scripts/lib.sh codex-profile` and paste the output into
-`~/.codex/config.toml`. corecrew never writes that file. The profile is a default: `--sandbox`,
-`--full-auto` or `-c sandbox_mode=...` on the command line switch it off. It does not cover git
-history (`git show HEAD:.env`).
+`~/.codex/config.toml`. corecrew never writes that file. The profile is a default, not a hard
+boundary. These switch it off: `--sandbox`, `--dangerously-bypass-approvals-and-sandbox` or
+`-c sandbox_mode=...` on the command line, `sandbox_mode` in any config layer (a profile, the
+system config), and the `.codex/config.toml` of a trusted project (a cloned repository can bring
+one). It does not cover git history (`git show HEAD:.env`).
 
 ### Known limits of the hooks
 
@@ -98,14 +100,23 @@ history (`git show HEAD:.env`).
 - In Codex, file reads go through the shell: Codex fires no hook for read, search or list tools.
 - Codex runs a plugin's hooks only after you trust them in `/hooks`, and again after each update.
 - The code guard catches the usual ways to write `CLAUDE.md`, `AGENTS.md`, `docs/` or `.claude/`
-  into a code folder; the git pre-commit and pre-push hooks check what is committed and pushed.
+  into a code folder: the file tools, and the common write commands in Bash. It does not follow: a
+  command line given to `bash -c`, `sh -c` or `eval`, or a script file; a target with a variable, a
+  glob, braces or `$(...)`; `xargs` and `find -exec`; a relative target after `cd`, `pushd` or
+  `popd`; interpreters (`python -c`, `node -e`); `git -C <dir> mv`; other writers (`rsync`,
+  `dd of=`, `tar -C`, `curl -o`). The git pre-commit and pre-push hooks check what is committed
+  and pushed.
 - Codex subagents cannot be made read-only: the read-only steps of `/corecrew:task` are checked
   (the working tree before and after), not enforced.
 
 ## Data that leaves your machine
 
-- **corecrew** talks to GitHub through `gh` and `git`: only when you approve a repo creation or a
-  push, and when the Core pre-push hook asks `api.github.com` whether the Core repo is private.
+- **corecrew** talks to GitHub through `gh` and `git`. Read-only checks run without a prompt (in Codex,
+  whose sandbox has no network, every network call asks first):
+  `new-project` checks that `gh` is logged in and that the project name is free on GitHub,
+  `/corecrew:ship` fetches tags from `origin` to check for a clash, and the Core pre-push hook asks
+  `api.github.com` whether the Core repo is private. Writes happen only after your yes: each repo
+  creation, each push, and the tag and GitHub release of `/corecrew:ship`.
 - **coremodel**, in Claude Code, sends each prompt you type to a short classifier call through your
   own Claude Code account, to pick the model and effort. In Codex, while its hint is on, it sends each
   prompt a second time to OpenAI through `codex exec`. [plugins/coremodel/README.md](plugins/coremodel/README.md)
