@@ -418,4 +418,11 @@ assert_eq "$OUT" "" "codex: stdout"
 [ -n "$ERR" ] && pass || fail "codex: exit 2 with an empty stderr"
 cfx pre-bash-applypatch-heredoc; assert_eq "$RC" "0" "codex: a patch through Bash is not a test run"
 
+
+# --- << as a shift is not a heredoc: the test run after it is still seen; a real heredoc body is still data
+for c in 'echo $((1<<3)); swift test' 'x=$(( 1 << 3 )) && pytest' 'echo $(( (1<<3)+1 )); swift test'; do
+  ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0 run_hook "$c"; assert_eq "$RC" "2" "a shift is not a heredoc: $c"
+done
+ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0 run_hook 'cat <<EOF\nswift test\nEOF'; assert_eq "$RC" "0" "heredoc body still skipped"
+
 finish

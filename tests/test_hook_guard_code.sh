@@ -685,6 +685,41 @@ sec_host_gate() {
 }
 bg sec_host_gate
 
+
+# Bash through wrapper options and through another shell; a file directly under .claude/worktrees; a core_dir
+# that is a symlink. Own project folder bp, so the worktree folder it makes does not touch the other sections.
+sec_wrappers() {
+  local B="$CORE_DIR/bp/code"; mkdir -p "$B/src"; : > "$CORE_DIR/bp/CLAUDE.md"
+  code() { run_bash "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" "$B"; }
+  # wrapper options take their values
+  code 'timeout 5 tee docs/a'; assert_eq "$RC" "2" "timeout 5 tee docs/a"
+  code 'sudo -u x touch CLAUDE.md'; assert_eq "$RC" "2" "sudo -u x touch CLAUDE.md"
+  code 'nice -n 5 tee docs/a'; assert_eq "$RC" "2" "nice -n 5 tee docs/a"
+  code 'timeout 5 tee src/a'; assert_eq "$RC" "0" "timeout 5 tee src/a passes"
+  # a file directly under .claude/worktrees
+  run_file Write "$B/.claude/worktrees/notes.md" "$B"; assert_eq "$RC" "2" "file directly under .claude/worktrees is blocked"
+  mkdir -p "$B/.claude/worktrees/w"
+  run_file Write "$B/.claude/worktrees/w" "$B"; assert_eq "$RC" "0" "an existing worktree dir passes"
+  run_file Write "$B/.claude/worktrees/w/src/a.sh" "$B"; assert_eq "$RC" "0" "code inside a worktree passes"
+  # a command line handed to another shell is judged too: bash -c, sh -c, eval
+  code 'bash -c "echo hi > CLAUDE.md"'; assert_eq "$RC" "2" "bash -c writes CLAUDE.md"
+  code "sh -c 'touch docs/a.md'"; assert_eq "$RC" "2" "sh -c touches docs/a.md"
+  code 'eval "tee AGENTS.md"'; assert_eq "$RC" "2" "eval tee AGENTS.md"
+  code 'bash -c "echo hi > src/a.ts"'; assert_eq "$RC" "0" "bash -c writes src/a.ts passes"
+  code 'bash -c "ls docs"'; assert_eq "$RC" "0" "bash -c ls docs passes"
+  # a core_dir that is a symlink: the code folder beside the link's own path is still seen
+  local S2="$OD/sl"; mkdir -p "$S2/Projects/Proj" "$S2/elsewhere/Core/proj"
+  ln -s "$S2/elsewhere/Core" "$S2/Projects/Core"; : > "$S2/elsewhere/Core/proj/CLAUDE.md"
+  local oc="$CORE_DIR"; export CORE_DIR="$S2/Projects/Core"
+  run_file Write "$S2/Projects/Proj/CLAUDE.md" "$S2/Projects/Proj"
+  assert_eq "$RC" "2" "symlinked core_dir: guard-code sees the code folder"
+  CORE_DIR="$oc"
+  # HOME="/" (absolute, but the root): no crash, a plain write passes
+  printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"%s/a.txt","content":"x"}}' "$OD" "$OD" \
+    | env -u CORE_DIR HOME=/ XDG_CONFIG_HOME= bash "$H" >/dev/null 2>"$OD/e"; assert_eq "$?" "0" "HOME=/: guard-code passes a plain write"
+}
+bg sec_wrappers
+
 bg_wait
 
 finish

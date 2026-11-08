@@ -355,6 +355,17 @@ timed "1 MB of shells without a hit" 1 "$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 
 timed "1 MB of quotes, then apply_patch" 0 "$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 300000; i++) printf "\"\"x"; print "; apply_patch" }')"
 timed "1 MB of \$' escapes" 0 "$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 100000; i++) printf "$'"'"'a'"'"' "; print "$'"'"'\\x61'"'"'" }')"
 
+# --- find's program-running primaries with the terminator in QUOTES. Quoted text is opaque to the structure checks,
+# so `';'` leaves no ; for the "no list" check: only the find rule refuses these (a copy of the rule without it stayed
+# green). test_shell_patch_exec.sh shows that such a find really starts apply_patch.
+for c in "find . -exec apply_patch ';'" "find . -ok apply_patch ';'" "find . -execdir apply_patch ';'" "find . -okdir apply_patch ';'" \
+         "find . -name f -exec apply_patch ';'" "find f -exec apply_patch \"+\""; do
+  refused "$c" "find with a quoted terminator"
+done
+# twins that must pass: the same find reading only
+passes "find . -name apply_patch -print" "find -name apply_patch"
+passes "find . -iname 'apply_patch*'" "find -iname quoted glob"
+
 # --- the rule needs no file of the plugin
 SELF="$SANDBOX/nowhere"
 refused 'apply_patch' "no scripts dir: bare word"

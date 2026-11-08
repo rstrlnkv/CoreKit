@@ -136,6 +136,8 @@ for c in "${twins[@]}"; do
 done
 # The word-splitting bypass is real: the fake is started by it (not only refused by the hook).
 ran_fake 'git grep $IFS--open-files-in-pager=apply_patch one' && pass || fail "the \$IFS git grep pager case no longer starts the fake: the bypass test is blind"
+# find with the terminator in quotes really starts the fake (test_shell_patch.sh: only the find rule refuses it)
+ran_fake "find . -name f.txt -exec apply_patch ';'" && pass || fail "find -exec ';': the fake did not start, so the case proves nothing"
 # Control: the fake itself works, and a plain apply_patch line is refused (the test is not blind).
 ran_fake "apply_patch x" && pass || fail "the fake apply_patch does not run: the check would be blind"
 [ "$(hook_rc guard-code.sh "apply_patch x")" = 2 ] && pass || fail "plain apply_patch not refused"
