@@ -29,9 +29,12 @@
 #   a file tool; Delete File passes (like `rm .env`). The patch body is never scanned (it may mention .env).
 #   A text this hook cannot read as a patch (an X line, or no path at all) fails closed on a secret-looking string
 #   in any line that holds "***"; with no such line it passes. More than 100 paths (a C line) are refused. Header
-#   lines and paths are trimmed like Codex does (Unicode spaces too). A patch handed to the shell is refused, not judged
+#   lines and paths are trimmed like Codex does (Unicode spaces too). In Codex only (lib.sh shell_patch_host: the plugin under
+#   CODEX_HOME, or turn_id in the input; Claude Code has no apply_patch tool) a patch handed to the shell is refused, not judged,
+#   with the match named in the message
 #   (a substring hit on apply_patch, applypatch or apply-patch once quotes, backslashes and newlines are deleted, or a
-#   "*** Begin Patch" with a file marker, or a $' with an escape, or an unquoted glob word that can match the name, unless the
+#   "*** Begin Patch" with a file marker, or a $' with an escape, or an unquoted glob word that can match the name as a command
+#   word or with 4 or more literal characters, a wildcard argument and a heredoc body's * being no hit, unless the
 #   command is in the simple form: one read-only reader piped only through sort, uniq, cut, tr, nl, wc, head, tail, grep, rg,
 #   with no $ outside single quotes, substitution, list, redirect or program-running option (quoted text is opaque);
 #   BEST EFFORT, NOT A SECURITY BOUNDARY (the apply_patch tool form is the checked path; the real boundary for secrets in
@@ -209,8 +212,8 @@ if [ "$tool" = Bash ]; then
     hit="$(printf '%s' "$in" | raw_hit)" && die "$hit"
     exit 0
   fi
-  # A Codex patch handed to the shell is refused (see the header).
-  if shell_patch_refused "$cmd"; then printf '%s\n' "$(msg patch_shell)" >&2; exit 2; fi
+  # A Codex patch handed to the shell is refused, in Codex only (see the header).
+  if shell_patch_host "$in" && shell_patch_refused "$cmd"; then printf '%s\n' "$(msg patch_shell "$SHELL_PATCH_HIT")" >&2; exit 2; fi
   # Cheap exit: a secret path has a dot in it (.env, .ssh; quotes or a backslash in the name are
   # removed by the lexer, so the raw text is not searched for ".env"). Everything else is lexed.
   case "$cmd" in *.*) ;; *) exit 0 ;; esac

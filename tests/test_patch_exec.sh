@@ -16,11 +16,12 @@ chmod +x "$BIN/apply_patch"
 ( cd "$W" && git init -q . && git config user.email t@t && git config user.name t \
   && printf 'one\n' > f.txt && git add f.txt && git commit -qm "apply_patch note" ) >/dev/null 2>&1
 
-json() { # json <cmd> — a Bash PreToolUse event with the command escaped
-  local c; c="$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | LC_ALL=C awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }')"
-  printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"}}' "$CORE_DIR/p/code" "$c"
+json() { # json <cmd> [claude] — a Codex Bash PreToolUse event (turn_id) with the command escaped; "claude": Claude Code's shape
+  local c t='"turn_id":"turn-1",'; c="$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | LC_ALL=C awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }')"
+  [ "${2:-}" = claude ] && t=""
+  printf '{"session_id":"s",%s"cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"}}' "$t" "$CORE_DIR/p/code" "$c"
 }
-hook_rc() { json "$2" | bash "$HOOKS/$1" >/dev/null 2>&1; echo $?; }
+hook_rc() { json "$2" "${3:-}" | bash "$HOOKS/$1" >/dev/null 2>&1; echo $?; }
 ran_fake() { # ran_fake <cmd> — run it for real with the fake first on PATH; 0 when the fake started
   : > "$LOG"
   ( cd "$W" && PATH="$BIN:$PATH" timeout 20 bash -c "$1" </dev/null >/dev/null 2>&1 ) 2>/dev/null
@@ -139,4 +140,12 @@ ran_fake 'git grep $IFS--open-files-in-pager=apply_patch one' && pass || fail "t
 # Control: the fake itself works, and a plain apply_patch line is refused (the test is not blind).
 ran_fake "apply_patch x" && pass || fail "the fake apply_patch does not run: the check would be blind"
 [ "$(hook_rc guard-code.sh "apply_patch x")" = 2 ] && pass || fail "plain apply_patch not refused"
+# Claude Code has no apply_patch tool: the refusal does not run there (a program of that name is the person's own), so the
+# same inputs pass both hooks when the event has Claude Code's shape and the plugin is not installed under CODEX_HOME
+for c in "apply_patch x" "${bypass[0]}" "cd $BIN && ./app*y_patch x" 'rm -rf dist/* && ls'; do
+  for h in guard-code.sh guard-secrets.sh; do
+    rc="$(hook_rc "$h" "$c" claude)"
+    [ "$rc" = 0 ] && pass || fail "claude $h rc=$rc (want 0) for: ${c:0:120}"
+  done
+done
 finish

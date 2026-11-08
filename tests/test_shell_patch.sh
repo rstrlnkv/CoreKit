@@ -262,6 +262,61 @@ for c in 'git log --o=x --grep=apply_patch' 'git log --out=x --grep=apply_patch'
   refused "$c" "git abbreviation"
 done
 
+# --- a wildcard argument is no command: everyday glob commands with && ; | or a redirect pass (they were refused when
+# any glob that could match the name counted, wherever it stood); a heredoc body is data, its * is no command word
+for c in 'wc -l a/* b/* 2>/dev/null | tail -1' 'cd x && ls scripts/* && cat .claude-plugin/marketplace.json' 'rm -rf dist/* && npm run build' \
+  'cp assets/* public/ 2>/dev/null' 'chmod +x bin/* && ls' 'du -sh * | sort -h > sizes.txt' 'tar czf out.tgz * ; ls' \
+  'for f in *; do echo "$f"; done > list.txt' 'git add src/* && git commit -m x' 'npm test && ls dist/*' 'cp [a-z]* out/; ls' \
+  'ls src/* >&2' 'ls -d */ 2>&1 | head' 'echo x >| out.txt *' \
+  "cat > f.js <<'EOF'${nl}const y = a * b; // *${nl}* x${nl}EOF${nl}node f.js" "cat <<-EOF > f.txt${nl}	* item${nl}	EOF${nl}ls" \
+  "cat > a.md <<EOF${nl}it's * here; * x${nl}EOF${nl}ls" "x=\$(cat <<'EOF'${nl}* a${nl}EOF${nl}); echo \"\$x\""; do
+  passes "$c" "glob argument or heredoc body"
+done
+# a heredoc started inside "$(...)" (the usual commit and PR body idiom), after a quoted apostrophe, or after a quote that
+# spans lines is a heredoc too; a case pattern and arithmetic are no command words
+for c in "git commit -m \"\$(cat <<'EOF'${nl}Fix things${nl}${nl}* bullet one${nl}* bullet two${nl}EOF${nl})\"" \
+  "gh pr create --title x --body \"\$(cat <<'EOF'${nl}## Summary${nl}* item${nl}EOF${nl})\"" "echo \"it's\" <<EOF${nl}* item${nl}EOF" \
+  "echo 'a \"b' <<EOF${nl}* item${nl}EOF" "echo \"a${nl}b\" && cat <<EOF${nl}* x${nl}EOF" "x=\`cat <<EOF${nl}* a${nl}EOF${nl}\`" \
+  "echo \"\$(echo \")\") \$(cat <<'E'${nl}* a${nl}E${nl})\"" "cat <<E\\OF${nl}* a${nl}EOF" "cat <<E\"O\"F${nl}* a${nl}EOF" \
+  "case \"\$a\" in${nl}  *.md) echo md ;;${nl}  *) echo other ;;${nl}esac" 'case "$1" in start) x;; *) y;; esac' \
+  'case $f in (*) ls;; esac' 'case $f in a|*) ls;; esac' "case \$f in${nl}*)${nl}  ls ;;${nl}esac" \
+  'echo $(( $(wc -l < f) * 2 ))' 'x=$(( (a+b) * 2 ))' 'echo "$(( 3 * 4 ))"' 'echo $((1<<2)) && ls *'; do
+  passes "$c" "heredoc in a quoted substitution, case pattern or arithmetic"
+done
+# what only looks like a heredoc start, a case, or arithmetic leaves the next words command words
+for c in "echo \"<<EOF\"${nl}* x" "echo '<<EOF'${nl}* x" "echo \\<<EOF${nl}./a* x" "# <<EOF${nl}./a* x" "echo x # it's <<EOF${nl}* x" \
+  "echo \"it's${nl}<<EOF\"${nl}* x" 'case x in *) ;; esac; * y' 'case x in a) * y;; esac' 'case x in *) ./a* | sh;; esac' \
+  'echo $(( $(./a* x) + 1 ))' 'echo $((./a* x) )' 'x=$(( 2 * 3 )); * y' "echo \$((1<<2))${nl}* x"; do
+  refused "$c" "a false heredoc, case or arithmetic"
+done
+# command positions: a backtick, find -exec, a wrapper's numeric value, a wrapper named by path, coproc
+for c in 'echo `./a* x`' 'timeout 5 ./a* x' 'timeout 1.5s ./a* x' 'nice -n 5 ./a* x' 'xargs -n 1 ./a*' 'find . -exec ./a* {} \;' \
+  'find . -execdir ./a* {} +' 'find . -ok ./a* {} \;' '/usr/bin/env ./a* x' 'coproc ./a* x'; do
+  refused "$c" "a glob in a command position"
+done
+passes 'echo `ls` * && ls' "a wildcard after a closing backtick is an argument"
+passes 'timeout 5 ls dist/*' "a wildcard argument after a wrapper's numeric value"
+passes 'find . -exec ls {} \; -name *' "a wildcard argument after find -exec"
+# a glob still counts as a command word (first word, after ; && | ( or a newline, after a reserved word, an assignment or a
+# wrapper) and, anywhere, when its last part keeps 4 or more literal characters and can match the name
+for c in '* x' 'ls; * x' 'ls && ./a* x' 'true | ./ap*' 'if true; then ./a*; fi' '( ./a* )' 'sudo ./a* x' 'xargs -0 ./a*' 'X=1 ./a* x' \
+  "ls${nl}./a* x" 'ls 2>/dev/null; ./a*' 'sudo ../bin/apply_pat?h x > /dev/null' 'ls ../bin/appl*_patch; true' 'rm -f ../b/*patch && ls' \
+  "bash <<EOF${nl}../bin/apply_pat?h x${nl}EOF" "cat <<EOF${nl}x${nl}EOF${nl}./a* x" "cat <<'A' <<'B'${nl}*${nl}A${nl}*${nl}B${nl}* x"; do
+  refused "$c" "glob as a command word, or spelling the name"
+done
+# the refusal names what matched (SHELL_PATCH_HIT; the hook message shows it)
+hit_is() { SHELL_PATCH_HIT=""; shell_patch_refused "$1"; assert_eq "$SHELL_PATCH_HIT" "$2" "$3"; }
+hit_is 'cd d && ../bin/apply_pat?h x' '../bin/apply_pat?h' "the hit names the glob word"
+hit_is 'ls; * x' '*' "the hit names a bare wildcard"
+hit_is 'echo x | Apply_Patch' 'Apply_Patch' "the hit names the spelling as written"
+hit_is "apply_pa''tch x" 'apply_patch' "the hit names the spelling with quotes removed"
+hit_is "cat <<'E' | x${nl}*** Begin Patch${nl}*** Add File: a${nl}E" '*** Begin Patch' "the hit names a patch text"
+hit_is "\$'\\x61pply' x" "\$'\\...'" "the hit names an escape"
+# the hit is cut at 80 bytes, never inside a UTF-8 character
+e2="$(printf '\303\251')"; long="x"; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50; do long="$long$e2"; done
+want="x"; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39; do want="$want$e2"; done
+hit_is "$long/a* x" "$want" "a long hit is cut before a split UTF-8 character"
+
 # --- documented over-blocking (LIMIT): a hit outside the simple form is refused
 for c in 'cd x && grep apply_patch .' 'for f in *.md; do grep -q apply_patch "$f"; done' 'gh pr create --body "apply_patch"' 'echo apply_patch' 'grep apply_patch f > out.txt' \
   'command -v apply_patch' 'man apply_patch' '/usr/bin/grep apply_patch f' 'which apply_patch' 'grep -n apply_patch $FILE' 'less apply_patch' 'ag apply_patch' \
@@ -269,6 +324,8 @@ for c in 'cd x && grep apply_patch .' 'for f in *.md; do grep -q apply_patch "$f
   'test -f apply_patch' 'cat apply_patch 2>/dev/null' 'grep x <<< apply_patch' 'git log -Sapply_patch' 'git commit apply_patch --no-verify'; do
   refused "$c" "LIMIT: over-blocking"
 done
+refused 'echo $(ls) * && ls' "LIMIT: over-blocking, a bare wildcard right after )"
+refused 'for ((i = 0; i < 3; i++)); do (( (i+1) * 2 )); done' "LIMIT: over-blocking, arithmetic without \$"
 
 # --- documented limits (LIMIT): no hit, no refusal
 passes 'a=apply; ${a}_patch' "LIMIT: a computed name"
@@ -279,6 +336,9 @@ passes 'x=apply; y=patch; "$x"_"$y"' "LIMIT: a computed name, two variables"
 passes "\$'apply'\$'_patch'" "LIMIT: \$'...' splitting"
 passes "../bin/'apply_pat'?h" "LIMIT: a quoted part glued to a glob"
 passes "shopt -s extglob${nl}../bin/apply_pat@(c)h" "LIMIT: extglob"
+passes 'sudo -u x ./a*' "LIMIT: a glob after a wrapper option that takes a non-numeric value"
+passes 'exec -a name ./a* x' "LIMIT: a glob after exec -a name"
+passes "cat <<EOF | sh${nl}./a* x${nl}EOF" "LIMIT: a short glob in a heredoc body fed to a shell"
 
 # --- a 1 MB command stays well inside the 15 s hook timeout (grep, tr and one awk pass: linear)
 timed() { # timed <label> <want: 0 refused | 1 pass> <command>

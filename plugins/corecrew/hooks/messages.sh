@@ -75,8 +75,8 @@ _msg_text() {
     en:patch_no_reader) MSG_T='corecrew: the patch cannot be judged: patch-paths.awk is missing or failed, so no file of the patch can be checked. Reinstall the corecrew plugin.' ;;
     ru:patch_no_reader) MSG_T='corecrew: патч нельзя проверить: patch-paths.awk отсутствует или не сработал, поэтому ни один файл патча не проверить. Переустановите плагин corecrew.' ;;
     ru:patch_unjudgeable) MSG_T='corecrew: патч нельзя проверить: не удаётся прочитать текст патча, а строка "@1" называет внутренний путь. Используйте инструмент apply_patch и строки вида "*** Add File: <полный путь>".' ;;
-    en:patch_shell) MSG_T='corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked.' ;;
-    ru:patch_shell) MSG_T='corecrew: применяйте патчи инструментом apply_patch, а не через командную строку (Bash); в такой форме патч проверить нельзя.' ;;
+    en:patch_shell) MSG_T='corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked (matched: @1). If this is not a patch, rewrite the command without it: run a reader such as grep or cat on its own, or name the files instead of using a wildcard.' ;;
+    ru:patch_shell) MSG_T='corecrew: применяйте патчи инструментом apply_patch, а не через командную строку (Bash); в такой форме патч проверить нельзя (сработало на: @1). Если это не патч, перепишите команду без этого: запустите чтение (grep, cat) отдельной командой или перечислите файлы вместо шаблона.' ;;
     en:secrets_blocked) MSG_T='corecrew: reading secrets is blocked (@1)' ;;
     ru:secrets_blocked) MSG_T='corecrew: чтение секретов заблокировано (@1)' ;;
     en:secrets_ask) MSG_T='Ask the user to check the value themselves, or use .env.example.' ;;

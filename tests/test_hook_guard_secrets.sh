@@ -643,12 +643,12 @@ FX="$ROOT/tests/fixtures/codex"
 sec_codex() {
   fx() { run_json "$(sed "s|@CWD@|${2-$C}|g" "$FX/$1.json")"; }
   # patch <patch text> [cwd] [tool] — a Codex tool call with the given patch text
-  patch() { run_json "$(printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"command":"%s"}}' "${2-$C}" "${3-apply_patch}" "$(jesc "$1")")"; }
+  patch() { run_json "$(printf '{"session_id":"s","turn_id":"turn-1","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"command":"%s"}}' "${2-$C}" "${3-apply_patch}" "$(jesc "$1")")"; }
   # bigjson <paths> <tool> — a hook input with that many harmless Add File entries, built by awk (bash 3.2 is
   # quadratic on a string this long)
   bigjson() {
     awk -v n="$1" -v tool="$2" -v cwd="$C" 'BEGIN {
-      printf "{\"session_id\":\"s\",\"cwd\":\"%s\",\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"%s\",\"tool_input\":{\"command\":\"", cwd, tool
+      printf "{\"session_id\":\"s\",\"turn_id\":\"turn-1\",\"cwd\":\"%s\",\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"%s\",\"tool_input\":{\"command\":\"", cwd, tool
       if (tool == "Bash") printf "apply_patch <<\x27EOF\x27\\n"
       printf "*** Begin Patch\\n"
       for (i = 1; i <= n; i++) printf "*** Add File: src/f%d.c\\n+x\\n", i
@@ -731,8 +731,8 @@ sec_codex() {
   patch "$B${nl}*** Add File: a${nl}+x${nl}$(printf '\302\240')*** Add File: .env${nl}$E"; blocked "codex NBSP header after an Add body" ".env"
   patch "$B${nl}*** Add File: src/a.swift${nl}+x${nl}junk *** Add File: .env${nl}$E"; blocked "codex junk before a .env header (X)" ".env"
   # A patch handed to the shell is refused with one message (each of these was a bypass of the old judging)
-  local SM="corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked." P
-  refused() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_eq "$ERR" "$SM" "$1: message"; }
+  local SM="corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked" P
+  refused() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; case "$ERR" in "$SM"*) pass ;; *) fail "$1: message: $ERR" ;; esac; }
   fx pre-bash-applypatch-heredoc; refused "codex Bash apply_patch heredoc"
   fx pre-bash-applypatch-quotedarg; refused "codex Bash apply_patch quoted arg"
   fx pre-bash-applypatch-cd; refused "codex Bash cd sub && apply_patch"
@@ -770,16 +770,50 @@ sec_settings_only() {
   local cfg="$SANDBOX/only-settings" cmd
   printf 'core_dir: %s\n' "$CORE_DIR" > "$cfg"
   for cmd in 'apply_patch' 'xargs --max-args 1 apply_patch' "env -Sapply_patch" 'cat p | apply_patch'; do
-    printf '%s' "$(printf '{"session_id":"s","cwd":"%s","tool_name":"Bash","tool_input":{"command":"%s"}}' "$C" "$cmd")" \
+    printf '%s' "$(printf '{"session_id":"s","turn_id":"turn-1","cwd":"%s","tool_name":"Bash","tool_input":{"command":"%s"}}' "$C" "$cmd")" \
       | env -u CORE_DIR -u CLAUDE_PLUGIN_OPTION_CORE_DIR CORECREW_CONFIG="$cfg" bash "$H" >"$OD/out" 2>"$OD/err"; RC=$?
     [ "$RC" = 2 ] && pass || fail "settings-only core_dir: [$cmd] rc=$RC (want 2)"
     grep -qF "run patches with the apply_patch tool" "$OD/err" && pass || fail "settings-only core_dir: [$cmd] message: $(<"$OD/err")"
   done
-  printf '%s' "$(printf '{"session_id":"s","cwd":"%s","tool_name":"Bash","tool_input":{"command":"grep -rn apply_patch src"}}' "$C")" \
+  printf '%s' "$(printf '{"session_id":"s","turn_id":"turn-1","cwd":"%s","tool_name":"Bash","tool_input":{"command":"grep -rn apply_patch src"}}' "$C")" \
     | env -u CORE_DIR -u CLAUDE_PLUGIN_OPTION_CORE_DIR CORECREW_CONFIG="$cfg" bash "$H" >"$OD/out" 2>"$OD/err"; RC=$?
   [ "$RC" = 0 ] && pass || fail "settings-only core_dir: reader twin rc=$RC"
 }
 bg sec_settings_only
+
+# --- the shell-patch refusal runs only in Codex (install path, or Codex's turn_id in the input); in Claude Code everyday
+# glob commands and the word apply_patch pass, in a project and outside; in Codex wildcard arguments pass and real
+# shell patches are refused with the match named
+sec_host_gate() {
+  local O="$OD/not a project" c h nl=$'\n'
+  local SM="corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked"
+  mkdir -p "$O"
+  cl() { run_json "$(printf '{"session_id":"s","transcript_path":"/t.jsonl","cwd":"%s","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"},"tool_use_id":"toolu_1"}' "$2" "$(jesc "$1")")"; }
+  cx() { run_json "$(printf '{"session_id":"s","turn_id":"turn-1","transcript_path":null,"cwd":"%s","hook_event_name":"PreToolUse","model":"gpt-5","permission_mode":"default","tool_name":"Bash","tool_input":{"command":"%s"},"tool_use_id":"call_1"}' "$2" "$(jesc "$1")")"; }
+  named() {
+    assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"
+    case "$ERR" in "$SM"*"$2"*) pass ;; *) fail "$1: message lacks the refusal or [$2]: $ERR" ;; esac
+  }
+  local everyday=( 'wc -l a/* b/* 2>/dev/null | tail -1' 'cd x && ls scripts/* && cat .claude-plugin/marketplace.json' \
+    'rm -rf dist/* && npm run build' 'cp assets/* public/' 'chmod +x bin/*' \
+    "cat > f.js <<'EOF'${nl}const y = a * b;${nl}EOF${nl}node f.js" \
+    "git commit -m \"\$(cat <<'EOF'${nl}Fix things${nl}${nl}* bullet one${nl}* bullet two${nl}EOF${nl})\"" \
+    "gh pr create --title x --body \"\$(cat <<'EOF'${nl}## Summary${nl}* item${nl}EOF${nl})\"" )
+  for c in "${everyday[@]}"; do
+    for h in "$O" "$C"; do
+      cl "$c" "$h"; ok "claude Bash [$c] in $h passes"
+      cx "$c" "$h"; ok "codex Bash [$c] in $h passes"
+    done
+  done
+  for c in 'cd src && grep -rn apply_patch .' 'apply_patch x' 'cat p | apply_patch'; do
+    cl "$c" "$C"; ok "claude Bash [$c] in a project passes"
+  done
+  cx "apply_patch <<'EOF'${nl}*** Begin Patch${nl}*** Add File: .env${nl}+k${nl}*** End Patch${nl}EOF" "$C"; named "codex heredoc apply_patch" "apply_patch"
+  cx 'cd bin && ./app*y_patch x' "$C"; named "codex glob command" "./app*y_patch"
+  cx 'ls; * x' "$C"; named "codex bare wildcard as a command" "*"
+  COREKIT_HOST=codex cl 'cat p | apply_patch' "$C"; named "host codex without turn_id" "apply_patch"
+}
+bg sec_host_gate
 
 bg_wait
 

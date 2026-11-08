@@ -165,6 +165,20 @@ Docs meant to stay public in the code folder: list them on a \"public-docs: <pat
 Документы, которые должны остаться публичными в папке кода, перечислите в строке \"public-docs: <paths>\" в $CORE_DIR/$PN2/CLAUDE.md."
 done
 
+# --- the shell-patch refusal (Codex input: turn_id), in both guards: the text names what matched
+for H in "$HOOKS/guard-code.sh" "$HOOKS/guard-secrets.sh"; do
+  for v in "${VARIANTS[@]}"; do
+    printf '{"session_id":"s","turn_id":"t","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"cd d && ../bin/apply_pat?h x"}}' "$C" \
+      | vrun "$v" bash "$H" >"$SANDBOX/out" 2>"$SANDBOX/err"; RC=$?
+    assert_eq "$RC" "2" "patch_shell exit [$v] $(basename "$H")"; assert_eq "$(cat "$SANDBOX/out")" "" "patch_shell: stdout empty [$v]"
+    check "$v" "patch_shell $(basename "$H")" "$(cat "$SANDBOX/err")" \
+"corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked (matched: ../bin/apply_pat?h).
+If this is not a patch" \
+"corecrew: применяйте патчи инструментом apply_patch, а не через командную строку (Bash); в такой форме патч проверить нельзя (сработало на: ../bin/apply_pat?h).
+Если это не патч"
+  done
+done
+
 # --- guard-secrets
 H="$HOOKS/guard-secrets.sh"
 echo "FAKE=1" > "$C/.env"
@@ -184,7 +198,8 @@ H="$HOOKS/one-suite.sh"
 FAKE="onesuite-fake-run-$$"
 export ONE_SUITE_PROCS="$FAKE" ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0 ONE_SUITE_TURN="$SANDBOX/turn"
 dummy=""; trap '[ -z "$dummy" ] || kill "$dummy" 2>/dev/null; chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
-bash -c "exec -a $FAKE sleep 120" >/dev/null 2>&1 & dummy=$!; disown "$dummy" 2>/dev/null
+# the fake run works inside the project: one-suite holds only runs of the same project
+(cd "$C" && exec bash -c "exec -a $FAKE sleep 120") >/dev/null 2>&1 & dummy=$!; disown "$dummy" 2>/dev/null
 sleep 1
 for v in "${VARIANTS[@]}"; do
   printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"swift test","description":"run"}}' "$C" \

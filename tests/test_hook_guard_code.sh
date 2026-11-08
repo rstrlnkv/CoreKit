@@ -497,13 +497,13 @@ sec_codex() {
   # patch <patch text> [cwd] [tool] — a Codex tool call with the given patch text
   patch() {
     local t="$1"; t="${t//\\/\\\\}"; t="${t//\"/\\\"}"; t="${t//$'\n'/\\n}"
-    run_json "$(printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"command":"%s"}}' "${2-$C}" "${3-apply_patch}" "$t")"
+    run_json "$(printf '{"session_id":"s","turn_id":"turn-1","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"command":"%s"}}' "${2-$C}" "${3-apply_patch}" "$t")"
   }
   # bigjson <paths> <tool> — a hook input with that many harmless Add File entries, built by awk (bash 3.2 is
   # quadratic on a string this long)
   bigjson() {
     awk -v n="$1" -v tool="$2" -v cwd="$C" 'BEGIN {
-      printf "{\"session_id\":\"s\",\"cwd\":\"%s\",\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"%s\",\"tool_input\":{\"command\":\"", cwd, tool
+      printf "{\"session_id\":\"s\",\"turn_id\":\"turn-1\",\"cwd\":\"%s\",\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"%s\",\"tool_input\":{\"command\":\"", cwd, tool
       if (tool == "Bash") printf "apply_patch <<\x27EOF\x27\\n"
       printf "*** Begin Patch\\n"
       for (i = 1; i <= n; i++) printf "*** Add File: src/f%d.c\\n+x\\n", i
@@ -536,8 +536,8 @@ sec_codex() {
   fx pre-bash-subagent; ok "codex Bash in a subagent: no ro_agent for a Codex agent_type"
   # A patch handed to the shell is refused with one message, wherever it points: a patch run through the Bash command line cannot be checked
   # (each of these was a bypass of the old path judging)
-  local SM="corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked."
-  refused() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_eq "$ERR" "$SM" "$1: message"; }
+  local SM="corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked"
+  refused() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; case "$ERR" in "$SM"*) pass ;; *) fail "$1: message: $ERR" ;; esac; }
   fx pre-bash-applypatch-heredoc; refused "codex Bash apply_patch heredoc"
   fx pre-bash-applypatch-quotedarg; refused "codex Bash apply_patch quoted arg"
   fx pre-bash-applypatch-cd; refused "codex Bash cd sub && apply_patch"
@@ -652,6 +652,52 @@ sec_codex() {
   fx pre-apply-patch-add; [ -n "$ERR" ] && pass || fail "exit 2 with an empty stderr"
 }
 bg sec_codex
+
+# The shell-patch refusal runs only in Codex: the plugin installed under CODEX_HOME (host), or a hook input with
+# Codex's turn_id (a dev install whose path says nothing). Claude Code has no apply_patch tool, so there everyday glob
+# commands, and even the word apply_patch, pass, outside a project and inside one.
+sec_host_gate() {
+  local O="$OD/not a project" c h nl=$'\n'
+  mkdir -p "$O"
+  js() { local t="$1"; t="${t//\\/\\\\}"; t="${t//\"/\\\"}"; t="${t//$'\n'/\\n}"; t="${t//$'\t'/\\t}"; printf '%s' "$t"; }
+  cl() { run_json "$(printf '{"session_id":"s","transcript_path":"/t.jsonl","cwd":"%s","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"},"tool_use_id":"toolu_1"}' "$2" "$(js "$1")")"; }
+  cx() { run_json "$(printf '{"session_id":"s","turn_id":"turn-1","transcript_path":null,"cwd":"%s","hook_event_name":"PreToolUse","model":"gpt-5","permission_mode":"default","tool_name":"Bash","tool_input":{"command":"%s"},"tool_use_id":"call_1"}' "$2" "$(js "$1")")"; }
+  local SM="corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked"
+  named() { # named <label> <match> — exit 2, the message starts with the refusal and names the match
+    assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"
+    case "$ERR" in "$SM"*) pass ;; *) fail "$1: message: $ERR" ;; esac
+    case "$ERR" in *"$2"*) pass ;; *) fail "$1: the message does not name [$2]: $ERR" ;; esac
+  }
+  local everyday=( 'wc -l a/* b/* 2>/dev/null | tail -1' 'cd x && ls scripts/* && cat .claude-plugin/marketplace.json' \
+    'rm -rf dist/* && npm run build' 'cp assets/* public/' 'chmod +x bin/*' 'du -sh * | sort -h' \
+    "cat > f.js <<'EOF'${nl}const y = a * b;${nl}console.log(\"*\", 'it''s');${nl}EOF${nl}node f.js" \
+    "git commit -m \"\$(cat <<'EOF'${nl}Fix things${nl}${nl}* bullet one${nl}* bullet two${nl}EOF${nl})\"" \
+    "gh pr create --title x --body \"\$(cat <<'EOF'${nl}## Summary${nl}* item${nl}EOF${nl})\"" \
+    "case \"\$a\" in${nl}  *.md) echo md ;;${nl}  *) echo other ;;${nl}esac" 'echo $(( $(wc -l < f) * 2 ))' )
+  for c in "${everyday[@]}"; do
+    for h in "$O" "$C"; do
+      cl "$c" "$h"; ok "claude Bash [$c] in $h passes"
+      cx "$c" "$h"; ok "codex Bash [$c] in $h passes (a wildcard argument is no command)"
+    done
+  done
+  # Claude Code: the word, and a shell line that would run a program named apply_patch, are the person's own business
+  for c in 'cd src && grep -rn apply_patch .' 'echo apply_patch > notes.txt' 'apply_patch x' '../bin/apply_pat?h x'; do
+    for h in "$O" "$C"; do cl "$c" "$h"; ok "claude Bash [$c] in $h passes"; done
+  done
+  # Codex: real shell patches are still refused, outside a project and inside, and the message names the match
+  for h in "$O" "$C"; do
+    cx "apply_patch <<'EOF'${nl}*** Begin Patch${nl}*** Add File: src/a${nl}+x${nl}*** End Patch${nl}EOF" "$h"; named "codex heredoc apply_patch in $h" "apply_patch"
+    cx 'cd bin && ./app*y_patch x' "$h"; named "codex glob command in $h" "./app*y_patch"
+    cx 'ls && * x' "$h"; named "codex bare wildcard as a command in $h" "*"
+    cx 'sudo ../bin/apply_pat?h x 2>/dev/null' "$h"; named "codex glob spelling the name after a wrapper in $h" "../bin/apply_pat?h"
+    cx "bash <<EOF${nl}cd src && apply_patch x${nl}EOF" "$h"; named "codex the name in a heredoc body fed to bash in $h" "apply_patch"
+  done
+  # the install path alone says Codex (COREKIT_HOST stands in for it): a Claude-shaped input is refused there too
+  COREKIT_HOST=codex cl 'cat p | apply_patch' "$C"; named "host codex without turn_id" "apply_patch"
+  COREKIT_HOST=claude cl 'cat p | apply_patch' "$C"; ok "host claude without turn_id passes"
+  COREKIT_HOST=claude cx 'cat p | apply_patch' "$C"; named "turn_id says Codex even when the path does not (fails closed)" "apply_patch"
+}
+bg sec_host_gate
 
 bg_wait
 

@@ -28,7 +28,9 @@
 #   W lines judged; besides, its "***" lines are checked raw (internal_hit: a component docs, .claude, claude.md,
 #   claude.local.md or agents.md in any case, no public-docs exception) and a hit is refused; no hit passes. Header lines and
 #   paths are trimmed like Codex does (Unicode spaces too). A text with no string to read passes.
-#   A patch handed to the shell is refused, not judged, in every folder. This is BEST EFFORT, NOT A SECURITY BOUNDARY: it
+#   In Codex only (lib.sh shell_patch_host: the plugin lies under CODEX_HOME, or the input carries Codex's turn_id; Claude
+#   Code has no apply_patch tool, so nothing is refused there) a patch handed to the shell is refused, not judged, in every
+#   folder, and the message names what matched. This is BEST EFFORT, NOT A SECURITY BOUNDARY: it
 #   catches plain and accidental shell patches and many disguised ones, cannot see names the shell builds at run time, and the
 #   apply_patch tool form is the checked path (known ways past it: the Limits below, plus $'apply'$'_patch', 'apply_pat'?h,
 #   extglob, IFS changes, write_stdin) (a scope gate by cwd or by wrapper was bypassed
@@ -36,12 +38,13 @@
 #   shell_patch_refused (no shell parsing): a hit is apply_patch, applypatch or apply-patch (any letter case) in the text
 #   once ' " \ and newlines are deleted (also --codex-run-as-apply-patch), or "*** Begin Patch" followed by an Add File,
 #   Update File, Delete File or Move to marker, or a $' with an escape, or an unquoted glob word that can match the name
-#   (../bin/apply_pat?h). A hit passes only in the simple form: one read-only
+#   and is a command word or keeps 4 or more literal characters (../bin/apply_pat?h, ls; * x; not rm -rf dist/*, and not a
+#   * in a heredoc body). A hit passes only in the simple form: one read-only
 #   command (grep egrep fgrep rg, git log|show|diff|grep|status|blame|commit -m, cat head tail ls wc find) piped only through
 #   sort uniq cut tr nl wc head tail grep rg; quoted text is opaque there, outside quotes no $ ` \ ; & < > ( ) { } ! or newline;
 #   no assignment first, and no program-running option (git -c -p -O --pag* --ext* --output* --open-files-in-pager* and their
 #   abbreviations, not --oneline; rg --pre -z, find -exec -delete, sort --co*). Exit 2 with
-#   "run patches with the apply_patch tool". Over-blocking by design: echo apply_patch, cd x && grep apply_patch .,
+#   "run patches with the apply_patch tool ... (matched: <what>)". Over-blocking by design (Codex): echo apply_patch, cd x && grep apply_patch .,
 #   grep apply_patch f > out, man apply_patch, FOO=apply_patch make, grep apply_patch $FILE. Limits: a name built at run time (a=apply;
 #   ${a}_patch, $(...) or backticks (also empty), brace expansion, $'apply'$'_patch', 'apply_pat'?h, extglob), a glob that expands to a file whose name is an option (-...), a script file or
 #   interpreter that runs it.
@@ -56,7 +59,7 @@
 #   "$(...)" (the commit-message idiom) has its body skipped; <<"WORD" there stops the judging.
 #   Wrapper options with a value are skipped (timeout 5 tee, sudo -u x touch, nice -n 5). Documented limits:
 #   relative targets after cd, xargs, find -exec, bash -c "...", and the file-target judging being inert outside a project
-#   cwd (spec D17). That is about file-target judging only: the shell-patch refusal runs before it, in every folder.
+#   cwd (spec D17). That is about file-target judging only: the shell-patch refusal (Codex) runs before it, in every folder.
 #   Not followed: variables, globs, `sh -c "..."`, ln, install, in-place sed, rsync, scripts. A target
 #   that has $ ` * ? [ { is not judged. Quoted text is not a command, heredoc bodies and comments are
 #   skipped. At most 100 targets are looked at. The tokenizer is one linear pass in awk. A command this
@@ -266,8 +269,8 @@ fi
 # --- Bash: targets of redirects and file commands, found by one awk pass.
 cmd="$(json_str "$in" command)"
 [ -n "$cmd" ] || exit 0
-# A Codex patch applied through the shell is refused (see the header).
-if shell_patch_refused "$cmd"; then printf '%s\n' "$(msg patch_shell)" >&2; exit 2; fi
+# A Codex patch applied through the shell is refused, in Codex only (see the header).
+if shell_patch_host "$in" && shell_patch_refused "$cmd"; then printf '%s\n' "$(msg patch_shell "$SHELL_PATCH_HIT")" >&2; exit 2; fi
 # Cheap exit: nothing in the command can write a file.
 case "$cmd" in *">"*|*tee*|*touch*|*cp*|*mv*|*mkdir*) ;; *) exit 0 ;; esac
 
