@@ -27,7 +27,8 @@ echo "  -- A. manifest and hooks file"
 assert_file "$CX_MAN"
 if [ -f "$CX_MAN" ]; then
   json_ok "$CX_MAN" && pass || fail "$CX_MAN is not valid JSON"
-  for k in name version description; do
+  # description: the Codex one differs by design (a hint only); tests/test_manifest.sh checks the rest
+  for k in name version; do
     v="$(field "$CX_MAN" $k)"
     [ -n "$v" ] && pass || fail "codex manifest has no $k"
     assert_eq "$v" "$(field "$CL_MAN" $k)" "codex manifest $k = claude manifest $k"

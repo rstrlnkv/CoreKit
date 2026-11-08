@@ -2,7 +2,7 @@
   "name": "coremodel",
   "displayName": "CoreModel",
   "version": "0.6.0",
-  "description": "Picks the model and the effort level each prompt needs, for code and office work; asks before Fable, xhigh or max, and names the token cost of a model switch mid-chat.",
+  "description": "Spends only what each prompt needs: picks the model and effort level, and asks before the costly ones.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",
   "repository": "https://github.com/rstrlnkv/CoreKit",

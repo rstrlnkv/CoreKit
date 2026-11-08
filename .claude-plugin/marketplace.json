@@ -13,13 +13,13 @@
       "name": "coremodel",
       "displayName": "CoreModel",
       "source": "./plugins/coremodel",
-      "description": "Picks the model and the effort level each prompt needs, for code and office work; asks before Fable, xhigh or max, and names the token cost of a model switch mid-chat."
+      "description": "Spends only what each prompt needs: picks the model and effort level, and asks before the costly ones."
     },
     {
       "name": "coreopinion",
       "displayName": "CoreOpinion",
       "source": "./plugins/coreopinion",
-      "description": "Ask OpenAI's GPT, through the Codex CLI with a narrow read-only permission profile, for a second opinion or a review; Claude shows the answer with its own assessment and stays the only one that edits."
+      "description": "Get a second opinion from GPT on your code or plan; Claude shows it and stays the only one that edits."
     }
   ],
   "renames": {

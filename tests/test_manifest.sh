@@ -96,7 +96,11 @@ for pl in $plugins; do
   desc="$(jf "$CJ" description)"
   assert_contains "$M" "\"source\": \"./plugins/$pl\""
   assert_eq "$(market_desc "$pl")" "$desc" "$pl description differs between marketplace.json and plugin.json"
-  [ -f "$XJ" ] && assert_eq "$(jf "$XJ" description)" "$desc" "$pl description differs between the Claude and Codex manifests"
+  # coremodel's Codex description differs by design: in Codex it only suggests a model
+  [ -f "$XJ" ] && [ "$pl" != coremodel ] && assert_eq "$(jf "$XJ" description)" "$desc" "$pl description differs between the Claude and Codex manifests"
+  # one sentence of at most 120 characters, benefit first
+  [ "${#desc}" -le 120 ] && pass || fail "$pl description is ${#desc} characters, want 120 at most"
+  case "$desc" in *.*.*) fail "$pl description is more than one sentence" ;; *.) pass ;; *) fail "$pl description does not end with a full stop" ;; esac
   # the icon: ./assets/icon.png, named in every manifest, a square PNG of 512 to 2048 px, under 256 KiB
   ic="$ROOT/plugins/$pl/assets/icon.png"
   assert_eq "$(jf "$CJ" icon)" "./assets/icon.png" "$pl icon field"
@@ -116,12 +120,6 @@ for pl in $plugins; do
   # SECURITY.md: a line that names this plugin and a version names the current one
   bad="$(grep -wF "$pl" "$ROOT/SECURITY.md" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | grep -vxF "$top")"
   assert_eq "$bad" "" "SECURITY.md names an old $pl version"
-done
-# the descriptions this repo owns are one sentence of at most 120 characters, benefit first
-for pl in corecrew; do
-  desc="$(jf "$ROOT/plugins/$pl/.claude-plugin/plugin.json" description)"
-  [ "${#desc}" -le 120 ] && pass || fail "$pl description is ${#desc} characters, want 120 at most"
-  case "$desc" in *.*.*) fail "$pl description is more than one sentence" ;; *.) pass ;; *) fail "$pl description does not end with a full stop" ;; esac
 done
 
 # self-check of the CHANGELOG rule: a good file passes, each kind of mistake is caught
