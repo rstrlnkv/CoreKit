@@ -1,25 +1,25 @@
 {
   "name": "corekit",
-  "description": "CoreKit: corecrew for starting and running projects with Claude Code, coremodel for picking the model and effort level, and coreopinion for a second opinion from GPT.",
+  "description": "Three plugins for Claude Code and Codex: a project workflow (corecrew), a model and effort picker (coremodel) and a second opinion from GPT (coreopinion).",
   "owner": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "plugins": [
     {
       "name": "corecrew",
       "displayName": "CoreCrew",
       "source": "./plugins/corecrew",
-      "description": "Start projects from an interview and run tasks with a crew of agents; standards and lessons live in your private Core repo."
+      "description": "Run every project the same way: start from an interview, work with a crew of agents, keep the docs in a private repo."
     },
     {
       "name": "coremodel",
       "displayName": "CoreModel",
       "source": "./plugins/coremodel",
-      "description": "Picks the model and the effort level each prompt needs, for code and office work; asks before Fable, xhigh or max, and names the token cost of a model switch mid-chat."
+      "description": "Spends only what each prompt needs: picks the model and effort level, and asks before the costly ones."
     },
     {
       "name": "coreopinion",
       "displayName": "CoreOpinion",
       "source": "./plugins/coreopinion",
-      "description": "Ask OpenAI's GPT, through the Codex CLI with a narrow read-only permission profile, for a second opinion or a review; Claude shows the answer with its own assessment and stays the only one that edits."
+      "description": "Get a second opinion from GPT on your code or plan; Claude shows it and stays the only one that edits."
     }
   ],
   "renames": {

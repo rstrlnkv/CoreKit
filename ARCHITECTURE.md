@@ -1,54 +1,93 @@
 # Architecture
 
-A bird's-eye view of the repository for contributors. CoreKit is a Claude Code marketplace
-(`corekit`) that holds three independent plugins. Nothing here is compiled except the TypeScript
-module of `coremodel`.
+A bird's-eye view of the repository for contributors. CoreKit is a marketplace (`corekit`) for
+Claude Code and the Codex CLI that holds three independent plugins. Nothing here is compiled
+except the TypeScript module of `coremodel`.
 
 ## Where things live
 
 ```
-.claude-plugin/marketplace.json   the marketplace: lists the three plugins
+.claude-plugin/marketplace.json   the marketplace: lists the three plugins (both hosts read it)
 plugins/corecrew/                 project workflow
-  .claude-plugin/plugin.json      name, version, settings (userConfig)
+  .claude-plugin/plugin.json      Claude Code manifest: name, version, settings (userConfig), icon
+  .codex-plugin/plugin.json       Codex manifest: the same name, version and description, Codex listing fields
+  assets/icon.png                 the plugin icon (SVG source in docs/icons/)
   skills/                         new-project, task, ship, new-standard (SKILL.md + references/)
+    */agents/openai.yaml          Codex: keeps task, ship and new-standard out of implicit invocation
+    task/references/codex.md      Codex: the task chain with Codex subagents
+    task/references/codex-roles.md  Codex: the architect and explorer roles without feature-dev
   agents/                         engineer, tester, security, verifier, localizer, designer
   hooks/                          hooks.json and the five hook scripts, messages.sh for their texts
-  scripts/                        the machinery in portable bash: lib.sh, setup-core.sh, install-hooks.sh,
-                                  sync-tools.sh, adopt.sh, save, undo-step, wiki-*.sh, git-hooks/
+  scripts/                        the machinery in portable bash: lib.sh, prepare.sh, setup-core.sh,
+                                  install-hooks.sh, sync-tools.sh, adopt.sh, save, undo-step, wiki-*.sh,
+                                  patch-paths.awk (Codex apply_patch), the bash-lex*.awk readers, git-hooks/
   reference/                      wiki.md and knowledge.md: the rules the agents follow
   evals/                          trigger evals
-plugins/coremodel/                model and effort picker: hooks/ (TypeScript module), tests/, types/
-plugins/coreopinion/              second opinion from GPT: skills/second-opinion/ (SKILL.md, scripts/ask-gpt.sh), evals/
+plugins/coremodel/                model and effort picker
+  hooks/                          the Claude Code module (TypeScript)
+  codex/                          hint.sh and hooks.json: the Codex hint
+  tests/, types/                  the module's tests and the host API types
+plugins/coreopinion/              second opinion from GPT (Claude Code only)
+  skills/second-opinion/          SKILL.md; scripts/: ask-gpt.sh (the Codex run), allowed-files.sh and
+                                  secret-patterns.txt (the one secret list)
+  evals/                          trigger evals
 tests/                            bash tests, run by tests/run.sh; lib.sh gives each test a sandbox
-docs/                             upgrade guides (migration-*.md) and icon sources
+docs/                             upgrade guides (migration-*.md) and icon sources (icons/)
 ```
+
+## Hosts
+
+```
+                     Claude Code                         Codex CLI
+manifest             .claude-plugin/plugin.json          .codex-plugin/plugin.json
+corecrew hooks       hooks/hooks.json (all five)         the same hooks/hooks.json
+coremodel hooks      hooks/ (TypeScript module)          codex/hooks.json -> codex/hint.sh
+coreopinion          yes                                 not supported
+hook trust           on install                          after you enable them in /hooks
+```
+
+- **Manifests.** Each host reads its own manifest. The shared fields (name, version, description,
+  licence) must match; `tests/test_manifest.sh` checks it. A root `plugin.json` would make Codex
+  skip the hooks, so there is none.
+- **Hooks in Codex.** Codex fires PreToolUse for its shell (`Bash`) and for `apply_patch`; it has no
+  read, search or list tools to hook. The guards therefore read `apply_patch` patches with
+  `scripts/patch-paths.awk`. A rule that exists for one host runs only on that host: the refusal of
+  a patch handed to the shell runs only in Codex.
+- **Hook trust.** Codex runs a plugin's hooks only after the person enables them in `/hooks`, and
+  again after each update. `prepare.sh` says so until the session-start hook has run once.
+- **Settings.** Claude Code passes the plugin options to the hooks. Codex has no options screen, so
+  `lib.sh` also reads `~/.config/corecrew/settings`.
+- **Codex sandbox.** Codex keeps `.git` read-only, so `save` asks for approval to run outside it.
+  Codex subagents cannot be made read-only, so the read-only steps are checked before and after.
 
 ## How the parts fit
 
-- **Skills** are the user's entry points (`/corecrew:task`, `/coreopinion:second-opinion`).
-  They tell Claude what to do and call scripts through the plugin folder they resolve first (`lib.sh plugin-root`) or the plugin tools.
+- **Skills** are the user's entry points (`/corecrew:task`, `/coreopinion:second-opinion`). They
+  find their plugin folder first (`lib.sh plugin-root`), then call scripts from it.
 - **Agents** are the roles `/corecrew:task` hands work to. The designer, localizer, security and
-  verifier agents are read-only: a hook refuses their writes.
+  verifier agents are read-only: in Claude Code a hook refuses their writes.
 - **Hooks** (`plugins/corecrew/hooks/hooks.json`) run at session start, before tool calls and at
   stop. They guard secrets and the public code folder, keep one test suite running at a time and
-  remind Claude to save. Outside a Core project two things act: the session-start hook
-  (it refreshes the plugin's tools and, once per machine, prints a "Core not set up" hint) and the
-  read-only checker rule of the code guard; every other hook exits at once and prints nothing.
-- **Scripts** hold the logic, so hooks stay thin. At session start `sync-tools.sh` copies them into
-  the plugin's data folder (`~/.claude/plugins/data/corecrew-corekit/tools`), the one place git
-  hooks run them from; a plugin update therefore reaches git hooks without reinstalling them.
-- **Git hooks** (`scripts/git-hooks/`) are installed by `install-hooks.sh` into the code repo
-  (pre-commit, pre-push: no internal files in public history) and into the Core (pre-push: the
-  GitHub repo must be private).
-- **The Core folder.** The private repo (`~/Projects/Core` by default) holds the standards,
-  knowledge and each project's `CLAUDE.md` and `docs/` wiki. The code lives in its own repo beside
-  it; a gitignored `CLAUDE.local.md` link in the code folder loads the private `CLAUDE.md`.
+  remind the agent to save. Outside a Core project only the session-start hook (tools refresh and
+  a one-time "Core not set up" hint) and the read-only checker rule act; every other hook exits at once.
+- **Scripts** hold the logic, so hooks stay thin. `sync-tools.sh` copies them into the plugin's data
+  folder (`tools/`), the one place git hooks run them from, so a plugin update reaches the git hooks
+  without reinstalling them.
+- **Git hooks** (`scripts/git-hooks/`) are shims installed by `install-hooks.sh` into the code repo
+  (pre-commit, pre-push: no `CLAUDE.md`, `AGENTS.md`, `.claude/`, secrets or keys in commits) and
+  into the Core (pre-push: the GitHub repo must be private).
+- **The Core.** The private repo (`~/Projects/Core` by default) holds the standards, knowledge and
+  each project's `CLAUDE.md` and `docs/` wiki. The code lives in its own repo beside it; a
+  gitignored `CLAUDE.local.md` link in the code folder loads the private `CLAUDE.md`.
 
 ## Invariants
 
-- Internal files (agent instructions, the wiki) never enter a code repo; two guards and two git
-  hooks enforce it.
+- Internal files never enter a code repo. `CLAUDE.md`, `AGENTS.md`, `.claude/` and secrets are kept
+  out by the code guard and by the git hooks. The wiki (`docs/`) is kept out only by the code guard,
+  which is best effort; the git hooks do not block `docs/`, because a project may publish docs there.
+- The host's permissions and sandbox are the security boundary; the hooks are a best-effort second
+  line (see [SECURITY.md](SECURITY.md#threat-model)).
 - Scripts run on macOS bash 3.2 with BSD tools, without `jq`; `tests/test_portability.sh` checks it.
 - Scripts never overwrite or delete a user's files; a failed step leaves them as they were.
-- Tests run in a sandbox (own `HOME`, `CORE_DIR`) and never touch the real Core or `~/.claude`.
+- Tests run in a sandbox (own `HOME`, `CORE_DIR`) and never touch the real Core, `~/.claude` or `~/.codex`.
 - `coremodel` and `coreopinion` do not depend on `corecrew` or on each other.
