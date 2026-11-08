@@ -118,7 +118,7 @@ assert_eq "$first" '`This brief comes from corecrew:task, path: <path>, project:
 # No superpowers dependency anywhere under skills/task/
 if grep -rF "superpowers:" "$T" >/dev/null 2>&1; then fail "superpowers: referenced under skills/task/"; else pass; fi
 
-# release.md: the seven postconditions of spec section 10, in order, with the exact commands.
+# release.md: the seven release postconditions, in order, with the exact commands.
 REL="$T/references/release.md"
 assert_file "$REL"
 [ "$(wc -l < "$REL")" -le 80 ] && pass || fail "release.md is over 80 lines"

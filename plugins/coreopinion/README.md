@@ -98,6 +98,15 @@ Claude says what failed and never pretends a review happened:
 - **Permissions:** Codex runs with a narrow read-only profile (see "What is sent" above). If you turned on Claude Code's Bash sandbox, the skill's run script has to be allowed outside it (see "If it fails").
 - **Changes outside its own folder:** none that stay. The run script creates a temp folder with the prompt and removes it however the run ends. Your `~/.codex/config.toml` is not read and not changed.
 
+## Uninstall
+
+```bash
+claude plugin uninstall coreopinion@corekit
+```
+Nothing stays behind: the run script removes its temp folder after each run. If you added the
+`sandbox.excludedCommands` entry for `ask-gpt.sh` to your Claude Code settings, remove it too. If
+Codex installed it through the marketplace, `codex plugin remove coreopinion@corekit` removes it there.
+
 ## Build from source
 
 ```bash
