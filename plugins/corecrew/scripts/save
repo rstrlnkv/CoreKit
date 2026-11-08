@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Saves one working step: commits the code repo and this project's docs in Core
-# with the same message and a shared "Step-Id" trailer.
+# with the same message and a shared "Step-Id" trailer. The Core commit also carries a
+# "Project: <name>" trailer, so undo-step can tell this project's steps that changed only shared
+# Core files (knowledge/, standards/ ...) from other projects' steps.
 # Usage: save "<message>" [--push] [--no-attribution]
 # --no-attribution drops "Co-Authored-By:" lines and lines that start with "Generated with" (after
 # optional spaces and a robot emoji) from the message: the user's attribution=forbid setting. A
@@ -27,26 +29,71 @@ if [ ! -x "$MAIN/.git/hooks/pre-commit" ] || [ ! -x "$MAIN/.git/hooks/pre-push" 
   case "$rc" in 0|4) ;; *) exit 1 ;; esac
 fi
 
+# Both repos must be able to commit before the code commit is made, so a step is not left half saved
+# for a reason known in advance: a git identity, a writable git folder, no index.lock. The Core is
+# checked only when it has this step's docs to commit: a code-only step does not need it (its identity
+# may be set per repo and missing there). With CDPATH set, cd can print the folder it went to; the cd
+# here ignores CDPATH and prints nothing.
+can_commit() {
+  local r="$1" gd common
+  gd=$(git -C "$r" rev-parse --absolute-git-dir 2>/dev/null) &&
+    common=$(cd "$r" && CDPATH='' cd -- "$(git rev-parse --git-common-dir)" >/dev/null && pwd) || {
+    echo "save: $r is not a readable git repo; nothing saved." >&2; return 1; }
+  if [ ! -w "$gd" ] || [ ! -w "$common" ] || [ ! -w "$common/objects" ]; then
+    echo "save: git could not write $r/.git (read-only? in Codex allow the commit when asked); nothing saved." >&2; return 1
+  fi
+  if [ -e "$gd/index.lock" ]; then
+    echo "save: $gd/index.lock exists: another git command is running in $r, or one crashed. Wait for it, or remove that file if no git command is running; nothing saved." >&2
+    return 1
+  fi
+  if ! git -C "$r" var GIT_AUTHOR_IDENT >/dev/null 2>&1 || ! git -C "$r" var GIT_COMMITTER_IDENT >/dev/null 2>&1; then
+    echo "save: git has no user identity in $r (set user.name and user.email); nothing saved." >&2; return 1
+  fi
+}
+# CORE_DIRTY: the Core has changes under CORE_PATHS (a status that fails counts as changes, so the
+# check below says what is wrong).
+# shellcheck disable=SC2086
+CORE_DIRTY=$(git -C "$CORE" status --porcelain -- $CORE_PATHS 2>/dev/null) || CORE_DIRTY=unknown
+can_commit "$CODE" || exit 1
+[ -z "$CORE_DIRTY" ] || can_commit "$CORE" || exit 1
+
 # Step-Id = <time>-<NN>-<random>. NN counts this project's steps within one second, so undo-step can
 # order them (commit times have one-second resolution); the random part (process id and $RANDOM)
 # keeps another project's step of the same second apart: its code-only step is not in our repos.
+# A step of this second is among the newest commits, so only the latest RECENT commits are read
+# (not the whole history of every ref on each call).
+RECENT=100
 base="$(date +%Y%m%d-%H%M%S)"; n=1; nn=01
-while git -C "$CODE" log --all --format=%B 2>/dev/null | grep -q "^Step-Id: $base-$nn-" || \
-      git -C "$CORE" log --format=%B 2>/dev/null | grep -q "^Step-Id: $base-$nn-"; do
+while git -C "$CODE" log --all -n "$RECENT" --format=%B 2>/dev/null | grep -q "^Step-Id: $base-$nn-" || \
+      git -C "$CORE" log -n "$RECENT" --format=%B 2>/dev/null | grep -q "^Step-Id: $base-$nn-"; do
   n=$((n + 1)); nn="$(printf '%02d' "$n")"
 done
 ID="$base-$nn-$(printf '%x%04x' "$$" "$RANDOM")"
-saved=0
+saved=0; code_sha=""
 git -C "$CODE" add -A || { echo "save: git could not write $CODE/.git (read-only? in Codex allow the commit when asked); nothing saved." >&2; exit 1; }
 if ! git -C "$CODE" diff --cached --quiet; then
   git -C "$CODE" commit -q -m "$MSG" -m "Step-Id: $ID" || { echo "Code commit failed; nothing saved." >&2; exit 1; }
+  code_sha=$(git -C "$CODE" rev-parse --short HEAD)
   echo "saved code ($(git -C "$CODE" rev-parse --abbrev-ref HEAD))"; saved=1
 fi
-# shellcheck disable=SC2086
-git -C "$CORE" add -A -- $CORE_PATHS || { echo "save: git could not write $CORE/.git (read-only? in Codex allow the commit when asked)." >&2; exit 1; }
-if ! git -C "$CORE" diff --cached --quiet -- $CORE_PATHS; then
-  git -C "$CORE" commit -q -m "$MSG" -m "Step-Id: $ID" -- $CORE_PATHS || { echo "Docs commit failed." >&2; exit 1; }
-  echo "saved docs"; saved=1
+# docs_failed <what> — the Core step failed; say what is already committed and how to finish it.
+docs_failed() {
+  echo "$1" >&2
+  if [ -n "$code_sha" ]; then
+    echo "The code commit $code_sha (Step-Id: $ID) was made; the docs were not committed. Fix the cause above, then run save again: it commits the docs as a step of their own." >&2
+  fi
+  exit 1
+}
+# The Core is left alone when it has nothing to commit (it was not checked above).
+if [ -n "$CORE_DIRTY" ]; then
+  # shellcheck disable=SC2086
+  git -C "$CORE" add -A -- $CORE_PATHS || docs_failed "save: git could not write $CORE/.git (read-only? in Codex allow the commit when asked)."
+  # shellcheck disable=SC2086
+  if ! git -C "$CORE" diff --cached --quiet -- $CORE_PATHS; then
+    git -C "$CORE" commit -q -m "$MSG" -m "Step-Id: $ID
+Project: $NAME" -- $CORE_PATHS || docs_failed "Docs commit failed."
+    echo "saved docs"; saved=1
+  fi
 fi
 [ $saved -eq 1 ] || echo "nothing to save"
 

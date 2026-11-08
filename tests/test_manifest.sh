@@ -152,8 +152,8 @@ WIRED="$(awk '
 ' "$H")"
 want_wired="SessionStart|startup|resume|clear|compact|fork|session-start.sh|30
 PreToolUse|Bash|one-suite.sh|150
-PreToolUse|Write|Edit|MultiEdit|NotebookEdit|apply_patch|Bash|guard-code.sh|15
-PreToolUse|Read|Grep|Glob|Edit|MultiEdit|Write|NotebookEdit|apply_patch|Bash|guard-secrets.sh|15
+PreToolUse|Write|Edit|NotebookEdit|apply_patch|Bash|guard-code.sh|15
+PreToolUse|Read|Grep|Glob|Edit|Write|NotebookEdit|apply_patch|Bash|guard-secrets.sh|15
 Stop||stop-remind.sh|10"
 assert_eq "$WIRED" "$want_wired" "hooks.json events, matchers, scripts, timeouts"
 # Codex edits files with apply_patch: both guards must be matched on that name (Codex lists it explicitly)
@@ -253,7 +253,7 @@ if command -v python3 >/dev/null 2>&1; then
 fi
 # Codex ignores disable-model-invocation; agents/openai.yaml is its equivalent. Both or neither.
 for sk in "$PLUGIN"/skills/*/SKILL.md; do
-  d="$(dirname "$sk")"; nm="$(basename "$d")"
+  d="$(dirname "$sk")"
   if grep -qx 'disable-model-invocation: true' "$sk"; then
     assert_contains "$d/agents/openai.yaml" 'allow_implicit_invocation: false'
   else

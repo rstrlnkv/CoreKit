@@ -264,6 +264,31 @@ assert_eq "$(grep -c 'nl-app' "$CORE_DIR/PROJECTS.md")" "1" "PROJECTS.md entry s
 assert_contains "$CORE_DIR/PROJECTS.md" "First line. Second line."
 assert_contains "$CORE_DIR/nl-app/CLAUDE.md" "First line. Second line."
 
+# --- --name or --purpose without a value: a usage error, never an endless loop (time limit 10 s)
+new_sandbox; setup_core
+for args in "--name" "--purpose" "--name lim-app --purpose"; do
+  # shellcheck disable=SC2086
+  bash "$S" $args > "$SANDBOX/out" 2>&1 & pid=$!
+  i=0; while kill -0 "$pid" 2>/dev/null && [ "$i" -lt 20 ]; do sleep 0.5; i=$((i + 1)); done
+  if kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; fail "scaffold.sh $args still runs after 10 s"
+  else
+    wait "$pid"; assert_eq "$?" "2" "scaffold.sh $args exit"
+    grep -qi 'usage' "$SANDBOX/out" && pass || fail "scaffold.sh $args: no usage line: $(cat "$SANDBOX/out")"
+  fi
+done
+assert_no_file "$CORE_DIR/lim-app"
+
+# --- a code-side step that fails stops the run: non-zero exit, no PROJECTS.md entry added after it
+new_sandbox; setup_core
+bash "$S" --name cs-app >/dev/null
+K2="$(dirname "$CORE_DIR")/cs-app"
+rm -rf "$K2/.claude"; : > "$K2/.claude"   # .claude is a file: settings.local.json cannot be written
+grep -v '^- cs-app ' "$CORE_DIR/PROJECTS.md" > "$SANDBOX/pm"; mv "$SANDBOX/pm" "$CORE_DIR/PROJECTS.md"
+assert_exit 1 bash "$S" --name cs-app
+assert_eq "$(grep -c '^- cs-app ' "$CORE_DIR/PROJECTS.md")" "0" "PROJECTS.md entry added after a failed code-side step"
+[ -f "$K2/.claude" ] && pass || fail "the .claude file was replaced"
+
 # the wiki has one place for all worktrees: <Core>/<p>/docs/, which the task skill updates from a
 # worktree too (no "never edit ../docs/ from a worktree" that contradicts it)
 T="$SKILL/templates/CLAUDE.md.tmpl"

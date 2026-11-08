@@ -9,10 +9,12 @@ set -u
 locate || exit 1
 
 # This project's Core commits: those that touch its folder, and those that touch only the shared
-# Core files save commits with it (CORE_PATHS, e.g. knowledge/) and whose Step-Id (or Undo-Of)
-# names a step of this code repo. A shared-only commit with no code commit here can be any
-# project's, so it is never counted; a commit that also touches another project's folder is that
-# project's.
+# Core files save commits with it (CORE_PATHS, e.g. knowledge/). A shared-only commit is this
+# project's when its "Project:" trailer (written by save and undo-step; older commits have none)
+# names it. A commit with no such trailer counts when its Step-Id (or Undo-Of) names a step of this
+# code repo (so an old shared-only step with no code commit here is never counted). Only the trailer
+# block is read for the project: a "Project:" line in the message body does not count. A commit that
+# also touches another project's folder is that project's.
 # shellcheck disable=SC2086
 core_mine() {
   local x="" p
@@ -20,12 +22,16 @@ core_mine() {
   git -C "$CORE" log --format=%H -- "$NAME"
   { git -C "$CODE" log --format=%B | sed -n 's/^Step-Id: /i /p'
     git -C "$CORE" log --format='o %H' -- . $x
-    git -C "$CORE" log --format='%x01 %H%n%B' -- $CORE_PATHS; } |
-    awk 'BEGIN { m = sprintf("%c", 1) }
+    git -C "$CORE" log --format='%x01 %H %(trailers:key=Project,valueonly,separator=%x2C)%n%B' -- $CORE_PATHS; } |
+    awk -v name="$NAME" 'BEGIN { m = sprintf("%c", 1) }
+         function done_commit() {
+           if (h != "" && !(h in o) && (pr != "" ? pr == name : (id != "" && (id in i)))) print h
+           h = ""; id = ""; pr = "" }
          $1 == "i" { i[$2] = 1; next }
          $1 == "o" { o[$2] = 1; next }
-         $1 == m { h = $2; next }
-         /^(Step-Id|Undo-Of): / && h != "" { if (!(h in o) && ($2 in i)) print h; h = "" }'
+         $1 == m { done_commit(); h = $2; pr = $3; next }
+         /^(Step-Id|Undo-Of): / && h != "" && id == "" { id = $2; next }
+         END { done_commit() }'
 }
 MINE=$(core_mine | awk '!s[$0]++')
 
@@ -143,6 +149,9 @@ for w in $started; do
   while IFS= read -r p; do [ -n "$p" ] && set -- "$@" "$p"; done <<< "$(changed_of "$w")"
   if [ $# -eq 0 ]; then git -C "$r" revert --quit 2>/dev/null; continue; fi
   subj=$(git -C "$r" log -1 --format=%s "$(commits_of "$w" "$ID" | head -1)")
-  GIT_LITERAL_PATHSPECS=1 git -C "$r" commit -q -m "Undo step $ID: $subj" -m "Undo-Of: $ID" -- "$@"
+  # the Core commit names the project, like save's: an undo of a shared-only step stays this project's
+  trailer="Undo-Of: $ID"; [ "$w" = core ] && trailer="$trailer
+Project: $NAME"
+  GIT_LITERAL_PATHSPECS=1 git -C "$r" commit -q -m "Undo step $ID: $subj" -m "$trailer" -- "$@"
   echo "reverted $([ "$w" = core ] && echo docs || echo code) ($subj)"
 done

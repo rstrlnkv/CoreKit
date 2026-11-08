@@ -89,6 +89,35 @@ echo more >> "$C/new.txt"
 OUT=$(input "$C" false | bash "$H" 2>&1)
 echo "$OUT" | grep -qF -- "--no-attribution" && fail "allow: reminder has --no-attribution: $OUT" || pass
 
+# untracked files are fingerprinted by name, size and mtime, not by reading their content: a change of
+# the mtime alone counts as a new change, the same name, size and mtime does not
+(cd "$C" && bash "$SCRIPTS/save" "s-fp") >/dev/null 2>&1
+echo same > "$C/fp.txt"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "fingerprint: first reminder"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "fingerprint: unchanged file reminded again"
+touch -t 200001010000 "$C/fp.txt"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "fingerprint: an mtime change was missed"
+# an untracked file the hook cannot read is still fingerprinted, with no error in the reminder
+if [ "$(id -u)" != 0 ]; then
+  echo secret > "$C/noread.txt"; chmod 000 "$C/noread.txt"
+  OUT=$(input "$C" false | bash "$H" 2>&1); rc=$?
+  assert_eq "$rc" "2" "fingerprint: unreadable file"
+  echo "$OUT" | grep -qi 'permission denied' && fail "read error in the reminder: $OUT" || pass
+  touch -t 200001020000 "$C/noread.txt"
+  input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "fingerprint: mtime change of an unreadable file missed"
+  chmod 600 "$C/noread.txt"; rm -f "$C/noread.txt"
+fi
+# an edit of the same size within the same minute is noticed (the file is newer than the last reminder)
+input "$C" false | bash "$H" >/dev/null 2>&1
+echo same > "$C/fp.txt"; input "$C" false | bash "$H" >/dev/null 2>&1
+printf 'SAME\n' > "$C/fp.txt"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "fingerprint: a same-size edit was missed"
+# a file dated in the future (a clock ahead) is reminded once, not at every stop
+echo f > "$C/future.txt"; touch -t 209901010000 "$C/future.txt"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "future file: first reminder"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "future file: reminded at every stop"
+rm -f "$C/fp.txt" "$C/future.txt"
+
 # Codex Stop payloads (fixtures built from the rust-v0.166.0 structs): same rules, and an exit 2 carries a
 # non-empty stderr (Codex treats exit 2 with an empty one as a failed hook, not a block)
 FX="$ROOT/tests/fixtures/codex"

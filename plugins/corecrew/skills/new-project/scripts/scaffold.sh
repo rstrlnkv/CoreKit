@@ -12,11 +12,14 @@ ROOT_DIR="$(cd "$SKILL_DIR/../.." && pwd)"
 . "$ROOT_DIR/scripts/lib.sh"
 load_settings
 NAME=""; PURPOSE="TODO: one or two sentences."; DRY=0
+usage() { echo 'Usage: scaffold.sh --name <name> [--purpose "<text>"] [--dry-run]' >&2; exit 2; }
 
+# An option that takes a value needs one: `shift 2` with one argument left does not shift (bash 3.2),
+# and the loop would never end.
 while [ $# -gt 0 ]; do
   case "$1" in
-    --name) NAME="${2:-}"; shift 2 ;;
-    --purpose) PURPOSE="${2:-}"; shift 2 ;;
+    --name) [ $# -ge 2 ] || usage; NAME="$2"; shift 2 ;;
+    --purpose) [ $# -ge 2 ] || usage; PURPOSE="$2"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -37,6 +40,7 @@ fi
 
 P="$CORE_DIR/$NAME"
 K="$PROJECTS_DIR/$NAME"
+# shellcheck disable=SC2034  # render() in lib.sh fills the templates with it
 DATE="$(date +%Y-%m-%d)"
 
 # A folder in <Projects> that is not ours (no project in the Core yet) is never touched.
@@ -59,12 +63,12 @@ else
   done <<< "$IDX_OUT"
 fi
 
-# Code repo, beside the Core
-mkdir_p "$K"
-git_init "$K"
-put "$TPL/code/gitignore-common"          "$K/.gitignore" copy
-put "$TPL/code/settings.local.json.tmpl"  "$K/.claude/settings.local.json"
-put "$TPL/code/worktreeinclude"           "$K/.worktreeinclude" copy
+# Code repo, beside the Core; a step that fails stops the run (no PROJECTS.md entry after it)
+mkdir_p "$K" || exit 1
+git_init "$K" || exit 1
+put "$TPL/code/gitignore-common"          "$K/.gitignore" copy || exit 1
+put "$TPL/code/settings.local.json.tmpl"  "$K/.claude/settings.local.json" || exit 1
+put "$TPL/code/worktreeinclude"           "$K/.worktreeinclude" copy || exit 1
 link_local_claude "$K" "$P" || exit 1
 link_agents "$K" "$P" || exit 1
 

@@ -108,6 +108,23 @@ assert_no_file "$C/a1.txt"; assert_file "$K/b.md"; assert_file "$E/b1.txt"
 (cd "$E" && bash "$UNDO") >/dev/null 2>&1
 assert_no_file "$E/b1.txt"; assert_no_file "$K/b.md"
 
+# a step that changed only shared Core files and no code: its Core commit's "Project:" trailer makes it
+# this project's, so plain undo-step undoes it; another project never takes it; it is undone once only
+echo s > "$K/shared-only.md"; bash "$SAVE" "shared only" >/dev/null 2>&1
+SO=$(step_id "$CORE_DIR")
+assert_eq "$(git -C "$CORE_DIR" show --name-only --format= HEAD)" "knowledge/shared-only.md" "the step's Core commit is not shared-only"
+[ "$(step_id "$C")" != "$SO" ] && pass || fail "the shared-only step made a code commit"
+(cd "$E" && bash "$UNDO" "$SO") >/dev/null 2>&1
+assert_file "$K/shared-only.md"
+before_c=$(git -C "$C" rev-parse HEAD)
+assert_exit 0 bash "$UNDO"
+assert_no_file "$K/shared-only.md"
+assert_eq "$(git -C "$C" rev-parse HEAD)" "$before_c" "undo of a shared-only step changed the code repo"
+git -C "$CORE_DIR" log -1 --format=%B | grep -qxF "Undo-Of: $SO" && pass || fail "the shared-only step was not the one undone"
+git -C "$CORE_DIR" log -1 --format=%B | grep -qxF "Project: u-app" && pass || fail "the Undo commit lacks the Project trailer"
+assert_exit 0 bash "$UNDO" "$SO"
+echo "$OUT" | grep -q 'already undone' && pass || fail "a shared-only step undone twice: $OUT"
+
 # a later step renamed a file the step changed: the undo changes it under its new name and commits it
 echo x > "$C/r.txt"; bash "$SAVE" r1 >/dev/null 2>&1
 echo y > "$C/r.txt"; echo o > "$C/o.txt"; bash "$SAVE" r2 >/dev/null 2>&1; R2=$(step_id "$C")
@@ -148,5 +165,18 @@ echo keep.me >> "$C/.git/info/exclude"; echo local > "$C/keep.me"
 assert_exit 1 bash "$UNDO"
 assert_eq "$(cat "$C/keep.me")" "local" "ignored local file overwritten"
 no_revert_left
+
+# an old shared-only Core commit has no Project trailer, only a Step-Id of this project's code step. A
+# "Project: other" line in its message body (not in the trailer block) does not name a project: the
+# Step-Id rule still makes the commit this project's, and the undo reverts it with the code commit.
+OLD="20000102-000000-01-abc1"
+echo old > "$C/old.txt"; git -C "$C" add old.txt; git -C "$C" commit -q -m "old step" -m "Step-Id: $OLD"
+echo old > "$K/old-step.md"; git -C "$CORE_DIR" add knowledge/old-step.md
+git -C "$CORE_DIR" commit -q -m "old step" -m "$(printf 'Project: other\nwas a folder name in an old message.')" \
+  -m "Step-Id: $OLD" -- knowledge/old-step.md
+assert_eq "$(git -C "$CORE_DIR" log -1 --format='%(trailers:key=Project,valueonly)')" "" "the old commit has a Project trailer"
+assert_exit 0 bash "$UNDO" "$OLD"
+assert_no_file "$C/old.txt"
+assert_no_file "$K/old-step.md"
 
 finish

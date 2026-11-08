@@ -245,4 +245,121 @@ assert_contains "$SANDBOX/err" "core.hooksPath"
 assert_no_file "$C/.husky/pre-commit"
 git -C "$C" config --unset core.hooksPath
 
+# The Core commit carries a "Project: <name>" trailer (undo-step uses it for a step with no code commit)
+sleep 1; echo "pt" > "$C/pt.txt"; echo "pt" >> "$P/docs/brief.md"
+(cd "$C" && bash "$SAVE" "Project trailer") >/dev/null 2>&1
+git -C "$CORE_DIR" log -1 --format=%B | grep -qxF "Project: save-app" && pass || fail "no Project trailer in the Core commit: $(git -C "$CORE_DIR" log -1 --format=%B)"
+git -C "$CORE_DIR" log -1 --format=%B | grep -qx "Step-Id: $(step_ids "$C" | head -1)" && pass || fail "Core commit lost its Step-Id"
+
+# Both repos must be able to commit before the code commit is made. Failure path: a Core that
+# cannot commit leaves both repos as they were (no code commit without its docs commit).
+# no identity in the Core (the code repo has one of its own)
+sleep 1; echo "id" > "$C/id.txt"; echo "id" >> "$P/docs/brief.md"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
+git -C "$C" config user.name tester; git -C "$C" config user.email tester@example.com
+git -C "$CORE_DIR" config user.useConfigOnly true
+(cd "$C" && env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL \
+  bash "$SAVE" "No identity") > "$SANDBOX/out" 2>&1; rc=$?
+[ "$rc" != 0 ] && pass || fail "save exited 0 with no identity in the Core"
+assert_eq "$(cnt "$C")" "$nc" "code commit made although the Core cannot commit"
+assert_eq "$(cnt "$CORE_DIR")" "$nd" "Core commit made with no identity"
+assert_contains "$SANDBOX/out" "identity"; assert_contains "$SANDBOX/out" "nothing saved"
+git -C "$CORE_DIR" config --unset user.useConfigOnly
+# a stale index.lock in the Core
+: > "$CORE_DIR/.git/index.lock"
+(cd "$C" && bash "$SAVE" "Locked Core") > "$SANDBOX/out" 2>&1; rc=$?
+rm -f "$CORE_DIR/.git/index.lock"
+[ "$rc" != 0 ] && pass || fail "save exited 0 with a Core index.lock"
+assert_eq "$(cnt "$C")" "$nc" "code commit made although the Core index is locked"
+assert_contains "$SANDBOX/out" "index.lock"
+# a stale index.lock in the code repo
+: > "$C/.git/index.lock"
+(cd "$C" && bash "$SAVE" "Locked code") > "$SANDBOX/out" 2>&1; rc=$?
+rm -f "$C/.git/index.lock"
+[ "$rc" != 0 ] && pass || fail "save exited 0 with a code index.lock"
+assert_contains "$SANDBOX/out" "index.lock"
+# a read-only Core .git
+if [ "$(id -u)" != 0 ]; then
+  chmod a-w "$CORE_DIR/.git"
+  (cd "$C" && bash "$SAVE" "Read-only Core") > "$SANDBOX/out" 2>&1; rc=$?
+  chmod u+w "$CORE_DIR/.git"
+  [ "$rc" != 0 ] && pass || fail "save exited 0 with a read-only Core .git"
+  assert_eq "$(cnt "$C")" "$nc" "code commit made although the Core .git is read-only"
+  assert_contains "$SANDBOX/out" "save: git could not write $CORE_DIR/.git"
+fi
+assert_eq "$(cat "$C/id.txt")" "id" "a refused save changed a file"
+# the legitimate save of the same changes goes through
+(cd "$C" && bash "$SAVE" "With identity") > "$SANDBOX/out" 2>&1
+assert_eq "$(cnt "$C")" "$((nc+1))" "save after the fixes: no code commit"
+assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "save after the fixes: no Core commit"
+
+# The Core is checked only when it has docs to commit. With no identity in the Core (user.useConfigOnly,
+# the identity set per repo) a code-only step still saves. A step with docs is refused before the code
+# commit: nothing is saved and both trees stay as they were.
+git -C "$CORE_DIR" config user.useConfigOnly true
+noid_save() { (cd "$C" && env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL \
+  bash "$SAVE" "$1") > "$SANDBOX/out" 2>&1; }
+trees() { git -C "$C" status --porcelain; git -C "$CORE_DIR" status --porcelain; tree_sum "$C"; tree_sum "$CORE_DIR"; }
+sleep 1; echo "code only" > "$C/noid.txt"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
+noid_save "Code only, no Core identity"; rc=$?
+assert_eq "$rc" "0" "a code-only step was refused for the Core's identity: $(cat "$SANDBOX/out")"
+assert_eq "$(cnt "$C")" "$((nc+1))" "code-only step with no Core identity: no code commit"
+assert_eq "$(cnt "$CORE_DIR")" "$nd" "code-only step made a Core commit"
+assert_eq "$(git -C "$C" log -1 --format=%s)" "Code only, no Core identity"
+echo "noid 2" > "$C/noid.txt"; echo "noid" >> "$P/docs/brief.md"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
+before=$(trees)
+noid_save "Docs, no Core identity"; rc=$?
+[ "$rc" != 0 ] && pass || fail "a step with docs saved with no identity in the Core"
+assert_contains "$SANDBOX/out" "identity"; assert_contains "$SANDBOX/out" "nothing saved"
+assert_eq "$(cnt "$C")" "$nc" "code commit made although the Core cannot commit the docs"
+assert_eq "$(cnt "$CORE_DIR")" "$nd" "Core commit made with no identity"
+assert_eq "$(trees)" "$before" "a refused save changed a tree"
+git -C "$CORE_DIR" config --unset user.useConfigOnly
+(cd "$C" && bash "$SAVE" "Docs with identity") >/dev/null 2>&1
+assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "save with the Core identity back: no Core commit"
+
+# CDPATH exported with "." in it: bash's cd then prints the folder it went to. The Core's git folder
+# is found by a relative path (.git), so a cd that prints would break the check. Saved from a linked
+# worktree, whose git folders are absolute paths.
+sleep 1; echo "cdpath" > "$W/cdpath.txt"; echo "cdpath" >> "$P/docs/brief.md"; nd=$(cnt "$CORE_DIR")
+(cd "$W" && CDPATH=".:$SANDBOX" bash "$SAVE" "With CDPATH") > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "0" "save with CDPATH exported: $(cat "$SANDBOX/out")"
+assert_eq "$(git -C "$W" log -1 --format=%s)" "With CDPATH" "save with CDPATH: no code commit"
+assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "save with CDPATH: no Core commit"
+# the same from the main code folder, whose git folder is the relative .git
+sleep 1; echo "cdpath main" > "$C/cdpath.txt"; nd=$(cnt "$CORE_DIR")
+(cd "$C" && CDPATH=".:$SANDBOX" bash "$SAVE" "With CDPATH main") > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "0" "save with CDPATH exported, main folder: $(cat "$SANDBOX/out")"
+assert_eq "$(git -C "$C" log -1 --format=%s)" "With CDPATH main" "save with CDPATH, main folder: no code commit"
+git -C "$C" config --unset user.name; git -C "$C" config --unset user.email
+
+# A Core commit that fails after the code commit (here a Core pre-commit hook): save exits non-zero,
+# names the code commit and its Step-Id, and says a rerun commits the docs; the rerun does.
+printf '#!/bin/sh\necho "core hook refused" >&2\nexit 1\n' > "$CORE_DIR/.git/hooks/pre-commit"
+chmod +x "$CORE_DIR/.git/hooks/pre-commit"
+sleep 1; echo "half" > "$C/half.txt"; echo "half" >> "$P/docs/brief.md"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
+(cd "$C" && bash "$SAVE" "Half step") > "$SANDBOX/out" 2>&1; rc=$?
+rm -f "$CORE_DIR/.git/hooks/pre-commit"
+[ "$rc" != 0 ] && pass || fail "save exited 0 although the docs commit failed"
+assert_eq "$(cnt "$C")" "$((nc+1))" "half step: no code commit"
+assert_eq "$(cnt "$CORE_DIR")" "$nd" "half step: Core commit made"
+assert_contains "$SANDBOX/out" "$(git -C "$C" rev-parse --short HEAD)"
+assert_contains "$SANDBOX/out" "Step-Id: $(step_ids "$C" | head -1)"
+assert_contains "$SANDBOX/out" "run save again"
+(cd "$C" && bash "$SAVE" "Half step docs") > "$SANDBOX/out" 2>&1
+assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "rerun did not commit the docs"
+assert_contains "$SANDBOX/out" "saved docs"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain -- save-app)" "" "docs left uncommitted after the rerun"
+
+# The Step-Id loop reads a bounded part of the history (every git log save runs has a count
+# limit), not the whole history of all refs on every call. A git wrapper records the calls.
+GW="$SANDBOX/gitwrap"; mkdir -p "$GW"; REALGIT="$(command -v git)"
+{ echo '#!/bin/sh'; printf 'printf "%%s\\n" "$*" >> "%s/git-calls"\n' "$SANDBOX"; printf 'exec "%s" "$@"\n' "$REALGIT"; } > "$GW/git"
+chmod +x "$GW/git"; : > "$SANDBOX/git-calls"
+sleep 1; echo "bounded" > "$C/bounded.txt"; echo "bounded" >> "$P/docs/brief.md"
+(cd "$C" && PATH="$GW:$PATH" bash "$SAVE" "Bounded") >/dev/null 2>&1
+grep -qE '(^| )log( |$)' "$SANDBOX/git-calls" && pass || fail "the git wrapper saw no git log call"
+unbounded=$(grep -E '(^| )log( |$)' "$SANDBOX/git-calls" | grep -vE '(^| )(-n [0-9]+|-[0-9]+|--max-count=[0-9]+)( |$)')
+assert_eq "$unbounded" "" "save ran git log without a count limit"
+assert_eq "$(git -C "$C" log -1 --format=%s)" "Bounded" "save through the wrapper did not commit"
+
 finish

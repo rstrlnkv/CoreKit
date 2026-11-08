@@ -370,7 +370,8 @@ TMP="$(mktemp -d "$CORE_DIR/.adopt.XXXXXX")" || { echo "adopt: cannot create a t
 cleanup() { if [ "$COMMITTED" -eq 0 ]; then rm -rf "$TMP"; else rm -f "$TMP/rules.md"; rmdir "$TMP" 2>/dev/null; fi; }
 trap cleanup EXIT
 STAGE="$TMP/p"
-DATE="$(date +%Y-%m-%d)"   # render() in lib.sh fills the templates with it
+# shellcheck disable=SC2034  # render() in lib.sh fills the templates with it
+DATE="$(date +%Y-%m-%d)"
 CREATED=""
 MIG=""
 
@@ -605,9 +606,13 @@ case "$SL_STATE" in
   ok) echo "skipped $(rel_core "$K/$SL_REL")" ;;
   warn) echo "$SL_WARN" >&2 ;;
 esac
-if ! CORE_DIR="$CORE_DIR" bash "$ROOT_DIR/scripts/install-hooks.sh" "$P"; then
-  echo "warning: git hooks were not installed; run: CORE_DIR=\"$CORE_DIR\" bash \"$ROOT_DIR/scripts/install-hooks.sh\" \"$P\"" >&2
-fi
+# Exit 4: core.hooksPath sends git to another hooks folder (husky, lefthook, a global setting);
+# install-hooks has already said how to chain the hooks, and a rerun would exit 4 again.
+IH_RC=0; CORE_DIR="$CORE_DIR" bash "$ROOT_DIR/scripts/install-hooks.sh" "$P" || IH_RC=$?
+case "$IH_RC" in
+  0|4) ;;
+  *) echo "warning: git hooks were not installed; run: CORE_DIR=\"$CORE_DIR\" bash \"$ROOT_DIR/scripts/install-hooks.sh\" \"$P\"" >&2 ;;
+esac
 # The PROJECTS.md line: an existing one (the old layout's "<name>/code/") gets the new entry (and the
 # --purpose text when given), else one is added.
 ENTRY="$(basename "$K")/"

@@ -773,5 +773,28 @@ assert_file "$F/src/AGENTS.md"
 }
 bg part_nested
 
+part_hooks_path() {
+# core.hooksPath set by another tool (husky): install-hooks exits 4 after explaining how to chain the
+# hooks, so adopt finishes without a "run it again" warning (a rerun would exit 4 again)
+new_sandbox; setup_core
+F="$SANDBOX/Projects/hp-app"; mkrepo "$F"
+mkdir -p "$F/.husky"; git -C "$F" config core.hooksPath .husky
+OUT="$(bash "$AD" --from "$F" 2>"$SANDBOX/err")"; rc=$?
+assert_eq "$rc" "0" "adopt with core.hooksPath: $(cat "$SANDBOX/err")"
+assert_contains "$SANDBOX/err" "core.hooksPath"
+assert_not_contains "$SANDBOX/err" "git hooks were not installed"
+assert_no_file "$F/.husky/pre-commit"
+assert_eq "$(last_line "$OUT")" "open: $F" "adopt with core.hooksPath: last line"
+# any other install-hooks failure keeps the warning with the command to run (a plugin copy with a stub)
+new_sandbox; setup_core
+cp -R "$PLUGIN" "$SANDBOX/plugin-copy"
+printf '#!/usr/bin/env bash\necho "stub: boom" >&2\nexit 1\n' > "$SANDBOX/plugin-copy/scripts/install-hooks.sh"
+F="$SANDBOX/Projects/hf-app"; mkrepo "$F"
+OUT="$(bash "$SANDBOX/plugin-copy/scripts/adopt.sh" --from "$F" 2>"$SANDBOX/err")"; rc=$?
+assert_eq "$rc" "0" "adopt with a failing install-hooks: $(cat "$SANDBOX/err")"
+assert_contains "$SANDBOX/err" "git hooks were not installed; run:"
+}
+bg part_hooks_path
+
 bg_wait
 finish
