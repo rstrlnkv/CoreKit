@@ -113,7 +113,8 @@ if [ "$part" = all ] || [ "$part" = host ]; then
     cfg=""; base="${CODEX_HOME:-}"
     if [ -z "$base" ]; then case "${HOME:-}" in /*) base="$HOME/.codex" ;; esac; fi
     case "$base" in /*) cfg="${base%/}/config.toml" ;; esac
-    if [ -n "$cfg" ] && ! { tr -d '\r' < "$cfg" | tr "'" '"' | awk 'NR == 1 { sub(/^\357\273\277/, "") }
+    # LC_ALL=C: the BOM is compared byte for byte (in a UTF-8 locale awk's regex does not match the octal escapes).
+    if [ -n "$cfg" ] && ! { LC_ALL=C tr -d '\r' < "$cfg" | LC_ALL=C tr "'" '"' | LC_ALL=C awk 'NR == 1 && substr($0, 1, 3) == "\357\273\277" { $0 = substr($0, 4) }
         { if ($0 ~ /"""/ || $0 ~ /\\"/) exit 1
           if ($0 ~ /^[ \t]*\[/) exit 1
           if ($0 ~ /^[ \t]*"?default_permissions"?[ \t]*=[ \t]*"corecrew"[ \t]*(#.*)?$/) { ok = 1; exit 0 }

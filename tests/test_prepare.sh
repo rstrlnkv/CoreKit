@@ -65,6 +65,12 @@ for body in 'default_permissions = "corecrew"\r\n' 'default_permissions="corecre
   "'default_permissions' = 'corecrew'\n" '\xef\xbb\xbfdefault_permissions = "corecrew"\n' 'model = "o3"\ndefault_permissions = "corecrew"\n[profiles.x]\nmodel = "y"\n'; do
   printf "$body" > "$CFG"; run codex --part host; assert_eq "$OUT" "" "profile chosen ($body): silent"
 done
+# the BOM is matched byte for byte whatever the locale (a UTF-8 locale made awk miss it on CI); an unknown locale falls back to C
+printf '\357\273\277default_permissions = "corecrew"\n' > "$CFG"
+for loc in C C.UTF-8 en_US.UTF-8 POSIX; do
+  OUT="$(LC_ALL="$loc" LANG="$loc" COREKIT_HOST=codex bash "$PREP" --part host 2>&1)"; assert_eq "$OUT" "" "profile chosen after a BOM, LC_ALL=$loc: silent"
+done
+OUT="$(env -u LC_ALL LANG=en_US.UTF-8 LC_CTYPE=en_US.UTF-8 COREKIT_HOST=codex bash "$PREP" --part host 2>&1)"; assert_eq "$OUT" "" "profile chosen after a BOM, LANG=en_US.UTF-8: silent"
 # another profile is the default, or the key is not at the top level, or it sits in a multi-line string: the corecrew profile is not the default
 for body in 'default_permissions = "my profile"\n' 'default_permissions = ":workspace"\n' "default_permissions = 'other'\n" 'default_permissions = "corecrew2"\n' \
   '[profiles.x]\ndefault_permissions = "corecrew"\n' 'x = """\ndefault_permissions = "corecrew"\n"""\n' "x = '''\ndefault_permissions = 'corecrew'\n'''\n" \

@@ -151,6 +151,20 @@ for i in 1 2 3 4 5 6; do
   assert_eq "$(ls -A "$SL" | grep -vc '^tools$')" "0" "two waiters on a dead lock, round $i: nothing but tools in the folder"
   assert_eq "$(ls -A "$SL/tools" | grep -c 'new')" "0" "two waiters, round $i: no stray .new in tools"
 done
+# The lock changes hands between a waiter's read of the dead pid and its rename: the first waiter to read the pid
+# stalls (stub cat), the other takes the dead lock over and copies slowly (stub cp). The stalled waiter must not move
+# the new owner's live lock away, or both copy at once and one copy lands inside tools/.
+RS="$SANDBOX/racestub"; mkdir -p "$RS"; REALCAT="$(command -v cat)"; REALCP="$(command -v cp)"
+printf '#!/bin/sh\n"%s" "$@"; case "$*" in *tools.lock/pid*) mkdir "%s/stalled" 2>/dev/null && sleep 2 ;; esac\n' "$REALCAT" "$SANDBOX" > "$RS/cat"
+printf '#!/bin/sh\nsleep 0.2\nexec "%s" "$@"\n' "$REALCP" > "$RS/cp"; chmod +x "$RS/cat" "$RS/cp"
+for i in 1 2; do
+  rm -rf "$SL/tools" "$SANDBOX/stalled"; mkdir "$SL/tools.lock"; echo 99999999 > "$SL/tools.lock/pid"
+  PATH="$RS:$PATH" bash "$SYNC" "$PLUGIN" "$SL/tools" > "$SANDBOX/r1" 2>&1 &
+  PATH="$RS:$PATH" bash "$SYNC" "$PLUGIN" "$SL/tools" > "$SANDBOX/r2" 2>&1 & wait
+  assert_eq "$("$REALCAT" "$SANDBOX/r1" "$SANDBOX/r2" | grep -c 'tools updated')" "1" "lock changes hands, round $i: only one run made the copy"
+  assert_eq "$(ls -A "$SL/tools" | grep -c 'new')" "0" "lock changes hands, round $i: no copy inside tools"
+  assert_eq "$(ls -A "$SL" | grep -vc '^tools$')" "0" "lock changes hands, round $i: nothing but tools in the folder"
+done
 
 # --- install-hooks.sh writes the shims where git runs hooks: core.hooksPath and linked worktrees
 IH="$SCRIPTS/install-hooks.sh"

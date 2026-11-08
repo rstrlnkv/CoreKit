@@ -55,7 +55,7 @@ printf '#!/bin/sh\necho "$GH_STUB"\n' > "$STUB/gh"; chmod +x "$STUB/gh"
 H="$CORE_DIR/.git/hooks/pre-push"; URL=https://github.com/someone/Core.git
 GH_STUB=true  PATH="$STUB:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && pass || fail "private Core push blocked"
 GH_STUB=false PATH="$STUB:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && fail "public Core push allowed" || pass
-PATH="/usr/bin:/bin" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && fail "push allowed without gh" || pass
+PATH="$(path_without gh)" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && fail "push allowed without gh" || pass
 GH_STUB=true PATH="$STUB:$PATH" bash "$H" origin "git@github.com:someone/Core.git" </dev/null >/dev/null 2>&1 && pass || fail "ssh url not parsed"
 # a failed gh call (network) is retried: 2 failures then "true" pass, 3 failures block, "false" is final
 FL="$SANDBOX/flaky"; mkdir -p "$FL"

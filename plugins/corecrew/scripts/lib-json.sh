@@ -12,7 +12,7 @@
 # (a piece that ends in an odd number of backslashes ends at an escaped quote), and a value is
 # decoded by splitting each piece at its backslashes. No loop walks single characters.
 json_str() {
-  printf '%s' "${1:-}" | JSON_KEY="${2:-}" LC_ALL=C awk '
+  printf '%s' "${1:-}" 2>/dev/null | JSON_KEY="${2:-}" LC_ALL=C awk '
     function hexval(h,   i, d, v) {
       v = 0
       for (i = 1; i <= length(h); i++) {
