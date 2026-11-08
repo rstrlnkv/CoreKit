@@ -6,6 +6,11 @@
 # Env:   CORE_DIR (default: parent of project_dir)
 #        COREDEV_TOOLS (default: lib.sh tools_dir: $CLAUDE_PLUGIN_DATA/tools, else the host's data folder under an
 #        absolute HOME or CODEX_HOME, else the data folder is unknown and nothing is written)
+# Shims go to the folder git runs hooks from (`git rev-parse --git-path hooks`: the shared one of a
+# linked worktree). When core.hooksPath sends git to another folder (husky, lefthook, a global
+# setting) or is empty, nothing is written: that folder belongs to the user's tool (or is the work
+# tree). A message names it with the lines to chain the corecrew hooks, and the exit status is 4
+# (after installing the shims of the other repo, if it has no such setting).
 set -u
 P=""
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -66,10 +71,63 @@ NAME="$(basename "$P")"
 # A case clash (exit 3): code_dir_of's line on stderr names the two folders; nothing is installed.
 rc=0; CODE="$(code_dir_of "$NAME")" || rc=$?
 case "$rc" in 0) ;; 3) exit 1 ;; *) CODE="$P/code" ;; esac
-[ -d "$CODE/.git" ] || { echo "No git repo at $CODE" >&2; exit 1; }
-[ -d "$CORE_DIR/.git" ] || { echo "No git repo at $CORE_DIR" >&2; exit 1; }
-H="$CODE/.git/hooks"
-install_shim pre-commit-code "$H/pre-commit" || exit 1
-install_shim pre-push-code   "$H/pre-push" || exit 1
-install_shim pre-push-core   "$CORE_DIR/.git/hooks/pre-push" || exit 1
+# .git is a file in a linked worktree
+[ -e "$CODE/.git" ] || { echo "No git repo at $CODE" >&2; exit 1; }
+[ -e "$CORE_DIR/.git" ] || { echo "No git repo at $CORE_DIR" >&2; exit 1; }
+
+# hooks_dir <repo> — sets HD to the absolute folder git runs the repo's hooks from. Returns 4 when
+# that is not git's own hooks folder (<common dir>/hooks): core.hooksPath points at a folder another
+# tool manages, or is empty (then git runs no hooks and rev-parse names the work tree root).
+hooks_dir() {
+  local repo="$1" def
+  HD="$(git -C "$repo" rev-parse --git-path hooks 2>/dev/null)" && [ -n "$HD" ] || {
+    echo "corecrew: git cannot tell the hooks folder of $repo; hooks not installed." >&2; return 1; }
+  case "$HD" in /*) ;; *) HD="$repo/$HD" ;; esac
+  def="$(git -C "$repo" rev-parse --git-common-dir 2>/dev/null)" && [ -n "$def" ] || {
+    echo "corecrew: git cannot tell the git folder of $repo; hooks not installed." >&2; return 1; }
+  case "$def" in /*) ;; *) def="$repo/$def" ;; esac
+  [ "$(canon_dir "$HD")" = "$(canon_dir "$def/hooks")" ] && return 0
+  HP_SET=1; HP="$(git -C "$repo" config --get core.hooksPath 2>/dev/null)" || HP_SET=0
+  return 4
+}
+
+# install_repo <repo> <hook>=<tools name>... — installs the shims, or prints why not and the lines
+# that chain them from the user's own hooks.
+REFUSED=0
+install_repo() {
+  local repo="$1" rc=0 pair q; shift
+  hooks_dir "$repo" || rc=$?
+  case "$rc" in
+    0) for pair in "$@"; do install_shim "${pair#*=}" "$HD/${pair%%=*}" || return 1; done; return 0 ;;
+    4) REFUSED=1 ;;
+    *) return 1 ;;
+  esac
+  if [ "$HP_SET" = 1 ] && [ -z "$HP" ]; then
+    {
+      echo "corecrew: core.hooksPath of $repo is set to an empty value, so git runs no hooks there. corecrew hooks were NOT installed."
+      echo "  To let corecrew install them, remove the setting (git -C '$repo' config --unset core.hooksPath) and run this again."
+    } >&2
+    return 0
+  fi
+  q=$(printf '%s' "$TOOLS" | sed "s/'/'\\\\''/g")
+  {
+    if [ "$HP_SET" = 1 ]; then
+      echo "corecrew: git runs the hooks of $repo from $HD (core.hooksPath = $HP, set for example by husky, lefthook or a global git setting), not from its own hooks folder. corecrew hooks were NOT installed, so they do not run there."
+    else
+      echo "corecrew: git runs the hooks of $repo from $HD, not from its own hooks folder. corecrew hooks were NOT installed, so they do not run there."
+    fi
+    [ -d "$HD" ] || echo "  ($HD does not exist.)"
+    echo "  To chain them, add a line to each hook file in $HD, right after the first line (create a missing hook file with the first line #!/bin/sh and make it executable with chmod +x). With lefthook, add the command to lefthook.yml instead: lefthook rewrites its hook files."
+    for pair in "$@"; do
+      case "${pair%%=*}" in
+        # git sends pre-push the refs on stdin: keep a copy, so the rest of the user's hook gets them too
+        pre-push) echo "    ${pair%%=*}: f=\$(mktemp) || exit 1; cat > \"\$f\"; bash '$q/git-hooks/${pair#*=}' \"\$@\" < \"\$f\" || { rm -f \"\$f\"; exit 1; }; exec < \"\$f\"; rm -f \"\$f\"" ;;
+        *)        echo "    ${pair%%=*}: bash '$q/git-hooks/${pair#*=}' || exit 1" ;;
+      esac
+    done
+  } >&2
+}
+install_repo "$CODE" pre-commit=pre-commit-code pre-push=pre-push-code || exit 1
+install_repo "$CORE_DIR" pre-push=pre-push-core || exit 1
+[ "$REFUSED" = 0 ] || exit 4
 echo "hooks installed"

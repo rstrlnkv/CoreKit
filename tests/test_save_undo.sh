@@ -234,4 +234,15 @@ if [ "$(id -u)" != 0 ]; then
   rm -f "$C/ro.txt"
 fi
 
+# core.hooksPath set by another tool (husky, lefthook): corecrew cannot install its shims there, so save
+# still commits and says on stderr that the hooks are not installed (it does not fail every time)
+mkdir -p "$C/.husky"; git -C "$C" config core.hooksPath .husky
+sleep 1; echo "hp" > "$C/hp.txt"; nc=$(cnt "$C")
+(cd "$C" && bash "$SAVE" "With hooksPath") > "$SANDBOX/out" 2>"$SANDBOX/err"; rc=$?
+assert_eq "$rc" "0" "save failed with core.hooksPath set"
+assert_eq "$(cnt "$C")" "$((nc+1))" "no commit with core.hooksPath set"
+assert_contains "$SANDBOX/err" "core.hooksPath"
+assert_no_file "$C/.husky/pre-commit"
+git -C "$C" config --unset core.hooksPath
+
 finish

@@ -17,10 +17,14 @@ fi
 [ -n "$MSG" ] || { echo 'Usage: save "<message>" [--push] [--no-attribution]' >&2; exit 2; }
 locate || exit 1
 
-# Make sure protective hook shims are in place.
+# Make sure protective hook shims are in place. With core.hooksPath set (husky, lefthook, a global
+# setting) git does not run .git/hooks: install-hooks.sh then exits 4 and explains on stderr how to
+# chain corecrew's checks; the step is still saved.
 if [ ! -x "$MAIN/.git/hooks/pre-commit" ] || [ ! -x "$MAIN/.git/hooks/pre-push" ] || \
-   [ ! -x "$CORE/.git/hooks/pre-push" ]; then
-  CORE_DIR="$CORE" bash "$(dirname "$0")/install-hooks.sh" "$PROJECT" >/dev/null || exit 1
+   [ ! -x "$CORE/.git/hooks/pre-push" ] || git -C "$MAIN" config --get core.hooksPath >/dev/null 2>&1 || \
+   git -C "$CORE" config --get core.hooksPath >/dev/null 2>&1; then
+  rc=0; CORE_DIR="$CORE" bash "$(dirname "$0")/install-hooks.sh" "$PROJECT" >/dev/null || rc=$?
+  case "$rc" in 0|4) ;; *) exit 1 ;; esac
 fi
 
 ID=$(date +%Y%m%d-%H%M%S); n=1; base="$ID"

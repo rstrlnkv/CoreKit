@@ -116,4 +116,100 @@ for i in 1 2 3 4 5 6; do
   assert_eq "$(ls -A "$SL" | grep -vc '^tools$')" "0" "two waiters on a dead lock, round $i: nothing but tools in the folder"
   assert_eq "$(ls -A "$SL/tools" | grep -c 'new')" "0" "two waiters, round $i: no stray .new in tools"
 done
+
+# --- install-hooks.sh writes the shims where git runs hooks: core.hooksPath and linked worktrees
+IH="$SCRIPTS/install-hooks.sh"
+setup_core && sync_tools && pass || fail "setup for install-hooks"
+# 1. A local core.hooksPath (husky): nothing is written to .git/hooks or the husky folder, the message
+#    names the folder and gives the chaining lines, exit 4, no success line. The Core has no hooksPath.
+scaffold_old ihp; P="$CORE_DIR/ihp"; C="$P/code"
+mkdir -p "$C/.husky"; printf '#!/bin/sh\nnpx lint-staged\n' > "$C/.husky/pre-commit"
+git -C "$C" config core.hooksPath .husky
+husky_before="$(tree_sum "$C/.husky")"
+assert_exit 4 bash "$IH" "$P"
+assert_no_file "$C/.git/hooks/pre-commit"; assert_no_file "$C/.git/hooks/pre-push"
+assert_eq "$(tree_sum "$C/.husky")" "$husky_before" "the hooksPath folder was written"
+assert_no_file "$C/.husky/pre-push"
+echo "$OUT" | grep -qF "$C/.husky" && pass || fail "message does not name the hooksPath folder: $OUT"
+echo "$OUT" | grep -qF "core.hooksPath" && pass || fail "message does not name core.hooksPath: $OUT"
+echo "$OUT" | grep -qF "bash '$COREDEV_TOOLS/git-hooks/pre-commit-code' || exit 1" && pass || fail "no pre-commit chaining line: $OUT"
+echo "$OUT" | grep -qF "bash '$COREDEV_TOOLS/git-hooks/pre-push-code' \"\$@\" < \"\$f\"" && pass || fail "no pre-push chaining line: $OUT"
+echo "$OUT" | grep -qF "hooks installed" && fail "claims success with core.hooksPath set: $OUT" || pass
+assert_contains "$CORE_DIR/.git/hooks/pre-push" "# corecrew hook shim"
+# a hooksPath that is git's own folder is fine: the shims go there, exit 0
+git -C "$C" config core.hooksPath .git/hooks
+assert_exit 0 bash "$IH" "$P"
+assert_contains "$C/.git/hooks/pre-commit" "# corecrew hook shim"
+assert_eq "$(tree_sum "$C/.husky")" "$husky_before" "the husky folder was written"
+git -C "$C" config --unset core.hooksPath
+
+# 2. A global core.hooksPath (only in the sandbox's own global config): both repos refused, nothing written
+case "$GIT_CONFIG_GLOBAL" in "$SANDBOX"/*) pass ;; *) fail "GIT_CONFIG_GLOBAL is not in the sandbox: $GIT_CONFIG_GLOBAL"; finish; exit 1 ;; esac
+GH="$SANDBOX/global hooks"; mkdir -p "$GH"
+scaffold_old ihg; P="$CORE_DIR/ihg"; C="$P/code"
+rm -f "$CORE_DIR/.git/hooks/pre-push"
+git config --file "$GIT_CONFIG_GLOBAL" core.hooksPath "$GH"
+assert_exit 4 bash "$IH" "$P"
+assert_no_file "$C/.git/hooks/pre-commit"; assert_no_file "$C/.git/hooks/pre-push"
+assert_no_file "$CORE_DIR/.git/hooks/pre-push"
+assert_eq "$(ls -A "$GH")" "" "the global hooks folder was written"
+echo "$OUT" | grep -qF "$GH" && pass || fail "message does not name the global hooksPath: $OUT"
+echo "$OUT" | grep -qF "bash '$COREDEV_TOOLS/git-hooks/pre-push-core' \"\$@\" < \"\$f\"" && pass || fail "no Core chaining line: $OUT"
+echo "$OUT" | grep -qF "hooks installed" && fail "claims success with a global hooksPath: $OUT" || pass
+git config --file "$GIT_CONFIG_GLOBAL" --unset core.hooksPath
+
+# 3. The code folder is a linked worktree (.git is a file): the shims land in the common hooks folder
+#    git runs, and a commit in the worktree is checked by them.
+scaffold_old ihw; P="$CORE_DIR/ihw"; C="$P/code"; M="$SANDBOX/ihw main"
+mv "$C" "$M" && git -C "$M" worktree add -q "$C" -b wt && pass || fail "linked worktree setup"
+[ -f "$C/.git" ] && pass || fail "the worktree's .git is not a file"
+assert_exit 0 bash "$IH" "$P"
+assert_contains "$M/.git/hooks/pre-commit" "# corecrew hook shim"
+assert_contains "$M/.git/hooks/pre-push" "# corecrew hook shim"
+echo x > "$C/CLAUDE.md"; git -C "$C" add -f CLAUDE.md
+git -C "$C" commit -q -m "add CLAUDE.md" >/dev/null 2>&1 && fail "worktree commit of CLAUDE.md allowed: shim not run" || pass
+git -C "$C" reset -q; rm -f "$C/CLAUDE.md"
+mkdir -p "$C/src"; echo x > "$C/src/ok.txt"; git -C "$C" add src/ok.txt
+git -C "$C" commit -q -m "add ok" >/dev/null 2>&1 && pass || fail "a legitimate commit in the worktree was blocked"
+assert_exit 0 bash "$IH" "$P"
+
+# 4. No hooksPath: installs, prints the success line, is idempotent, and keeps a user's own hook
+scaffold_old ihok; P="$CORE_DIR/ihok"; C="$P/code"
+printf '#!/bin/sh\necho mine\n' > "$C/.git/hooks/pre-push"
+assert_exit 0 bash "$IH" "$P"
+echo "$OUT" | grep -qF "hooks installed" && pass || fail "no success line: $OUT"
+assert_contains "$C/.git/hooks/pre-commit" "# corecrew hook shim"
+assert_eq "$(cat "$C/.git/hooks/pre-push")" "$(printf '#!/bin/sh\necho mine')" "the user's own pre-push hook was replaced"
+first="$(cat "$C/.git/hooks/pre-commit")"
+assert_exit 0 bash "$IH" "$P"
+assert_eq "$(cat "$C/.git/hooks/pre-commit")" "$first" "second run changed the shim"
+
+# 5. An empty core.hooksPath (set to cancel a global one): git then runs no hooks from .git/hooks and
+#    rev-parse names the work tree root. Nothing is written anywhere, exit 4, no success line.
+scaffold_old ihe; P="$CORE_DIR/ihe"; C="$P/code"
+git -C "$C" config core.hooksPath ""
+assert_exit 4 bash "$IH" "$P"
+assert_no_file "$C/pre-commit"; assert_no_file "$C/pre-push"
+assert_no_file "$C/.git/hooks/pre-commit"; assert_no_file "$C/.git/hooks/pre-push"
+git -C "$C" status --porcelain | grep -qE 'pre-(commit|push)' && fail "an empty hooksPath left hook files in the work tree" || pass
+echo "$OUT" | grep -qF "core.hooksPath" && pass || fail "message does not name core.hooksPath: $OUT"
+echo "$OUT" | grep -qF "hooks installed" && fail "claims success with an empty hooksPath: $OUT" || pass
+git -C "$C" config --unset core.hooksPath
+
+# 6. The pre-push chaining line from the message, put in a user's own pre-push hook: it runs the
+#    corecrew check (a blocked file stops the push) and the rest of the user's hook still gets the
+#    refs on stdin (git lfs pre-push needs them).
+scaffold_old ihc; P="$CORE_DIR/ihc"; C="$P/code"; HPD="$SANDBOX/ihc hooks"; mkdir -p "$HPD"
+git -C "$C" config core.hooksPath "$HPD"
+assert_exit 4 bash "$IH" "$P"
+line="$(echo "$OUT" | sed -n 's/^    pre-push: //p')"
+[ -n "$line" ] && pass || fail "no pre-push chaining line to test: $OUT"
+printf '#!/bin/sh\n%s\ncat > "%s"\n' "$line" "$SANDBOX/ihc seen" > "$HPD/pre-push"; chmod +x "$HPD/pre-push"
+git init -q --bare "$SANDBOX/ihc remote.git"
+mkdir -p "$C/src"; echo x > "$C/src/ok.txt"; git -C "$C" add src/ok.txt; git -C "$C" commit -q --no-verify -m "add ok"
+git -C "$C" push -q "$SANDBOX/ihc remote.git" HEAD:refs/heads/main >/dev/null 2>&1 && pass || fail "a legitimate push through the chained hook failed"
+assert_eq "$(grep -c 'refs/heads/main' "$SANDBOX/ihc seen" 2>/dev/null)" "1" "the user's hook after the chained line did not get the refs on stdin"
+echo x > "$C/CLAUDE.md"; git -C "$C" add -f CLAUDE.md; git -C "$C" commit -q --no-verify -m "add CLAUDE.md"
+git -C "$C" push -q "$SANDBOX/ihc remote.git" HEAD:refs/heads/main >/dev/null 2>&1 && fail "the chained line did not block a push of CLAUDE.md" || pass
+git -C "$C" config --unset core.hooksPath
 finish
