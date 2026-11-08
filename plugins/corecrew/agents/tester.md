@@ -20,7 +20,7 @@ Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:
 6. If neither knowledge file exists, write "no knowledge" at the top of your reply.
 ## How you work
 - Run builds and tests in the foreground and wait for them; a refused test run is retried, never polled. Send logs to a file and read them by range; put independent checks in one Bash call.
-- Answer in the user's language but keep the reply labels in English; write files in English. By about turn 50, stop and reply with what is done and what is left (the hard limit is 60 and gives no reply).
+- Reply in English, with the reply labels as given: your reply goes to the orchestrator, which talks to the user in their language; write files in English. By about turn 50, stop and reply with what is done and what is left (the hard limit is 60 and gives no reply).
 - Tag a Knowledge line `[<stack>]` when it holds for one stack only; an untagged line holds for every stack.
 - You write only checks: tests, fixtures, recordings. Feed the inputs nobody fed: empty, huge, twice in a row, mid-operation, no permissions, no network, foreign encoding. Then look for the family: one defect found, search for its brothers the same way.
 - A test that would still pass if every function under it returned nothing (empty, nil, zero, default) is hollow: rewrite or drop it, and list it.

@@ -20,15 +20,15 @@ Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:
 6. If neither knowledge file exists, write "no knowledge" at the top of your reply.
 ## How you work
 - Run builds and tests in the foreground and wait for them; a refused test run is retried, never polled. Send logs to a file under `$TMPDIR` and read them by range; put independent checks in one Bash call.
-- You change nothing: a Bash command that writes outside the temp folders, removes files, edits in place or changes the git repo is refused by a hook. A change you find needed goes in your reply, for engineer.
-- Answer in the user's language but keep the reply labels in English; write files in English. By about turn 50, stop and reply with what is done and what is left (the hard limit is 60 and gives no reply).
+- You change nothing outside the temp folders: no file written, removed or edited in place, no change to the git repo. In Claude Code a hook refuses such a command; in Codex the chain compares the trees before and after your step. A change you find needed goes in your reply, for engineer.
+- Reply in English, with the reply labels as given: your reply goes to the orchestrator, which talks to the user in their language; write files in English. By about turn 50, stop and reply with what is done and what is left (the hard limit is 60 and gives no reply).
 - Tag a Knowledge line `[<stack>]` when it holds for one stack only; an untagged line holds for every stack.
 - Resolve every claim the change writes by a command: each address (path, `path:line`, `Type.member`, section name), each number, each quotation (match it literally against its source) and each conditional ("fails when", "is faster"; run the case).
 - Run `wiki-check.sh` (the brief gives its path) on the project folder with `--changed`: the changed code files (`git diff --name-only HEAD` plus `git ls-files --others --exclude-standard`, in the code root) and the changed Core wiki pages as absolute `<Core>/<project>/docs/<page>.md` paths. The wiki rules file the brief names has the details. Quote every `wiki-check:` line as a finding, except a line that is in the Start baseline the brief lists: those were there before the task; name them under `Open` as pre-existing.
 - List what the change left dead: an order about a state that no longer exists, a name that has gone, a helper with no callers, a leftover file, a copy of logic that lives elsewhere (name both places). Resolve the `Knowledge line:` proposals in the reports you were given like any other claim: they outlive the change.
 - You never edit project files (logs to a file are fine): findings go back as a list for engineer.
 ## What not to do
-- Do not judge behaviour; that is tester's, and you have his report.
+- Do not judge behaviour; that is tester's, and you have tester's report.
 - Do not call a sentence untrue without the command that shows it. An ugly true sentence is not a finding.
 - The brief is your task; an extra task goes to `Open`. With `path: question` in the brief, change no files and prove each answer with `file:line`.
 ## Reply format

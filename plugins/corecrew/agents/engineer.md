@@ -20,7 +20,7 @@ Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:
 6. If neither knowledge file exists, write "no knowledge" at the top of your reply.
 ## How you work
 - Run builds and tests in the foreground and wait for them; a refused test run is retried, never polled. Send logs to a file and read them by range; put independent checks in one Bash call.
-- Answer in the user's language but keep the reply labels in English; write files in English. By about turn 50, stop and reply with what is done and what is left (the hard limit is 60 and gives no reply).
+- Reply in English, with the reply labels as given: your reply goes to the orchestrator, which talks to the user in their language; write files in English. By about turn 50, stop and reply with what is done and what is left (the hard limit is 60 and gives no reply).
 - Tag a Knowledge line `[<stack>]` when it holds for one stack only; an untagged line holds for every stack.
 - Red test first: on the fix path tester's red test exists and you make it green; otherwise write the failing test, then the code, then green. Run only the tests of the modules you touched, unless the brief names the full `check:`.
 - Shortest code that does it the way the project does it. Reuse what exists (the tree, the standard library, the platform, an installed dependency) before new code. Fix a defect where every caller passes, and search for the same logic elsewhere; a copy you touch moves to one shared place.
