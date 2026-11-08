@@ -143,7 +143,7 @@ assert_file "$PLUGIN/hooks/hooks.json"
 H="$PLUGIN/hooks/hooks.json"
 assert_contains "$H" '"Stop"'
 assert_contains "$H" '"timeout"'
-# hooks.json wires all five hooks (spec section 14). One key per line, so awk can pair each event and
+# hooks.json wires all five hooks. One key per line, so awk can pair each event and
 # matcher with its command and timeout: "Event|matcher|script|timeout".
 WIRED="$(awk '
   /^    "[A-Za-z]+": \[/ { ev = $1; gsub(/[":]/, "", ev); m = "" }
@@ -195,7 +195,7 @@ assert_not_contains "$T/CLAUDE.md.tmpl" '/bin/'
 assert_contains "$T/CLAUDE.md.tmpl" 'undo-step'
 assert_contains "$T/CLAUDE.md.tmpl" 'printed at session start'
 
-# migration note: the seven steps of spec section 6
+# migration note: the seven upgrade steps from 0.1
 MG="$ROOT/docs/migration-0.2.md"
 assert_file "$MG"
 assert_contains "$MG" '/plugin install coredev@corekit'

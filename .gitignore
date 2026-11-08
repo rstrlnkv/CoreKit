@@ -13,3 +13,5 @@ docs/superpowers/
 !.env.example
 !.env.sample
 !.env.template
+# test_no_personal.sh: the owner-specific terms list stays local
+tests/personal-terms.local
