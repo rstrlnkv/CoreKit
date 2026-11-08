@@ -9,6 +9,8 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-08
+
 ### Added
 
 - `reference/codex-host.md`: one Codex reference for all four skills (skill folder, settings,
