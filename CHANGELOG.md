@@ -9,6 +9,8 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-09
+
 ### Changed
 
 - `ship` pushes the branch and waits for its CI checks (`gh run watch`) after the go-ahead and before
