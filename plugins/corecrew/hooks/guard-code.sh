@@ -74,8 +74,11 @@
 #   (guard_code_too_many) when the cwd or a target is in scope: judging them all would outlast the hook timeout. A link
 #   or a copy into a folder counts as three targets. A missing reader lets the Bash call pass;
 #   the file tools are still judged. The shell-patch refusal (Codex) runs before all this, in every folder.
-#   LIMIT (not followed, each pinned as a passing case in tests/test_hook_guard_code.sh): a relative target after cd,
-#   pushd or popd (`cd .. && echo x >> docs/INDEX.md` is the Core wiki); a target with $ ` * ? [ { (variables,
+#   A command that starts with `cd <absolute folder> &&` (or `;`, or a newline; one plain / word, the first command, not
+#   in a subshell) has the relative targets after it judged against that folder, until another cd, pushd or popd.
+#   LIMIT (not followed, each pinned as a passing case in tests/test_hook_guard_code.sh): any other relative target after
+#   cd, pushd or popd (`cd .. && echo x >> docs/INDEX.md` is the Core wiki; `(cd /x && ...)`, `cd /x || exit`,
+#   `cd -P /x`, `ls; cd /x`); a target with $ ` * ? [ { (variables,
 #   $(...), globs, braces); a command line handed to another shell (bash -c, sh -c, eval) or a script file; xargs,
 #   find -exec, interpreters (python -c, node -e); git -C <dir> mv; other writers (rsync, dd of=, tar -C, curl -o);
 #   a wrapper option whose value is not skipped (only -u -g -n -s -k -C -c take one: stdbuf -o L tee); past 100
