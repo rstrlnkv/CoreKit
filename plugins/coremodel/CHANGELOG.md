@@ -48,6 +48,9 @@ Needs Claude Code 2.1.309 or newer (models are named by alias).
 - In `auto`, a current model the plugin did not know (a newer id, a gateway name) was replaced on
   the first prompt by an older pinned id. It is now left alone.
 - Classifier failures were invisible: the pane said "No picks yet".
+- The pane's captions take the width of the longest caption in the active language, so the
+  Russian rows line up.
+- `/coremodel recheck` names the "Pick the model" setting instead of the raw key `pickModel`.
 
 ## [0.6.0] - 2026-11-08
 

@@ -67,7 +67,7 @@ export const ru: Strings = {
   undone: pair => `Вернул: ${pair}.`,
   nothingToUndo: 'Отменять нечего: последнюю смену уже вернули или изменили.',
   probeLogged: n => `CoreModel probe: ${n} строк записано в журнал отладки (claude --debug).`,
-  recheckEffortOnly: 'pickModel выключен: CoreModel выбирает только усилие.',
+  recheckEffortOnly: 'В настройках плагина выключено «Pick the model»: CoreModel выбирает только усилие.',
   recheckAllOff: 'Все модели выключены в настройках плагина: CoreModel выбирает только усилие. Включите нужные в настройках.',
   recheckNone: 'Выбирать нечего: модели, включённые в настройках, и список моделей аккаунта не имеют общих. Включите другие модели в настройках.',
   recheckModels: names => `Модели, которые может выбрать CoreModel: ${names}.`,

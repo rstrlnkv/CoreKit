@@ -368,6 +368,32 @@ test('the pane speaks Russian after a Russian prompt', { options: { mode: 'auto'
   await ui.unmount()
 })
 
+test('the pane captions are as wide as the longest English caption, plus one', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  const ui = await pane($)
+  // "This session" is the longest English caption
+  for (const key of ['chat-caption', 'choose-caption', 'session-caption']) {
+    expect((await ui.find({ type: 'Box', key }))?.props.minWidth).toBe('This session'.length + 1)
+  }
+  await ui.unmount()
+})
+
+test('the pane captions are as wide as the longest Russian caption, plus one', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium', 'почини авторизацию')
+  const ui = await pane($)
+  // "Последний выбор" is the longest Russian caption: every row's value starts in the same column
+  for (const key of ['chat-caption', 'choose-caption', 'session-caption']) {
+    expect((await ui.find({ type: 'Box', key }))?.props.minWidth).toBe('Последний выбор'.length + 1)
+  }
+  await ui.unmount()
+})
+
 test('the pane marks what the chat runs at when nothing is held', async ($, on) => {
   const w = world(on)
   w.row = null

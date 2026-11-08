@@ -75,7 +75,7 @@ export const en = {
   undone: (pair: string) => `Back to ${pair}.`,
   nothingToUndo: 'Nothing to undo: the last switch was taken back or changed since.',
   probeLogged: (n: number) => `CoreModel probe: ${n} rows written to the debug log (claude --debug).`,
-  recheckEffortOnly: 'pickModel is off: CoreModel picks the effort only.',
+  recheckEffortOnly: '"Pick the model" is off in the plugin settings: CoreModel picks the effort only.',
   recheckAllOff: 'Every model is switched off in the settings, so CoreModel picks the effort only. Switch the ones you want on in the plugin settings.',
   recheckNone: "Nothing to pick: the models switched on in the settings and the account's model list share no model. Switch other models on in the plugin settings.",
   recheckModels: (names: string) => `Models CoreModel may pick: ${names}.`,

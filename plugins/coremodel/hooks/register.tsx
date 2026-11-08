@@ -577,8 +577,10 @@ async function paneModel($: EngineInterface, key: ModelKey): Promise<void> {
 }
 
 const RULE = '─'.repeat(40)
-// The width of the captions in the pane's rows ("This session"), in cells.
-const CAPTION = 13
+// The width of the captions in the pane's rows, in cells: the longest caption of the language, plus one,
+// so every row's value starts in the same column.
+const captionWidth = (t: ReturnType<typeof texts>) =>
+  Math.max(...[t.thisChat, t.model, t.effort, t.thisSession, t.lastPick].map(c => c.length)) + 1
 
 /** The language of a prompt: the setting when it names one, else the prompt's own, kept for a reload. */
 async function promptLang($: EngineInterface, options: { language?: unknown }, text: string): Promise<Lang> {
@@ -798,10 +800,11 @@ export const register: Register = (on, options) => {
     const nowModel = pickOn ? (heldModel ?? toModel(seenModel)) : ''
     const nowPair = t.pair(nowModel, nowLevel)
     const yours = t.pair(heldModel && pickOn ? toModel(seenModel) : '', toLevel(asked))
-    const row = (key: string, caption: string, body: RenderChildren) => (
+    const caption = captionWidth(t)
+    const row = (key: string, label: string, body: RenderChildren) => (
       <Box key={key} flexDirection="row" gap="sm">
-        <Box key={`${key}-caption`} minWidth={CAPTION}>
-          <Text dimColor>{caption}</Text>
+        <Box key={`${key}-caption`} minWidth={caption}>
+          <Text dimColor>{label}</Text>
         </Box>
         {body}
       </Box>
