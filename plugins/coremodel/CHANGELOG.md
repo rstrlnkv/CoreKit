@@ -7,6 +7,8 @@ full detail.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-09
+
 ### Changed
 
 - `language: auto` follows Claude Code's `language` setting, no longer the text of the prompt: a

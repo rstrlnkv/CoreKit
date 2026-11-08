@@ -9,6 +9,8 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-09
+
 ### Changed
 
 - `ship` writes the version and the changelog entry first and runs `check:` on that tree, so the

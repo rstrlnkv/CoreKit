@@ -1,7 +1,7 @@
 {
   "name": "coremodel",
   "displayName": "CoreModel",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Spends only what each prompt needs: picks the model and effort level, and asks before the costly ones.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",
