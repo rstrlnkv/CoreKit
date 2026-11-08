@@ -103,12 +103,14 @@ Project: $NAME" -- $CORE_PATHS || docs_failed "Docs commit failed."
 fi
 [ $saved -eq 1 ] || echo "nothing to save"
 
-# Only the Core is pushed: the code repo leaves through ship, after its tests and version.
+# Only the Core is pushed: the code repo leaves through ship, after its tests and version. That line
+# comes first, so the user learns where the code goes even when the Core push fails (a hook refused it,
+# the remote is gone); a failed push still exits 1 and leaves both commits as they are.
 if [ $PUSH -eq 1 ]; then
+  echo "code not pushed: the code leaves only through corecrew's ship (/corecrew:ship)"
   if git -C "$CORE" remote get-url origin >/dev/null 2>&1; then
     git -C "$CORE" push -q -u origin HEAD && echo "pushed $(basename "$CORE")" || { echo "Push failed: $CORE" >&2; exit 1; }
   else
     echo "no remote for $(basename "$CORE") — skipped push"
   fi
-  echo "code not pushed: the code leaves only through corecrew's ship (/corecrew:ship)"
 fi
