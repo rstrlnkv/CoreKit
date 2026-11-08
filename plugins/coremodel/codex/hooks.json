@@ -3,7 +3,7 @@
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/codex/hint.sh\"", "timeout": 25 }
+          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/codex/hint.sh\"", "timeout": 25, "statusMessage": "coremodel: choosing a model" }
         ]
       }
     ]

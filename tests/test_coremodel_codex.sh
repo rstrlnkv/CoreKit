@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# coremodel in Codex (port task 5): Codex hooks cannot change the model, so a UserPromptSubmit hook
+# coremodel in Codex: Codex hooks cannot change the model, so a UserPromptSubmit hook
 # (plugins/coremodel/codex/hint.sh) asks a small model which model and effort the prompt needs and adds
-# that as context ("switch with /model"). Checks: the Codex manifest and hooks file (and, offline, that
+# that as context ("switch with /model"). The hint is off until the person turns it on, and it stays
+# silent when the current model already fits. Checks: the Codex manifest and hooks file (and, offline, that
 # Codex 0.166.0 lists exactly that hook and not the Claude module hooks/hooks.json), then hint.sh against
 # a FAKE `codex` on PATH. No network; CODEX_HOME and HOME are the test sandbox. The manifest key was found by
 # experiment on codex 0.166.0: "hooks" in .codex-plugin/plugin.json (a string or an array of paths, relative
@@ -27,11 +28,19 @@ echo "  -- A. manifest and hooks file"
 assert_file "$CX_MAN"
 if [ -f "$CX_MAN" ]; then
   json_ok "$CX_MAN" && pass || fail "$CX_MAN is not valid JSON"
-  for k in name version description; do
+  for k in name version; do
     v="$(field "$CX_MAN" $k)"
     [ -n "$v" ] && pass || fail "codex manifest has no $k"
     assert_eq "$v" "$(field "$CL_MAN" $k)" "codex manifest $k = claude manifest $k"
   done
+  # Codex gets a hint, not a switch: its description promises nothing only the Claude module does
+  d="$(field "$CX_MAN" description)"
+  [ -n "$d" ] && pass || fail "codex manifest has no description"
+  [ "$d" != "$(field "$CL_MAN" description)" ] && pass || fail "codex manifest description is the Claude one"
+  for word in Fable Opus Sonnet Haiku xhigh 'asks before' 'token cost' Picks 'switches'; do
+    case "$d" in *"$word"*) fail "codex description names Claude-only behaviour: $word" ;; *) pass ;; esac
+  done
+  case "$d" in */model*) pass ;; *) fail "codex description does not say the person switches with /model" ;; esac
   grep -qE '"hooks": *("\./codex/hooks\.json"|\[ *"\./codex/hooks\.json" *\])' "$CX_MAN" && pass || fail "codex manifest does not point \"hooks\" at ./codex/hooks.json"
 fi
 # the Claude module file stays as it is and is not what Codex reads
@@ -43,6 +52,8 @@ if [ -f "$HJSON" ]; then
   assert_eq "$(grep -c '"command"' "$HJSON")" "1" "one hook command"
   assert_eq "$(grep -cE '"(PreToolUse|PostToolUse|SessionStart|Stop|PermissionRequest)"' "$HJSON")" "0" "no other event"
   assert_contains "$HJSON" 'bash \"${CLAUDE_PLUGIN_ROOT}/codex/hint.sh\"'
+  # Codex shows this while the hook runs, instead of a silent wait
+  assert_contains "$HJSON" '"statusMessage": "coremodel: choosing a model"'
   t="$(sed -n 's/.*"timeout": *\([0-9][0-9]*\).*/\1/p' "$HJSON" | head -1)"
   if [ -n "$t" ] && [ "$t" -ge 1 ] && [ "$t" -le 30 ]; then pass; else fail "explicit timeout 1..30 s in hooks.json (got '${t:-none}')"; fi
   # the hook's own wait (default 20 s) fits inside the hook timeout
@@ -106,11 +117,14 @@ export STUB_DIR="$SANDBOX"
 PATHSTUB="$BIN:/usr/bin:/bin:/usr/sbin:/sbin"
 PATHNONE="$SANDBOX/nobin:/usr/bin:/bin:/usr/sbin:/sbin"; mkdir -p "$SANDBOX/nobin"
 
-# run_hint <path> <stdin-text> [VAR=value ...] — stdout in $SANDBOX/out, stderr in $SANDBOX/err, exit code in $RC
+# The hint is off until turned on; ON_SF turns it on for the behaviour checks.
+ON_SF="$SANDBOX/coremodel-on"; printf 'codex_hint: on\n' > "$ON_SF"
+# run_hint <path> <stdin-text> [VAR=value ...] — stdout in $SANDBOX/out, stderr in $SANDBOX/err, exit code in $RC.
+# The hint is on (COREMODEL_CONFIG=$ON_SF) unless a VAR=value names COREMODEL_CONFIG itself.
 run_hint() {
   local p="$1" in="$2"; shift 2
   rm -f "$CALLS" "$ARGV" "$STDIN" "$ENVREC" "$SANDBOX/pid"
-  { printf "%s" "$in"; } 2>/dev/null | env PATH="$p" "$@" /bin/bash "$HINT" > "$SANDBOX/out" 2> "$SANDBOX/err"; RC=$?
+  { printf "%s" "$in"; } 2>/dev/null | env PATH="$p" COREMODEL_CONFIG="$ON_SF" "$@" /bin/bash "$HINT" > "$SANDBOX/out" 2> "$SANDBOX/err"; RC=$?
 }
 ncalls() { [ -f "$CALLS" ] && wc -l < "$CALLS" | tr -d ' ' || echo 0; }
 # event <prompt> — the hook's stdin JSON for a prompt that needs no escaping
@@ -198,27 +212,71 @@ answer '{"why":"x","level":"high","model":"opus"}'
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_NESTED=1
 silent "nested"; assert_eq "$(ncalls)" "0" "nested: codex not called"
 
-# settings: off, default on
+# settings: off by default; on in the coremodel settings file, or (the fallback) in the corecrew one
+CM_SF="$XDG_CONFIG_HOME/coremodel/settings"; mkdir -p "$(dirname "$CM_SF")"
 SF="$(bash "$SCRIPTS/lib.sh" setting-path)"; mkdir -p "$(dirname "$SF")"
-printf 'coremodel_mode: off\n' > "$SF"
-run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
-silent "off"; assert_eq "$(ncalls)" "0" "off: codex not called"
+rm -f "$CM_SF" "$SF"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_CONFIG=
+silent "no settings file: off"; assert_eq "$(ncalls)" "0" "no settings file: codex not called"
+printf 'codex_hint: on\n' > "$CM_SF"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_CONFIG=
+assert_eq "$(ncalls)" "1" "codex_hint: on in ~/.config/coremodel/settings: codex called"
+printf 'other: 1\n  codex_hint :   on  \r\n' > "$CM_SF"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_CONFIG=
+assert_eq "$(ncalls)" "1" "codex_hint: on (spaces, CRLF): codex called"
+printf 'codex_hint: off\n' > "$CM_SF"; printf 'coremodel_mode: on\n' > "$SF"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_CONFIG=
+silent "coremodel off wins over corecrew on"; assert_eq "$(ncalls)" "0" "coremodel off wins: codex not called"
+printf 'other: 1\n' > "$CM_SF"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_CONFIG=
+assert_eq "$(ncalls)" "1" "no codex_hint key: the corecrew coremodel_mode: on is the fallback"
+rm -f "$CM_SF"
 printf 'ui_language: en\n  coremodel_mode :   off  \r\n' > "$SF"
-run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
-silent "off (spaces, CRLF)"; assert_eq "$(ncalls)" "0" "off (spaces, CRLF): codex not called"
-printf 'coremodel_mode: on\n' > "$SF"
-run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
-assert_eq "$(ncalls)" "1" "mode on: codex called"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_CONFIG=
+silent "corecrew off (spaces, CRLF)"; assert_eq "$(ncalls)" "0" "corecrew off: codex not called"
 printf 'ui_language: en\n' > "$SF"
-run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
-assert_eq "$(ncalls)" "1" "other keys only: on by default"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_CONFIG=
+silent "corecrew without coremodel_mode: off"; assert_eq "$(ncalls)" "0" "corecrew other keys only: off by default"
+for v in suggest auto yes; do
+  printf 'coremodel_mode: %s\n' "$v" > "$SF"
+  run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_CONFIG=
+  assert_eq "$(ncalls)" "0" "corecrew coremodel_mode: $v is not on"
+done
 rm -f "$SF"
-run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
-assert_eq "$(ncalls)" "1" "no settings file: on by default"
-# CORECREW_CONFIG points the settings elsewhere
+# COREMODEL_CONFIG and CORECREW_CONFIG point the files elsewhere
+printf 'codex_hint: on\n' > "$SANDBOX/alt-cm"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_CONFIG="$SANDBOX/alt-cm"
+assert_eq "$(ncalls)" "1" "on via COREMODEL_CONFIG: codex called"
+printf 'coremodel_mode: on\n' > "$SANDBOX/alt-settings"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_CONFIG= CORECREW_CONFIG="$SANDBOX/alt-settings"
+assert_eq "$(ncalls)" "1" "on via CORECREW_CONFIG: codex called"
 printf 'coremodel_mode: off\n' > "$SANDBOX/alt-settings"
-run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" CORECREW_CONFIG="$SANDBOX/alt-settings"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_CONFIG= CORECREW_CONFIG="$SANDBOX/alt-settings"
 silent "off via CORECREW_CONFIG"; assert_eq "$(ncalls)" "0" "off via CORECREW_CONFIG: codex not called"
+
+# the current model: silent when it is the pick or a stronger one
+mevent() { printf '{"hook_event_name":"UserPromptSubmit","model":"%s","prompt":"%s"}' "$1" "$2"; }
+answer '{"why":"x","level":"high","model":"opus"}'
+run_hint "$PATHSTUB" "$(mevent gpt-6-astra 'fix the flaky login test')"
+silent "on the strongest model"; assert_eq "$(ncalls)" "0" "on the strongest model: codex not called"
+answer '{"why":"x","level":"medium","model":"sonnet"}'
+run_hint "$PATHSTUB" "$(mevent gpt-6.1-sol 'add a field')"
+silent "current model is the pick"; assert_eq "$(ncalls)" "1" "current model is the pick: codex was asked"
+answer '{"why":"x","level":"low","model":"haiku"}'
+run_hint "$PATHSTUB" "$(mevent gpt-6.1-sol 'rename x')"
+silent "current model is stronger than the pick"
+answer '{"why":"x","level":"high","model":"opus"}'
+run_hint "$PATHSTUB" "$(mevent gpt-6.1-sol 'fix the flaky login test')"
+case "$(cat "$SANDBOX/out")" in *gpt-6-astra*) pass ;; *) fail "a weaker current model: no hint: $(cat "$SANDBOX/out")" ;; esac
+answer '{"why":"x","level":"low","model":"haiku"}'
+run_hint "$PATHSTUB" "$(mevent gpt-6-luna 'rename x')"
+silent "luna for a haiku pick"
+# a model it does not know, or a model key that is not the event's own: the hint as before
+answer '{"why":"x","level":"high","model":"opus"}'
+run_hint "$PATHSTUB" "$(mevent some-other-model 'fix the flaky login test')"
+case "$(cat "$SANDBOX/out")" in *gpt-6-astra*) pass ;; *) fail "unknown current model: no hint" ;; esac
+run_hint "$PATHSTUB" '{"hook_event_name":"UserPromptSubmit","meta":{"model":"gpt-6-astra"},"prompt":"fix the flaky login test"}'
+case "$(cat "$SANDBOX/out")" in *gpt-6-astra*) pass ;; *) fail "a nested model key was read as the current model" ;; esac
 
 # failures are silent and never block the prompt
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" STUB_MODE=fail
@@ -294,13 +352,14 @@ assert_eq "$(tail -1 "$SANDBOX/argv.txt")" "-" "prompt read from stdin (last arg
 # a 1 MB prompt with many \n escapes
 awk 'BEGIN{printf "{\"hook_event_name\":\"UserPromptSubmit\",\"prompt\":\""; for(i=0;i<100000;i++) printf "line%d\\n", i; printf "\"}"}' > "$SANDBOX/big.json"
 t0="$(date +%s)"
-rm -f "$CALLS"; env PATH="$PATHSTUB" /bin/bash "$HINT" < "$SANDBOX/big.json" > "$SANDBOX/out" 2>/dev/null; RC=$?
+rm -f "$CALLS"; env PATH="$PATHSTUB" COREMODEL_CONFIG="$ON_SF" /bin/bash "$HINT" < "$SANDBOX/big.json" > "$SANDBOX/out" 2>/dev/null; RC=$?
 t1="$(date +%s)"
 assert_eq "$RC" "0" "1 MB prompt: exit 0"
 if [ $((t1 - t0)) -lt 5 ]; then pass; else fail "1 MB prompt took $((t1 - t0)) s"; fi
+assert_eq "$(ncalls)" "0" "1 MB prompt: cut at 256 KB, so it ends unterminated and gets no call"
 # SIGTERM to hint.sh while the stub sleeps: nothing is left running
 rm -f "$SANDBOX/pid"
-( printf '%s' "$(event 'fix the flaky login test')" | env PATH="$PATHSTUB" STUB_MODE=sleep /bin/bash "$HINT" > /dev/null 2>&1 ) &
+( printf '%s' "$(event 'fix the flaky login test')" | env PATH="$PATHSTUB" COREMODEL_CONFIG="$ON_SF" STUB_MODE=sleep /bin/bash "$HINT" > /dev/null 2>&1 ) &
 sleep 2
 hp="$(pgrep -f "bash $HINT" | head -1)"
 [ -n "$hp" ] && kill -TERM "$hp" 2>/dev/null
