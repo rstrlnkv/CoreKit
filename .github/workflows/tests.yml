@@ -2,8 +2,14 @@ name: tests
 
 on:
   push:
-    branches: [main]
+    # every branch; a tag-only push (ship, after the run) starts nothing
+    branches: ['**']
   pull_request:
+
+# a newer push to a branch cancels its stale run; a run on main always finishes
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
