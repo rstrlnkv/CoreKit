@@ -6,7 +6,8 @@
 #        commit-subjects.sh --file <message>   the message file of a commit-msg hook
 # Generated subjects are exempt in both modes: `Revert "...` and `Undo step ...`. In --file mode
 # `fixup! `, `squash! ` and `amend! ` are exempt too: they are squashed before CI sees them.
-# Exit 0 when every subject passes, 1 with one line per bad subject on stderr, 2 on a bad argument.
+# Exit 0 when every subject passes, 1 with one line per bad subject on stderr, 2 on a bad argument, outside a git
+# repository ("not a git repository") or with a range git cannot read ("bad range <a..b>"); git's own stderr is silenced.
 set -u
 RE='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|merge)(\([a-z0-9][a-z0-9-]*\))?!?: [^ ]'
 MAX=72
@@ -35,7 +36,8 @@ check() {
 bad=0
 case "$1" in
   --range)
-    list=$(git log --no-merges --format=%s "$2" --) || usage
+    git rev-parse --git-dir >/dev/null 2>&1 || { echo "commit-subjects: not a git repository" >&2; exit 2; }
+    list=$(git log --no-merges --format=%s "$2" -- 2>/dev/null) || { echo "commit-subjects: bad range $2" >&2; exit 2; }
     [ -n "$list" ] || exit 0
     while IFS= read -r s; do check "$s" 0 || bad=1; done <<EOF_LIST
 $list
