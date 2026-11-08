@@ -14,7 +14,8 @@ date -d|date([[:space:]]+-[a-zA-Z]+)*[[:space:]]+-d
 stat -c|stat[[:space:]]+-c
 readlink -f|readlink[[:space:]]+-f
 find -printf|find[[:space:]].*-printf
-xargs -r|xargs([[:space:]]+-[a-zA-Z]+)*[[:space:]]+-[a-zA-Z]*r'
+xargs -r|xargs([[:space:]]+-[a-zA-Z]+)*[[:space:]]+-[a-zA-Z]*r
+jq as a command|(^|[|;&(`]|(do|then|else)[[:space:]])[[:space:]]*jq([[:space:]]|$)'
 
 # scan <file> — prints "<file>:<line>: <label>" for each forbidden construct
 scan() {
@@ -38,8 +39,10 @@ stat -c %s f
 readlink -f x
 find . -printf '%p'
 xargs -r rm
+cat f | jq .x
+x=$(jq -r .a f)
 EOF
-assert_eq "$(scan "$bad" | wc -l | tr -d ' ')" "12" "self-check hits"
+assert_eq "$(scan "$bad" | wc -l | tr -d ' ')" "14" "self-check hits"
 good="$SANDBOX/good.sh"
 cat > "$good" <<'EOF'
 sed -n 's/a/b/p' f > f.tmp && mv f.tmp f
@@ -47,6 +50,8 @@ grep -qiE 'x' f
 echo "${name:-a,b}" | tr '[:upper:]' '[:lower:]'
 cmd > log 2>&1
 local dir="$1"
+gh api repos/x --jq .private
+# hook JSON without jq (no jq)
 EOF
 assert_eq "$(scan "$good")" "" "portable lines flagged"
 
