@@ -1,27 +1,59 @@
 #!/usr/bin/env bash
 # Undoes the last saved step of THIS project (or the given Step-Id) in both repos with
 # git revert. History is kept. All-or-nothing: on a conflict nothing is changed.
+# The Core is shared: only the step's own paths are touched, so other projects' staged or unsaved
+# Core files stay as they are and never go into the Undo commit.
 # Usage: undo-step [STEP_ID]
 set -u
 . "$(dirname "$0")/_locate.sh"
 locate || exit 1
 
-# log_of <code|core> <git log args...> — Core history is limited to this project's folder.
+# This project's Core commits: those that touch its folder, and those that touch only the shared
+# Core files save commits with it (CORE_PATHS, e.g. knowledge/) and whose Step-Id (or Undo-Of)
+# names a step of this code repo. A shared-only commit with no code commit here can be any
+# project's, so it is never counted; a commit that also touches another project's folder is that
+# project's.
+# shellcheck disable=SC2086
+core_mine() {
+  local x="" p
+  for p in $CORE_PATHS; do x="$x :(exclude)$p"; done
+  git -C "$CORE" log --format=%H -- "$NAME"
+  { git -C "$CODE" log --format=%B | sed -n 's/^Step-Id: /i /p'
+    git -C "$CORE" log --format='o %H' -- . $x
+    git -C "$CORE" log --format='%x01 %H%n%B' -- $CORE_PATHS; } |
+    awk 'BEGIN { m = sprintf("%c", 1) }
+         $1 == "i" { i[$2] = 1; next }
+         $1 == "o" { o[$2] = 1; next }
+         $1 == m { h = $2; next }
+         /^(Step-Id|Undo-Of): / && h != "" { if (!(h in o) && ($2 in i)) print h; h = "" }'
+}
+MINE=$(core_mine | awk '!s[$0]++')
+
+# log_of <code|core> <git log args...> — Core history is limited to this project's commits.
 log_of() {
   local which="$1"; shift
   if [ "$which" = code ]; then git -C "$CODE" log "$@"
-  else git -C "$CORE" log "$@" -- "$NAME"; fi
+  elif [ -n "$MINE" ]; then printf '%s\n' "$MINE" | git -C "$CORE" log --no-walk --stdin "$@"; fi
 }
 repo_of() { [ "$1" = code ] && echo "$CODE" || echo "$CORE"; }
 
+# shellcheck disable=SC2086
 if [ -n "$(git -C "$CODE" status --porcelain)" ] || \
-   [ -n "$(git -C "$CORE" status --porcelain -- "$NAME")" ]; then
+   [ -n "$(git -C "$CORE" status --porcelain -- $CORE_PATHS)" ]; then
   echo "Unsaved changes in this project. Run save or discard them first." >&2; exit 1
 fi
 
 is_undone() { log_of code -n1 --format=%H --grep="^Undo-Of: $1\$" | grep -q . || \
               log_of core -n1 --format=%H --grep="^Undo-Of: $1\$" | grep -q .; }
 commits_of() { log_of "$1" --format=%H --grep="^Step-Id: $2\$"; }
+# paths_of <code|core> — the paths the step's commits change in that repo, one per line.
+paths_of() {
+  local c
+  for c in $(commits_of "$1" "$ID"); do
+    git -C "$(repo_of "$1")" diff-tree --no-commit-id --name-only -r --no-renames -z "$c" | tr '\0' '\n'
+  done | sort -u
+}
+in_head() { git -C "$1" cat-file -e "HEAD:$2" 2>/dev/null; }
 
 ID="${1:-}"
 if [ -z "$ID" ]; then
@@ -43,25 +75,73 @@ for w in code core; do
   done
 done
 
-# Phase 1: apply all reverts without committing; abort everything on any conflict.
+# Every path the step changed must be clean, and a path the undo would bring back must not hold a
+# local (ignored) file: git would overwrite it, and an aborted undo removes what the revert made.
+NEWDIRS=""
+for w in code core; do
+  r=$(repo_of "$w")
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    if [ -n "$(GIT_LITERAL_PATHSPECS=1 git -C "$r" status --porcelain -- "$p")" ] || \
+       { ! in_head "$r" "$p" && { [ -e "$r/$p" ] || [ -L "$r/$p" ]; }; }; then
+      echo "Could not undo step $ID: $p has local changes or an unsaved local file. Save, move or discard it first." >&2
+      exit 1
+    fi
+    # folders git would create for a file the undo brings back; an aborted undo removes them again
+    if ! in_head "$r" "$p"; then
+      d=$(dirname "$p")
+      while [ "$d" != . ] && [ ! -d "$r/$d" ]; do NEWDIRS="$NEWDIRS$r/$d
+"; d=$(dirname "$d"); done
+    fi
+  done <<< "$(paths_of "$w")"
+done
+
+# The index of each repo before the undo (other projects' staged Core files included). The revert can
+# change paths the step's commits do not name (a file a later step renamed), so what it changed is
+# measured against this tree, and an aborted undo puts exactly those paths back from it.
+PRE_CODE=$(git -C "$CODE" write-tree 2>/dev/null) && PRE_CORE=$(git -C "$CORE" write-tree 2>/dev/null) || {
+  echo "Could not undo step $ID: a repo has unresolved merge conflicts. Resolve them first." >&2; exit 1; }
+pre_of() { [ "$1" = code ] && echo "$PRE_CODE" || echo "$PRE_CORE"; }
+# changed_of <code|core> — the index paths the revert changed, one per line.
+changed_of() { git -C "$(repo_of "$1")" diff-index --cached --name-only -z "$(pre_of "$1")" | tr '\0' '\n'; }
+
+# Phase 1: apply all reverts without committing; on any conflict put back only what the revert touched.
 started=""
 abort_all() {
-  for w in $started; do git -C "$(repo_of "$w")" reset -q --merge 2>/dev/null; done
+  local w r p pre
+  for w in $started; do
+    r=$(repo_of "$w"); pre=$(pre_of "$w")
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      if git -C "$r" cat-file -e "$pre:$p" 2>/dev/null; then
+        GIT_LITERAL_PATHSPECS=1 git -C "$r" checkout -q "$pre" -- "$p" 2>/dev/null
+      else   # the revert brought it back; it did not exist before (checked above)
+        GIT_LITERAL_PATHSPECS=1 git -C "$r" rm -q -f --cached --ignore-unmatch -- "$p" >/dev/null 2>&1
+        rm -f "$r/$p"
+      fi
+    done <<< "$( { changed_of "$w"; git -C "$r" ls-files -u -z | tr '\0' '\n' | cut -f2-; paths_of "$w"; } | sort -u)"
+    git -C "$r" revert --quit 2>/dev/null
+  done
+  # deepest first; rmdir leaves a folder that is not empty
+  printf '%s' "$NEWDIRS" | sort -r | while IFS= read -r d; do [ -n "$d" ] && rmdir "$d" 2>/dev/null; done
   echo "Could not undo step $ID: it conflicts with later changes. Nothing was changed." >&2
   exit 1
 }
 for w in code core; do
   for c in $(commits_of "$w" "$ID"); do
-    started="$started $w"
+    case " $started " in *" $w "*) ;; *) started="$started $w" ;; esac
     git -C "$(repo_of "$w")" revert --no-commit "$c" >/dev/null 2>&1 || abort_all
   done
 done
 [ -n "$started" ] || { echo "Nothing to undo for step $ID."; exit 0; }
 
-# Phase 2: commit in each repo that has staged reverts.
-for w in code core; do
-  r=$(repo_of "$w"); git -C "$r" diff --cached --quiet && continue
+# Phase 2: in each repo, commit only the paths the revert changed; other staged files stay staged.
+for w in $started; do
+  r=$(repo_of "$w")
+  set --
+  while IFS= read -r p; do [ -n "$p" ] && set -- "$@" "$p"; done <<< "$(changed_of "$w")"
+  if [ $# -eq 0 ]; then git -C "$r" revert --quit 2>/dev/null; continue; fi
   subj=$(git -C "$r" log -1 --format=%s "$(commits_of "$w" "$ID" | head -1)")
-  git -C "$r" commit -q -m "Undo step $ID: $subj" -m "Undo-Of: $ID"
+  GIT_LITERAL_PATHSPECS=1 git -C "$r" commit -q -m "Undo step $ID: $subj" -m "Undo-Of: $ID" -- "$@"
   echo "reverted $([ "$w" = core ] && echo docs || echo code) ($subj)"
 done
