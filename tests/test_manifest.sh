@@ -6,7 +6,6 @@ M="$ROOT/.claude-plugin/marketplace.json"
 
 # plugin.json
 assert_contains "$P" '"name": "corecrew"'
-assert_contains "$P" '"version": "0.8.0"'
 assert_contains "$P" '"userConfig"'
 for key in core_dir attribution model_profile ui_language; do assert_contains "$P" "\"$key\""; done
 assert_contains "$P" '"type": "directory"'
@@ -47,15 +46,97 @@ assert_not_contains "$ROOT/README.md" 'my-app/code/'
 assert_contains "$ROOT/README.md" '/plugin install corecrew@corekit'
 assert_not_contains "$ROOT/README.md" '/corekit:'
 assert_not_contains "$ROOT/README.md" 'corekit@corekit'
-assert_eq "$(grep -m1 '^## ' "$ROOT/CHANGELOG.md" | cut -c1-9)" '## 0.8.0 ' "CHANGELOG first entry"
-assert_contains "$ROOT/CHANGELOG.md" '## 0.8.0 — 2026-11-08'
-assert_contains "$ROOT/CHANGELOG.md" '## 0.7.0 — 2026-11-06'
-assert_contains "$ROOT/CHANGELOG.md" '## 0.6.5 — 2026-11-05'
-assert_contains "$ROOT/CHANGELOG.md" '## 0.5.0 — 2026-11-04'
-assert_contains "$ROOT/CHANGELOG.md" '## 0.4.0 — 2026-11-04'
-assert_contains "$ROOT/CHANGELOG.md" '## 0.3.0 — 2026-11-04'
-assert_contains "$ROOT/CHANGELOG.md" '## 0.2.1 — 2026-11-04'
-assert_contains "$ROOT/CHANGELOG.md" '## 0.2.0 — '
+
+# Versions, CHANGELOGs, descriptions and icons of every plugin: they must agree with each other,
+# never with a literal, so a release edits no test.
+jf() { sed -n "s/^ *\"$2\": *\"\(.*\)\",\{0,1\}\$/\1/p" "$1" | head -1; }
+# changelog_of <plugin> — corecrew's CHANGELOG is the root one; the others sit next to the plugin
+changelog_of() { [ "$1" = corecrew ] && echo "$ROOT/CHANGELOG.md" || echo "$ROOT/plugins/$1/CHANGELOG.md"; }
+# check_changelog <file> — Keep a Changelog 1.1.0: "## [Unreleased]" first, then
+# "## [X.Y.Z] - YYYY-MM-DD" with dates never rising, groups only Added..Security, no old badges.
+# Prints one line per problem; prints nothing for a good file.
+check_changelog() {
+  LC_ALL=C awk '
+    /^## / {
+      n++
+      if (n == 1) { if ($0 != "## [Unreleased]") print "first heading is not ## [Unreleased]: " $0; next }
+      if ($0 !~ /^## \[[0-9]+\.[0-9]+\.[0-9]+\] - [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) { print "bad release heading: " $0; next }
+      d = substr($0, length($0) - 9); mo = substr(d, 6, 2) + 0; dy = substr(d, 9, 2) + 0
+      if (mo < 1 || mo > 12 || dy < 1 || dy > 31) print "bad date: " $0
+      if (last != "" && d > last) print "date rises: " $0
+      last = d; next
+    }
+    /^### / { if ($0 !~ /^### (Added|Changed|Deprecated|Removed|Fixed|Security)$/) print "bad group: " $0; next }
+    /\*\*(NEW|FIX|UPD)\*\*/ { print "old badge at line " NR }
+    END { if (n < 2) print "no released version" }
+  ' "$1"
+}
+# top_version <file> — the version of the first released heading
+top_version() { sed -n 's/^## \[\([0-9][0-9.]*\)\] - .*/\1/p' "$1" | head -1; }
+# market_desc <plugin> — the description of the plugin's entry in marketplace.json (one key per line)
+market_desc() {
+  awk -v p="$1" '
+    /"name": / { n = $0; sub(/.*"name": "/, "", n); sub(/".*/, "", n) }
+    /"description": / && n == p { d = $0; sub(/.*"description": "/, "", d); sub(/",?[[:space:]]*$/, "", d); print d; exit }
+  ' "$M"
+}
+
+plugins=""
+for d in "$ROOT"/plugins/*/; do plugins="$plugins $(basename "$d")"; done
+for pl in $plugins; do
+  CJ="$ROOT/plugins/$pl/.claude-plugin/plugin.json"; XJ="$ROOT/plugins/$pl/.codex-plugin/plugin.json"
+  CL="$(changelog_of "$pl")"
+  assert_file "$CL"
+  assert_eq "$(check_changelog "$CL")" "" "$pl CHANGELOG format"
+  top="$(top_version "$CL")"
+  assert_eq "$(jf "$CJ" version)" "$top" "$pl .claude-plugin version vs CHANGELOG"
+  [ -f "$XJ" ] && assert_eq "$(jf "$XJ" version)" "$top" "$pl .codex-plugin version vs CHANGELOG"
+  # every plugin is listed, with the same one-sentence description as its manifests
+  desc="$(jf "$CJ" description)"
+  assert_contains "$M" "\"source\": \"./plugins/$pl\""
+  assert_eq "$(market_desc "$pl")" "$desc" "$pl description differs between marketplace.json and plugin.json"
+  [ -f "$XJ" ] && assert_eq "$(jf "$XJ" description)" "$desc" "$pl description differs between the Claude and Codex manifests"
+  # the icon: ./assets/icon.png, named in every manifest, a square PNG of 512 to 2048 px, under 256 KiB
+  ic="$ROOT/plugins/$pl/assets/icon.png"
+  assert_eq "$(jf "$CJ" icon)" "./assets/icon.png" "$pl icon field"
+  if [ -f "$XJ" ]; then
+    for k in composerIcon logo; do assert_eq "$(jf "$XJ" $k)" "./assets/icon.png" "$pl Codex $k"; done
+  fi
+  assert_file "$ic"
+  assert_no_file "$ROOT/plugins/$pl/.claude-plugin/icon.png"
+  assert_file "$ROOT/docs/icons/$pl.svg"
+  if command -v sips >/dev/null 2>&1; then
+    w="$(sips -g pixelWidth "$ic" 2>/dev/null | sed -n 's/.*pixelWidth: //p')"; h="$(sips -g pixelHeight "$ic" 2>/dev/null | sed -n 's/.*pixelHeight: //p')"
+    assert_eq "$w" "$h" "$pl icon is square"
+    [ "${w:-0}" -ge 512 ] && [ "${w:-0}" -le 2048 ] && pass || fail "$pl icon is $w px, want 512 to 2048"
+  fi
+  [ "$(wc -c < "$ic" | tr -d ' ')" -lt 262144 ] && pass || fail "$pl icon is 256 KiB or more"
+  case "$(head -c 4 "$ic" | od -An -c | tr -d ' ')" in *PNG*) pass ;; *) fail "$pl icon is not a PNG" ;; esac
+  # SECURITY.md: a line that names this plugin and a version names the current one
+  bad="$(grep -wF "$pl" "$ROOT/SECURITY.md" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | grep -vxF "$top")"
+  assert_eq "$bad" "" "SECURITY.md names an old $pl version"
+done
+# the descriptions this repo owns are one sentence of at most 120 characters, benefit first
+for pl in corecrew; do
+  desc="$(jf "$ROOT/plugins/$pl/.claude-plugin/plugin.json" description)"
+  [ "${#desc}" -le 120 ] && pass || fail "$pl description is ${#desc} characters, want 120 at most"
+  case "$desc" in *.*.*) fail "$pl description is more than one sentence" ;; *.) pass ;; *) fail "$pl description does not end with a full stop" ;; esac
+done
+
+# self-check of the CHANGELOG rule: a good file passes, each kind of mistake is caught
+new_sandbox; T="$SANDBOX/changelogs"; mkdir -p "$T"
+printf '# Changelog\n\n## [Unreleased]\n\n## [1.1.0] - 2026-11-08\n\n### Added\n\n- x\n\n## [1.0.0] - 2026-11-01\n\n### Fixed\n\n- y\n' > "$T/good.md"
+assert_eq "$(check_changelog "$T/good.md")" "" "a good CHANGELOG passes"
+assert_eq "$(top_version "$T/good.md")" "1.1.0" "top released version"
+printf '## [1.0.0] - 2026-11-01\n' > "$T/nounrel.md"
+case "$(check_changelog "$T/nounrel.md")" in *"not ## [Unreleased]"*) pass ;; *) fail "missing [Unreleased] not caught" ;; esac
+printf '## [Unreleased]\n## 1.0.0 — 2026-11-01\n' > "$T/old.md"
+case "$(check_changelog "$T/old.md")" in *"bad release heading"*) pass ;; *) fail "old heading not caught" ;; esac
+printf '## [Unreleased]\n## [1.0.0] - 2026-11-01\n### New\n- **NEW** x\n' > "$T/group.md"
+case "$(check_changelog "$T/group.md")" in *"bad group"*"old badge"*) pass ;; *) fail "bad group or badge not caught" ;; esac
+printf '## [Unreleased]\n## [1.0.1] - 2026-10-01\n## [1.0.0] - 2026-11-01\n## [0.9.0] - 2026-13-01\n' > "$T/date.md"
+case "$(check_changelog "$T/date.md")" in *"date rises"*"bad date"*) pass ;; *) fail "rising or bad date not caught" ;; esac
+rm -rf "$T"
 
 # hooks.json: plugin Stop hook; no install.sh any more
 assert_file "$PLUGIN/hooks/hooks.json"
@@ -149,27 +230,12 @@ for pl in corecrew coreopinion; do
   [ "$n" -ge 3 ] && pass || fail "$pl: fewer than 3 trigger eval cases ($n)"
   assert_contains "$ROOT/plugins/$pl/evals/.gitignore" 'results/'
 done
-# every plugin has an icon (the directory wants a square PNG, 512 to 2048 px, under 2 MB); the SVG
-# sources are in docs/icons/
-for pl in corecrew coremodel coreopinion; do
-  ic="$ROOT/plugins/$pl/.claude-plugin/icon.png"
-  assert_file "$ic"
-  assert_file "$ROOT/docs/icons/$pl.svg"
-  if command -v sips >/dev/null 2>&1; then
-    w="$(sips -g pixelWidth "$ic" 2>/dev/null | sed -n 's/.*pixelWidth: //p')"; h="$(sips -g pixelHeight "$ic" 2>/dev/null | sed -n 's/.*pixelHeight: //p')"
-    assert_eq "$w" "$h" "$pl icon is square"
-    [ "${w:-0}" -ge 512 ] && [ "${w:-0}" -le 2048 ] && pass || fail "$pl icon is $w px, want 512 to 2048"
-  fi
-  [ "$(wc -c < "$ic" | tr -d ' ')" -lt 2000000 ] && pass || fail "$pl icon is 2 MB or more"
-  case "$(head -c 4 "$ic" | od -An -c | tr -d ' ')" in '211PNG'*|*PNG*) pass ;; *) fail "$pl icon is not a PNG" ;; esac
-done
 # Codex manifest: Codex reads .codex-plugin/plugin.json instead of .claude-plugin/plugin.json, so the
 # shared fields must not drift. No root plugin.json: Codex treats it as an AgentPlugin manifest and
 # skips the plugin's hooks.
 CX="$PLUGIN/.codex-plugin/plugin.json"
 assert_file "$CX"
 assert_no_file "$PLUGIN/plugin.json"
-jf() { sed -n "s/^ *\"$2\": *\"\(.*\)\",\{0,1\}\$/\1/p" "$1" | head -1; }
 for k in name version description license; do
   [ -n "$(jf "$P" $k)" ] && assert_eq "$(jf "$CX" $k)" "$(jf "$P" $k)" "$k differs between the Claude and Codex manifests" || fail "no $k in the Claude manifest"
 done
