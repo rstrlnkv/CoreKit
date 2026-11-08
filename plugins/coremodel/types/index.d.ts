@@ -13,7 +13,7 @@ export type Band = {
   from: Level | ''
   /** The classifier's short reason. */
   why: string
-  /** The language of the prompt the band answers. */
+  /** The language of the words when the band was made; an older band keeps its own. */
   lang: 'ru' | 'en'
   /** The model the switch moved to, and from; absent when the model did not change. */
   model?: ModelKey | null

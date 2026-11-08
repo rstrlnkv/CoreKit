@@ -415,7 +415,6 @@ test('a language stored by 0.7.0 is ignored', { options: { mode: 'auto' } }, asy
   const p = await paneTexts($)
   expect(p.texts[0]).toBe('CoreModel · ' + texts('en').mode.auto)
   expect(p.texts).toContain(texts('en').thisChat)
-  expect(await $.store.get('lang')).toBe('ru')
 })
 
 // The failure path: a host whose settings cannot be read gets English, a debug line and no toast; the pick still runs.

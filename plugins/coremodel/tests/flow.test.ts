@@ -383,6 +383,7 @@ test('a Russian prompt gets the question in Russian', { options: { mode: 'auto' 
   const w = world(on)
   w.answer = '{"level":"xhigh","why":"w"}'
   w.reply = 'Оставить «Среднее»'
+  w.hostLanguage = 'russian'
   await start($)
   await submit($, 'собери всё приложение')
   await step($, 'medium')
@@ -462,6 +463,7 @@ test('a level typed under Other counts, in English or Russian', { options: { mod
   await submit($, 'fix the login')
   await step($, 'medium')
   w.reply = 'Низкое'
+  w.hostLanguage = 'russian'
   await submit($, 'почини вход')
   await step($, 'medium')
   expect(w.efforts).toEqual(['max', 'low'])
