@@ -7,6 +7,8 @@ full detail.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-08
+
 Needs Claude Code 2.1.309 or newer (models are named by alias).
 
 ### Added
