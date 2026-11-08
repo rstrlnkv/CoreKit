@@ -7,6 +7,13 @@ full detail.
 
 ## [Unreleased]
 
+### Changed
+
+- `language: auto` follows Claude Code's `language` setting, no longer the text of the prompt: a
+  Cyrillic prompt (a Ukrainian one, say) no longer turns the words Russian. A language stored by
+  0.7.0 is ignored. To keep Russian, set the plugin's `language` to `ru` or Claude Code's
+  `"language": "russian"` in settings.json.
+
 ## [0.7.0] - 2026-11-08
 
 Needs Claude Code 2.1.309 or newer (models are named by alias).
