@@ -17,7 +17,7 @@
 # Exit: 0 ok; 1 stale (--check only) or a 0.6 wiki; 2 usage error.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
-mode=write; proj=""
+mode="write"; proj=""
 for a in "$@"; do
   case "$a" in
     --check) mode=check ;;

@@ -7,6 +7,7 @@
 # The copy is current when both match the plugin and the copy itself still has that checksum; a
 # VERSION with only the version (older syncs) counts as stale. A non-empty <tools_dir> without a
 # VERSION file, or a <tools_dir> that is not a folder, is not ours: exit 2, nothing is touched.
+# A <tools_dir> named tools also gets <tools_dir>/.data-dir: its parent, the plugin's data folder (lib.sh tools_dir reads it).
 # Runs at the same time take turns (a lock folder <tools_dir>.lock); one that cannot get it in about 10 s prints
 # "tools busy <version>" and exits 0.
 set -u
@@ -17,18 +18,27 @@ S="$ROOT/scripts"
 MANIFEST="$ROOT/.claude-plugin/plugin.json"
 
 [ -r "$MANIFEST" ] || { echo "corecrew: $MANIFEST not found; tools not updated." >&2; exit 1; }
-VER=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$MANIFEST" | head -1)
+. "$(dirname "$0")/lib.sh" || { echo "corecrew: $(dirname "$0")/lib.sh not found; tools not updated." >&2; exit 1; }
+VER="$(plugin_version "$ROOT")"
 [ -n "$VER" ] || { echo "corecrew: no version in $MANIFEST; tools not updated." >&2; exit 1; }
-for f in save undo-step _locate.sh lib.sh install-hooks.sh; do
+
+# The files we copy, relative to the scripts folder (names have no spaces): what save, undo-step and the git hook shims
+# run, lib.sh with every part it sources (tests/test_tools.sh checks that against lib.sh), and git-hooks/*.
+FILES="save undo-step _locate.sh install-hooks.sh lib.sh lib-paths.sh lib-settings.sh lib-layout.sh lib-host.sh lib-scaffold.sh
+  lib-json.sh lib-codex-profile.sh lib-role-model.sh lib-tree-state.sh"
+for f in $FILES; do
   [ -f "$S/$f" ] || { echo "corecrew: $S/$f not found; tools not updated." >&2; exit 1; }
 done
 [ -d "$S/git-hooks" ] || { echo "corecrew: $S/git-hooks not found; tools not updated." >&2; exit 1; }
-
-# The files we copy, relative to the scripts folder (names have no spaces).
-FILES="save undo-step _locate.sh lib.sh install-hooks.sh"
 for f in "$S"/git-hooks/*; do
   [ -f "$f" ] && FILES="$FILES git-hooks/$(basename "$f")"
 done
+# data_dir — the data folder of the copy (<data>/tools, the layout tools_dir uses), written into it as .data-dir, so a copy
+# run by hand without CLAUDE_PLUGIN_DATA finds itself (lib.sh tools_dir); nothing for a tools folder with another name.
+data_dir() {
+  [ "$(basename "$T")" = tools ] || return 0
+  (cd "$(dirname "$T")" 2>/dev/null && pwd -P)
+}
 # sum_of <dir> — one checksum over those files in <dir> (a missing file changes it too).
 sum_of() {
   # shellcheck disable=SC2086
@@ -36,10 +46,10 @@ sum_of() {
 }
 SUM="$(sum_of "$S")"
 
-# is_current — same version, same content, and the copy is intact (a damaged or edited copy is rebuilt).
+# is_current — same version, same content, the copy is intact (a damaged or edited copy is rebuilt), and its .data-dir is right.
 is_current() {
   [ -f "$T/VERSION" ] && [ "$(sed -n 1p "$T/VERSION")" = "$VER" ] && [ "$(sed -n 2p "$T/VERSION")" = "$SUM" ] \
-    && [ "$(sum_of "$T")" = "$SUM" ]
+    && [ "$(sum_of "$T")" = "$SUM" ] && [ "$(cat "$T/.data-dir" 2>/dev/null)" = "$(data_dir)" ]
 }
 if is_current; then echo "tools current $VER"; exit 0; fi
 
@@ -79,16 +89,14 @@ fi
 # Copy into a temp dir next to the target, then swap it in, so a half copy never stays.
 rm -rf "$NEW" "$OLD"
 mkdir -p "$NEW/git-hooks" || exit 1
-for f in save undo-step _locate.sh lib.sh install-hooks.sh; do
-  cp -p "$S/$f" "$NEW/$f" || { rm -rf "$NEW"; echo "corecrew: copy of $f failed; tools not updated." >&2; exit 1; }
-done
-for f in "$S"/git-hooks/*; do
-  [ -f "$f" ] || continue
-  cp -p "$f" "$NEW/git-hooks/" || { rm -rf "$NEW"; echo "corecrew: copy of $f failed; tools not updated." >&2; exit 1; }
+for f in $FILES; do
+  cp -p "$S/$f" "$NEW/$f" || { rm -rf "$NEW"; echo "corecrew: copy of $S/$f failed; tools not updated." >&2; exit 1; }
 done
 # Executable regardless of how the plugin cache stored the modes.
 chmod +x "$NEW/save" "$NEW/undo-step" "$NEW/install-hooks.sh" "$NEW"/git-hooks/* 2>/dev/null
 chmod -x "$NEW/git-hooks/blocked-patterns" 2>/dev/null
+D="$(data_dir)"
+if [ -n "$D" ]; then printf '%s\n' "$D" > "$NEW/.data-dir" || { rm -rf "$NEW"; exit 1; }; fi
 printf '%s\n%s\n' "$VER" "$(sum_of "$NEW")" > "$NEW/VERSION"
 if [ -e "$T" ]; then mv "$T" "$OLD" || { rm -rf "$NEW"; exit 1; }; fi
 if ! mv "$NEW" "$T"; then

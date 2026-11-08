@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # NOTE: the rule is best effort, not a security boundary; the LIMIT cases below list known ways past it.
-# lib.sh shell_patch_refused: a substring hit (apply_patch, applypatch, apply-patch after deleting quotes and backslashes,
+# scripts/shell-patch.sh shell_patch_refused (the guards' own file, sourced after lib.sh): a substring hit (apply_patch, applypatch, apply-patch after deleting quotes and backslashes,
 # a "*** Begin Patch" with a file marker, or a $' with an escape) refuses the command unless it is in the simple form (one reader,
 # an allowlisted pipe, no substitution/list/redirect, no program-running option). Covers every input of the seven review
 # passes, the pass twins, the documented over-blocking and limits (LIMIT), and the 1 MB time bound.
 source "$(dirname "$0")/lib.sh"
 new_sandbox
 . "$SCRIPTS/lib.sh"
+. "$SCRIPTS/shell-patch.sh"
 # shellcheck disable=SC2034  # SELF is read by the functions of the sourced lib.sh
 SELF="$PLUGIN"
 nl="
@@ -272,6 +273,27 @@ for c in 'wc -l a/* b/* 2>/dev/null | tail -1' 'cd x && ls scripts/* && cat .cla
   "cat > a.md <<EOF${nl}it's * here; * x${nl}EOF${nl}ls" "x=\$(cat <<'EOF'${nl}* a${nl}EOF${nl}); echo \"\$x\""; do
   passes "$c" "glob argument or heredoc body"
 done
+# Markdown emphasis in a heredoc body is data: a word with * only at its two ends (**Patch**, *apply*) never counts there,
+# and another data word counts only when its literal part holds "apply" or it has a ? or [ (a glob, not emphasis)
+for c in "cat > notes.md <<'EOF'${nl}- **Patch** release${nl}EOF" "git commit -F - <<EOF${nl}fix: *patch* level bump${nl}EOF" \
+  "cat <<EOF${nl}- *apply* it${nl}EOF" "cat > c.md <<'EOF'${nl}**Apply** the **_patch_** now; *Patch*, **apply**${nl}EOF" \
+  "git commit -m \"\$(cat <<'EOF'${nl}Bump *patch* version${nl}${nl}- **Patch**: x${nl}EOF${nl})\"" "cat <<EOF > a.md${nl}see *_patch and *patch${nl}EOF"; do
+  passes "$c" "Markdown emphasis in a heredoc body"
+done
+for c in "bash <<EOF${nl}../bin/apply_pa*${nl}EOF" "bash <<EOF${nl}../bin/ap?ly_patch x${nl}EOF" "sh <<'EOF'${nl}./[a]pply_patch${nl}EOF" \
+  "bash <<EOF${nl}../bin/*apply_pat?h${nl}EOF" "bash <<EOF${nl}x appl*_patch${nl}EOF"; do
+  refused "$c" "a glob spelling the name in a heredoc body"
+done
+# Markdown emphasis has no path before it: a data word with a / keeps the plain rule (4 or more literal characters);
+# emphasis whose inner text holds apply_, apply- or applyp spells the name, not a word
+for c in "bash <<'EOF'${nl}../bin/*pply_patch* -x${nl}EOF" "bash <<'EOF'${nl}/opt/arg0/x/*apply_pat* -x${nl}EOF" \
+  "bash <<'EOF'${nl}/x/*ply_patch -x${nl}EOF" "bash <<'EOF'${nl}/x/*_patch -x${nl}EOF" "bash <<'EOF'${nl}*apply_pat* -x${nl}EOF" \
+  "bash <<'EOF'${nl}*apply-pa* -x${nl}EOF" "bash <<'EOF'${nl}**applypat** -x${nl}EOF"; do
+  refused "$c" "a path-qualified or name-spelling glob in a heredoc body"
+done
+# LIMIT: a data word with no / and a * only in front, whose literal part lacks apply, passes (it reads as text)
+passes "bash <<'EOF'${nl}*ply_patch -x${nl}EOF" "LIMIT: a leading-star glob without apply in a heredoc body"
+passes "bash <<'EOF'${nl}*pply_patch -x${nl}EOF" "LIMIT: a leading-star glob without apply in a heredoc body"
 # a heredoc started inside "$(...)" (the usual commit and PR body idiom), after a quoted apostrophe, or after a quote that
 # spans lines is a heredoc too; a case pattern and arithmetic are no command words
 for c in "git commit -m \"\$(cat <<'EOF'${nl}Fix things${nl}${nl}* bullet one${nl}* bullet two${nl}EOF${nl})\"" \

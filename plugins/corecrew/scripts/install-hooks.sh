@@ -47,7 +47,7 @@ for f in pre-commit-code pre-push-code pre-push-core blocked-patterns; do
 done
 
 install_shim() {  # install_shim <name in tools/git-hooks> <dest hook path>
-  local name="$1" dest="$2" target="$TOOLS/git-hooks/$1"
+  local dest="$2" target="$TOOLS/git-hooks/$1"
   if [ -e "$dest" ] && ! grep -qF -e "$MARK" -e "$OLD_MARK" -e "$OLD_SHIM" "$dest"; then
     echo "WARN: $dest exists and is not a corecrew hook; left unchanged" >&2; return 0
   fi

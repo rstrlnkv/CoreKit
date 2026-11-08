@@ -2,6 +2,7 @@
 # Sets: CODE (code repo or worktree toplevel), MAIN (main code checkout), PROJECT (<Core>/<name>),
 # NAME, CORE, CORE_PATHS. Two layouts: old (<Core>/<name>/code) and new (<Projects>/<Name> beside
 # the Core, with a CLAUDE.local.md symlink to <Core>/<name>/CLAUDE.md).
+# shellcheck disable=SC2034  # CODE MAIN PROJECT NAME CORE CORE_PATHS are read by save and undo-step, which source this file
 locate() {
   local here="$PWD" common link ldir n
   [ -d "$here/code/.git" ] && here="$here/code"
@@ -17,11 +18,13 @@ locate() {
         echo "Run this inside a project's code folder." >&2; return 1; }
     fi
   fi
-  common=$(cd "$CODE" && cd "$(git rev-parse --git-common-dir)" && pwd)
+  # CDPATH='' and >/dev/null: with CDPATH exported, cd to the relative .git could print the folder or go elsewhere
+  common=$(cd "$CODE" && CDPATH='' cd -- "$(git rev-parse --git-common-dir)" >/dev/null && pwd)
   MAIN=$(dirname "$common")
   PROJECT=$(dirname "$MAIN"); NAME=$(basename "$PROJECT")
   CORE=$(git -C "$PROJECT" rev-parse --show-toplevel 2>/dev/null)
   if [ "$(basename "$MAIN")" = "code" ] && [ -n "$CORE" ] && [ "$CORE" != "$MAIN" ]; then
+    _name_splits "$NAME" && return 1
     CORE_PATHS="$(core_paths "$CORE" "$NAME")"
     return 0
   fi
@@ -41,9 +44,22 @@ locate() {
     && [ -d "$CORE_DIR/.git" ] || {
     echo "This folder is not a corecrew project (<Projects>/<Name> with <Core>/<name>/CLAUDE.md)." >&2
     return 1; }
+  _name_splits "$NAME" && return 1
   CORE="$CORE_DIR"; PROJECT="$CORE/$NAME"
   CORE_PATHS="$(core_paths "$CORE" "$NAME")"
   return 0
+}
+
+# _name_splits <project> — exit 0 (and a line on stderr) when the project name holds a space or a tab. save and
+# undo-step pass CORE_PATHS to git unquoted, so such a name would split into words: the code commit would be made and
+# the docs commit would fail. locate refuses it first, before either script changes anything.
+_name_splits() {
+  case "$1" in
+    *[[:blank:]]*)
+      echo "save and undo-step cannot handle a project name with a space: $1. Rename <Core>/$1 (and its code folder) without spaces, or commit by hand with git." >&2
+      return 0 ;;
+  esac
+  return 1
 }
 
 # core_paths <core> <project> — the Core paths that belong to every step of <project>, on one line,

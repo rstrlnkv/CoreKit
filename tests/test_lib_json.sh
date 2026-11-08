@@ -143,4 +143,17 @@ assert_eq "$(json_str "$doc" cwd)" "/after/bs" "key after a long backslash run"
 [ $((SECONDS - start)) -le 2 ] && pass || fail "json_str quadratic on a backslash run"
 # a raw newline in a value (invalid JSON) survives and does not start an escape
 assert_eq "$(json_str "$(printf '{"cwd":"a\nb"}')" cwd)" "$(printf 'a\nb')" "raw newline kept"
+
+# --- json_str needs no awk file: with every scripts/*.awk gone (the guards' documented case: the Bash path fails open,
+# file tools are still judged), json_str still reads hook JSON, and guard-code still refuses a Write of an internal file.
+new_sandbox; PL="$SANDBOX/plugin-noawk"; mkdir -p "$PL/hooks" "$PL/scripts"
+cp "$HOOKS/guard-code.sh" "$HOOKS/messages.sh" "$PL/hooks/"
+for f in "$SCRIPTS"/*; do case "$f" in *.awk) ;; *) [ -f "$f" ] && cp "$f" "$PL/scripts/" ;; esac; done
+find "$PL/scripts" -name '*.awk' | grep -q . && fail "the no-awk copy holds an awk file" || pass
+# shellcheck disable=SC1091
+assert_eq "$( (. "$PL/scripts/lib.sh"; json_str '{"cwd":"/a/а"}' cwd) )" "/a/а" "json_str without awk files"
+N="$SANDBOX/Projects/Foo"; mkdir -p "$CORE_DIR/foo" "$N"; echo '# foo' > "$CORE_DIR/foo/CLAUDE.md"
+ln -s "$CORE_DIR/foo/CLAUDE.md" "$N/CLAUDE.local.md"
+printf '%s' '{"cwd":"'"$N"'","tool_name":"Write","tool_input":{"file_path":"'"$N"'/CLAUDE.md"}}' | bash "$PL/hooks/guard-code.sh" >/dev/null 2>&1
+assert_eq "$?" "2" "no awk files: guard-code still judges a file tool"
 finish

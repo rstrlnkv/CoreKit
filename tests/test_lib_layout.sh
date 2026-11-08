@@ -92,11 +92,108 @@ for fn in la ll; do
   echo "$OUT" | grep -q "^would create" && fail "$fn DRY=1 announced a link: $OUT" || pass
 done
 
+# --- a new-layout project whose names hold non-ASCII letters: <Projects>/Uni проект beside <Core>/uni проект.
+# lc lowers ASCII only, on both sides, so the names match; the project is found from its code folder too.
+new_sandbox; P="$SANDBOX/Projects"; U="uni проект"
+mkdir -p "$CORE_DIR/$U" "$P/Uni проект/src"; : > "$CORE_DIR/$U/CLAUDE.md"; git init -q "$P/Uni проект"
+assert_exit 0 bash "$LIB" code-dir "$U";                      assert_eq "$OUT" "$P/Uni проект" "code-dir non-ASCII"
+assert_exit 0 bash "$LIB" layout "$U";                        assert_eq "$OUT" "new" "layout non-ASCII"
+assert_exit 0 bash "$LIB" project-of "$P/Uni проект";         assert_eq "$OUT" "$U" "project-of non-ASCII code folder"
+assert_exit 0 bash "$LIB" project-of "$P/Uni проект/src/x.ts"; assert_eq "$OUT" "$U" "project-of a file in it"
+assert_exit 0 bash "$LIB" code-root "$P/Uni проект/src";      assert_eq "$OUT" "$P/Uni проект" "code-root non-ASCII"
+# still no project: a folder with no Core project of its name, a dot-folder, standards, knowledge
+mkdir -p "$P/Другое" "$P/.hidden" "$P/Standards" "$P/knowledge" "$CORE_DIR/.hidden" "$CORE_DIR/standards" "$CORE_DIR/knowledge"
+: > "$CORE_DIR/.hidden/CLAUDE.md"; : > "$CORE_DIR/standards/CLAUDE.md"; : > "$CORE_DIR/knowledge/CLAUDE.md"
+for d in "$P/Другое" "$P/.hidden" "$P/Standards" "$P/knowledge/x"; do
+  assert_exit 1 bash "$LIB" project-of "$d"; assert_eq "$OUT" "" "project-of $d prints nothing"
+done
+
+# --- save and undo-step with such names. A non-ASCII name is saved and undone as any other. A name with a space
+# (or a tab) is refused before any commit, both repos left as they were: save and undo-step hand git the Core paths as
+# one space-separated line (CORE_PATHS), so such a name would split and leave a step half-saved.
+new_sandbox; setup_core; sync_tools; P="$SANDBOX/Projects"
+cnt() { git -C "$1" rev-list --count HEAD 2>/dev/null || echo 0; }
+mkproj() {  # mkproj <Core project folder> <code folder>: a new-layout project
+  mkdir -p "$CORE_DIR/$1" "$P/$2"; echo "# $1" > "$CORE_DIR/$1/CLAUDE.md"
+  git -C "$P/$2" init -q; ln -s "$CORE_DIR/$1/CLAUDE.md" "$P/$2/CLAUDE.local.md"
+  printf 'CLAUDE.local.md\n' > "$P/$2/.gitignore"
+}
+mkproj "uni-проект" "Uni-проект"; N="$P/Uni-проект"
+echo c1 > "$N/c.txt"; echo d1 > "$CORE_DIR/uni-проект/d.md"
+OUT="$(cd "$N" && bash "$SCRIPTS/save" "first" 2>&1)" && pass || fail "save of a non-ASCII project failed: $OUT"
+echo c2 > "$N/c.txt"; echo d2 > "$CORE_DIR/uni-проект/d.md"
+OUT="$(cd "$N" && bash "$SCRIPTS/save" "second" 2>&1)" && pass || fail "second save of a non-ASCII project failed: $OUT"
+assert_eq "$(git -C "$N" status --porcelain)" "" "non-ASCII project: code left unsaved"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain -- "uni-проект")" "" "non-ASCII project: docs left unsaved"
+OUT="$(cd "$N" && bash "$SCRIPTS/undo-step" 2>&1)" && pass || fail "undo-step of a non-ASCII project failed: $OUT"
+assert_eq "$(cat "$N/c.txt")" "c1" "undo-step: code of a non-ASCII project"
+assert_eq "$(cat "$CORE_DIR/uni-проект/d.md")" "d1" "undo-step: docs of a non-ASCII project"
+# a space: new layout (Uni проект beside <Core>/uni проект) and old layout (<Core>/my app/code)
+mkproj "uni проект" "Uni проект"
+mkdir -p "$CORE_DIR/my app/code"; echo "# my app" > "$CORE_DIR/my app/CLAUDE.md"; git -C "$CORE_DIR/my app/code" init -q
+git -C "$CORE_DIR" add -A && git -C "$CORE_DIR" commit -qm "two projects"
+for C in "$P/Uni проект" "$CORE_DIR/my app/code"; do
+  d="$(dirname "$C")"; [ "$C" = "$P/Uni проект" ] && d="$CORE_DIR/uni проект"
+  echo c1 > "$C/c.txt"; git -C "$C" add c.txt && git -C "$C" commit -qm "by hand"
+  echo c2 > "$C/c.txt"; echo d1 > "$d/d.md"
+  nc="$(cnt "$C")"; nd="$(cnt "$CORE_DIR")"; sc="$(git -C "$C" status --porcelain)"; sd="$(git -C "$CORE_DIR" status --porcelain)"
+  OUT="$(cd "$C" && bash "$SCRIPTS/save" "spaced" 2>&1)" && fail "save of a name with a space did not refuse: $OUT" || pass
+  echo "$OUT" | grep -q "saved code" && fail "save committed the code of a name with a space: $OUT" || pass
+  OUT="$(cd "$C" && bash "$SCRIPTS/undo-step" 2>&1)" && fail "undo-step of a name with a space did not refuse: $OUT" || pass
+  assert_eq "$(cnt "$C")" "$nc" "code commits after a refused save/undo ($C)"
+  assert_eq "$(cnt "$CORE_DIR")" "$nd" "Core commits after a refused save/undo ($C)"
+  assert_eq "$(git -C "$C" status --porcelain)" "$sc" "code tree after a refused save/undo ($C)"
+  assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "$sd" "Core tree after a refused save/undo ($C)"
+  assert_eq "$(cat "$C/c.txt")" "c2" "code file after a refused save/undo ($C)"
+done
+# the hooks' and skills' helpers still find the spaced project (only save and undo-step refuse it)
+assert_exit 0 bash "$LIB" project-of "$P/Uni проект"; assert_eq "$OUT" "uni проект" "project-of a spaced name"
+
+# --- lib.sh sources its parts (lib-*.sh and the awk files it names): every part is there, every helper is still defined
+# through lib.sh, and lib.sh itself stays small. The shell-patch check is the guards' own file, not part of lib.sh.
+parts="$(grep -oE '\$_LIB_DIR/[A-Za-z_][A-Za-z0-9._-]*' "$LIB" | sed 's|^\$_LIB_DIR/||' | LC_ALL=C sort -u)"
+[ -n "$parts" ] && pass || fail "lib.sh names no parts in \$_LIB_DIR"
+for f in $parts; do assert_file "$SCRIPTS/$f"; done
+n="$(wc -l < "$LIB" | tr -d ' ')"
+[ "$n" -le 250 ] && pass || fail "lib.sh is $n lines; its helpers belong in its parts"
+HELPERS="expand_home canon_dir coredev_get core_ready coredev_set opt_value settings_file_path _sf_load _sf_get _setting_valid
+  _resolve_setting _settings_file_check resolve_setting settings_warning_lines _core_raw load_settings json_str patch_paths
+  _project_of_path worktree_of project_of wt_is_main_of code_root_of code_dir_of layout_of valid_project_name lc norm_path
+  resolve_abs codex_home host tools_dir hooks_marker_path plugin_version rel_core esc render put mkdir_p git_init
+  project_docs_manifest put_project_docs link_file_to_claude link_local_claude link_agents projects_entry"
+# shellcheck disable=SC1090,SC2086
+missing="$( ( . "$LIB"; for fn in $HELPERS; do type "$fn" >/dev/null 2>&1 || echo "$fn"; done ) 2>&1 )"
+assert_eq "$missing" "" "helpers not defined after sourcing lib.sh"
+# shellcheck disable=SC1090
+assert_eq "$( ( . "$LIB"; type shell_patch_refused >/dev/null 2>&1 && echo defined ) )" "" "shell_patch_refused is in lib.sh"
+# sourced through a relative path from another folder, then used after a cd: the parts are still found
+OUT="$(cd "$PLUGIN" && . scripts/lib.sh && cd / && json_str '{"a":"b"}' a && echo && valid_project_name foo && echo ok)"
+assert_eq "$OUT" "$(printf 'b\nok')" "lib.sh sourced by a relative path, used after a cd"
+# the same with CDPATH exported and naming a folder that holds another scripts/: lib.sh still finds its own parts
+mkdir -p "$SANDBOX/cdp/scripts"
+OUT="$(cd "$PLUGIN" && export CDPATH="$SANDBOX/cdp" && . scripts/lib.sh && cd / && json_str '{"a":"b"}' a && echo && printf '%s\n' "$_LIB_DIR")"
+assert_eq "$OUT" "$(printf 'b\n%s' "$SCRIPTS")" "lib.sh sourced by a relative path with CDPATH set"
+# lib.sh copied alone: plugin-root needs no part and still answers; anything else names the missing part and fails
+mkdir -p "$SANDBOX/alone/scripts"; cp "$LIB" "$SANDBOX/alone/scripts/"
+assert_exit 1 bash "$SANDBOX/alone/scripts/lib.sh" plugin-root
+assert_eq "$OUT" "corecrew: not a plugin folder: $SANDBOX/alone" "plugin-root of a lib.sh copied alone"
+assert_exit 1 bash "$SANDBOX/alone/scripts/lib.sh" schema
+echo "$OUT" | grep -qF "lib-paths.sh is missing or broken" && pass || fail "no missing-part line: $OUT"
+# shellcheck disable=SC1091
+( . "$SANDBOX/alone/scripts/lib.sh" ) 2>/dev/null && fail "sourcing a lib.sh without its parts succeeded" || pass
+# codex_home: an absolute CODEX_HOME (no trailing slash), else HOME/.codex; nothing for a relative one
+ch() { ( . "$LIB"; codex_home ); }
+assert_eq "$(CODEX_HOME=/x/cx/ ch)" "/x/cx" "codex_home from CODEX_HOME"
+assert_eq "$(CODEX_HOME= HOME=/h ch)" "/h/.codex" "codex_home from HOME"
+assert_eq "$(CODEX_HOME=rel HOME=/h ch)" "" "codex_home: a relative CODEX_HOME is none"
+assert_eq "$(CODEX_HOME= HOME=rel ch)" "" "codex_home: a relative HOME is none"
+
 # case clash: only on a case-sensitive disk
-if mkdir "$P/foo" 2>/dev/null && [ -d "$P/Foo/src" ] && [ "$(ls "$P" | grep -ci '^foo$')" -eq 2 ]; then
+new_sandbox; P="$SANDBOX/Projects"; mkdir -p "$P/Foo/src"
+if mkdir "$P/foo" 2>/dev/null && [ "$(ls "$P" | grep -ci '^foo$')" -eq 2 ]; then
   assert_exit 3 bash "$LIB" code-dir foo
   echo "$OUT" | grep -q "two folders differ only in case" && pass || fail "no case-clash line: $OUT"
 else
-  echo "  note: case-insensitive disk, case-clash check skipped"
+  skip "case clash" "case-insensitive disk"
 fi
 finish

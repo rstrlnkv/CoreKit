@@ -36,6 +36,39 @@ for f in git-hooks/blocked-patterns git-hooks/pre-push-core _locate.sh lib.sh in
 done
 assert_exit 0 bash "$SYNC" "$PLUGIN" "$T"
 assert_eq "$OUT" "tools current $V" "intact copy is current again"
+# lib.sh sources its parts: the copy holds every one (save, undo-step and install-hooks source the copied lib.sh), a missing
+# part is healed, and the copied lib.sh runs on its own
+PARTS="$(grep -oE '\$_LIB_DIR/[A-Za-z_][A-Za-z0-9._-]*' "$SCRIPTS/lib.sh" | sed 's|^\$_LIB_DIR/||' | LC_ALL=C sort -u)"
+[ -n "$PARTS" ] && pass || fail "lib.sh names no parts"
+for f in $PARTS; do
+  assert_file "$T/$f"
+  rm -f "$T/$f"
+  assert_exit 0 bash "$SYNC" "$PLUGIN" "$T"
+  assert_eq "$OUT" "tools updated $V" "sync after deleting $f"
+  assert_file "$T/$f"
+done
+assert_eq "$(bash "$T/lib.sh" schema)" "$(bash "$SCRIPTS/lib.sh" schema)" "the copied lib.sh runs"
+# shellcheck disable=SC1091
+assert_eq "$( ( . "$T/lib.sh"; json_str '{"k":"v"}' k ) )" "v" "the copied lib.sh reads JSON"
+# The copy knows its data folder (.data-dir, written at sync time): a tools copy run by hand, with no CLAUDE_PLUGIN_DATA
+# or COREDEV_TOOLS, finds itself whatever the marketplace is called. The plugin's own lib.sh keeps the host default.
+assert_eq "$(cat "$T/.data-dir" 2>/dev/null)" "$SANDBOX/data" ".data-dir names the data folder"
+# shellcheck disable=SC2016
+OUT="$(env -u COREDEV_TOOLS -u CLAUDE_PLUGIN_DATA bash -c '. "$1/lib.sh"; tools_dir' _ "$T")"
+assert_eq "$OUT" "$T" "tools_dir of a tools copy run by hand"
+# shellcheck disable=SC2016
+OUT="$(env -u COREDEV_TOOLS -u CLAUDE_PLUGIN_DATA COREKIT_HOST=claude bash -c '. "$1/lib.sh"; tools_dir' _ "$SCRIPTS")"
+assert_eq "$OUT" "$HOME/.claude/plugins/data/corecrew-corekit/tools" "tools_dir of the plugin run by hand"
+# a copy from an older sync (no .data-dir) is refreshed; a wrong one too
+rm -f "$T/.data-dir"
+assert_exit 0 bash "$SYNC" "$PLUGIN" "$T"
+assert_eq "$OUT" "tools updated $V" "copy without .data-dir: updated"
+assert_eq "$(cat "$T/.data-dir" 2>/dev/null)" "$SANDBOX/data" ".data-dir written again"
+echo /elsewhere > "$T/.data-dir"
+assert_exit 0 bash "$SYNC" "$PLUGIN" "$T"
+assert_eq "$OUT" "tools updated $V" "copy with a wrong .data-dir: updated"
+assert_exit 0 bash "$SYNC" "$PLUGIN" "$T"
+assert_eq "$OUT" "tools current $V" "current after .data-dir is right"
 echo marker > "$T/marker"
 
 # a different VERSION triggers an update that replaces the folder
@@ -49,6 +82,8 @@ assert_no_file "$T/marker"
 T2="$SANDBOX/my data/tools dir"
 assert_exit 0 bash "$SYNC" "$PLUGIN" "$T2"
 assert_file "$T2/save"; assert_file "$T2/git-hooks/blocked-patterns"
+# a tools folder not named tools has no .data-dir (its parent's tools/ would be another folder)
+assert_no_file "$T2/.data-dir"
 
 # the synced save runs standalone (reads _locate.sh next to itself)
 (cd "$SANDBOX" && bash "$T2/save" 2>&1 | grep -q 'Usage') && pass || fail "synced save does not run"
