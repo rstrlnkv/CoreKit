@@ -150,6 +150,11 @@ msg() {
   _msg_text "$lang" "$key"
   [ -n "$MSG_T" ] || _msg_text en "$key"
   tpl="$MSG_T"
+  # The texts name skills as Claude Code calls them (/corecrew:<skill>); Codex calls them $corecrew:<skill>
+  # (lib.sh host). Only the text changes, before the arguments go in.
+  case "$tpl" in
+    */corecrew:*) if type host >/dev/null 2>&1 && [ "$(host)" = codex ]; then tpl="$(printf '%s' "$tpl" | sed 's|/corecrew:|$corecrew:|g')"; fi ;;
+  esac
   while :; do
     case "$tpl" in *@*) ;; *) break ;; esac
     out="$out${tpl%%@*}"; tpl="${tpl#*@}"

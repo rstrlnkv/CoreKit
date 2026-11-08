@@ -45,6 +45,59 @@ rm_bad claude "" engineer
 rm_bad claude balanced ""
 rm_bad Claude balanced engineer
 
+# --- role-model: the user's own Codex models from the settings file (Claude Code keeps its table)
+SF="$(bash "$LIB" setting-path)"; mkdir -p "$(dirname "$SF")"
+rmo() { bash "$LIB" role-model "$@" 2>"$SANDBOX/err"; }
+printf 'codex_model: my-model-1 high\n' > "$SF"
+for role in engineer tester security verifier localizer designer architect explorer; do
+  for p in economy balanced strong; do assert_eq "$(rmo codex "$p" "$role")" "my-model-1 high" "codex_model applies to codex $p $role"; done
+done
+assert_eq "$(rmo claude balanced engineer)" "sonnet" "codex_model leaves claude alone"
+printf 'codex_model: my-model-1 high\ncodex_model_tester: other.model-2\ncodex_model_verifier: inherit\n' > "$SF"
+assert_eq "$(rmo codex balanced tester)" "other.model-2" "a role key beats codex_model; a model alone has no effort"
+assert_eq "$(rmo codex balanced verifier)" "" "inherit: an empty line (spawn without model and effort)"
+assert_eq "$(rmo codex balanced verifier | wc -l | tr -d ' ')" "1" "inherit still prints one line"
+assert_eq "$(rmo codex balanced engineer)" "my-model-1 high" "other roles keep codex_model"
+printf 'codex_model_engineer:   spaced-model    low  \n' > "$SF"
+assert_eq "$(rmo codex balanced engineer)" "spaced-model low" "blanks are trimmed and collapsed"
+for bad in 'two words more' 'bad;model' '$(touch x)' 'model HIGH' '-flag low'; do
+  printf 'codex_model_engineer: %s\n' "$bad" > "$SF"
+  out="$(rmo codex balanced engineer)"; rc=$?
+  assert_eq "$rc:$out" "0:gpt-6.1-sol medium" "an invalid value ($bad) falls back to the table"
+  grep -q 'codex_model_engineer' "$SANDBOX/err" && pass || fail "an invalid value ($bad) is named on stderr"
+done
+printf 'codex_model: bad;x\ncodex_model_engineer: also bad;x\n' > "$SF"
+assert_eq "$(rmo codex strong security)" "gpt-6-astra high" "an invalid codex_model falls back to the table"
+rm -f "$SF"
+# the built-in Codex table names models (and efforts) the bundled catalog of the installed codex knows
+if command -v codex >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+  mkdir -p "$CODEX_HOME"
+  if codex debug models --bundled > "$SANDBOX/models.json" 2>/dev/null; then
+    for p in economy balanced strong; do for role in engineer security; do
+      bash "$LIB" role-model codex "$p" "$role"
+    done; done | sort -u > "$SANDBOX/table.txt"
+    miss="$(python3 -c '
+import json, sys
+cat = json.load(open(sys.argv[1]))
+models = cat.get("models", cat) if isinstance(cat, dict) else cat
+known = {}
+for m in models:
+    levels = m.get("supported_reasoning_levels") or []
+    known[m.get("slug")] = {l.get("effort") for l in levels if isinstance(l, dict)}
+for line in open(sys.argv[2]):
+    w = line.split()
+    if not w: continue
+    if w[0] not in known: print(w[0])
+    elif len(w) > 1 and known[w[0]] and w[1] not in known[w[0]]: print(" ".join(w))
+' "$SANDBOX/models.json" "$SANDBOX/table.txt" 2>&1)"
+    assert_eq "$miss" "" "every model and effort of the role-model codex table is in the bundled catalog"
+  else
+    echo "  note: codex debug models --bundled failed; the table is not compared"
+  fi
+else
+  echo "  note: codex or python3 missing; the role-model table is not compared with the catalog"
+fi
+
 # --- core-writable
 D="$SANDBOX/cw dir"; mkdir -p "$D"; : > "$D/keep.txt"
 before="$(ls -A "$D")"
@@ -120,13 +173,27 @@ bash "$LIB" tree-state "$R/.git" >/dev/null 2>&1; assert_eq "$?" "1" "tree-state
 # --- docs
 CX="$TASK/references/codex.md"
 assert_file "$CX"
-for w in spawn_agent fork_turns wait_agent followup_task role-model core-writable tree-state -- --add-dir '<plugin>/agents/<role>.md'; do
-  [ "$w" = "--" ] && continue
+for w in spawn_agent role-model tree-state '<plugin>/agents/<role>.md' '<plugin>/reference/codex-host.md'; do
   assert_contains "$CX" "$w"
 done
-assert_file "$TASK/references/codex-roles.md"
-assert_contains "$TASK/references/codex-roles.md" "## Architect"
-assert_contains "$TASK/references/codex-roles.md" "## Explorer"
+# the shared Codex reference: both multi-agent tool sets (v1 is Codex 0.166's default, v2 is opt-in), a clear stop
+# without spawn_agent, the --add-dir restart and the approval to leave the sandbox
+CH="$PLUGIN/reference/codex-host.md"
+sec() { awk -v n="$2" '$0 == "## " n {f=1; next} /^## /{f=0} f' "$1"; }
+sa="$(sec "$CH" Subagents)"
+for w in spawn_agent wait_agent 'fork_context: false' send_input close_agent task_name 'fork_turns: "none"' followup_task 'multi_agent'; do
+  case "$sa" in *"$w"*) pass ;; *) fail "codex-host.md Subagents lacks: $w" ;; esac
+done
+case "$sa" in *'No `spawn_agent`'*stop*) pass ;; *) fail "codex-host.md Subagents: no stop when spawn_agent is missing" ;; esac
+case "$(sec "$CH" 'Writable folders')" in *core-writable*'--add-dir'*) pass ;; *) fail "codex-host.md Writable folders: core-writable and --add-dir" ;; esac
+case "$(sec "$CH" 'Approval outside the sandbox')" in *save*gh*'git push'*) pass ;; *) fail "codex-host.md Approval: save, gh, git push" ;; esac
+case "$(sec "$CH" Questions)" in *AskUserQuestion*) pass ;; *) fail "codex-host.md Questions names what it replaces" ;; esac
+assert_not_contains "$CH" '--full-auto'
+# the crew chain sends both tool forms through the shared reference: no v2-only parameter in codex.md
+for w in fork_turns followup_task task_name; do assert_not_contains "$CX" "$w"; done
+assert_file "$TASK/references/architect-explorer.md"
+assert_contains "$TASK/references/architect-explorer.md" "## Architect"
+assert_contains "$TASK/references/architect-explorer.md" "## Explorer"
 assert_contains "$TASK/SKILL.md" "references/codex.md"
 # the SKILL.md Claude table agrees with role-model
 for row in "engineer, tester|engineer" "security, verifier, localizer, designer|security"; do
@@ -151,4 +218,17 @@ assert_eq "$(CODEX_HOME="$SANDBOX/cxh" bash "$LIB" host)" "claude" "host: defaul
 mkdir -p "$SANDBOX/cxh/plugins/cache/corekit/corecrew"; cp -R "$PLUGIN" "$SANDBOX/cxh/plugins/cache/corekit/corecrew/9.9.9"
 assert_eq "$(CODEX_HOME="$SANDBOX/cxh" bash "$SANDBOX/cxh/plugins/cache/corekit/corecrew/9.9.9/scripts/lib.sh" host)" "codex" "host: plugin under CODEX_HOME is codex"
 assert_eq "$(COREKIT_HOST=codex bash "$LIB" host | wc -l | tr -d ' ')" "1" "host prints one line"
+# --- hook messages name skills the way the host calls them: /corecrew:x in Claude Code, $corecrew:x in Codex
+hm() { ( . "$SCRIPTS/lib.sh"; . "$HOOKS/messages.sh"; msg "$@" ); }
+for k in hint_not_found hint_not_set_up; do
+  out="$(COREKIT_HOST=codex hm "$k" /c)"
+  case "$out" in *'$corecrew:new-project'*'$corecrew:task adopt'*) pass ;; *) fail "codex $k: $out" ;; esac
+  case "$out" in */corecrew:*) fail "codex $k still names /corecrew: $out" ;; *) pass ;; esac
+  out="$(COREKIT_HOST=claude hm "$k" /c)"
+  case "$out" in *'/corecrew:new-project'*) pass ;; *) fail "claude $k: $out" ;; esac
+done
+out="$(COREKIT_HOST=codex UI_LANGUAGE=ru hm old_layout /a /b /c)"
+case "$out" in *'$corecrew:task adopt /b'*) pass ;; *) fail "codex ru old_layout: $out" ;; esac
+out="$(COREKIT_HOST=codex hm guard_code_blocked '/x/corecrew:y' /z)"
+case "$out" in *'/x/corecrew:y'*) pass ;; *) fail "an argument is printed as given: $out" ;; esac
 finish

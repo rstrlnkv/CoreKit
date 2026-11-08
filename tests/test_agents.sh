@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The six corecrew agents (spec section 13): frontmatter, sections, tools, reply format, wording.
+# The six corecrew agents: frontmatter, sections, tools, reply format, wording.
 source "$(dirname "$0")/lib.sh"
 AG="$PLUGIN/agents"
 ROLES="engineer tester security verifier localizer designer"
@@ -72,8 +72,8 @@ for r in $ROLES; do
   sec_has "$f" "How you work" 'retried, never polled'
   sec_has "$f" "How you work" 'by range'
   sec_has "$f" "How you work" 'one Bash call'
-  sec_has "$f" "How you work" "user's language"
-  sec_has "$f" "How you work" 'keep the reply labels in English'
+  sec_has "$f" "How you work" 'Reply in English'
+  sec_has "$f" "How you work" 'reply labels as given'
   sec_has "$f" "How you work" 'write files in English'
   sec_has "$f" "How you work" 'By about turn 50'
   sec_has "$f" "How you work" 'what is done and what is left'

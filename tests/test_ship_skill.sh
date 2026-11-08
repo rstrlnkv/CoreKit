@@ -12,8 +12,8 @@ assert_contains "$SK" 'disable-model-invocation: true'
 assert_contains "$SK" '<plugin>/skills/task/references/release.md'
 assert_contains "$SK" 'still reads literally `${user_config.`'
 
-# The global git config is the same before and after the tests.
-assert_contains "$SK" 'git config --global --list'
+# The global git config check was a lesson from CoreKit's own tests; it does not ship to every project.
+assert_not_contains "$SK" 'git config --global'
 
 # Version: patch unless the user named another part or a version.
 assert_contains "$SK" 'patch'
@@ -29,6 +29,28 @@ assert_not_contains "$SK" 'push -f'
 assert_contains "$SK" 'Merged:'
 assert_contains "$SK" 'Version:'
 assert_contains "$SK" 'Open:'
+
+# The branch to ship into is resolved, never assumed: no command names `main` itself.
+section() { awk -v n="$2" '$0 == "## " n {f=1; next} /^## /{f=0} f' "$1"; }
+st="$(section "$SK" Start)"
+case "$st" in *'git symbolic-ref --short refs/remotes/origin/HEAD'*'init.defaultBranch'*'ask the user'*) pass ;; *) fail "Start resolves <main>: origin/HEAD, then init.defaultBranch, else ask" ;; esac
+hard="$(grep -nE '(^|[ `"])main\.\.|\.\.\.?main\b|origin main\b|merge main\b|refs/heads/main\b|:main\b|ff-only main\b|On `main`' "$SK")"
+assert_eq "$hard" "" "no command or step hard-codes the branch main"
+grep -q '^description:.*into main' "$SK" && fail "the description still promises main" || pass
+# Tag and GitHub release: after the push, on the user's own yes, never moved or forced.
+steps="$(section "$SK" Steps)"
+np="$(printf '%s\n' "$steps" | grep -n 'git push origin <main>' | head -1 | cut -d: -f1)"
+nt="$(printf '%s\n' "$steps" | grep -n 'git tag -a' | head -1 | cut -d: -f1)"
+nr="$(printf '%s\n' "$steps" | grep -n 'gh release create' | head -1 | cut -d: -f1)"
+[ -n "$np" ] && [ -n "$nt" ] && [ -n "$nr" ] && [ "$np" -lt "$nt" ] && [ "$nt" -lt "$nr" ] && pass || fail "push, then git tag -a, then gh release create (lines $np $nt $nr)"
+printf '%s\n' "$steps" | grep -F 'gh release create' | grep -qF -- '--verify-tag' && pass || fail "gh release create uses --verify-tag (the tag pushed before)"
+tg="$(printf '%s\n' "$steps" | awk '/\*\*Tag and release\.\*\*/{f=1} f')"
+case "$tg" in *'yes'*) pass ;; *) fail "the tag step waits for the user's yes" ;; esac
+case "$st$steps" in *'refs/tags/'*) pass ;; *) fail "an existing tag is found before anything changes (refs/tags/)" ;; esac
+for w in 'git tag -f' 'tag -d' 'push --delete' '--force'; do assert_not_contains "$SK" "$w"; done
+for l in 'Merged:' 'Pushed:' 'Version:' 'Tag:' 'Release:' 'Open:'; do
+  printf '%s\n' "$steps" | grep -qF -- "$l" && pass || fail "the report has $l"
+done
 
 # The README lists the command.
 assert_contains "$ROOT/README.md" '/corecrew:ship'

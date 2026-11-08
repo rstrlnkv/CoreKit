@@ -14,22 +14,26 @@ assert_eq "$(grep -c '^default_permissions = "corecrew"$' "$FRAG")" "1" "one def
 assert_eq "$(grep -n '^default_permissions' "$FRAG" | cut -d: -f1)" "$(grep -n -m1 -v '^#' "$FRAG" | cut -d: -f1)" "default_permissions comes before any table"
 grep -qi 'every Codex session' "$FRAG" && pass || fail "comment says it applies to every session"
 # honest scope: the comment names what the profile does not do, and does not promise a hard boundary
-for w in '--sandbox' '--full-auto' 'sandbox_mode' '.codex/config.toml' 'git history' 'hard link' '/tmp' 'nvironment variables' 'CODEX_HOME' 'very top'; do
+for w in '--sandbox' '--dangerously-bypass-approvals-and-sandbox' 'sandbox_mode' '.codex/config.toml' 'git history' 'hard link' '/tmp' 'nvironment variables' 'CODEX_HOME' 'very top'; do
   grep -qF -- "$w" "$FRAG" && pass || fail "comment names: $w"
 done
 grep -qiE 'real boundary|drop that line' "$FRAG" && fail "comment still promises a boundary or advises dropping the line" || pass
 # the broad name patterns are gone: they blocked tokenizer.py, secret_santa.py
 for g in '*[tT]oken*' '*TOKEN*' '*[sS]ecret*' '*SECRET*'; do grep -qF "\"**/$g\"" "$FRAG" && fail "broad pattern still denied: $g" || pass; done
-for g in '.env' '.env.*' '*.env' '*.pem' 'id_rsa*' 'id_ecdsa*' 'id_dsa*' '.npmrc' '.aws/**' '.kube/**' '.docker/config.json' '.htpasswd' '.pgpass' '*.token' '[tT]oken' '[sS]ecrets*' '*.secret' '*_[tT]oken' '*-[tT]oken' '*_[tT]oken.*' '.*[tT]oken' '.secrets*' '*client_secret*.json' '.dockercfg' '*-secret.*' '*_secret.*'; do assert_contains "$FRAG" "\"**/$g\" = \"none\""; done
+for g in '.env' '.env.*' '*.env' '*.pem' 'id_rsa*' 'id_ecdsa*' 'id_dsa*' '.npmrc' '.aws/**' '.kube/**' '.docker/config.json' '.htpasswd' '.pgpass' '*.token' '[tT]oken' '[sS]ecrets*' '*.secret' '*_[tT]oken' '*-[tT]oken' '*_[tT]oken.*' '.*[tT]oken' '.secrets*' '*client_secret*.json' '.dockercfg' '*-secret.*' '*_secret.*'; do assert_contains "$FRAG" "\"**/$g\" = \"deny\""; done
 assert_contains "$FRAG" '"." = "write"'
 assert_contains "$FRAG" '":minimal" = "read"'
-assert_eq "$(grep -v '^#' "$FRAG" | grep 'ssh' | grep -vxF '"**/.ssh/**" = "none"')" "" "~/.ssh stays closed by not being listed"
-# the deny patterns are the ones coreopinion's review profile blocks
-ask="$ROOT/plugins/coreopinion/skills/second-opinion/scripts/ask-gpt.sh"
+assert_eq "$(grep -v '^#' "$FRAG" | grep 'ssh' | grep -vxF '"**/.ssh/**" = "deny"')" "" "~/.ssh stays closed by not being listed"
+# Codex 0.166 documents ":workspace_roots" and "deny"; ":project_roots" and "none" are legacy aliases kept for now
+assert_contains "$FRAG" '[permissions.corecrew.filesystem.":workspace_roots"]'
+assert_eq "$(grep -v '^#' "$FRAG" | grep -cE ':project_roots|= "none"$')" "0" "no legacy alias (:project_roots, \"none\") outside comments"
+# the deny patterns are the ones coreopinion's review profile blocks (it builds them from secret-patterns.txt)
+pat="$ROOT/plugins/coreopinion/skills/second-opinion/scripts/secret-patterns.txt"
+assert_file "$pat"
 miss=""; set -f   # the patterns are globs: do not expand them
-for g in $(grep -o '"\*\*/[^"]*"="none"' "$ask" | sed 's/="none"//; s/^"\*\*\///; s/"$//' | tr ' ' '?'); do
+for g in $(sed -e 's/^[[:space:]]*//' -e 's/[[:space:]].*$//' -e '/^#/d' -e '/^$/d' "$pat"); do
   case "$g" in .env\*) continue ;; esac   # the review profile's .env* is spelled .env, .env.* here
-  grep -qF "\"**/$g\" = \"none\"" "$FRAG" || miss="$miss $g"
+  grep -qF "\"**/$g\" = \"deny\"" "$FRAG" || miss="$miss $g"
 done
 # the review profile still has the broad token and secret globs; this one narrows them on purpose (tokenizer.py, secret_santa.py)
 miss="$(printf '%s\n' $miss | grep -vxE '\*\[tT\]oken\*|\*TOKEN\*|\*\[sS\]ecret\*|\*SECRET\*' | tr '\n' ' ' | sed 's/ $//')"

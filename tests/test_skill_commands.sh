@@ -85,8 +85,8 @@ for sk in "$PLUGIN"/skills/*/SKILL.md; do
   assert_eq "$(grep -c '\${CLAUDE_SKILL_DIR}' "$sk")" "1" "$nm: \${CLAUDE_SKILL_DIR} appears once"
   paths="$(awk '/^## /{on = ($0 == "## Paths")} on' "$sk")"
   case "$paths" in *'${CLAUDE_SKILL_DIR}'*'lib.sh" plugin-root'*) pass ;; *) fail "$nm: ## Paths lacks CLAUDE_SKILL_DIR and plugin-root" ;; esac
-  # the location check (cache folder, no quote, $ or backtick) comes before the plugin-root command
-  case "$paths" in *'Check it'*'plugins/cache/'*'no `"`'*'run nothing'*'lib.sh" plugin-root'*) pass ;; *) fail "$nm: ## Paths must check <skill> before running plugin-root" ;; esac
+  # in Codex the folder is found and checked by the shared host reference, before plugin-root runs
+  case "$paths" in *'reference/codex-host.md'*'Skill folder'*'lib.sh" plugin-root'*) pass ;; *) fail "$nm: ## Paths must send Codex to codex-host.md (Skill folder) before plugin-root" ;; esac
   if grep -nE 'bash "[^<"]' "$sk" | grep -v '^[0-9]*:.*bash "\$' >/dev/null; then
     fail "$nm: a bash command not starting with a placeholder: $(grep -nE 'bash "[^<"]' "$sk" | head -2 | tr '\n' ' ')"
   else pass; fi
@@ -104,4 +104,48 @@ mkdir -p "$SANDBOX/x/scripts"; cp "$PLUGIN/scripts/lib.sh" "$SANDBOX/x/scripts/l
 err="$(bash "$SANDBOX/x/scripts/lib.sh" plugin-root 2>&1)"; rc=$?
 assert_eq "$rc" "1" "a folder that is not a plugin: exit 1"
 case "$err" in *"not a plugin folder"*) pass ;; *) fail "no 'not a plugin folder' message: $err" ;; esac
+# One Paths section, the same in every skill (kept short: the Codex rules live in reference/codex-host.md).
+first=""
+for sk in "$PLUGIN"/skills/*/SKILL.md; do
+  paths="$(awk '/^## /{on = ($0 == "## Paths")} on' "$sk")"
+  if [ -z "$first" ]; then first="$paths"; firstn="$(basename "$(dirname "$sk")")"; continue; fi
+  assert_eq "$paths" "$first" "## Paths of $(basename "$(dirname "$sk")") is the same as in $firstn"
+done
+w="$(printf '%s\n' "$first" | wc -w | tr -d ' ')"
+[ "$w" -le 130 ] && pass || fail "## Paths is $w words; keep it under 130 (details go to codex-host.md)"
+# the shared Codex reference: its sections, and the location check of the skill folder before anything runs
+CH="$PLUGIN/reference/codex-host.md"
+assert_file "$CH"
+secs="$(grep '^## ' "$CH" | tr '\n' '|')"
+assert_eq "$secs" "## Skill folder|## Settings and skill names|## Writable folders|## Approval outside the sandbox|## Questions|## Subagents|" "codex-host.md sections"
+sf="$(awk '/^## /{on = ($0 == "## Skill folder")} on' "$CH")"
+case "$sf" in *'plugins/cache/'*'no `..`'*'no `"`'*'run nothing'*) pass ;; *) fail "codex-host.md Skill folder lacks the location check" ;; esac
+grep -qF '${' "$CH" && fail "codex-host.md is read with Read, which substitutes nothing: no \${...} in it" || pass
+
+# Every file path a corecrew prompt names through a placeholder exists: <plugin>/..., <scripts>/..., the skill's own
+# <skill>/... and references/... (placeholders inside the rest of the path are skipped).
+chk_paths() { # <file> <skill dir or empty>
+  local f="$1" sd="$2" t rel base
+  LC_ALL=C grep -oE '<(plugin|scripts|skill)>/[A-Za-z0-9_./-]*[A-Za-z0-9_]|(^|[ `(])references/[A-Za-z0-9_.-]+\.md' "$f" | LC_ALL=C sed -E 's/^[ `(]//' | LC_ALL=C sort -u |
+  while IFS= read -r t; do
+    case "$t" in
+      '<plugin>/'*) base="$PLUGIN"; rel="${t#<plugin>/}" ;;
+      '<scripts>/'*) base="$PLUGIN/scripts"; rel="${t#<scripts>/}" ;;
+      '<skill>/'*) [ -n "$sd" ] || continue; base="$sd"; rel="${t#<skill>/}" ;;
+      references/*) [ -n "$sd" ] || continue; base="$sd"; rel="$t" ;;
+    esac
+    case "$rel" in ../../*) base="$PLUGIN"; rel="${rel#../../}" ;; esac
+    [ -e "$base/$rel" ] || echo "$(basename "$f") names $t, which does not exist"
+  done
+}
+miss=""
+for sk in "$PLUGIN"/skills/*/SKILL.md; do
+  d="$(dirname "$sk")"
+  for f in "$sk" "$d"/references/*.md; do [ -f "$f" ] && miss="$miss$(chk_paths "$f" "$d")"; done
+done
+for f in "$PLUGIN"/reference/*.md "$PLUGIN"/agents/*.md; do miss="$miss$(chk_paths "$f" "")"; done
+assert_eq "$miss" "" "every <plugin>/, <scripts>/, <skill>/ and references/ path in the prompts exists"
+T="$(mktemp -d)"; printf 'Read `<plugin>/reference/gone.md` and `references/paths.md`.\n' > "$T/x.md"
+assert_eq "$(chk_paths "$T/x.md" "$PLUGIN/skills/task")" "x.md names <plugin>/reference/gone.md, which does not exist" "the path check catches a made-up path"
+rm -rf "$T"
 finish

@@ -10,8 +10,8 @@ so the next chain does not ask.
 
 ## fix
 A defect in a known place.
-1. `feature-dev:code-architect` only if more than one module is affected (needs feature-dev;
-   see SKILL.md Start step 3). Otherwise skip.
+1. architect only if more than one module is affected (the agent SKILL.md Start,
+   **Architect and explorer** chose). Otherwise skip.
 2. tester: write a test that reproduces the defect and show it red (the failing output). Where
    no test can catch it (a screen, a recording), a screenshot or recording of the defect.
    A test that does not fail on the defect goes back.
@@ -26,11 +26,11 @@ A defect in a known place.
 A new capability or a behaviour change.
 1. Ask the user 3–5 clarifying questions, one at a time, in plain words. Then show a short plan
    in plain words (what will change for the user, in how many tasks and which modules). Wait
-   for "ok". Without feature-dev stop here and name the install command.
+   for "ok".
 2. If the plan has more than 5 tasks or touches more than 3 modules: run only its first task
    as the whole chain (steps 3–6: architect to release, committed), then stop with the diff,
    the risk and an estimate, and wait for the user's go.
-3. `feature-dev:code-architect`: the design for the plan.
+3. architect: the design for the plan.
 4. engineer, then tester (touched modules only).
 5. Checkers' wave (see the checkers' wave section). If it has findings, engineer repairs them
    in one pass and tester confirms, as that section says; none, go on.
@@ -38,7 +38,7 @@ A new capability or a behaviour change.
 
 ## question
 A question about the code or the project; no files change.
-- `feature-dev:code-explorer` for how something works across files (needs feature-dev), or one
+- explorer for how something works across files (SKILL.md Start, **Architect and explorer**), or one
   corecrew role when the question is in its field (tester: how it is tested; security: what
   an input can reach; and so on).
 - Proof is a `file:line` for every claim. An answer with no `file:line` goes back once.

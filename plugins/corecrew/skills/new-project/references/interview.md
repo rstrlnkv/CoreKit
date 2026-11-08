@@ -1,6 +1,7 @@
 # Interview
 
-Ask 2–3 questions per AskUserQuestion call, in the user's language, plain words. Offer options
+Ask 2–3 questions per AskUserQuestion call (in Codex, in one plain chat message; see
+`<plugin>/reference/codex-host.md`, section Questions), in the user's language, plain words. Offer options
 with a recommended default where possible; the user can always answer freely. Keep the answers
 in the conversation until step 2 creates `docs/brief.md`, then write them there **in English**.
 

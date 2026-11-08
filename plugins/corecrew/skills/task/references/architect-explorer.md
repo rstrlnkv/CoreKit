@@ -1,6 +1,7 @@
-# Architect and explorer roles for Codex
+# Architect and explorer roles
 
-Used in place of the `feature-dev` agents. Both are read-only: change no file, run no command that writes. Follow the brief you were
+Used when the feature-dev agents are not there: in Claude Code by the built-in `Plan` (architect) and `Explore`
+(explorer) agents, in Codex by a subagent (see codex.md). Both are read-only: change no file, run no command that writes. Follow the brief you were
 given. Reply with the corecrew report lines: `Done:`, `Files:`, `Proof:` (the `file:line` you relied on), `Open:`, `Standards:`,
 `Knowledge line: <symptom → cause → guard | none>`.
 

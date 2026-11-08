@@ -1,0 +1,4 @@
+# coreopinion works only in Claude Code. Codex installs it through the marketplace all the same; this keeps
+# Codex from offering the skill on its own (ask-gpt.sh also refuses to run inside a Codex session).
+policy:
+  allow_implicit_invocation: false

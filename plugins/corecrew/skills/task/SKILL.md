@@ -18,7 +18,8 @@ Detail lives in references, read when you reach that step:
 - `<skill>/references/report.md` — the final report
 - `<skill>/references/release.md` — the release postconditions (every chain that changed files)
 - `<skill>/references/adopt.md` — bringing an existing project into the Core layout
-- `<skill>/references/codex.md` — running the chain in Codex (agents, Core access, read-only checks); `codex-roles.md` holds architect and explorer there
+- `<skill>/references/codex.md` — running the chain in Codex (agents, Core access, read-only checks)
+- `<skill>/references/architect-explorer.md` — the architect and explorer roles when feature-dev is not installed, and in Codex
 
 Shared files: `<plugin>/reference/wiki.md` (wiki rules),
 `<plugin>/reference/knowledge.md` (knowledge format),
@@ -26,19 +27,14 @@ Shared files: `<plugin>/reference/wiki.md` (wiki rules),
 `<scripts>/save`.
 
 ## Paths
-This skill's folder is `${CLAUDE_SKILL_DIR}`. Claude Code replaces that text with the absolute
-path before you read it. Codex does not: there the text stays as written, and the folder is the
-directory of the SKILL.md path Codex gave for this skill (`(file: …/SKILL.md)` in the skills
-list, or the path of the skill block it loaded; a path that starts with a root alias such as
-`r1/` starts with the folder listed under "Skill roots"). Call that folder `<skill>`. Check it
-before you run anything: in Codex, `<skill>` must lie inside a
-`plugins/cache/<marketplace>/corecrew/<version>/skills/` folder, its text must have no `..` component, and it must contain no `"`,
-`$` or backtick; if it fails that, ask the user and run nothing. Then run this first, with
-`<skill>` filled in: `bash "<skill>/../../scripts/lib.sh" plugin-root`. It prints `<plugin>`, the
-absolute plugin folder; `<scripts>` is `<plugin>/scripts`. Write every later command and every
-Read path with these filled in as absolute paths. If the command fails, or you cannot give
-`<skill>` as an absolute path, stop, tell the user the corecrew folder was not found, and do not
-guess a path.
+This skill's folder is `${CLAUDE_SKILL_DIR}`; call it `<skill>`. Claude Code fills in that absolute
+path before you read it. Codex leaves the text as written: then read `reference/codex-host.md` in the
+plugin folder (two folders above the folder of the SKILL.md path Codex gave for this skill), find and
+check `<skill>` as its section Skill folder says, and follow that file for the rest of this skill.
+Then run `bash "<skill>/../../scripts/lib.sh" plugin-root`. It prints `<plugin>`, the absolute plugin
+folder; `<scripts>` is `<plugin>/scripts`. Write every later command and every Read path with these
+filled in as absolute paths. If the command fails, or you cannot give `<skill>` as an absolute path,
+stop, tell the user the corecrew folder was not found, and do not guess a path.
 
 ## Language
 Talk to the user in their language, in plain words. Everything on disk (code, docs, commit
@@ -54,7 +50,7 @@ resolve each setting (option, then file, then default `core_dir` `~/Projects/Cor
 `allow`, `model_profile` `balanced`) with the commands in Start.
 
 Model per role, from `model_profile`; pass it as the `model` of every corecrew Agent call.
-Do not pass `model` to feature-dev agents; they use their own default.
+Do not pass `model` to the architect and explorer agents; they use their own default.
 
 | Role | economy | balanced | strong |
 |---|---|---|---|
@@ -107,12 +103,15 @@ attribution value resolved at Start" instead of placeholders:
    - exit 3: two folders in `<Projects>` differ only in letter case. Show the
      `two folders differ only in case: …` line it printed, say one of them has to be renamed, and
      stop.
-3. **feature-dev.** In Codex skip this step (see `references/codex.md`). Look at the agent types listed for your Agent tool. If
-   `feature-dev:code-architect` or `feature-dev:code-explorer` is missing, name the install
-   command `/plugin install feature-dev@claude-plugins-official`. Paths that need them stop
-   until it is installed: `full`, `fix` when more than one module is affected, and `question`
-   via code-explorer. Other paths go on.
-4. **Read** `<Core>/<project>/CLAUDE.md` and its `check: <command>` line. A line that still reads
+3. **Architect and explorer.** In Codex see `references/codex.md`. The architect and explorer
+   steps of paths.md use the optional feature-dev plugin when your Agent tool lists
+   `feature-dev:code-architect` and `feature-dev:code-explorer`. Without it, use Claude Code's
+   built-in read-only agents instead: `Plan` as the architect and `Explore` as the explorer, each
+   with the message "Read <skill>/references/architect-explorer.md, section Architect (or
+   Explorer), and act as it." before the brief. Say once that
+   `/plugin install feature-dev@claude-plugins-official` adds the deeper feature-dev agents; no
+   path stops for it. If neither kind is listed, a step that needs one stops and says why.
+4. **Read.** Read `<Core>/<project>/CLAUDE.md` and its `check: <command>` line. A line that still reads
    `check: <set after scaffolding>`, or no line at all, means unset. Do not ask yet: ask the user
    once for the command, before the first tester call that needs it (on `release`, before
    postcondition 1; every path except `question`), and write the confirmed command into the `check:` line of that `CLAUDE.md`
@@ -129,25 +128,23 @@ attribution value resolved at Start" instead of placeholders:
    skips it (adopt.md has its own checks).
 6. **Wiki.** Every path except `adopt` (adopt converts the wiki itself), before any crew is
    briefed: run `bash "<scripts>/wiki-index.sh" "<Core>/<project>" --check`. When it prints
-   `wiki-index: no page has a type; run wiki-migrate.sh first`, the wiki is still in the 0.6 format:
-   run `bash "<scripts>/wiki-migrate.sh" "<Core>/<project>" --dry-run`, show its output to the user
-   and ask for an "ok". On "ok" run it again without `--dry-run` and commit it as its own step from
-   the code root: `bash "<scripts>/save" "wiki: migrate to the 0.7 format"` (with
-   attribution=forbid add `--no-attribution`). This needs the clean tree of step 5 (on `question`
-   check it now). Without that "ok", stop the chain. Then, in any case, run
+   `wiki-index: no page has a type; run wiki-migrate.sh first`, the wiki is in an older format:
+   follow `<plugin>/reference/older-formats.md`, section Wiki without types (the user's "ok", the
+   migration and its own commit). Without that "ok", stop the chain. Then, in any case, run
    `bash "<scripts>/wiki-check.sh" "<Core>/<project>"` once and note its lines as the **baseline**,
    like the base commits: the wiki problems that were there before this chain. The verifier brief
    and release postcondition 3 use it.
 7. **Base commits.** Record `git rev-parse HEAD` in the code root and in `<Core>`: these are the
    chain's base commits; release attribution ranges and `--changed` start from them.
-8. **Choose the path** (`fix`, `full`, `question`, `batch`, `release`, `adopt`; see
-   `references/paths.md`) and name it in the first line you say to the user.
+8. **Choose the path.** One of `fix`, `full`, `question`, `batch`, `release`, `adopt`; see
+   `references/paths.md`. Name it in the first line you say to the user.
 
 ## Running the chain
 Briefs follow `references/brief.md`. In Codex there is no Agent tool: see `references/codex.md`. A corecrew agent's `subagent_type` is `corecrew:<role>`:
 `corecrew:engineer`, `corecrew:tester`, `corecrew:security`, `corecrew:verifier`,
-`corecrew:localizer`, `corecrew:designer`. A feature-dev agent's `subagent_type` is its full name,
-`feature-dev:code-architect` or `feature-dev:code-explorer`.
+`corecrew:localizer`, `corecrew:designer`. The architect's and explorer's `subagent_type` is the
+full name of the agent chosen in Start, **Architect and explorer** (`feature-dev:code-architect`,
+`feature-dev:code-explorer`, `Plan` or `Explore`).
 
 ## Rules
 1. One author of changes: engineer. A checker's finding goes back to engineer.
@@ -162,8 +159,8 @@ Briefs follow `references/brief.md`. In Codex there is no Agent tool: see `refer
 5. Dispatch in the foreground, always: pass `run_in_background: false` on every Agent call. A
    wave is several Agent calls in one message. In Codex see `references/codex.md`.
 6. Every Agent call passes `subagent_type`: `corecrew:<role>` for corecrew roles, the full name for
-   feature-dev agents. CoreCrew calls also pass `model` from the table above.
-   Do not pass `model` to feature-dev agents. In Codex see `references/codex.md`.
+   the architect and explorer agents. corecrew calls also pass `model` from the table above.
+   Do not pass `model` to the architect and explorer agents. In Codex see `references/codex.md`.
 7. Only the touched modules' tests per pass; the full `check:` once, at the end, as its own
    tester call.
 8. Never retell `CLAUDE.md` in a brief; give paths.

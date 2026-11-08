@@ -11,7 +11,7 @@ A Claude Code plugin (Claude Code only: it is not supported in Codex) that asks 
 /plugin install coreopinion@corekit
 ```
 
-It is in the `corekit` marketplace and does not depend on `corecrew` or `coremodel`. Codex: not supported. The plugin calls the Codex CLI from Claude Code; it has no Codex manifest, and `codex plugin add coreopinion@corekit` would install it, but its skill is not meant to run inside Codex.
+It is in the `corekit` marketplace and does not depend on `corecrew` or `coremodel`. Codex: not supported. The plugin calls the Codex CLI from Claude Code; it has no Codex manifest. `codex plugin add coreopinion@corekit` still installs it, but Codex does not offer its skill on its own, and its run script refuses to run inside a Codex session (nothing is sent).
 
 Update:
 `claude plugin marketplace update corekit`, `claude plugin update coreopinion@corekit`, then restart Claude Code.
@@ -90,13 +90,22 @@ Claude says what failed and never pretends a review happened:
 - **OS:** macOS or Linux, wherever the Codex CLI runs; the run script is portable bash.
 - **Claude Code** 2.1.271 or newer (`claude --version`), as for corecrew: the skill's commands use
   `${CLAUDE_SKILL_DIR}`.
-- **The Codex CLI** (`codex --version`), installed with `npm install -g @openai/codex` or
-  `brew install codex`.
+- **The Codex CLI** (`codex --version`): `npm install -g @openai/codex` on any system, or the other
+  ways on https://developers.openai.com/codex/cli (on macOS also `brew install codex`).
 - **A ChatGPT plan** (Plus or higher): run `codex login` once in a normal terminal;
   `codex login status` shows it. **Each review counts against that plan's Codex usage.**
 - **Network:** OpenAI, through the Codex CLI only, with the files you confirmed. The plugin makes no other network call.
 - **Permissions:** Codex runs with a narrow read-only profile (see "What is sent" above). If you turned on Claude Code's Bash sandbox, the skill's run script has to be allowed outside it (see "If it fails").
 - **Changes outside its own folder:** none that stay. The run script creates a temp folder with the prompt and removes it however the run ends. Your `~/.codex/config.toml` is not read and not changed.
+
+## Uninstall
+
+```bash
+claude plugin uninstall coreopinion@corekit
+```
+Nothing stays behind: the run script removes its temp folder after each run. If you added the
+`sandbox.excludedCommands` entry for `ask-gpt.sh` to your Claude Code settings, remove it too. If
+Codex installed it through the marketplace, `codex plugin remove coreopinion@corekit` removes it there.
 
 ## Build from source
 

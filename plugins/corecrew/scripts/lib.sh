@@ -1077,7 +1077,8 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
         '# secret files named below inside the project. ~/.ssh and the rest of the home folder are not listed, so they stay closed.' \
         '# Codex keeps .git read-only, so commits ask for approval.' \
         '# What it is NOT: a default, not a hard boundary.' \
-        '#  - It is switched off by --sandbox, --full-auto or -c sandbox_mode=... on the command line, and by the' \
+        '#  - It is switched off by --sandbox, --dangerously-bypass-approvals-and-sandbox or -c sandbox_mode=... on the command' \
+        '#    line, by sandbox_mode in any config layer (a profile, the system config), and by the' \
         '#    .codex/config.toml of a trusted project (a cloned repository can bring one).' \
         '#  - It protects files in the working tree, not git history (git show HEAD:.env, git log -p), and not a hard link' \
         '#    made outside the sandbox.' \
@@ -1085,15 +1086,15 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
         '# Names are matched by pattern. Still over-blocked: source files named credentials*, secrets* or secret.*' \
         '# (credentials_form.ts, secrets_helper.py). Still open: .envrc (project config), other names not listed.' \
         'default_permissions = "corecrew"' '' '[permissions.corecrew.filesystem]' \
-        '":minimal" = "read"' '":tmpdir" = "write"' '' '[permissions.corecrew.filesystem.":project_roots"]' '"." = "write"'
+        '":minimal" = "read"' '":tmpdir" = "write"' '' '[permissions.corecrew.filesystem.":workspace_roots"]' '"." = "write"'
       for g in '.env' '.env.*' '*.env' '*.env.*' '*.pem' '*.key' '*.p12' '*.pfx' 'id_rsa*' 'id_ed25519*' 'id_ecdsa*' 'id_dsa*' \
         '*[cC]redentials*' '*CREDENTIALS*' '.npmrc' '.netrc' '.pypirc' '.git-credentials' '.htpasswd' '.pgpass' '*.tfvars' '*.tfstate*' \
-        '*.jks' '*.keystore' '*.p8' '[sS]ecrets*' 'SECRETS*' '[sS]ecret.*' '*.secret' '*.secrets' \
+        '*.jks' '*.keystore' '*.p8' '*.ppk' '*.keytab' '.s3cfg' '.gnupg/**' '[sS]ecrets*' 'SECRETS*' '[sS]ecret.*' '*.secret' '*.secrets' \
         '[tT]oken' '[tT]oken.txt' '[tT]oken.json' '*.token' '*_[tT]oken.json' '*-[tT]oken.json' \
         '*_[tT]oken' '*-[tT]oken' '*_[tT]oken.*' '.*[tT]oken' '.secrets*' '*client_secret*.json' '.dockercfg' '*-secret.*' '*_secret.*' \
         '*[kK]ube[cC]onfig*' '*KUBECONFIG*' '*.kdbx' '.aws/**' '.kube/**' '.ssh/**' '.docker/config.json' \
         '*[sS]ervice?[aA]ccount*.json' '*[sS]ervice[aA]ccount*.json' '*SERVICE?ACCOUNT*.json'; do
-        printf '"**/%s" = "none"\n' "$g"
+        printf '"**/%s" = "deny"\n' "$g"
       done ;;
     host) host; echo ;;
     role-model)
@@ -1108,11 +1109,26 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
         *) echo "Usage: lib.sh role-model <claude|codex> <economy|balanced|strong> <role>" >&2; exit 2 ;;
       esac
       case "$4" in
-        engineer|tester) printf '%s\n' "$rm_e" ;;
-        security|verifier|localizer|designer) printf '%s\n' "$rm_c" ;;
-        architect|explorer) if [ "$2" = claude ]; then echo; else printf '%s\n' "$rm_c"; fi ;;
+        engineer|tester) rm_out="$rm_e" ;;
+        security|verifier|localizer|designer) rm_out="$rm_c" ;;
+        architect|explorer) if [ "$2" = claude ]; then rm_out=""; else rm_out="$rm_c"; fi ;;
         *) echo "Usage: lib.sh role-model <claude|codex> <economy|balanced|strong> <role>" >&2; exit 2 ;;
-      esac ;;
+      esac
+      # Codex: the user's own models win over the table (the table can name a model their plan lacks). Settings file
+      # keys codex_model_<role>, then codex_model: "<model>", "<model> <effort>" or "inherit" (an empty line: spawn
+      # without model and effort, so Codex's own default applies). An invalid value is named and skipped.
+      if [ "$2" = codex ]; then
+        _sf_load
+        for rm_k in "codex_model_$4" codex_model; do
+          rm_v="$(_sf_get "$rm_k" | tr -s '[:space:]' ' ')"; rm_v="${rm_v% }"
+          [ -n "$rm_v" ] || continue
+          if [ "$rm_v" = inherit ]; then rm_out=""; break; fi
+          if printf '%s\n' "$rm_v" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._:/-]*( [a-z]+)?$'; then rm_out="$rm_v"; break; fi
+          printf 'corecrew: %s "%s" in %s is not valid: use <model>, <model> <effort> or inherit. Skipped.\n' \
+            "$rm_k" "$rm_v" "$(settings_file_path)" >&2
+        done
+      fi
+      printf '%s\n' "$rm_out" ;;
     core-writable)
       # Exit 0 when <dir> accepts a new file (a mktemp probe, removed at once; only the probe is removed).
       [ $# -eq 2 ] && case "$2" in /*) true ;; *) false ;; esac || { echo "Usage: lib.sh core-writable <absolute dir>" >&2; exit 2; }
