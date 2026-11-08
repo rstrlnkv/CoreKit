@@ -5,7 +5,8 @@ import { type ModelKey, toModel } from './models'
 
 export type Pick = { level: Level | 'keep'; model: ModelKey | ''; why: string }
 
-const LEVELS: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
+/** Weakest to strongest. */
+export const LEVELS: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
 /** Reads a level in any spelling the model may use ("Extra high", "x-high"); '' for anything else. */
 export function toLevel(v: unknown): Level | '' {

@@ -1,5 +1,7 @@
 // The models CoreModel picks from, their prices, and the cost of a model switch mid-chat.
-// No calls on `$` here. Prices: Anthropic API, $ per million input tokens (spec §3).
+// No calls on `$` here. Prices: Anthropic API, $ per million input tokens.
+// A model is named by its family alias (`opus`), never by a pinned id: Claude Code resolves the
+// alias to the newest version and to the id of the session's provider (Bedrock, Vertex, a gateway).
 
 import type { ModelKey } from '../types'
 
@@ -8,25 +10,30 @@ export type { ModelKey }
 /** Weakest to strongest. */
 export const LADDER: readonly ModelKey[] = ['haiku', 'sonnet', 'opus', 'fable']
 
-export const MODELS: Record<ModelKey, { id: string; name: string; input: number }> = {
-  haiku: { id: 'claude-haiku-5-5', name: 'Haiku', input: 0.1 },
-  sonnet: { id: 'claude-sonnet-5-5', name: 'Sonnet', input: 2 },
-  opus: { id: 'claude-opus-5-5', name: 'Opus', input: 4 },
-  fable: { id: 'claude-fable-5-1', name: 'Fable', input: 10 },
+export const MODELS: Record<ModelKey, { name: string; input: number }> = {
+  haiku: { name: 'Haiku', input: 0.1 },
+  sonnet: { name: 'Sonnet', input: 2 },
+  opus: { name: 'Opus', input: 4 },
+  fable: { name: 'Fable', input: 10 },
 }
 
 /** A cache write (5-minute TTL) costs this many times the input price, on every model. */
 const WRITE = 1.25
 
-/** A model key from a key, a name ("Fable 5.1") or an id the engine reports; '' for any other model. */
+/**
+ * The family of a model: from a key, an alias, a name ("Fable 5.1") or an id of any provider and
+ * generation (`claude-opus-6`, `us.anthropic.claude-sonnet-5-5-v1:0`); '' for any other model.
+ * The family must stand as a word of its own: `opusplan` names no model.
+ */
 export function toModel(v: unknown): ModelKey | '' {
   if (typeof v !== 'string') return ''
   const t = v.trim().toLowerCase().replace(/\[.*\]$/, '')
-  for (const k of LADDER) {
-    const m = MODELS[k]
-    if (t === k || t === m.id || t === m.name.toLowerCase() || t.startsWith(`${m.name.toLowerCase()} `)) return k
-  }
-  return ''
+  return LADDER.find(k => new RegExp(`(^|[^a-z])${k}([^a-z]|$)`).test(t)) ?? ''
+}
+
+/** What a request names to run on `key`: its alias, with the context suffix (`[1m]`) of the request it replaces. */
+export function requestModel(key: ModelKey, current: string): string {
+  return key + (/\[[^\]]*\]$/.exec(current)?.[0] ?? '')
 }
 
 /**

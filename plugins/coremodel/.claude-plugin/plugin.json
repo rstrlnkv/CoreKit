@@ -2,7 +2,7 @@
   "name": "coremodel",
   "displayName": "CoreModel",
   "version": "0.6.0",
-  "description": "Picks the model and the effort level each prompt needs, for code and office work; asks before Fable, xhigh or max, and names the token cost of a model switch mid-chat.",
+  "description": "Picks the model and the effort each prompt needs, for code and office work; switches quietly with an undo, and asks before the costly ones.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",
   "repository": "https://github.com/rstrlnkv/CoreKit",
@@ -13,13 +13,24 @@
     "mode": {
       "type": "string",
       "title": "Mode",
-      "description": "suggest: ask before every switch of model or level. auto: switch by itself, but ask before Fable, xhigh, max and a model change mid-chat. off: do nothing.",
+      "description": "auto: switch by itself, with an undo; ask only before Fable, Extra high, Max and a stronger model mid-chat. suggest: never ask; offer the pick above the prompt, you press to switch. off: do nothing.",
       "options": [
-        "suggest",
         "auto",
+        "suggest",
         "off"
       ],
-      "default": "suggest"
+      "default": "auto"
+    },
+    "language": {
+      "type": "string",
+      "title": "Language",
+      "description": "The language of CoreModel's words: auto follows your last prompt (English or Russian), or pick one.",
+      "options": [
+        "auto",
+        "en",
+        "ru"
+      ],
+      "default": "auto"
     },
     "classifier": {
       "type": "string",

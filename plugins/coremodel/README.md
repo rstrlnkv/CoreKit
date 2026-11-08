@@ -2,13 +2,14 @@
 
 A Claude Code plugin that picks the model and the effort level each prompt needs, before Claude starts on it.
 
-![platform](https://img.shields.io/badge/platform-Claude%20Code%202.1.287%2B-lightgrey) ![release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcoremodel%2F.claude-plugin%2Fplugin.json&query=%24.version&label=release) ![licence](https://img.shields.io/github/license/rstrlnkv/CoreKit)
+![platform](https://img.shields.io/badge/platform-Claude%20Code%202.1.309%2B-lightgrey) ![release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcoremodel%2F.claude-plugin%2Fplugin.json&query=%24.version&label=release) ![licence](https://img.shields.io/github/license/rstrlnkv/CoreKit)
 
 ## Install
 
-Claude Code 2.1.287 or newer (`claude --version`; update with `claude update`). The plugin uses
-Claude Code's early-access plugin API, which can change between releases. It is in the `corekit`
-marketplace (formerly CoreEffort) and does not depend on `corecrew`.
+Claude Code 2.1.309 or newer (`claude --version`; update with `claude update`). The plugin is a
+mod: it runs on Claude Code's mods API (from 2.1.287), which can still change between releases, and
+which Anthropic or an administrator can switch off (`allowManagedModsOnly`, `disableAllHooks`). It is
+in the `corekit` marketplace and does not depend on `corecrew`.
 
 ```
 /plugin marketplace add rstrlnkv/CoreKit
@@ -22,13 +23,14 @@ Update: `claude plugin marketplace update corekit`, `claude plugin update coremo
 | Feature | What it does |
 |---|---|
 | Model pick | Before Claude starts on a prompt, a short model call picks the model: Haiku, Sonnet, Opus or Fable |
-| Effort pick | Picks the effort level independently: Low, Medium, High, Extra high or Max |
-| Cost-aware switching | On the first prompt the model may change in either direction (`suggest` asks first, `auto` switches by itself, except to Fable); later it only offers a stronger model, always with a question that names the token cost |
-| Modes | `suggest` (asks), `auto` (switches Low, Medium, High by itself; always asks before Extra high, Max and Fable), `off` |
-| The pane | A footer button opens a pane with the current pair, Model, Level and Mode buttons, the last pick and session counts |
+| Effort pick | Picks the effort independently: Low, Medium, High, Extra high or Max |
+| Quiet by default | `auto` switches by itself, with an undo, and asks only before the costly ones: Fable, Extra high, Max and a stronger model mid-chat |
+| Cost-aware switching | Mid-chat it only offers a stronger model, with a question that names the lasting price per reply and the one-off re-read |
+| Modes | `auto` (the default), `suggest` (never asks: offers the pick above the prompt), `off` |
+| The pane | The footer button opens a pane with the mode, what the chat runs at, Model and Effort buttons and the session in one line |
 | Your menus stay put | The pick is put on the requests of this chat only; your model and effort settings are never written |
 | Account-aware | Reads the models your account can use and never picks one it lacks |
-| Commands and settings | `/coremodel` and its sub-commands; the settings are listed below |
+| Languages | English and Russian, by the language of your prompt or by a setting |
 
 The two picks are independent: a polite email is Haiku at Low, a contract risk review is Opus at
 High, a whole app built alone is Fable at Extra high. Approvals such as "yes", "go on" or "да,
@@ -40,137 +42,165 @@ Claude re-reads the whole chat before every reply, and keeps what it has read in
 tied to one model. Reading from the cache is cheap; after a model switch the new model reads the
 whole chat again at full price. So:
 
-- On the **first prompt** of a chat the model may change in either direction: there is nothing to re-read.
-  In `suggest` mode (the default) it still asks first, in `auto` mode it switches by itself, and a
-  switch to Fable always asks.
-- **Later** coremodel only offers a **stronger** model, always with a question that names the cost,
-  for example "Switch to Opus (many files)? The chat is read again once: ≈ 100k tokens, about
-  $0.50 at API prices". It never offers a weaker model mid-chat: the re-read would eat the saving.
-- **Fable** always asks first.
+- On the **first prompt** of a chat the model may change in either direction: there is nothing to
+  re-read. `auto` switches by itself; a switch to Fable always asks.
+- **Later** coremodel only offers a **stronger** model, always with a question that names the
+  lasting price first, then the one-off cost: "Switch to Opus? From now on each reply costs about
+  2× Sonnet. Switching also re-reads this chat once: ≈ 100k tokens, about $0.50 at API prices (on a
+  subscription it counts toward your limits)." It never offers a weaker model mid-chat: the re-read
+  would eat the saving.
+- A model coremodel does not know (a gateway's own model name) is never switched or asked about.
+
+Models are named by their alias (`opus`, `sonnet[1m]`): Claude Code resolves the newest version and
+the id your provider uses (Anthropic, Bedrock, Vertex or a gateway).
 
 ### Modes
 
-- **suggest** (the default): when a pick differs, Claude waits and asks, the model first, then the
-  effort, each in its own short question with the recommended choice first ("Opus (recommended)",
-  "Keep Sonnet", …). The effort question then ends with **← Back to the model**, to change the
-  model answer; a level can also be typed.
-- **auto**: switches the effort among Low, Medium and High by itself, up or down, and the model on
-  the first prompt; says so in a line above the prompt, with a **Back to …** button (or the key
-  `1`) that undoes what it switched. **It always asks before Extra high, Max or Fable**, and
-  before any model switch mid-chat.
+- **auto** (the default): switches the effort among Low, Medium and High by itself, up or down, and
+  the model on the first prompt. A line above the prompt says what changed, with a **Back to …**
+  button that undoes it: click it, or press ctrl+x tab and then `1`. `/coremodel undo` does the same
+  later. **It asks first, in a short dialog before Claude starts, only before Fable, Extra high, Max
+  and a stronger model mid-chat.** The model question comes first, then the effort; the effort
+  question ends with **← Back to the model**, and a level can also be typed.
+- **suggest**: never opens a dialog. The prompt runs as it is, and a line above the prompt offers
+  the pick: "CoreModel suggests Opus · High · why" with **Switch** (`1`) and **Keep** (`2`). Switch
+  holds the pick from the next request (a stronger model mid-chat still shows the cost question).
+  The line goes after 15 seconds.
 - **off**: does nothing.
 
-Every switch also leaves a mark in the chat, such as "↑ Opus · High (was Sonnet · Medium) · why",
-and while the plugin holds a model or level the working line names it ("Thinking… · Opus · High")
-and the footer names the pair beside the CoreModel button ("Opus • High").
+Every applied switch also leaves a row in the chat, such as "↑ Opus · High (was Sonnet · Medium) ·
+why". The footer button carries the state: **CoreModel · Opus · High** while coremodel sets the
+model or effort for this chat, **CoreModel** when your own choice runs, **CoreModel · off** in mode
+off.
 
-The texts are in Russian for a Russian prompt and in English otherwise.
+When two classifier calls in a row fail (an API error, a timeout), coremodel says so once in a
+toast and keeps a warning line in the pane until a pick works again; your prompts run unchanged.
+
+**VS Code** draws neither the line above the prompt nor the footer button: there a silent switch is
+told in a toast that names `/coremodel undo`, and `/coremodel` prints what the chat runs at.
 
 ### The pane
 
-Open it without typing anything into the chat: press the **CoreModel** button in the footer
-under the prompt (the slot where the mode labels sit, on the terminal and the desktop app); press
-it again to close the pane. Nothing is sent to the model, so a running turn is not interrupted.
-`/coremodel panel` opens it too. The pane sits beside the chat (above the prompt in a narrow
-terminal); its keys and the close mark are the engine's own (Esc, ctrl+x x). There is no
-shortcut of the plugin's own: the hooks API gives a plugin no keys of its own.
+Open it without typing anything into the chat: press the **CoreModel** button in the footer under
+the prompt; press it again to close the pane. Nothing is sent to the model, so a running turn is not
+interrupted. `/coremodel panel` opens it too. Its keys and the close mark are Claude Code's own (Esc,
+ctrl+x x).
 
-From top to bottom, the pane shows:
+```
+CoreModel · Auto
+[ ● Auto ]  [ Suggest ]  [ Off ]
+Asks only before Fable, Extra high, Max and a stronger model mid-chat
+────────────────────────────────────────
+This chat     Opus · High
+Set by CoreModel for this chat · your default: Sonnet · Medium
+[ Use my default ]
+Model         [ Haiku ]  [ Sonnet ]  [ ● Opus ]  [ Fable ]
+Effort        [ Low ]  [ Medium ]  [ ● High ]  [ Extra high ]  [ Max ]
+────────────────────────────────────────
+This session  Opus 2 · Sonnet 3 · High 4 · unchanged 2
+```
 
-- **Now in the chat**: the model and level the chat really runs at, and, while the plugin holds
-  something, "held by CoreModel" with the menu's own choice.
-- **Model** and **Level** buttons, the current ones highlighted. A press holds your pick at
-  once, Fable, Extra high and Max included: your own pick is your yes. A model pressed mid-chat
-  first shows the cost question. **Back to the menu's choice** lets go of what the plugin holds.
-- **Mode**: Suggest, Auto, Off, with a line on what the chosen mode does.
-- **Last pick**: the pair, whether it was applied or you kept what you had, and the reason.
-- **This session**: how often each model and level was picked, and how many prompts were left alone.
-
-Button rows wrap, so nothing is hidden in a narrow pane.
+- The selected button carries **●**, so the selection does not rest on colour alone.
+- A **Model** or **Effort** button holds your pick at once, Fable, Extra high and Max included: your
+  own press is your yes. A model pressed mid-chat first shows the cost question. **Use my default**
+  lets go of what coremodel set.
+- **Last pick** shows only when it says something new: a pick you kept away, or one that differs
+  from what the chat runs at.
+- Button rows wrap, so nothing is hidden in a narrow pane.
 
 ### Your menus do not move
 
-The plugin puts the chosen model and level on every request of this chat only. It never writes
-your model or effort setting, so other chats and later sessions keep your own defaults. The menus
-therefore keep showing your own settings; the footer shows **Opus • High** beside the CoreModel button, and
-`/coremodel` prints what the chat really runs at. Choose a model with `/model` or move the effort
-menu yourself, and the plugin lets go of that part; a new chat (`/clear`, `/resume`) or a new
-session lets go of both.
+The plugin puts the chosen model and effort on every request of this chat only. It never writes
+your model or effort setting, so other chats and later sessions keep your own defaults; the menus
+keep showing them, and the footer button and `/coremodel` say what the chat really runs at. Choose
+a model with `/model` or move the effort menu yourself, and the plugin lets go of that part; a new
+chat (`/clear`, `/resume`) or a new session lets go of both.
 
 **Which models are offered.** coremodel reads the list of models your account can use from the
 Model row of `/config` (the same list `/model` shows), before every pick and at the start of a
 session. A model that is not in it, such as Fable on a plan without it, is never picked or offered:
 when the pick names it, the nearest model you can use takes its place (the one below it first, so
-Opus for Fable), and the reason says so: "Fable is not available, Opus instead" in the question,
-the switch line and the transcript. The same holds for a model you switched off.
-When a model becomes available later, it is offered from the next pick: nothing is stored, so
-nothing needs a restart. If the list cannot be read, nothing is filtered. `/coremodel recheck` reads
-it again at once and also brings back a model that was dropped after an error.
+Opus for Fable), and the reason says so: "Fable is not available, Opus instead". The same holds for a
+model you switched off. A model that becomes available later is offered from the next pick. If the
+list cannot be read, nothing is filtered. `/coremodel recheck` reads it again at once and also brings
+back a model that was dropped after an error.
 
 If a model the plugin picked still fails (`model_not_found`), the turn fails once; coremodel then
 stops using that model for the session and says so in the pane (`/coremodel recheck` undoes that).
-The four **Allow Haiku / Sonnet / Opus / Fable** switches in the plugin settings (all on by default)
-are a limit on top of the account's list: untick a model you never want, and coremodel never picks it.
-They can only narrow the list, never add a model your account does not have. With every switch off
-coremodel picks the effort only.
 
 ### Commands
 
-- `/coremodel` asks which mode to use, showing the current mode and the real level; Esc changes
-  nothing.
-- `/coremodel recheck` reads the account's model list again and brings back models dropped after an error.
-- `/coremodel probe` prints what `/config` offers (rows and their choices), to see whether the models
-  your account can use are listed there; it changes nothing.
+- `/coremodel` asks which mode to use, showing the current mode and what the chat runs at; Esc changes nothing.
+- `/coremodel auto`, `/coremodel suggest` set the mode for every session; `/coremodel off` and `/coremodel on` turn it off and back on.
+- `/coremodel undo` takes back the last silent switch; a part you changed since stays.
 - `/coremodel panel` opens the pane (the footer button does the same without a chat command).
-- `/coremodel auto`, `/coremodel suggest` set the mode for every session.
-- `/coremodel off` and `/coremodel on` turn it off and back on.
+- `/coremodel recheck` reads the account's model list again and brings back models dropped after an error.
 
 ### Settings
 
 `/plugin` → Installed → coremodel → Configure options:
 
-- `mode`: `suggest`, `auto` or `off` (default `suggest`). `/coremodel` wins over it.
-- `classifier`: `sonnet` (default, the more accurate) or `haiku` (faster, cheaper).
-- `useHaiku`, `useSonnet`, `useOpus`, `useFable` (titled **Allow …**, on by default): tick the models coremodel may pick. They narrow what your account lists, never add a model it does not have. (Before 0.5.0 this was one text setting `models`; it is no longer read.)
-- `pickModel`: `on` (default) or `off`. With `off` it picks the effort level only and never changes the model.
+| Setting | Values | What it does |
+|---|---|---|
+| `mode` | `auto` (default), `suggest`, `off` | The mode; `/coremodel` wins over it |
+| `language` | `auto` (default), `en`, `ru` | The language of coremodel's words; `auto` follows your last prompt and keeps it across a reload |
+| `classifier` | `sonnet` (default), `haiku` | The model that reads each prompt: Sonnet is more accurate, Haiku faster and cheaper |
+| `useHaiku`, `useSonnet`, `useOpus`, `useFable` | on (default) or off | **Allow …**: the models coremodel may pick; they narrow what your account lists, never add one. All off: the effort only |
+| `pickModel` | `on` (default), `off` | `off`: pick the effort only, never the model |
+
+To add a language, copy `hooks/locales/en.ts`, translate the values and add the table to `LOCALES` in `hooks/policy.ts`.
 
 ### Cost
 
 One short classifier call per prompt you type (at most 120 output tokens), through your own
 Claude Code account; it adds about 1 to 3 seconds before Claude starts. When the call has not
-answered in 3 seconds a second one is sent and the first answer is used; after 8 seconds the
-prompt goes on unchanged. Slash commands and messages that come neither from the prompt box nor from Remote Control
-(the phone or the web) are never checked. Errors are written to `~/.claude/mods-logs/coremodel.log` and never block the
-prompt.
+answered in 3 seconds a second one is sent and the first answer is used; after 8 seconds the prompt
+goes on unchanged. Slash commands and messages that come neither from the prompt box nor from Remote
+Control (the phone or the web) are never checked. Errors go to Claude Code's debug log (`claude
+--debug`) and never block the prompt.
 
 ## Codex
 
-In Codex the plugin gives a **hint only**: Codex hooks cannot switch the model or the effort. A `UserPromptSubmit` hook
-(`codex/hint.sh`) asks `gpt-6-luna` (`codex exec`, read-only) which model and effort the prompt needs and, when they differ
-from "keep", adds one line to the context, for example "this prompt needs gpt-6-astra at high effort; switch with /model if the
-current one differs". You switch yourself with `/model`. Mapping: Haiku to `gpt-6-luna`, Sonnet to `gpt-6.1-sol`, Opus and Fable to `gpt-6-astra`.
+In Codex the plugin gives a **hint only**, and it is **off until you turn it on**: Codex hooks
+cannot switch the model or the effort, and the hint sends every prompt to a model once more. A
+`UserPromptSubmit` hook (`codex/hint.sh`) asks `gpt-6-luna` (`codex exec`, read-only) which model and
+effort the prompt needs and adds one line, for example "this prompt needs gpt-6-astra at high effort;
+switch with /model if the current one differs". You switch yourself with `/model`. Mapping: Haiku to
+`gpt-6-luna`, Sonnet to `gpt-6.1-sol`, Opus and Fable to `gpt-6-astra`.
 
-- The hint shows as a system message (and reaches the model as context). The nested call takes about 8 seconds; it runs with `--ignore-user-config` and low reasoning effort, so it does not load your config, MCP servers or other plugins' hooks (your login still works).
-- It costs about one `gpt-6-luna` call per prompt and waits at most 20 seconds (`COREMODEL_HINT_TIMEOUT`); any failure is silent and the prompt goes on.
-- Turn it off with `coremodel_mode: off` in `~/.config/corecrew/settings`.
+- Turn it on with `codex_hint: on` in `~/.config/coremodel/settings` (`$XDG_CONFIG_HOME/coremodel/settings`
+  when that is set; `COREMODEL_CONFIG` names another file). Without that key, `coremodel_mode: on` in
+  the corecrew settings file (`~/.config/corecrew/settings`) turns it on too; `codex_hint: off` wins.
+- It stays silent when your current model is the one it would name or a stronger one; on
+  `gpt-6-astra` it makes no call at all.
+- Codex shows "coremodel: choosing a model" while it runs. The nested call takes about 8 seconds; it
+  runs with `--ignore-user-config` and low reasoning effort, so it does not load your config, MCP
+  servers or other plugins' hooks (your login still works). It waits at most 20 seconds
+  (`COREMODEL_HINT_TIMEOUT`); any failure is silent and the prompt goes on.
 - Codex asks you to trust the hook the first time: review and enable it in `/hooks`.
 
 ## Requirements
 
-- **OS:** whatever Claude Code runs on (terminal and desktop app); the plugin is a TypeScript module with no native code.
-- **Claude Code** 2.1.287 or newer: its hooks run as a module.
-- **Network:** no host of its own. In Claude Code the classifier call goes through your own Claude Code account, so it reaches the same Anthropic service Claude Code does. In Codex every prompt is sent a second time to OpenAI (`gpt-6-luna`) through `codex exec`; the Codex hint needs `bash` and the `codex` CLI.
+- **OS:** whatever Claude Code runs on; the plugin is a TypeScript module with no native code.
+- **Claude Code** 2.1.309 or newer: it names models by alias in its hooks.
+- **Network:** no host of its own. In Claude Code the classifier call goes through your own Claude Code account, so it reaches the same Anthropic service Claude Code does. In Codex, once you turn the hint on, every prompt is sent a second time to OpenAI (`gpt-6-luna`) through `codex exec`; the hint needs `bash` and the `codex` CLI.
 - **Permissions:** it asks for none beyond the plugin hooks. It puts the pick on this chat's requests only and never writes your model or effort setting.
-- **Changes outside its own folder:** errors are written to `~/.claude/mods-logs/coremodel.log` (the plugin never blocks a prompt on an error).
-- **Known limitation:** it uses an early-access plugin API that can change between Claude Code releases.
+- **Changes outside its own folder:** none. Its log lines go to Claude Code's debug log.
+
+## Uninstall
+
+`claude plugin uninstall coremodel@corekit` (or `/plugin` → Installed → coremodel → Uninstall). Your
+model and effort settings were never changed, so nothing needs undoing. For Codex, remove the
+`codex_hint` line from `~/.config/coremodel/settings` if you added it.
 
 ## Build from source
 
 ```bash
-bash tests/test_coremodel.sh                  # validate the manifest and module, run the plugin's tests
-claude plugin test plugins/coremodel          # the plugin's own tests (needs the claude CLI)
+bash tests/test_coremodel.sh                          # validate the manifest and module, run the plugin's tests
+HOME=$(mktemp -d) claude plugin test plugins/coremodel  # the plugin's own tests, with a throwaway HOME
+bash tests/test_coremodel_codex.sh                    # the Codex hint, against a fake codex
 claude plugin validate plugins/coremodel
-bash plugins/coremodel/tests/quality.sh sonnet  # classifier quality on the real model (network, not part of the suite)
+bash plugins/coremodel/tests/quality.sh sonnet          # classifier quality on the real model (network, not part of the suite)
 ```
 The sources are in `plugins/coremodel/hooks/`. Credits: the idea comes from Ben AI's "Effort Optimizer" mod. No code or text of it is reused.
 
