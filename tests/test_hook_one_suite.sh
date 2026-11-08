@@ -16,28 +16,9 @@ FAKE="onesuite-fake-run-$$"
 export ONE_SUITE_PROCS="$FAKE"
 # no waiting unless a test asks for it; a turn of this run's own that the next call may take at once
 export ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0 ONE_SUITE_TURN="$SANDBOX/turn"
-dummy=""; FAKES=""
+dummy=""   # fake and stop (tests/lib.sh) start and end the fake runs
 PTMP="$(cd -P /tmp && pwd)"; NOTOWNED="$PTMP/onesuite-turn-$$"   # see "a state folder not owned by this user"
-trap '[ -z "$dummy" ] || kill "$dummy" 2>/dev/null; [ -z "$FAKES" ] || kill $FAKES 2>/dev/null; rm -rf "$NOTOWNED"' EXIT
-# fake <cwd> <argv0> — starts a fake test run (a renamed sleep) whose working folder is <cwd>; its pid in FAKE_PID.
-# Returns once the process shows its new name (up to 5 s), so the hook can see it.
-# The hook holds a call only for a run whose working folder is in the same place as the call.
-fake() {
-  bash -c 'cd "$1" && exec -a "$2" sleep 120' _ "$1" "$2" >/dev/null 2>&1 & FAKE_PID=$!
-  disown "$FAKE_PID" 2>/dev/null; FAKES="$FAKES $FAKE_PID"
-  local i=0
-  while [ $i -lt 50 ]; do
-    case "$(ps -p "$FAKE_PID" -o command= 2>/dev/null)" in "$2"*) return 0 ;; esac
-    sleep 0.1; i=$((i + 1))
-  done
-  fail "the fake run '$2' did not start in 5 s"
-}
-# stop <pid>... — kills fake runs and waits (up to 2 s) until they are gone
-stop() {
-  local p i
-  kill "$@" 2>/dev/null
-  for p in "$@"; do i=0; while kill -0 "$p" 2>/dev/null && [ $i -lt 20 ]; do sleep 0.1; i=$((i + 1)); done; done
-}
+trap 'stop_fakes; rm -rf "$NOTOWNED"' EXIT
 
 # payload <json-escaped command> [cwd] [description]
 payload() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"%s"}}' "${2-$C}" "$1" "${3:-run}"; }
@@ -149,6 +130,10 @@ mkdir -p "$SANDBOX/nopgrep"
 for t in cat sed tr grep date sleep mkdir head dirname basename awk rm; do ln -sf "$(command -v $t)" "$SANDBOX/nopgrep/$t"; done
 OUT="$(payload 'swift test' | PATH="$SANDBOX/nopgrep" "$(command -v bash)" "$H" 2>&1)"
 assert_eq "$?" "0" "no pgrep: let through"; assert_eq "$OUT" "" "no pgrep: silent"
+# pgrep is there but ps is not (the command lines cannot be read): let the call through, even while a run is on
+mkdir -p "$SANDBOX/nops"; cp -P "$SANDBOX/nopgrep"/* "$SANDBOX/nops/"; ln -sf "$(command -v pgrep)" "$SANDBOX/nops/pgrep"
+OUT="$(payload 'swift test' | PATH="$SANDBOX/nops" "$(command -v bash)" "$H" 2>&1)"
+assert_eq "$?" "0" "no ps: let through"; assert_eq "$OUT" "" "no ps: silent"
 
 # --- input the hook cannot judge passes
 for in in '' 'not json at all' '{}' '{"cwd":"'"$C"'"}' '{"cwd":"'"$C"'","tool_input":{}}' \
@@ -177,12 +162,73 @@ fake "$C" "$GP/gradlew build --exclude-task=test"; g2=$FAKE_PID
 stop "$dummy"   # the other fake run is not part of this check
 rm -rf "$ONE_SUITE_TURN"
 expect 0 "a running 'gradlew build -x test' is not a test run" 'swift test'
+# --- the command line of a process comes from ps, not from `pgrep -l`: procps-ng pgrep (Linux) prints only the
+# process name with -l ("4242 sleep" for these fake runs), and the full command line only with -a. PROCPS holds a
+# pgrep that prints so (it finds the pids with the real pgrep and logs every call), so these checks fail on macOS too
+# when the hook leans on -l.
+PROCPS="$SANDBOX/procps"; mkdir -p "$PROCPS"
+cat > "$PROCPS/pgrep" <<EOF
+#!/bin/sh
+echo "\$*" >> "$PROCPS/calls.log"
+l=0; a=0; pat=""
+for x in "\$@"; do
+  case "\$x" in
+    --) ;;
+    -*) case "\$x" in *l*) l=1 ;; esac; case "\$x" in *a*) a=1 ;; esac ;;
+    *) pat="\$x" ;;
+  esac
+done
+"$(command -v pgrep)" -f -- "\$pat" > "$PROCPS/pids.\$\$"
+rc=\$?
+while IFS= read -r pid; do
+  [ "\$pid" = "\$\$" ] && continue
+  if [ \$l = 1 ]; then echo "\$pid sleep"
+  elif [ \$a = 1 ]; then echo "\$pid \$(ps -p "\$pid" -o args=)"
+  else echo "\$pid"; fi
+done < "$PROCPS/pids.\$\$"
+rm -f "$PROCPS/pids.\$\$"
+exit \$rc
+EOF
+chmod +x "$PROCPS/pgrep"
+rm -rf "$ONE_SUITE_TURN"
+PATH="$PROCPS:$PATH" expect 0 "procps pgrep: a running 'gradlew build -x test' is not a test run" 'swift test'
 fake "$C" "$GP/gradlew build test"; g3=$FAKE_PID
 rm -rf "$ONE_SUITE_TURN"
 expect 2 "a running 'gradlew build test' is a test run" 'swift test'
-kill "$g1" "$g2" "$g3" 2>/dev/null
+rm -rf "$ONE_SUITE_TURN"
+PATH="$PROCPS:$PATH" expect 2 "procps pgrep: a running 'gradlew build test' is a test run" 'swift test'
+case "$ERR" in *"$g3 $GP/gradlew build test"*) pass ;; *) fail "procps pgrep: the refusal names the gradle run ($g3): $ERR" ;; esac
+stop "$g1" "$g2" "$g3"
 export ONE_SUITE_PROCS="$FAKE"
 fake "$C" "$FAKE"; dummy=$FAKE_PID
+rm -rf "$ONE_SUITE_TURN"
+PATH="$PROCPS:$PATH" expect 2 "procps pgrep: a run is seen" 'swift test'
+case "$ERR" in *"$dummy $FAKE"*) pass ;; *) fail "procps pgrep: the refusal names the renamed argv0 ($dummy $FAKE): $ERR" ;; esac
+[ -s "$PROCPS/calls.log" ] && pass || fail "procps pgrep: the hook did not call the pgrep on PATH"
+rm -rf "$ONE_SUITE_TURN"
+
+# --- a long command line is read whole. With no terminal (CI, a hook with no tty) procps-ng ps cuts args to
+# 80 columns unless it is given -ww; BSD ps then reads the whole line anyway. The test word of this gradle run
+# sits past column 200, and the hook must still see it. The run is started here, not with fake: fake reads
+# args without -ww. PS80 holds a ps that cuts as procps does, so the check fails on macOS too.
+LP="onesuite-long-$$"; LONG="$LP/gradlew $(printf '%0200d' 0 | tr 0 x) test"
+bash -c 'cd "$1" && exec -a "$2" sleep 120' _ "$C" "$LONG" >/dev/null 2>&1 & long=$!
+disown "$long" 2>/dev/null; FAKES="$FAKES $long"
+i=0; while [ $i -lt 50 ]; do case "$(ps -ww -p "$long" -o args= 2>/dev/null)" in "$LONG"*) break ;; esac; sleep 0.1; i=$((i + 1)); done
+[ $i -lt 50 ] && pass || fail "the long run did not start in 5 s"
+PS80="$SANDBOX/ps80"; mkdir -p "$PS80"
+cat > "$PS80/ps" <<EOF
+#!/bin/sh
+for x in "\$@"; do case "\$x" in -ww|-*ww*) exec "$(command -v ps)" "\$@" ;; esac; done
+"$(command -v ps)" "\$@" | cut -c1-80
+EOF
+chmod +x "$PS80/ps"
+rm -rf "$ONE_SUITE_TURN"
+ONE_SUITE_PROCS="$LP/gradlew( .*)? test( |$)" expect 2 "a run with a long command line is seen" 'swift test'
+case "$ERR" in *"$long $LP/gradlew"*) pass ;; *) fail "the refusal names the long run ($long): $ERR" ;; esac
+rm -rf "$ONE_SUITE_TURN"
+PATH="$PS80:$PATH" ONE_SUITE_PROCS="$LP/gradlew( .*)? test( |$)" expect 2 "ps cutting at 80 columns: a long run is still seen" 'swift test'
+stop "$long"
 rm -rf "$ONE_SUITE_TURN"
 
 # --- the turn must never make the hook spin: it either waits (sleeping) or lets the call through
@@ -229,13 +275,17 @@ chmod -R u+rwx "$SANDBOX/stuck" "$SANDBOX/ro"
 # else <TMPDIR>/corecrew-one-suite-<uid>, made with mode 700. A folder there that is not this user's own (a symlink,
 # someone else's, not writable) cannot be used: the call goes at once.
 UID_="$(id -u)"; NONE='onesuite-fake[-]none'
+# turns_in <state folder> — how many turns (turn-<place key>) it holds; turn_of <state folder> — the first one
+turns_in() { find "$1" -mindepth 1 -maxdepth 1 -type d -name 'turn-*' ! -name '*.lock*' 2>/dev/null | wc -l | tr -d ' '; }
+turn_of() { find "$1" -mindepth 1 -maxdepth 1 -type d -name 'turn-*' ! -name '*.lock*' 2>/dev/null | head -1; }
 ( unset ONE_SUITE_TURN; export CLAUDE_PLUGIN_DATA="$SANDBOX/pd" ONE_SUITE_PROCS="$NONE"; run_hook 'swift test'; exit $RC )
 assert_eq "$?" "0" "state in CLAUDE_PLUGIN_DATA: the call goes"
-assert_file "$SANDBOX/pd/one-suite/turn/at"
+assert_eq "$(turns_in "$SANDBOX/pd/one-suite")" "1" "state in CLAUDE_PLUGIN_DATA: one turn folder, named by place"
+[ -f "$(turn_of "$SANDBOX/pd/one-suite")/at" ] && pass || fail "state in CLAUDE_PLUGIN_DATA: the turn has no time in it"
 mkdir -p "$SANDBOX/tmpd"
 ( unset ONE_SUITE_TURN CLAUDE_PLUGIN_DATA; export TMPDIR="$SANDBOX/tmpd/" ONE_SUITE_PROCS="$NONE"; run_hook 'swift test'; exit $RC )
 assert_eq "$?" "0" "state in TMPDIR: the call goes"
-assert_file "$SANDBOX/tmpd/corecrew-one-suite-$UID_/turn/at"
+[ -f "$(turn_of "$SANDBOX/tmpd/corecrew-one-suite-$UID_")/at" ] && pass || fail "state in TMPDIR: no turn made"
 assert_eq "$(ls -ld "$SANDBOX/tmpd/corecrew-one-suite-$UID_" | cut -c1-10)" "drwx------" "the state folder in TMPDIR is private"
 # made in advance as a symlink to a folder that holds a fresh turn: not used, nothing written through it
 mkdir -p "$SANDBOX/tmpe" "$SANDBOX/planted/turn"; date +%s > "$SANDBOX/planted/turn/at"
@@ -245,7 +295,7 @@ ln -s "$SANDBOX/planted" "$SANDBOX/tmpe/corecrew-one-suite-$UID_"
 read -r rc t < "$SANDBOX/res"
 assert_eq "$rc" "0" "a state folder that is a symlink: the call goes"
 [ "$t" -lt 2 ] && pass || fail "a state folder that is a symlink: took ${t} s"
-assert_no_file "$SANDBOX/planted/turn.lock"
+assert_eq "$(ls "$SANDBOX/planted" | tr '\n' ' ')" "turn " "a state folder that is a symlink: nothing written through it"
 # made in advance and not writable, with a fresh turn in it: the call goes at once
 mkdir -p "$SANDBOX/tmpf/corecrew-one-suite-$UID_/turn"; date +%s > "$SANDBOX/tmpf/corecrew-one-suite-$UID_/turn/at"
 chmod 555 "$SANDBOX/tmpf/corecrew-one-suite-$UID_"
@@ -255,6 +305,21 @@ read -r rc t < "$SANDBOX/res"
 assert_eq "$rc" "0" "a state folder that is not writable: the call goes"
 [ "$t" -lt 2 ] && pass || fail "a state folder that is not writable: took ${t} s"
 chmod -R u+rwx "$SANDBOX/tmpf"
+# one turn per place: a run let through in another project or another worktree a moment ago never holds this call,
+# while one let through in the same place does (the project's code folder and its Core folder are one place)
+# place_hook <cwd> — one call with the default turn location (CLAUDE_PLUGIN_DATA=$SANDBOX/pp), a long grace, no
+# wait and nothing running; RC
+place_hook() {
+  ( unset ONE_SUITE_TURN; export CLAUDE_PLUGIN_DATA="$SANDBOX/pp" ONE_SUITE_PROCS="$NONE" ONE_SUITE_GRACE=1000 ONE_SUITE_WAIT=0
+    run_hook 'swift test' "$1"; exit $RC ); RC=$?
+}
+place_hook "$C";            assert_eq "$RC" "0" "turn by place: the first call in app goes"
+place_hook "$C";            assert_eq "$RC" "2" "turn by place: a second call in app is held by app's fresh turn"
+place_hook "$CORE_DIR/app"; assert_eq "$RC" "2" "turn by place: app's Core folder shares app's turn"
+place_hook "$F/src";        assert_eq "$RC" "0" "turn by place: a call in another project is not held by app's turn"
+place_hook "$W";            assert_eq "$RC" "0" "turn by place: a call in a linked worktree is not held by the main checkout's turn"
+place_hook "$W";            assert_eq "$RC" "2" "turn by place: a second call in the worktree is held by its own turn"
+assert_eq "$(turns_in "$SANDBOX/pp/one-suite")" "3" "turn by place: three places, three turns"
 # a state folder not owned by this user: /tmp itself (root's, writable by all) as the turn's folder. The turn
 # is not made there. (Ownership cannot be faked without root; /tmp is a real folder of someone else's.)
 if [ "$UID_" != "0" ] && [ ! -O "$PTMP" ] && [ -w "$PTMP" ]; then
@@ -262,7 +327,7 @@ if [ "$UID_" != "0" ] && [ ! -O "$PTMP" ] && [ -w "$PTMP" ]; then
   assert_eq "$RC" "0" "a state folder not owned by this user: the call goes"
   assert_no_file "$NOTOWNED"
 else
-  pass   # running as root, or /tmp is this user's: nothing to check here
+  skip "not-owned state folder" "running as root or /tmp is ours"
 fi
 export ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0
 
@@ -329,7 +394,7 @@ stress 8 8
 check_stress "stale turn, 8 waiters (real PATH)"
 # the same without flock on PATH: the fallback lock. Only the tools the hook uses are linked in.
 mkdir -p "$SANDBOX/noflock"
-for t in bash cat sed tr grep date sleep mkdir head dirname basename awk rm cut pgrep; do
+for t in bash cat sed tr grep date sleep mkdir head dirname basename awk rm cut cksum pgrep ps; do
   p="$(command -v $t 2>/dev/null)"; [ -n "$p" ] && [ -x "$p" ] && ln -sf "$p" "$SANDBOX/noflock/$t"
 done
 [ ! -e "$SANDBOX/noflock/flock" ] && pass || fail "the no-flock PATH has flock"

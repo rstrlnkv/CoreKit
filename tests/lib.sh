@@ -105,6 +105,34 @@ bg_wait() {
   done
 }
 
+# fake <cwd> <argv0> — starts a fake test run for hooks/one-suite.sh: a `sleep 120` renamed to <argv0> (exec -a)
+# whose working folder is <cwd>. Its pid goes in FAKE_PID and in FAKES. It returns once ps shows the new name
+# (it polls every 0.1 s, up to 5 s), so a hook run right after it can see the run. The hook holds a call only
+# for a run whose working folder is in the same place as the call.
+FAKES=""
+fake() {
+  bash -c 'cd "$1" && exec -a "$2" sleep 120' _ "$1" "$2" >/dev/null 2>&1 & FAKE_PID=$!
+  disown "$FAKE_PID" 2>/dev/null; FAKES="$FAKES $FAKE_PID"
+  local i=0
+  while [ $i -lt 50 ]; do
+    case "$(ps -ww -p "$FAKE_PID" -o args= 2>/dev/null)" in "$2"*) return 0 ;; esac
+    sleep 0.1; i=$((i + 1))
+  done
+  fail "the fake run '$2' did not start in 5 s"
+}
+# stop <pid>... — kills fake runs and waits (polling every 0.1 s, up to 2 s each) until they are gone
+stop() {
+  local p i
+  kill "$@" 2>/dev/null
+  for p in "$@"; do i=0; while kill -0 "$p" 2>/dev/null && [ $i -lt 20 ]; do sleep 0.1; i=$((i + 1)); done; done
+}
+# stop_fakes — kills every fake run this file started. A file that calls fake calls this in its EXIT trap.
+stop_fakes() {
+  [ -n "${FAKES:-}" ] || return 0
+  # shellcheck disable=SC2086  # a list of pids
+  kill $FAKES 2>/dev/null; FAKES=""
+}
+
 # finish — prints the counts, removes the sandboxes and exits: 0 when nothing failed, else 1.
 # It exits, so a file's own EXIT trap (which replaces the one above) cannot leave sandboxes behind.
 finish() {

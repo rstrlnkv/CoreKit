@@ -14,12 +14,15 @@
 # once, before it looks at the command or at any process.
 # Only the command is read, never the description: "see whether swift test runs" is not a test run.
 # Anything this hook cannot judge passes (exit 0): a stuck guard would stop every Bash call, which is
-# worse than one clash. It never prints to stdout. No jq, no python. Without pgrep it lets everything
-# through.
+# worse than one clash. It never prints to stdout. No jq, no python. Without pgrep or ps it lets
+# everything through. Processes are found with `pgrep -f` (pids only) and their command lines read
+# with `ps -ww -p <pid> -o args=`, which print the same on macOS (BSD) and Linux (procps-ng); `pgrep -l`
+# does not (procps prints only the process name with it). -ww: with no terminal procps cuts the line
+# to 80 columns without it, so a long test command line would not be recognised.
 #
 # Env knobs, for tests: ONE_SUITE_PROCS (the process pattern, replaces the default), ONE_SUITE_WAIT
 # (seconds to wait; default 120), ONE_SUITE_GRACE (seconds a turn stays fresh; default 3),
-# ONE_SUITE_TURN (the turn directory; by default it lives in a folder of this user's own, see below).
+# ONE_SUITE_TURN (the turn directory; by default one per place, in a folder of this user's own, see below).
 # Known limits: the grace of 3 s is short against a permission prompt the person answers slowly, after
 # which a second run may start; and a mkdir lock left by a hook that was killed while holding it is
 # broken by the next waiter only after 2 s. The takeover of a stale turn runs under a short lock
@@ -74,7 +77,7 @@ runners="$runners|go$sp+test$end"
 script="(^|[;&|(])$sp*(([A-Za-z_][A-Za-z0-9_]*=$stop*|time|exec|nohup|sudo)$sp+)*((ba|z)?sh($sp+-[a-z]+)*$sp+)?$stop*tests?\\.sh$end"
 bare="$(printf '%s' "$bare" | LC_ALL=C sed -E "s/$sp(-x|--exclude-task)($sp+|=)$stop+//g")"
 printf '%s' "$bare" | LC_ALL=C grep -qE "${pre}(${runners})|${script}" || exit 0
-command -v pgrep >/dev/null 2>&1 || exit 0
+command -v pgrep >/dev/null 2>&1 && command -v ps >/dev/null 2>&1 || exit 0
 
 # ONE_SUITE_PROCS replaces the process pattern (ERE, matched against whole command lines by
 # `pgrep -f`), so this hook's own tests do not depend on what happens to be running on the machine.
@@ -82,6 +85,12 @@ command -v pgrep >/dev/null 2>&1 || exit 0
 # as an argument does not count; the hook's own command line matches nothing here.
 default_procs='(^|/)swift[- ]test( |$)|(^|/)xctest( |$)|(^|/)xcodebuild( .*)? test(-without-building)?( |$)|node_modules/(\.bin/vitest|vitest/dist/)|(^|/)vitest run( |$)|(^|/)gradlew( .*)? ([^ ]*:)?(test[A-Za-z0-9]*|[a-z][A-Za-z0-9]*Test)( |$)|Gradle Test Executor|(^|/)pytest( |$)|(^|/)py\.test( |$)|-m pytest( |$)|(^|/)cargo( \+[^ ]+)? test( |$)|(^|/)flutter test( |$)|flutter_tools\.snapshot test( |$)|(^|/)go test( |$)|/go-build[0-9]+/.*\.test( |$)|(^|/)(ba|z)?sh( -[a-z]+)* [^ ]*tests?\.sh( |$)'
 procs="${ONE_SUITE_PROCS:-$default_procs}"
+
+# The place of this call: its linked worktree (here_wt), else the project's main code folder (code) and its
+# folder in the Core (pdir), which count as one place.
+here_wt=""; worktree_of "$cwd" && here_wt="$WT_ROOT"
+code="$(code_dir_of "$name" 2>/dev/null)" && code="$(canon_dir "$code")" || code=""
+pdir="$CORE_DIR/$name"
 
 # The turn: a directory only one waiter can make. A run that was let through takes a moment to
 # appear among the processes, and without the turn every waiter would see "nothing running" in that
@@ -95,6 +104,9 @@ procs="${ONE_SUITE_PROCS:-$default_procs}"
 # host gives one, else <TMPDIR>/corecrew-one-suite-<uid>, made with mode 700. A shared name in /tmp could
 # be made first by another user, who could then keep a fresh turn in it and stall every call. A folder
 # that is not this user's own (a symlink, someone else's, not writable) is not used: the call goes.
+# There is one turn per place, turn-<key> (key: the cksum of the worktree root, else of the code folder, else
+# of the project's Core folder), so a run let through in another project or worktree a moment ago never holds
+# this call. ONE_SUITE_TURN, when set, is the turn itself, whatever the place.
 if [ -n "${ONE_SUITE_TURN:-}" ]; then
   turn="$ONE_SUITE_TURN"
 else
@@ -105,7 +117,8 @@ else
     sdir="${TMPDIR:-/tmp}"; sdir="${sdir%/}/corecrew-one-suite-$(id -u 2>/dev/null || echo unknown)"
   fi
   [ -e "$sdir" ] || [ -L "$sdir" ] || mkdir -m 700 "$sdir" 2>/dev/null
-  turn="$sdir/turn"
+  key="$(printf '%s' "${here_wt:-${code:-$pdir}}" | cksum 2>/dev/null)"; key="${key%%[!0-9]*}"
+  turn="$sdir/turn-${key:-0}"
 fi
 grace="${ONE_SUITE_GRACE:-3}"; limit="${ONE_SUITE_WAIT:-120}"
 case "$grace" in ''|*[!0-9]*) grace=3 ;; esac
@@ -118,12 +131,6 @@ turn_usable() {
   if [ -e "$turn" ] || [ -L "$turn" ]; then [ ! -L "$turn" ] && [ -O "$turn" ] || return 1; fi
   return 0
 }
-
-# The place of this call: its linked worktree (here_wt), else the project's main code folder (code) and its
-# folder in the Core (pdir), which count as one place.
-here_wt=""; worktree_of "$cwd" && here_wt="$WT_ROOT"
-code="$(code_dir_of "$name" 2>/dev/null)" && code="$(canon_dir "$code")" || code=""
-pdir="$CORE_DIR/$name"
 
 # same_place <dir> — exit 0 when <dir> (a process's working folder) is in the place of this call.
 same_place() {
@@ -152,13 +159,17 @@ proc_cwd() {
 
 # running_line — the first other process (pid and command line) that matches $procs and works in the
 # place of this call. A gradlew run whose test task follows -x / --exclude-task is dropped: a regular
-# expression cannot say "not after -x".
+# expression cannot say "not after -x". The pids come from `pgrep -f`, each command line from `ps -ww -o args=`
+# (not `pgrep -l`: on Linux it prints only the process name). A process gone before ps reads it is skipped.
 running_line() {
-  local line rest pid d
-  pgrep -fl "$procs" 2>/dev/null | while IFS= read -r line; do
-    pid="${line%% *}"
+  local args rest pid d
+  pgrep -f "$procs" 2>/dev/null | while IFS= read -r pid; do
+    case "$pid" in ''|*[!0-9]*) continue ;; esac
     [ "$pid" = "$$" ] && continue
-    rest="${line#* }"
+    args="$(ps -ww -p "$pid" -o args= 2>/dev/null | head -1)"
+    args="${args#"${args%%[![:space:]]*}"}"
+    [ -n "$args" ] || continue
+    rest="$args"
     case "$rest" in
       *gradlew*)
         rest="$(printf '%s' "$rest" | LC_ALL=C sed -E 's/[[:space:]](-x|--exclude-task)([[:space:]]+|=)[^[:space:]]+//g')"
@@ -166,7 +177,7 @@ running_line() {
     esac
     d="$(proc_cwd "$pid")"
     [ -n "$d" ] && same_place "$d" || continue
-    printf '%s\n' "$line"
+    printf '%s %s\n' "$pid" "$args"
     break
   done
 }

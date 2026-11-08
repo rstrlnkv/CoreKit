@@ -43,13 +43,12 @@ printf '{"session_id":"x","cwd":"%s","hook_event_name":"Stop","stop_hook_active"
 assert_eq "$?" "2" "stop-remind is active in the worktree"
 rm -f "$W/new.txt" "$W/.env"
 # one-suite: a run is on, a test command is refused in the worktree
-FAKE="onesuite-fake-run-$$"; (cd "$W" && exec bash -c "exec -a $FAKE sleep 30") >/dev/null 2>&1 & dummy=$!; disown "$dummy" 2>/dev/null
-trap 'kill "$dummy" 2>/dev/null; chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
-sleep 1
+trap 'stop_fakes; chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
+FAKE="onesuite-fake-run-$$"; fake "$W" "$FAKE"; dummy=$FAKE_PID
 printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"swift test","description":"r"}}' "$W" \
   | ONE_SUITE_PROCS="$FAKE" ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0 ONE_SUITE_TURN="$SANDBOX/turn" bash "$HOOKS/one-suite.sh" >/dev/null 2>&1
 assert_eq "$?" "2" "one-suite is active in the worktree"
-kill "$dummy" 2>/dev/null
+stop "$dummy"
 
 # --- Claude's own place, unchanged
 CW="$C/.claude/worktrees/w1"
