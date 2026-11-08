@@ -6,6 +6,8 @@ All notable changes to `coreopinion` are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-08
+
 ### Added
 
 - An Uninstall section in the README.

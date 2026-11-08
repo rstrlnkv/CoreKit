@@ -1,7 +1,7 @@
 {
   "name": "coreopinion",
   "displayName": "CoreOpinion",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "description": "Get a second opinion from GPT on your code or plan; Claude shows it and stays the only one that edits.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",
