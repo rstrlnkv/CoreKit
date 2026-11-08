@@ -116,7 +116,7 @@ from 0.1.x: follow [docs/migration-0.2.md](../../docs/migration-0.2.md) first.
 | `/corecrew:task <task>` | Runs a task through the crew of agents and ends with a report and one commit |
 | `/corecrew:task release <version>` | Prepares a release: version, changelog and the other release checks |
 | `/corecrew:task adopt <folder>` | Brings an existing project into the Core layout |
-| `/corecrew:ship [patch\|minor\|major\|<version>]` | Releases the current branch, then, after your yes, fast-forwards the default branch and pushes it; after a second yes, tags the version and publishes a GitHub release |
+| `/corecrew:ship [patch\|minor\|major\|<version>]` | Releases the current branch, then, after your yes, pushes the branch, waits for its CI checks, fast-forwards the default branch and pushes it; after a second yes, tags the version and publishes a GitHub release |
 | `/corecrew:new-standard` | Helps you write a standard of your own into the Core |
 
 ### `new-project`
@@ -223,9 +223,10 @@ the same way, except `ui_language`, which falls back to `en` silently.
   whose sandbox has no network, every network call asks first):
   `new-project` checks that `gh` is logged in (`gh auth status`) and that the project name is free
   on GitHub (`gh repo view <name>`); `/corecrew:ship` fetches tags from `origin` to check for a
-  clash; the Core pre-push hook asks `api.github.com` whether the Core repo is private. Writes
-  happen only after your yes: each repo creation, each push, and the tag and GitHub release of
-  `/corecrew:ship`. Stack generators you approve reach their own package hosts. corecrew sends
+  clash and reads the CI runs of the branch it pushed (`gh run list`, `gh run watch`); the Core
+  pre-push hook asks `api.github.com` whether the Core repo is private. Writes happen only after
+  your yes: each repo creation, each push (the branch, then the default branch), and the tag and
+  GitHub release of `/corecrew:ship`. Stack generators you approve reach their own package hosts. corecrew sends
   nothing anywhere else.
 
 ### Changes outside the repo

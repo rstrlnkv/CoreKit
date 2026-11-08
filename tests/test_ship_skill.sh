@@ -55,7 +55,7 @@ done
 # Step order (REV-11): the version and changelog edit first, then check: on that tree, then the go-ahead,
 # merge, push, tag. A red check: stop with the edit left uncommitted, no repair.
 names="$(printf '%s\n' "$steps" | sed -nE 's/^[0-9]+\. \*\*([^*]+)\.\*\*.*/\1/p' | tr '\n' '|')"
-assert_eq "$names" 'Version and tag names|Release|Go-ahead|Merge|Push|Tag and release|Report|' "the ship steps, in order"
+assert_eq "$names" 'Version and tag names|Release|Go-ahead|Branch push and CI|Merge|Push|Tag and release|Report|' "the ship steps, in order"
 ne="$(printf '%s\n' "$steps" | grep -n 'engineer writes the version' | head -1 | cut -d: -f1)"
 nc="$(printf '%s\n' "$steps" | grep -n 'check:' | head -1 | cut -d: -f1)"
 [ -n "$ne" ] && [ -n "$nc" ] && [ "$ne" -lt "$nc" ] && pass || fail "the version edit comes before the check: run (lines $ne $nc)"
@@ -70,6 +70,32 @@ REL="$PLUGIN/skills/task/references/release.md"; PATHS="$PLUGIN/skills/task/refe
 assert_eq "$(cat "$SK" "$REL" "$PATHS" | grep -c 'where the version lives')" "1" "the version question is asked in one place"
 rp="$(awk '/^\*\*Release path/{f=1} f && /^$/{exit} f' "$REL")"
 case "$rp" in *ship*) pass ;; *) fail "release.md Release path defers the version question to ship" ;; esac
+
+# Protected default branch (B1): after the go-ahead ship pushes the branch itself and waits for the CI
+# checks on that commit; only green goes on to the fast-forward merge and the push of <main>, then the tag.
+# A red or cancelled run stops ship with the failed jobs and merges nothing; without gh, or not on GitHub,
+# ship asks the user to confirm the merge. The remote branch is never deleted by ship.
+ln() { printf '%s\n' "$steps" | grep -n -- "$1" | head -1 | cut -d: -f1; }
+ng="$(ln 'Wait for the user')"; nb="$(ln 'git push origin <branch>')"; nw="$(ln 'gh run ')"
+nm="$(ln 'ff-only')"; np="$(ln 'git push origin <main>')"; nt="$(ln 'git tag -a')"
+[ -n "$ng" ] && [ -n "$nb" ] && [ -n "$nw" ] && [ -n "$nm" ] && [ -n "$np" ] && [ -n "$nt" ] &&
+  [ "$ne" -lt "$ng" ] && [ "$ng" -lt "$nb" ] && [ "$nb" -lt "$nw" ] && [ "$nw" -lt "$nm" ] && [ "$nm" -lt "$np" ] && [ "$np" -lt "$nt" ] && pass ||
+  fail "release commit, go-ahead, git push origin <branch>, gh run wait, ff-only merge, git push origin <main>, tag (lines $ne $ng $nb $nw $nm $np $nt)"
+ci="$(printf '%s\n' "$steps" | awk '/\*\*Branch push and CI\.\*\*/{f=1} /\*\*Merge\.\*\*/{f=0} f')"
+case "$ci" in *'gh run list'*'--commit'*) pass ;; *) fail "the CI step finds the run of the pushed commit (gh run list --commit)" ;; esac
+case "$ci" in *'gh run watch'*'--exit-status'*) pass ;; *) fail "the CI step waits with gh run watch --exit-status" ;; esac
+case "$ci" in *'gh run view'*'--json jobs'*) pass ;; *) fail "a red run: the failed jobs are shown (gh run view --json jobs)" ;; esac
+case "$ci" in *cancelled*) pass ;; *) fail "a cancelled run stops ship like a red one" ;; esac
+case "$ci" in *'merge nothing'*|*'merges nothing'*|*'nothing is merged'*) pass ;; *) fail "a red run: nothing is merged" ;; esac
+case "$ci" in *'90'*) pass ;; *) fail "no run within a limited wait: ship asks (a limit in seconds, not a tight loop)" ;; esac
+case "$ci" in *'Without `gh`'*'ask'*|*'without `gh`'*'ask'*) pass ;; *) fail "without gh, or not on GitHub, the user confirms the merge" ;; esac
+case "$ci" in *'rejected'*) pass ;; *) fail "a rejected branch push stops ship" ;; esac
+case "$steps" in *'Pushed: origin/<branch>'*) pass ;; *) fail "the report names the pushed branch" ;; esac
+# ship never deletes the remote branch: the delete command appears once, in the Report, for the user to run later.
+rep="$(printf '%s\n' "$steps" | awk '/\*\*Report\.\*\*/{f=1} f')"
+case "$rep" in *'git push origin --delete <branch>'*) pass ;; *) fail "the report gives the command to delete the remote branch later" ;; esac
+assert_eq "$(grep -c -- '--delete' "$SK")" "1" "the delete command is only in the Report"
+[ "$(wc -l < "$SK")" -le 150 ] && pass || fail "ship SKILL.md is over 150 lines"
 
 # The release commit subject is short and valid in both worlds: chore(<part>): release <version>, or chore: release <version>.
 case "$steps" in *'chore(<part>): release <version>'*'chore: release <version>'*) pass ;; *) fail "the Release step gives the release commit subject" ;; esac
