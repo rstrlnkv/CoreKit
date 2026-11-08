@@ -87,6 +87,26 @@ sync_tools() { bash "$SCRIPTS/sync-tools.sh" "$PLUGIN" "$COREDEV_TOOLS" >/dev/nu
 # (NUL-separated, so names with spaces or non-ASCII characters are summed too.)
 tree_sum() { (cd "$1" && find . -type f -not -path '*/.git/*' -print0 | xargs -0 cksum | LC_ALL=C sort -k3); }
 
+# path_without <tool>... — prints a PATH (one new folder in the sandbox) with a link to every command of the current
+# PATH except the named tools; the first folder that has a name wins, as in a PATH lookup. "/usr/bin:/bin" does not
+# hide a tool: a Linux runner keeps gh in /usr/bin beside git.
+path_without() {
+  local d dir f n skip t links
+  d="$(mktemp -d "$SANDBOX/path.XXXXXX")" || return 1
+  local IFS=:
+  for dir in $PATH; do
+    [ -n "$dir" ] && [ -d "$dir" ] || continue
+    links=()
+    for f in "$dir"/*; do
+      n="${f##*/}"; skip=0
+      for t in "$@"; do [ "$n" = "$t" ] && skip=1; done
+      [ $skip -eq 0 ] && [ -x "$f" ] && [ ! -d "$f" ] && [ ! -e "$d/$n" ] && links[${#links[@]}]="$f"
+    done
+    [ ${#links[@]} -eq 0 ] || ln -s "${links[@]}" "$d/" 2>/dev/null
+  done
+  printf '%s' "$d"
+}
+
 # bg <function> — runs a section of a test file in the background: a subshell with its own counts and its own
 # scratch folder OD. Sections that share nothing run at the same time this way. bg_wait waits for all of them,
 # prints their output in the order they were started and adds their counts. A section must not call finish.

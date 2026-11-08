@@ -23,7 +23,13 @@ assert_exit 0 bash "$PF" --name free-app
 # gh is needed only at the GitHub stage: not logged in or missing is a warning, with an OS-neutral hint
 GH_AUTH=1 assert_exit 0 bash "$PF"
 echo "$OUT" | grep -q '^WARN gh-auth .*gh auth login' && pass || fail "no gh-auth WARN with the login hint: $OUT"
-PATH="/usr/bin:/bin" assert_exit 0 bash "$PF"
+# gh is hidden by a PATH without it, not by "/usr/bin:/bin": a Linux runner keeps gh in /usr/bin beside git
+# (simulated here by a system folder that holds both)
+SYS="$SANDBOX/sys bin"; mkdir -p "$SYS"; ln -s "$(command -v git)" "$SYS/git"; cp "$STUB/gh" "$SYS/gh"
+NOGH="$(PATH="$SYS:$PATH" path_without gh)"
+assert_eq "$(PATH="$NOGH" command -v gh)" "" "path_without gh hides every gh"
+PATH="$NOGH" assert_exit 0 bash "$PF"
+echo "$OUT" | grep -q '^OK git' && pass || fail "git hidden with gh: $OUT"
 echo "$OUT" | grep -q '^WARN gh .*https://cli.github.com' && pass || fail "no gh WARN with the install page: $OUT"
 echo "$OUT" | grep -q '^FAIL' && fail "a missing gh must not FAIL: $OUT" || pass
 # the hints name no single system's package manager
