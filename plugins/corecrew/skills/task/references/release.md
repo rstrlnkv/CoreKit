@@ -45,9 +45,10 @@ Security (only the groups that have lines), and an empty `## [Unreleased]` stays
    warnings, listed under `Open`, and the release goes on. Otherwise a red wiki-check is ✗.
 4. **Version and changelog** (release path only; other paths show "not a release"). Check
    that the version and the changelog entry written above follow that standard.
-5. **Commit.** From the code root:
-   `bash "<scripts>/save" "<message>"`. The message is English, says
-   what and why. `save` commits the code and the Core files as one step with one `Step-Id`
+5. **Commit.** From the code root: `bash "<scripts>/save" "<message>"`. The message is
+   English: a subject of at most 72 characters that says what, then a blank line and why; a
+   commit standard in `<Core>/standards/` wins over this form. `save` commits the code and the
+   Core files as one step with one `Step-Id`
    trailer. Output `saved code` / `saved docs` → ✓. `save` prints no hash: get it with
    `git log -1 --format='%h %s'` in the code root, or in `<Core>` when only docs were saved.
    `nothing to save` after a chain that changed files → ✗. In Codex run `save` with approval to leave the sandbox (`.git` is read-only there; see `codex.md`). This procedure never tags and

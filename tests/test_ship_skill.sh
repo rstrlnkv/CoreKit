@@ -71,6 +71,9 @@ assert_eq "$(cat "$SK" "$REL" "$PATHS" | grep -c 'where the version lives')" "1"
 rp="$(awk '/^\*\*Release path/{f=1} f && /^$/{exit} f' "$REL")"
 case "$rp" in *ship*) pass ;; *) fail "release.md Release path defers the version question to ship" ;; esac
 
+# The release commit subject is short and valid in both worlds: chore(<part>): release <version>, or chore: release <version>.
+case "$steps" in *'chore(<part>): release <version>'*'chore: release <version>'*) pass ;; *) fail "the Release step gives the release commit subject" ;; esac
+
 # The README lists the command.
 assert_contains "$ROOT/README.md" '/corecrew:ship'
 finish

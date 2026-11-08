@@ -80,8 +80,11 @@ defaults are `core_dir` `~/Projects/Core`, `attribution` `allow`.
    `git fetch origin --tags`): stop and name it before anything changes.
 2. **Release.** Run the `release` path of the task skill with that version:
    engineer writes the version and the changelog entry (the version answer of step 1 in its
-   brief), then release.md postconditions 1–7 in order. Postcondition 1 runs `check:` on the tree
-   that has the new version, so the release commit itself is what was tested. A ✗ at
+   brief), then release.md postconditions 1–7 in order. The release commit subject is
+   `chore(<part>): release <version>` in a repo with several versioned parts (several raised at
+   once: the first in the subject, all of them in the body) and `chore: release <version>` in a
+   repo with one; a commit standard in `<Core>/standards/` wins. Postcondition 1 runs `check:`
+   on the tree that has the new version, so the release commit itself is what was tested. A ✗ at
    postcondition 1 stops ship: show the output, name the uncommitted version and changelog files
    (`git status --short`), no repair, no merge; the user decides. Any other ✗ follows release.md;
    one that stops the chain stops ship too: report and do not merge.

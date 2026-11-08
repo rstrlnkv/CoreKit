@@ -244,8 +244,8 @@ for v in "${VARIANTS[@]}"; do
   sinput | vrun "$v" bash "$H" >"$SANDBOX/out" 2>"$SANDBOX/err"; RC=$?
   assert_eq "$RC" "2" "stop-remind exit [$v]"; assert_eq "$(cat "$SANDBOX/out")" "" "stop-remind: stdout empty [$v]"
   check "$v" "stop-remind" "$(cat "$SANDBOX/err")" \
-"Uncommitted changes in code. If this working step is finished, run: bash \"$SCRIPTS/save\" \"<short English message>\". If you are waiting for the user's answer or approval, do not save; just end your turn." \
-"Есть несохранённые изменения: код. Если этот рабочий шаг закончен, выполните: bash \"$SCRIPTS/save\" \"<short English message>\". Если вы ждёте ответа или одобрения пользователя, не сохраняйте, просто закончите ответ."
+"Uncommitted changes in code. If this working step is finished, run: bash \"$SCRIPTS/save\" \"<short English subject>\" (at most 72 characters, details after a blank line; a commit standard of the project wins). If you are waiting for the user's answer or approval, do not save; just end your turn." \
+"Есть несохранённые изменения: код. Если этот рабочий шаг закончен, выполните: bash \"$SCRIPTS/save\" \"<short English subject>\" (не длиннее 72 символов, подробности после пустой строки; стандарт коммитов проекта важнее). Если вы ждёте ответа или одобрения пользователя, не сохраняйте, просто закончите ответ."
 done
 (cd "$SC" && bash "$SCRIPTS/save" "s") >/dev/null 2>&1
 echo y >> "$SP/docs/brief.md"

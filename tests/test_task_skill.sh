@@ -131,7 +131,7 @@ done
 for w in 'wiki-check.sh' '--changed' '<Core>/<project>/docs/<page>.md' 'git diff --name-only' \
          "git log --format=%B <range> | grep -icE '^[[:space:]]*(co-authored-by:|(🤖[[:space:]]*)?generated with)'" \
          'attribution=forbid' 'skipped (attribution=allow)' 'the attribution value resolved at Start' \
-         'bash "<scripts>/save"' 'never tags' 'never pushes' 'Step-Id' \
+         'bash "<scripts>/save"' 'never tags' 'never pushes' 'Step-Id' '72 characters' 'commit standard' \
          'versioning' 'applies-to' 'ask the user' 'git status --short' \
          'check: <set after scaffolding>' 'git rev-parse HEAD' '<code base>..HEAD' \
          'lib.sh" get schema' 'lib.sh" schema' 'old-schema' 'warning' \
