@@ -9,6 +9,62 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+### Added
+
+- `reference/codex-host.md`: one Codex reference for all four skills (skill folder, settings,
+  `--add-dir`, approval outside the sandbox, chat questions, subagents).
+- A Codex model per crew role from the settings file: `codex_model` and `codex_model_<role>`
+  (`<model>`, `<model> <effort>` or `inherit`).
+- `ship` tags `<plugin>-v<version>` (or `v<version>`) after the push and publishes a GitHub
+  release, each after a yes.
+- `task`'s architect and explorer steps run without the feature-dev plugin, on Claude Code's
+  built-in Plan and Explore agents.
+- A README for corecrew itself, with settings, uninstall steps and a glossary.
+
+### Changed
+
+- The Bash guard's shell-patch refusal runs only in Codex, where `apply_patch` can be run from the
+  shell. In Codex a wildcard counts only in command position; heredoc bodies and redirect targets
+  are data, and the message names what matched.
+- `one-suite` holds a test run only while another run works in the same project folder or
+  worktree, for at most 120 s (was: any run on the machine, 480 s).
+- `ship` ships into the repo's default branch (origin/HEAD, else `init.defaultBranch`, else it
+  asks) instead of `main`.
+- Codex subagent steps work with both multi-agent tool sets (v1 and v2) and stop with a plain
+  message when Codex has no subagents.
+- Hook messages name skills `$corecrew:<skill>` in Codex.
+- Crew agents reply in English; the orchestrator talks to you in your language.
+- new-project's preflight warns, not fails, without `gh` (only the GitHub stage needs it), and its
+  install hints link the official pages for every system.
+- `release` offers Keep a Changelog 1.1.0 when a project has no versioning standard.
+- The Paths section of every skill is one short block; migration notes for 0.6 wikis, the old
+  brief stage field and the old layout moved to `reference/older-formats.md`.
+- Step-Ids are `<time>-<NN>-<random>`.
+- Plugin icons moved to `assets/icon.png` and are named in every manifest.
+
+### Removed
+
+- `ship`'s check of the global git config around the tests.
+
+### Fixed
+
+- `undo-step` reset the whole Core on a conflict and deleted other projects' staged files, swept
+  unrelated staged files into its commit, and left a step's shared Core files (`knowledge/`) in
+  place. It now touches only the paths the step changed.
+- Two projects that saved in the same second could share a Step-Id, so `undo-step <id>` undid
+  both.
+- `install-hooks.sh` wrote shims to `.git/hooks` when `core.hooksPath` (husky, lefthook, a global
+  setting) made git ignore them, and said the hooks were installed. It now writes nothing there,
+  explains how to chain corecrew's checks, and `save` still saves.
+- `one-suite` never held a run in a folder whose name has non-ASCII letters.
+- `ship` ran `task`'s Start by step numbers that had moved; steps are referred to by name.
+
+### Security
+
+- `codex-profile` emits the documented `:workspace_roots` and `"deny"` instead of legacy aliases,
+  names current flags instead of `--full-auto`, and also denies `*.ppk`, `*.keytab`, `.s3cfg` and
+  `.gnupg/**`.
+
 ## [0.8.0] - 2026-11-08
 
 Codex support: `corecrew` (and `coremodel` 0.6.0) install and run in the Codex CLI; the steps are

@@ -6,6 +6,34 @@ All notable changes to `coreopinion` are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- An Uninstall section in the README.
+
+### Changed
+
+- The skill description names English phrases and "in any language"; German and Spanish trigger
+  evals added.
+- After a failed run the script prints 80 log lines instead of 20.
+- A one-sentence description; the icon moved to `assets/icon.png` and is named in the manifest.
+
+### Fixed
+
+- Codex no longer offers the skill (`agents/openai.yaml`), and the run script refuses inside a
+  Codex session.
+- The skill reads the run's output instead of files the script had already removed.
+- The run script refused its temp folder when TMPDIR pointed away from where `mktemp -d` put it
+  (macOS, the Claude Code sandbox); it now accepts a mktemp folder in `$TMPDIR`, the system temp
+  folder or `/tmp`.
+
+### Security
+
+- One list of secret names (`skills/second-opinion/scripts/secret-patterns.txt`) builds both the
+  file filter and the Codex permission profile. The old lists had drifted and let SSH keys other
+  than `id_rsa`/`id_ed25519`, `.kube/`, `.pgpass`, `.htpasswd` and Docker config reach GPT; files
+  inside folders with a secret name are now left out too.
+- The review profile uses the documented `:workspace_roots` and `"deny"`.
+
 ## [0.2.5] - 2026-11-05
 
 ### Added

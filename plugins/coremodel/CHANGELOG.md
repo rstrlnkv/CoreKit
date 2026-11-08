@@ -7,6 +7,48 @@ full detail.
 
 ## [Unreleased]
 
+Needs Claude Code 2.1.309 or newer (models are named by alias).
+
+### Added
+
+- `/coremodel undo` takes back the last silent switch, also after the line above the prompt is gone.
+- A `language` setting (`auto`, `en`, `ru`). The words live in per-locale tables
+  (`hooks/locales/`); `auto` keeps the last prompt's language across a reload.
+- A toast and a pane line when the classifier fails twice in a row; a pick that works clears them.
+- VS Code: a silent switch is told in a toast that names `/coremodel undo`.
+- Codex: the hint reads its own settings file (`codex_hint: on` in `~/.config/coremodel/settings`)
+  and shows a status message while it runs.
+
+### Changed
+
+- `auto` is the default mode. It asks only before Fable, Extra high, Max and a stronger model
+  mid-chat.
+- `suggest` no longer opens dialogs: the prompt runs as it is, and a line above the prompt offers
+  the pick (Switch, Keep).
+- The line above the prompt shows only after a silent switch. The footer button carries the state
+  (`CoreModel · Opus · High`, `CoreModel · off`).
+- The pane puts the mode and the state first, marks the selection with ●, says "Effort" everywhere
+  and sums the session in one line.
+- The mid-chat cost question names the lasting price per reply first, then the one-off re-read.
+- Models are named by alias (`opus`, `sonnet[1m]`), so new versions and Bedrock, Vertex or gateway
+  ids work.
+- Codex: the hint is off until turned on, stays silent when the current model fits, and makes no
+  call on the strongest model. The Codex manifest has its own description.
+- Log lines go to Claude Code's debug log (`claude --debug`).
+- A one-sentence description; the icon moved to `assets/icon.png`.
+
+### Removed
+
+- The log file `~/.claude/mods-logs/coremodel.log`.
+- `/coremodel probe` from the command hint and the README (it writes to the debug log only).
+- The suffix on the working line and the drawing of the session counts in the pane.
+
+### Fixed
+
+- In `auto`, a current model the plugin did not know (a newer id, a gateway name) was replaced on
+  the first prompt by an older pinned id. It is now left alone.
+- Classifier failures were invisible: the pane said "No picks yet".
+
 ## [0.6.0] - 2026-11-08
 
 ### Added
