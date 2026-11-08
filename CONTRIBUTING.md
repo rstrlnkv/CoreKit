@@ -5,8 +5,8 @@ a release is made. [ARCHITECTURE.md](ARCHITECTURE.md) explains how the repo is l
 
 ## Requirements
 
-- macOS or Linux with `bash`, `git` and the usual command-line tools. The tests run on macOS;
-  Linux is expected to work.
+- macOS or Linux with `bash`, `git` and the usual command-line tools. CI runs the suite on both
+  (macOS with the system bash 3.2, and Ubuntu).
 - Optional: the `claude` CLI and the `codex` CLI. Without them, the tests that need them print a
   `SKIP` line and the run names them after `ALL TESTS PASSED`. CI installs `claude` (the version is
   pinned in `.github/workflows/tests.yml`), so there those parts run, and a `SKIP` for lack of it
