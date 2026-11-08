@@ -31,9 +31,9 @@ now: what is done, what is left; no more tool calls." and a wait. Still no repor
 (SKILL.md rule 3).
 
 ## Architect and explorer
-`feature-dev` does not exist in Codex. A step that would use `feature-dev:code-architect` or
-`feature-dev:code-explorer` is a subagent (role name `architect` or `explorer`, model from `role-model codex`) whose
-message is "Read <skill>/references/codex-roles.md, section Architect (or Explorer), and act as it." followed by the brief.
+`feature-dev` does not exist in Codex. An architect or explorer step is a subagent (role name `architect` or
+`explorer`, model from `role-model codex`) whose message is "Read <skill>/references/architect-explorer.md, section
+Architect (or Explorer), and act as it." followed by the brief.
 
 ## Read-only steps are checked, not enforced
 A Codex subagent cannot be made read-only. Around each read-only step (security, verifier, localizer, designer, architect, explorer):

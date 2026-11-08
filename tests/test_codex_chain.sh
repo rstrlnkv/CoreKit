@@ -191,9 +191,9 @@ case "$(sec "$CH" Questions)" in *AskUserQuestion*) pass ;; *) fail "codex-host.
 assert_not_contains "$CH" '--full-auto'
 # the crew chain sends both tool forms through the shared reference: no v2-only parameter in codex.md
 for w in fork_turns followup_task task_name; do assert_not_contains "$CX" "$w"; done
-assert_file "$TASK/references/codex-roles.md"
-assert_contains "$TASK/references/codex-roles.md" "## Architect"
-assert_contains "$TASK/references/codex-roles.md" "## Explorer"
+assert_file "$TASK/references/architect-explorer.md"
+assert_contains "$TASK/references/architect-explorer.md" "## Architect"
+assert_contains "$TASK/references/architect-explorer.md" "## Explorer"
 assert_contains "$TASK/SKILL.md" "references/codex.md"
 # the SKILL.md Claude table agrees with role-model
 for row in "engineer, tester|engineer" "security, verifier, localizer, designer|security"; do

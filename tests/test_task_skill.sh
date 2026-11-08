@@ -72,7 +72,12 @@ rule "maxTurns rule" '^3\. Budget: each agent has `maxTurns: 60`'
 rule "three passes rule" '^4\. At most three engineer passes per chain'
 rule "Standards once rule" '^9\. A reply without `Standards:` .*goes back once'
 rule "subagent_type for feature-dev" '`corecrew:<role>` for corecrew roles, the full name for'
-rule "no model for feature-dev" 'Do not pass `model` to feature-dev agents'
+rule "no model for the architect and explorer" 'Do not pass `model` to the architect and explorer agents'
+# feature-dev is optional: the built-in Plan and Explore agents with the shared role text stand in, nothing stops
+sec_has "$SK" Start '`Plan`'
+sec_has "$SK" Start '`Explore`'
+sec_has "$SK" Start 'references/architect-explorer.md'
+for f in "$SK" "$PA"; do grep -qiE 'stop[^.]*until it is installed|Without feature-dev stop' "$f" && fail "$f still stops without feature-dev" || pass; done
 assert_contains "$SK" 'applies-to'
 assert_not_contains "$SK" 'docs/specs/'
 assert_contains "$SK" 'lib.sh" code-root "$PWD"'

@@ -50,10 +50,9 @@ each: `[[name]] description`. Pages with status `done` or `superseded` are count
 
 ## Old wikis
 
-`bash scripts/wiki-migrate.sh <project_dir> [--dry-run]` converts a 0.6 wiki (Markdown links, a
-hand-written map, specs and plans in `docs/superpowers/`): front matter, links, specs and plans to
-`docs/specs/` and `docs/plans/`; `adopt` runs it too. A `warning:` line names what to fix by hand (also
-old `CLAUDE.md` lines). It moves a brief's one-line, non-empty `stage:` into `## Progress` (`Stage: <v>`) when the body has no `## Progress`; otherwise the field is kept and warned, like any other extra field. `wiki-index.sh` refuses a wiki with `no page has a type`; `/corecrew:task` then offers the migration at Start.
+`wiki-index.sh` refuses a wiki from an older corecrew with `no page has a type`; `wiki-migrate.sh`
+converts it, and `/corecrew:task` offers that at Start. The steps are in `older-formats.md` beside this
+file, section Wiki without types.
 
 ## Checking
 

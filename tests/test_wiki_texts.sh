@@ -101,10 +101,16 @@ grep -qiE '0\.6' "$REL" && pass || fail "release.md does not name the 0.6 format
 SK="$PLUGIN/skills/task/SKILL.md"
 st="$(awk '$0 == "## Start" {f=1; next} /^## /{f=0} f' "$SK")"
 for w in 'wiki-index.sh" "<Core>/<project>" --check' 'no page has a type' \
-         'wiki-migrate.sh" "<Core>/<project>" --dry-run' 'show its output to the user' \
-         'wiki: migrate to the 0.7 format' 'Without that "ok", stop the chain' \
+         '<plugin>/reference/older-formats.md' 'Without that "ok", stop the chain' \
          'wiki-check.sh" "<Core>/<project>"' '**baseline**'; do
   printf '%s\n' "$st" | grep -qF -- "$w" && pass || fail "SKILL.md Start lacks: $w"
+done
+# the migration itself (dry run, the user's ok, its own save step) lives in the Older formats reference
+OF="$PLUGIN/reference/older-formats.md"
+ofw="$(awk '$0 == "## Wiki without types" {f=1; next} /^## /{f=0} f' "$OF")"
+for w in 'wiki-migrate.sh" "<Core>/<project>" --dry-run' 'show its output to the user' \
+         'wiki: migrate to the 0.7 format' '--no-attribution' 'Without that "ok", stop the chain'; do
+  printf '%s\n' "$ofw" | grep -qF -- "$w" && pass || fail "older-formats.md, Wiki without types, lacks: $w"
 done
 # the wiki step comes before the base commits are recorded (the migration commit is not chain work)
 ws="$(printf '%s\n' "$st" | grep -n 'wiki-migrate.sh' | head -1 | cut -d: -f1)"
