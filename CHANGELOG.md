@@ -1,355 +1,327 @@
 # Changelog
 
-Every entry starts with a badge: **NEW** is a new capability, **FIX** is a defect fixed, **UPD** is a change to existing behaviour, documentation or internal work.
+All notable changes to `corecrew` are listed here. The other two plugins keep their own:
+[coremodel](plugins/coremodel/CHANGELOG.md) and [coreopinion](plugins/coreopinion/CHANGELOG.md).
 
-## 0.8.0 — 2026-11-08
-Codex support. `corecrew` and `coremodel` (0.6.0) install and run in the Codex CLI (`codex plugin marketplace add rstrlnkv/CoreKit`,
-`codex plugin add corecrew@corekit`; steps in the README, section Codex): a Codex manifest, skills that find their own folder,
-guards for `apply_patch`, a settings file instead of the options screen, the task chain with Codex subagents, an optional
-secrets sandbox profile. `coreopinion` stays Claude Code only. Upgrading in Claude Code: nothing to do; your plugin options still win
-over the new settings file. Behaviour changes to know: the guards now also refuse a Bash command that runs `apply_patch` (see below); a wrong `attribution` or `model_profile`, or a relative `core_dir` (such as `Core`, which used to become `<current folder>/Core`), is now ignored with a warning at session start; and with an empty or relative `HOME` there is no default Core.
-In Codex, re-trust the hooks in `/hooks` after an update.
-- **FIX** `save` stops with a clear line and a non-zero exit when git cannot write `.git` (the Codex sandbox keeps it read-only), instead of printing `nothing to save`; no file is touched.
-- **UPD** In Codex the task chain runs `save` with approval to leave the sandbox; without approval (`codex exec`) it reports `Commit: stopped — Codex sandbox keeps .git read-only`. README, `codex.md`, `release.md`.
-- **NEW** Git worktrees are found wherever they live (Codex keeps them outside `<Projects>`): `lib.sh worktree_of` reads the
-  `.git` file of the worktree (`gitdir: <main>/.git/worktrees/<name>`, the main `.git` folder must exist; no git process), and
-  `project_of` falls back to it, so `guard-code`, `guard-secrets`, `one-suite` and `stop-remind` are active in such a worktree.
-  `guard-code` takes the worktree folder as the code root there. A normal clone outside `<Projects>`, a submodule, a dangling
-  or forged `.git` file stay inert. New `lib.sh code-root <path>` prints the code root (the worktree folder, or the main code folder).
-  A worktree is trusted only when its main folder knows it (`<main>/.git/worktrees/<name>/gitdir` names `<worktree>/.git`) and the main
-  folder is the project's own code folder, so a forged `.git` file in a downloaded folder, in `docs/` or in `.claude/` never moves the guard
-  root, gets no links from `prepare.sh` and makes no project. A worktree placed inside the main code folder (`<code>/other/wt`) is its own root
-  for `guard-code`, except one placed in `docs/` or `.claude/`, which keeps the main folder's root; a worktree whose main folder was renamed is not judged
-  (limit, ADR 005). `code-root` prints a root that holds the folder asked about (a forged gitfile or `core.worktree` cannot point elsewhere), except from `<Core>/<name>/`, where it prints the main code folder.
-- **FIX** Several `prepare.sh` or `sync-tools.sh` runs at once no longer report a false "link to somewhere other" or "tools not refreshed" and
-  leave no `tools.new.*` behind: a link another run just made counts as skipped, and the tools swap takes a lock folder `<tools>.lock`
-  (a dead owner's lock is taken over by an atomic rename, so only one waiter wins; no lock within 10 s: "tools busy", exit 0).
-- **NEW** The `/corecrew:task` chain in Codex: `skills/task/references/codex.md` (each step a `spawn_agent` with model and effort from `lib.sh role-model`, `wait_agent`, `followup_task` instead of a turn cap, read-only steps checked by `lib.sh tree-state` before and after, since Codex subagents cannot be made read-only) and `codex-roles.md` (architect and explorer without feature-dev). `lib.sh core-writable <dir>` checks that Codex can write to the Core and names `codex --add-dir`. `tree-state` does not cover ignored files.
-- **NEW** A Codex sandbox profile for secrets: `lib.sh codex-profile` prints a TOML fragment for `~/.codex/config.toml` (profile `corecrew`: the project folder
-  and temp folders writable, minimal system paths readable, `.env*`, keys, credentials, `.kube`, `.docker/config.json`, `.htpasswd`, `.pgpass` and named token and
-  secret files unreadable, `~/.ssh` closed; `default_permissions` applies it to every Codex session). It is a default, not a hard boundary: `--sandbox`,
-  `--full-auto` or `-c sandbox_mode=...` on the command line and a trusted project's `.codex/config.toml` switch it off; it guards files in the working tree, not
-  git history (`git show HEAD:.env`) or a hard link made outside; `/tmp` and `/var/tmp` stay readable and writable; environment variables are not filtered.
-  corecrew never writes `~/.codex`: on Codex `prepare.sh` only says, once per run, to paste the fragment while `config.toml` does not set a top-level
-  `default_permissions = "corecrew"` (read as data, never written; either quote style, a quoted key and a BOM are understood; the path only from an absolute
-  `CODEX_HOME` or `HOME`; strings are not parsed: a triple or escaped quote before the key makes the note show). Checked with `codex sandbox` (codex 0.166). ADR 006.
-- **UPD** The failures `prepare.sh` relays are a translated message per sync failure kind (a folder that is not ours, a failed copy), in
-  host-neutral wording ("start a new session"), and a message when an `AGENTS.md` in the Core blocks the link.
-- **NEW** `scripts/prepare.sh [--cwd <dir>] [--part tools|project|host]`: the tools copy, the CLAUDE.local.md and AGENTS.md links
-  (also in a worktree outside the main folder), the layout note and the old git hooks note, without waiting for the SessionStart
-  hook; on Codex it also says that the corecrew hooks must be trusted (`/hooks`) until `session-start` has run once. A real file
-  where a link should go is reported, never replaced. The task, ship and new-project skills run it at Start.
-- **UPD** `session-start.sh` hands the tools sync and the project notes to `prepare.sh` (its Claude output is unchanged) and, on
-  Codex, records the plugin version in `<settings folder>/state/hooks-seen-codex`. `install-hooks.sh` and `session-start.sh` take the
-  tools folder from `lib.sh tools_dir`. New `lib.sh` helpers `host`, `tools_dir`, `hooks_marker_path`, `plugin_version`.
-- **NEW** The guards understand Codex's `apply_patch`: `scripts/patch-paths.awk` (through `lib.sh patch_paths`) lists the
-  files of a patch. `guard-code` blocks an internal file (`docs/`, `CLAUDE.md`, `AGENTS.md`, `.claude/`) as an Add, an Update
-  or a Move destination; `guard-secrets` blocks `.env` and `~/.ssh` as a written file or a move source, lets a delete pass,
-  and never scans patch bodies. A patch it cannot read (an `X` line: no `*** Begin Patch`, an unknown `***` line, a header after
-  other text on its line) still has its readable paths judged, and its `***` lines are checked raw: `guard-code` refuses a
-  component `docs`, `.claude`, `claude.md`, `claude.local.md` or `agents.md`, `guard-secrets` a secret-looking string; with no such line it passes.
-  Header lines and paths are trimmed like Codex does (ASCII blanks, VT, FF and the Unicode spaces NBSP, U+3000, ...).
-  More than 100 paths in one patch are refused by both guards ("corecrew: this patch names more than 100 files and cannot be checked. Split it into patches of at most 100 files."), because the hook
-  timeout is 15 s and a timeout does not block.
-- **NEW** Both guards refuse a patch handed to the shell (`guard-code` in every folder, `guard-secrets` inside a Core project), with "corecrew: run patches with the apply_patch tool,
-  not through the Bash command line; that form cannot be checked." (exit 2, English and Russian). The rule (`lib.sh shell_patch_refused`)
-  reads no shell syntax. A hit: the command text, with every `'`, `"`, `\` and newline deleted, holds `apply_patch`, `applypatch` or
-  `apply-patch` in any letter case (also `--codex-run-as-apply-patch`); or `*** Begin Patch` is followed by an `Add File:`,
-  `Update File:`, `Delete File:` or `Move to:` marker; or `$'` is followed by a `\x`, `\u`, `\U` or octal escape; or an unquoted word
-  with `?`, `*` or `[` whose part after the last `/`, read as a glob, can match one of the three spellings (`../bin/apply_pat?h`,
-  `../bin/appl*_patch`). No hit: pass.
-  A hit passes only in the simple form: one read-only command (`grep`, `egrep`, `fgrep`, `rg`, `git log|show|diff|grep|status|blame`,
-  `git commit` with only `-m -a -am --message -s --amend --no-edit`, `cat`, `head`, `tail`, `ls`, `wc`, `find`) piped only through
-  `sort`, `uniq`, `cut`, `tr`, `nl`, `wc`, `head`, `tail`, `grep`, `rg`; quoted text is opaque (a single-quoted string, and a double-quoted
-  one without `$`, backtick or `\`, counts as one word), so `grep -E 'apply_patch|applypatch' f` and `git commit -m "x (apply_patch); y"` pass;
-  outside quotes no `$` at all (so `$IFS` word splitting cannot hide an option), no backtick, `\`, `;`, `&`, newline, `<`, `>`, parenthesis,
-  brace or `!`; no program-running option (git `-c -C -p -O --pag* --ext* --output* --open-files-in-pager*` and any `--o...` that abbreviates
-  `--output` or `--open-files-in-pager`, but `--oneline` passes; rg `--pre* --hostname-bin -z`, find `-exec -delete`, sort `--co*`); and an option word that holds the spelling only as `-e`, `--regexp=`, `--grep=`, `--author=`, `--committer=`, `-S`, `-G`,
-  `-m`, `--message=`, `-g`, `--glob=`, `-name`, `-iname`, `-path`, `-ipath` with `=`. Passes: `grep -rn apply_patch .`,
-  `git log --grep=apply_patch`, `git commit -m "Adds apply_patch guard"`, `cat docs/eval-apply_patch.md`, `find . -name apply_patch.rs`.
-  Over-blocking by design: `echo apply_patch`, `cd x && grep apply_patch .`, `grep apply_patch f > out.txt`, `man apply_patch`,
-  `command -v apply_patch`, `gh pr create --body "apply_patch"`, `FOO=apply_patch make`, `touch apply_patch.txt`, `grep apply_patch $FILE`. Earlier passes judged
-  paths inside shell text, then used a folder gate and a wrapper list, then a tokenizer; each was bypassed (seven review passes in all, five of them against the tokenizer rule: quotes
-  inside words, `-c` scripts, `eval`, assignment values, git `!` aliases, `$(...)`, size caps, `$'...'` escapes), so the rule no longer
-  parses shell words. On the development machine a command of up to 1 MB took about 0.3 s as one long word (981 KB), about 1 s as 100 000 words (688 KB) and about 2 s as 300 000 quote pairs. This is a best-effort guard, not a security boundary: it catches plain and accidental shell patches and many
-  disguised ones, it cannot see a name the shell builds at run time, and the `apply_patch` tool form is the checked path. Known ways past it: variables and `${...}` (`a=apply; ${a}_patch`),
-  $(...) and backticks (also empty ones), brace expansion, `$'...'`/`$"..."` splitting (`$'apply'$'_patch'`), a quoted part glued to a glob (`'apply_pat'?h`), extglob (`shopt -s extglob`, then `apply_pat@(c)h`), a glob that expands to a file whose name is an option (`-...`), `IFS` changes, a script file or interpreter that runs `apply_patch`, and `write_stdin`. Over-blocking also includes a pure-wildcard word outside the simple form (`chmod +x scripts/*`, `rm -rf dist/*`), which is a hit by itself. A Delete of `.env` as a tool patch passes, like `rm`.
-- **FIX** A TAB or CR inside a patch path is deleted before the path is judged, as Codex does (`do<TAB>cs/a.md` writes `docs/a.md`, `.e<TAB>nv` writes `.env`); before, both guards let such a path pass. Checked against the Codex CLI (`codex --codex-run-as-apply-patch`) in `tests/test_codex_patch_parity.sh`.
-- **FIX** A settings file is read once per load in one linear pass; before, a file with one very long line took seconds (old reader on a 250 KB one-line file: 4.6 s for `core-dir`, 9.2 s for `settings` on the development machine; 1 MB: about 67 s; the new reader reads up to 64 KB in about 0.1 s) and a guard hook could pass its 15 s timeout, which does not block. A settings file over 64 KB is not read: one warning, the defaults are used.
-- **FIX** An empty or relative `HOME` no longer decides where the plugin writes: `install-hooks.sh` and `session-start.sh` use `$HOME/.claude/plugins/data/corecrew-corekit` only when `CLAUDE_PLUGIN_DATA` is set or `HOME` is absolute. Otherwise `session-start` skips the tools sync and the hint marker (before: `mkdir /.claude` with an empty `HOME`, `<cwd>/rel/.claude/...` with `HOME=rel`), and `install-hooks.sh` says the data folder is unknown and exits 1 without writing.
-- **FIX** An empty Core path gives plain messages: `session-start` no longer prints "Core not found at  —" (the HOME warning says why), `setup-core.sh` (also with `--dry-run`, before: "would create ./.git") and `lib.sh core-paths` refuse it, and `adopt.sh` says "no Core" instead of "already inside Core".
-- **FIX** Both guards refuse an `apply_patch` call outright, with the message "corecrew: the patch cannot be judged: patch-paths.awk is missing or failed" (English and Russian), when the path reader (`patch-paths.awk`) is missing or awk failed (`lib.sh patch_paths` returns non-zero); before, `guard-code` let a cwd-relative `x.md` in `docs/` and `do<TAB>cs/a.md` pass through its raw `***` check, and `guard-secrets` checked the `***` lines raw, which missed `.e<TAB>nv`. A reader that ran and printed nothing (a patch that names no file, such as `*** Begin Patch` + `*** End Patch`) passes in both guards, as Codex writes nothing for it.
-- **FIX** A relative `CORECREW_CONFIG` is ignored, like a relative `XDG_CONFIG_HOME`. With an empty or relative `HOME` there is no default Core (it was `/Projects/Core`): `lib.sh core-dir` prints a warning (en and ru in the session-start hook) and exits non-zero, and the hooks stay inert.
-- **UPD** The `## Paths` text of the four skills checks the skill folder (a Codex cache folder, no `"`, `$` or backtick, no `..` component in it) before it runs `plugin-root`.
-- **UPD** The messages for a patch that cannot be judged show the offending `***` line in quotes and say what to do (use the `apply_patch` tool with lines like `*** Add File: <full path>`); the Russian text says «не удаётся прочитать»; the shell message says "Bash command line".
-- **UPD** `hooks.json` names `apply_patch` in the `guard-code` and `guard-secrets` matchers (re-trust the hooks in Codex `/hooks`).
-- **UPD** Tests run `one-suite` and `stop-remind` on Codex-shaped payloads (`tests/fixtures/codex/`, built from the Codex
-  source, not captured) and check that every exit 2 writes a non-empty stderr, which Codex requires for a block.
-- **NEW** A Codex manifest, `.codex-plugin/plugin.json` (Codex reads it instead of `.claude-plugin/plugin.json`; the
-  name, version, description and license must match; there is no root `plugin.json`, which would make Codex skip the hooks).
-- **NEW** `agents/openai.yaml` with `allow_implicit_invocation: false` keeps `task`, `new-standard` and `ship` out of
-  Codex's skills list, the equivalent of `disable-model-invocation` that Codex ignores.
-- **NEW** `lib.sh plugin-root` prints the absolute plugin folder and exits 1 when the script is not in the corecrew plugin (the manifest must be named `corecrew`).
-- **UPD** The skills name the plugin folder once, in a `## Paths` section, and use `<skill>`, `<plugin>` and `<scripts>`
-  filled in after `lib.sh plugin-root`, instead of `${CLAUDE_SKILL_DIR}` in every command (Codex does not expand it).
-- **NEW** A settings file, `~/.config/corecrew/settings` (or the path in `CORECREW_CONFIG`), holds `core_dir`,
-  `attribution`, `model_profile` and `ui_language` as `key: value` lines; it is the settings source where there
-  is no plugin options screen. Order per key: `CORE_DIR` env (`core_dir` only), plugin option, file, default.
-- **NEW** `lib.sh settings [key[=value] ...]` prints the resolved settings and `lib.sh setting-path` the file path;
-  the task skill calls them (ship points to task); the skills call `lib.sh core-dir` and relay its stderr.
-- **FIX** A relative `core_dir` (for example `Core`) is no longer turned into `<current folder>/Core`: it is
-  ignored with a warning and the next source is used. A wrong `attribution` or `model_profile` is ignored the same way. The warning (en and ru) names the
-  setting and its source, says where to fix it and which value is used instead; several warnings are one per line. An unknown
-  `ui_language` stays silent and falls back to `en`. The file accepts blanks before the colon and a UTF-8 BOM; one that
-  cannot be read is named in a warning.
-- **UPD** The hooks read `ui_language`, and the skills `attribution` and `model_profile`, through the same resolver;
-  the session-start hook names an ignored setting at each session start (not on resume, clear or compact).
+The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/), and the
+versions follow [Semantic Versioning](https://semver.org/). Older entries are shortened; the
+commit log has the full detail.
 
-## 0.7.2 — 2026-11-06
-- **FIX** The `new-project` resume stage now lives in a `## Progress` section of the brief (`Stage: <stage>`)
+## [Unreleased]
+
+## [0.8.0] - 2026-11-08
+
+Codex support: `corecrew` (and `coremodel` 0.6.0) install and run in the Codex CLI; the steps are
+in the README. `coreopinion` stays Claude Code only. In Claude Code there is nothing to do: your
+plugin options still win over the new settings file. In Codex, trust the hooks again in `/hooks`
+after each update.
+
+### Added
+
+- A Codex manifest (`.codex-plugin/plugin.json`) beside the Claude Code one; the shared fields must match.
+- The `/corecrew:task` chain in Codex: each role runs as a Codex subagent with the model and effort
+  from `model_profile`. Codex subagents cannot be made read-only, so the read-only steps are
+  checked (the working tree before and after), not enforced. Codex is told to add the Core with
+  `codex --add-dir` when it cannot write there.
+- An optional Codex sandbox profile for secrets: `lib.sh codex-profile` prints a fragment for
+  `~/.codex/config.toml` that keeps `.env*`, keys, credentials and `~/.ssh` unreadable. It is a
+  default, not a hard boundary (`--sandbox`, `--full-auto` and `-c sandbox_mode=...` switch it
+  off), and corecrew never writes that file.
+- A settings file, `~/.config/corecrew/settings` (or the path in `CORECREW_CONFIG`), with
+  `key: value` lines for `core_dir`, `attribution`, `model_profile` and `ui_language`, for hosts
+  without an options screen. Per key the order is: `CORE_DIR` (for `core_dir`), plugin option,
+  file, default. `lib.sh settings` and `lib.sh setting-path` print them.
+- The guards understand Codex's `apply_patch` tool: `guard-code` blocks an internal file as an
+  added, updated or moved file; `guard-secrets` blocks `.env` and `~/.ssh` as a written file or a
+  move source. A patch that names more than 100 files is refused.
+- Git worktrees outside the projects folder (Codex keeps them elsewhere) are recognised, so the
+  guards, one-suite and the save reminder work there. A worktree counts only when its main folder
+  knows it and is the project's own code folder.
+- `scripts/prepare.sh` makes the tool copy and the `CLAUDE.local.md` and `AGENTS.md` links without
+  waiting for the session-start hook; the skills run it first.
+- `agents/openai.yaml` keeps `task`, `ship` and `new-standard` out of Codex's implicit skill
+  choice, as `disable-model-invocation` does in Claude Code.
+
+### Changed
+
+- In Codex, `save` asks for approval to leave the sandbox (it keeps `.git` read-only); in
+  non-interactive `codex exec` the task stops with `Commit: stopped — Codex sandbox keeps .git
+  read-only` and the files stay uncommitted.
+- A wrong `attribution` or `model_profile`, or a relative `core_dir` such as `Core` (which used to
+  become `<current folder>/Core`), is ignored with a warning at session start, and the next source
+  is used. An unknown `ui_language` falls back to `en` silently.
+- With an empty or relative `HOME` there is no default Core, and the plugin writes nothing under
+  such a `HOME`.
+- The skills find their own folder (`lib.sh plugin-root`) instead of relying on
+  `${CLAUDE_SKILL_DIR}`, which Codex does not expand.
+- Messages for a patch that cannot be judged show the offending line and say what to do.
+
+### Fixed
+
+- `save` stops with a clear message and a non-zero exit when git cannot write `.git`, instead of
+  printing `nothing to save`.
+- Several `prepare.sh` or `sync-tools.sh` runs at once no longer report false problems or leave
+  temporary folders behind.
+- A settings file with a very long line no longer makes a hook run past its timeout; a file over
+  64 KB is not read (one warning, defaults used).
+- An empty Core path gives plain messages in `session-start`, `setup-core.sh`, `adopt.sh` and
+  `lib.sh core-paths`.
+- A relative `CORECREW_CONFIG` is ignored, like a relative `XDG_CONFIG_HOME`.
+
+### Security
+
+- A TAB or CR inside a patch path is removed before the path is judged, as Codex does; before,
+  `do<TAB>cs/a.md` or `.e<TAB>nv` passed both guards.
+- When the patch reader is missing or fails, both guards refuse the patch instead of letting
+  part of it through.
+- Both guards refuse a patch handed to the shell (`apply_patch` run through Bash): that form
+  cannot be checked. This is a best-effort rule with documented ways past it, not a boundary.
+
+## [0.7.2] - 2026-11-06
+
+### Changed
+
+- `wiki-check` reports front matter fields beyond the six allowed ones; `wiki-migrate` moves a
+  brief's one-line stage into `## Progress` and warns about other extra fields.
+
+### Fixed
+
+- The `new-project` resume stage lives in a `## Progress` section of the brief (`Stage: <stage>`)
   instead of a `stage:` front matter field, which the wiki rules do not allow.
-- **UPD** `wiki-check` reports front matter fields beyond the six; `wiki-migrate` moves a brief's one-line
-  stage into `## Progress` (kept and warned when it is multi-line, the body has `## Progress` or ends in an open
-  code fence) and warns about other extra fields.
 
-## 0.7.1 — 2026-11-06
-- **FIX** The Core pre-push hook asks GitHub up to three times, 2 s apart, whether the Core repository is
-  private, so one network timeout no longer blocks a push. A "not private" answer still blocks at once.
-- **UPD** The Core README template names the code folder `../<Name>/` and lists the `AGENTS.md` link, the
+## [0.7.1] - 2026-11-06
+
+### Changed
+
+- The Core README template names the code folder `../<Name>/` and lists the `AGENTS.md` link, the
   generated `docs/INDEX.md`, the Obsidian vaults and the optional `session-rules.md`. An existing
   Core README is never changed.
 
-## 0.7.0 — 2026-11-06
-- **NEW** The wiki index is generated: `docs/INDEX.md` is built from the front matter of the pages
-  (`wiki-index.sh`), so nobody edits it by hand; `wiki-check.sh` reports it when it is out of date.
-- **NEW** Every project's `docs/` is one Obsidian vault: scaffold adds `wiki.base` (a table of all pages)
-  and `.obsidian/`.
-- **UPD** Front matter: `type` replaces `title`; page references are wikilinks (`[[page#Heading]]`), not
-  `docs/page.md § Heading`. Specs and plans live in `docs/specs/` and `docs/plans/` (before:
-  `docs/superpowers/`).
-- **NEW** `wiki-check.sh` has new checks for the new format (front matter fields, wikilink targets, the
-  generated INDEX).
-- **NEW** New `AGENTS.md` link in the code folder next to `CLAUDE.local.md`, made by scaffold and adopt and
-  repaired at session start. Note for coreopinion/Codex users: `AGENTS.md` now exposes the private
-  `CLAUDE.md` to Codex in that folder, so `second-opinion` runs can send its content to OpenAI.
-- **NEW** New `scripts/wiki-migrate.sh` converts a 0.6 wiki to the new format (front matter, wikilinks,
-  `docs/superpowers/` to `docs/specs/` and `docs/plans/`, INDEX); `adopt` runs it too.
-- **NEW** Upgrade: the first `/corecrew:task` on a 0.6 project offers the migration: it shows a
-  `wiki-migrate.sh --dry-run` first and converts the wiki only on your ok, as its own commit.
-  The old lines in the project's `CLAUDE.md` (`docs/superpowers`, map lines) are reported for a
-  hand edit; the script never changes that file. By hand:
-  `bash <plugin>/scripts/wiki-migrate.sh <Core>/<project> --dry-run`, then again without it.
+### Fixed
 
-## 0.6.6 — 2026-11-05
-- **FIX** The one-suite hook no longer lets several test runs through when many waiters (8 in the stress
-  test) find the same stale turn at the same instant. The takeover now runs under a short lock
-  (`flock` when installed, else a `mkdir` lock), judges the turn again once it holds the lock, and
-  never spins (the wait for the lock is bounded). This replaces the "known limit" named in 0.6.3.
-## 0.6.5 — 2026-11-05
-- **NEW** New skill `/corecrew:ship [patch|minor|major|<version>]`: releases the current branch through the
-  `release` path of `/corecrew:task`, checks that the tests left the global git config unchanged,
-  then, after your explicit yes, fast-forwards `main` to the branch and pushes it. Never forces.
+- The Core pre-push hook asks GitHub up to three times, 2 s apart, whether the Core repository is
+  private, so one network timeout no longer blocks a push. A "not private" answer still blocks at once.
 
-## 0.6.4 — 2026-11-05
-- **UPD** An icon for the plugin (and for coremodel and coreopinion): the directory listing wants one, and
-  `claude plugin validate` no longer warns. Sources in `docs/icons/`.
+## [0.7.0] - 2026-11-06
 
-## 0.6.3 — 2026-11-05
-- **UPD** The one-suite hook names its two known limits in its header (several waiters finding one stale turn
-  in the same instant; a 3 s grace against a slowly answered permission prompt). No behaviour change.
-- **UPD** README and tests: repo paths named in the READMEs must exist; Vite recipe verified (see stacks.md).
+### Added
 
-## 0.6.2 — 2026-11-05
-- **FIX** The read-only checkers' rule, after a second opinion from GPT: any `cd` ends relative writes
-  (`(cd /tmp); rm x` and `cd /tmp | rm x` run rm where the command started, so the folder is not
-  tracked; write logs to an absolute temp path); `git push`, `git config --global`/`--system`/`--file`,
-  `--git-dir`/`--work-tree` and `git worktree add` are refused even with `-C` into a temp folder;
-  `cp`/`mv` into a folder also judge `<folder>/<file name>`, which may be a link into the project;
-  `sed` with a `w` command or `-f`, and grouped curl options (`-sSLo FILE`, `-D`, `-c`) are judged.
+- The wiki index `docs/INDEX.md` is generated from the pages' front matter (`wiki-index.sh`);
+  `wiki-check.sh` reports it when it is out of date.
+- Every project's `docs/` is one Obsidian vault: scaffold adds `wiki.base` and `.obsidian/`.
+- `wiki-check.sh` checks the new format (front matter fields, wikilink targets, the generated INDEX).
+- An `AGENTS.md` link in the code folder next to `CLAUDE.local.md`. Note for coreopinion users:
+  it exposes the private `CLAUDE.md` to Codex in that folder, so a second opinion can send its
+  content to OpenAI.
+- `scripts/wiki-migrate.sh` converts a 0.6 wiki to the new format; `adopt` runs it too. The first
+  `/corecrew:task` on a 0.6 project offers it, shows a dry run first and converts only on your ok.
 
-## 0.6.1 — 2026-11-05
-- **FIX** The read-only checkers' rule, after an independent review: it follows `cd` (a relative write
-  after a cd to an unknown folder is refused), looks into `$(...)` and backticks, and also refuses
-  `find -delete`/`-exec`, `xargs rm`, `sort -o`, downloads and unpacking into the current folder,
-  `ln`, more git changes (`branch <name>`, `config <key> <value>`, `remote add`, `fetch`,
-  `--output`), and any command it cannot read whole or when the check itself fails. Reads it wrongly
-  refused now pass: `git tag -l`, `git stash list`, `git worktree list`, `perl -Ilib`, `chmod -R u+w /tmp/x`.
-- **UPD** The six agents' descriptions are 120 characters at most and say /corecrew:task calls them: they
-  are listed to the model in every session, project or not (about 500 characters less each turn).
-- **UPD** Trigger evals in `plugins/corecrew/evals/` (`claude plugin eval`): new-project starts for a new
-  app in Russian or English and stays silent for a feature or a Jira project. The old scenario
-  `evals/evals.json` is gone.
-- **UPD** Tests: the wiki fixtures keep their CLAUDE.md as `CLAUDE.md.in`, so the repo tracks no internal
-  file but its own CLAUDE.md.
+### Changed
 
-## 0.6.0 — 2026-11-05
-- **UPD** The plugin lives in `plugins/corecrew/` of the repo (the marketplace now points there). An install
-  copies only the plugin, not the repo's docs, tests and the two other plugins. The name, the
-  settings and the plugin data folder stay the same: an update needs nothing from you.
-- **NEW** The read-only checkers (designer, localizer, security, verifier) can change nothing but the temp
-  folders: a hook refuses their Bash writes, removals, in-place edits and git changes, wherever they
-  run. Before, only their instructions said so.
+- Front matter: `type` replaces `title`; page references are wikilinks (`[[page#Heading]]`). Specs
+  and plans live in `docs/specs/` and `docs/plans/` (before: `docs/superpowers/`).
 
-## 0.5.3 — 2026-11-05
-- **UPD** The session-start hook also runs when a session is forked, so a fork gets the project context too.
-- **FIX** A quick test suite re-run at once (fix one line, run again) no longer waits about 10 s: the
-  one-suite hook's grace is 3 s and it checks every second.
-- **UPD** `tests/run.sh` names a test file that skipped (coremodel without the `claude` CLI) after
-  ALL TESTS PASSED instead of hiding it.
-- **UPD** Cleanup: a dead fallback in the stop hook; banners on two shipped plans; migration-0.3 lists all
-  coremodel settings. Second refactor pass.
+## [0.6.6] - 2026-11-05
 
-## 0.5.2 — 2026-11-05
-- **FIX** Both guards judge the command line handed to `bash -c`, `sh -c`, `zsh -c`, `dash`, `ksh` and
-  `eval`: `bash -c "cat .env"` and `bash -c "echo x > CLAUDE.md"` are blocked like the plain commands.
-  Interpreters (`python -c`, `node -e`), `find -exec`, `git show REV:.env`, `dd` and `curl -F @file`
-  are still not seen; the README now says so.
-- **FIX** The one-time "Core not set up / not found" hint is shown to the person (a `systemMessage`), not
-  only handed to the model; before, it was marked as shown even when nobody read it.
-- **UPD** README: the Claude Code version it needs (2.1.271 for corecrew, 2.1.287 for coremodel) and a short
-  "What the hooks do" section. The `task` description uses `[task]` instead of `<task>`.
-- **UPD** Docs: finished plans and the old effort-picker documents carry a "historical" banner.
+### Fixed
 
-## 0.5.1 — 2026-11-05
-- **FIX** guard-secrets: a secret name written with quotes or a backslash (`.e'n'v`, `.\env`, `~/.s""sh/id_rsa`)
-  is judged after quote removal; globs that can match `.env`, `.env.*` or `.ssh` (`.e*`, `.en?`,
-  `.[e]nv`, `~/.s*/id_rsa`) are blocked; `*`, `.*` and `*.env` still pass.
-- **FIX** Both guards: wrapper options that take a value are skipped, so `timeout 5 cat .env`,
-  `nice -n 5 cat .env`, `sudo -u root cat .env`, `env -u X cat .env` and `timeout 5 tee docs/a` are
-  seen. `timeout`, `stdbuf`, `setsid`, `caffeinate`, `ionice` count as wrappers.
-- **FIX** `zip a.zip src -x .env` is no longer blocked (`-x`/`-i` take patterns).
-- **FIX** With HOME unset, `~/.ssh` is still protected (HOME comes from the account).
-- **FIX** A `core_dir` that is a symlink: the code folders next to the link are recognised.
-- **FIX** guard-code blocks a file written directly under `.claude/worktrees/`.
-- **FIX** one-suite sees `echo $((1<<3)); swift test` as a test run.
-- **UPD** Docs: CLAUDE.md layout, README (evals, release/adopt, session-rules), migration-0.3 names
-  `coremodel`, old specs carry a "superseded / now true" note.
-## 0.5.0 — 2026-11-04
-- **NEW** New projects keep their code beside the Core, in `<Projects>/<Name>` (Projects is the folder
-  that holds the Core, for example `~/Projects/MyApp`). Private files stay in `<Core>/<name>/`.
-  Launch Claude Code in the code folder.
-- **NEW** Session start makes and repairs `CLAUDE.local.md` in the code folder, a gitignored link to
-  `<Core>/<name>/CLAUDE.md`, so the private instructions load there. A real file or a link that
-  points elsewhere is never overwritten; the session start says what to fix.
-- **UPD** Project rules move into `CLAUDE.md`: there is no `.claude/rules/` template any more.
-- **UPD** `/corecrew:task adopt` keeps the repo where it is. It adds `.worktreeinclude`, folds tracked
-  `.claude/rules/` into `CLAUDE.md`, warns about nested `CLAUDE.md` files, and moves only
-  old-layout `<Core>/<name>/code` folders (to `<Projects>/<name>`), folding their
-  `<Core>/<name>/.claude/rules/` into `CLAUDE.md` too.
-- **UPD** `guard-code` guards the code folder beside the Core, as it did `<Core>/<name>/code`.
-  `docs/superpowers/` stays private even when `docs/` is listed as public.
-- **UPD** Core schema 2: a schema 1 Core gets one layout note at session start; the setup command changes
-  only the schema line of `.coredev`.
-- **UPD** Existing projects (code in `<Core>/<name>/code`): `/corecrew:task` stops in them and asks you to
-  run `/corecrew:task adopt <Core>/<name>/code` first, which moves the code folder to
-  `<Projects>/<name>`. `save` and the hooks still work there until then.
+- The one-suite hook no longer lets several test runs through when many waiters find the same
+  stale turn at the same instant: the takeover runs under a short lock.
 
-## 0.4.0 — 2026-11-04
-- **UPD** `AGENTS.md` (the agent-instructions file Codex, Cursor and other tools read) is now an internal
-  file, like `CLAUDE.md`: `guard-code` blocks writing it at any depth under `<Core>/<project>/code/`
-  (file tools and Bash), the git pre-commit and pre-push checks block committing it
-  (`blocked-patterns`), and the new-project `.gitignore` template lists it. Its place is
-  `<Core>/<project>/AGENTS.md`.
-- **UPD** `/corecrew:task adopt` moves a root `AGENTS.md` to `<Core>/<name>/` with `CLAUDE.md`, and adds
-  the `AGENTS.md` ignore line. An `AGENTS.md` that is a symlink is refused, as `CLAUDE.md` is.
-- **UPD** Existing projects: a code repo that already tracks `AGENTS.md` can no longer commit changes to
-  it. Move it by hand: copy it to `<Core>/<project>/AGENTS.md`, then in `code/` run
-  `git rm AGENTS.md`, add the line `AGENTS.md` to `.gitignore`, and commit.
+## [0.6.5] - 2026-11-05
 
-## 0.3.1 — 2026-11-04
-- **UPD** Plugin lists show the names as CoreCrew and CoreEffort (`displayName` in the manifests),
-  not "Corecrew" and "Coreeffort". Commands keep their lowercase names.
+### Added
 
-## 0.3.0 — 2026-11-04
-- **UPD** The plugin is now `corecrew` (brand CoreCrew); the marketplace and repo stay `corekit`.
-  Commands are `/corecrew:...`, agents `corecrew:<role>`, hook messages start with `corecrew:`.
-  The marketplace `renames` map moves `coredev` and `corekit` installs to `corecrew`.
+- `/corecrew:ship [patch|minor|major|<version>]` releases the current branch through the release
+  path of `/corecrew:task`, then, after your explicit yes, fast-forwards `main` and pushes it.
+  It never forces.
+
+## [0.6.4] - 2026-11-05
+
+### Added
+
+- Icon files for the three plugins, with SVG sources in `docs/icons/`. No manifest named them yet,
+  so plugin listings did not show them.
+
+## [0.6.3] - 2026-11-05
+
+### Changed
+
+- The one-suite hook names its known limits in its header. No behaviour change.
+- Repo paths named in the READMEs must exist (a test checks it).
+
+## [0.6.2] - 2026-11-05
+
+### Security
+
+- The read-only checkers' rule, after a second opinion: any `cd` ends relative writes; `git push`,
+  global git config, `--git-dir`/`--work-tree` and `git worktree add` are refused even into a temp
+  folder; `cp`/`mv` into a folder, `sed` with a `w` command or `-f`, and grouped curl options are judged.
+
+## [0.6.1] - 2026-11-05
+
+### Changed
+
+- The six agents' descriptions are 120 characters at most, which saves context in every session.
+- Trigger evals for `new-project` in `plugins/corecrew/evals/` (`claude plugin eval`).
+
+### Security
+
+- The read-only checkers' rule, after an independent review: it follows `cd`, looks into `$(...)`
+  and backticks, and refuses `find -delete`/`-exec`, `xargs rm`, `sort -o`, downloads, unpacking,
+  `ln`, more git changes, and any command it cannot read whole. Some reads it wrongly refused now
+  pass (`git tag -l`, `git stash list`, `git worktree list`).
+
+## [0.6.0] - 2026-11-05
+
+### Added
+
+- The read-only checkers (designer, localizer, security, verifier) can change nothing but the temp
+  folders: a hook refuses their Bash writes, removals, in-place edits and git changes.
+
+### Changed
+
+- The plugin lives in `plugins/corecrew/` of the repo; an install copies only the plugin. The name,
+  the settings and the data folder stay the same.
+
+## [0.5.3] - 2026-11-05
+
+### Changed
+
+- The session-start hook also runs when a session is forked.
+- `tests/run.sh` names a test file that was skipped instead of hiding it.
+
+### Fixed
+
+- A quick re-run of a test suite no longer waits about 10 s: the one-suite grace is 3 s.
+
+## [0.5.2] - 2026-11-05
+
+### Changed
+
+- README: the Claude Code versions needed and a short "What the hooks do" section.
+
+### Fixed
+
+- The one-time "Core not set up" hint is shown to the person, not only handed to the model.
+
+### Security
+
+- Both guards judge the command line handed to `bash -c`, `sh -c`, `zsh -c` and `eval`.
+  Interpreters (`python -c`, `node -e`), `find -exec`, `git show REV:.env`, `dd` and
+  `curl -F @file` are still not seen; the README says so.
+
+## [0.5.1] - 2026-11-05
+
+### Fixed
+
+- `zip a.zip src -x .env` is no longer blocked.
+- A `core_dir` that is a symlink: the code folders next to the link are recognised.
+- one-suite sees `echo $((1<<3)); swift test` as a test run.
+
+### Security
+
+- guard-secrets judges a secret name written with quotes or a backslash (`.e'n'v`) and blocks globs
+  that can match `.env` or `.ssh`.
+- Both guards skip wrapper options that take a value (`timeout 5 cat .env`, `sudo -u root cat .env`).
+- With `HOME` unset, `~/.ssh` is still protected.
+- guard-code blocks a file written directly under `.claude/worktrees/`.
+
+## [0.5.0] - 2026-11-04
+
+### Added
+
+- New projects keep their code beside the Core, in `<Projects>/<Name>`; private files stay in
+  `<Core>/<name>/`. Launch Claude Code in the code folder.
+- Session start makes and repairs `CLAUDE.local.md`, a gitignored link to `<Core>/<name>/CLAUDE.md`,
+  and never overwrites a real file.
+
+### Changed
+
+- `/corecrew:task adopt` keeps the repo where it is and moves only old-layout `<Core>/<name>/code`
+  folders. In such a project `/corecrew:task` asks you to run adopt first.
+- `guard-code` guards the code folder beside the Core.
+- Core schema 2: a schema 1 Core gets one layout note at session start.
+
+### Removed
+
+- The `.claude/rules/` template: project rules live in `CLAUDE.md`.
+
+## [0.4.0] - 2026-11-04
+
+### Changed
+
+- `AGENTS.md` is an internal file like `CLAUDE.md`: `guard-code` and the git hooks keep it out of the
+  code repo, and `adopt` moves it to `<Core>/<name>/`. A code repo that already tracks it must move
+  it by hand: copy it to the Core, `git rm AGENTS.md`, add it to `.gitignore`, commit.
+
+## [0.3.1] - 2026-11-04
+
+### Changed
+
+- Plugin lists show the name as CoreCrew (`displayName`). Commands keep their lowercase names.
+
+## [0.3.0] - 2026-11-04
+
+### Changed
+
+- The plugin is now `corecrew`; the marketplace and repo stay `corekit`. Commands are
+  `/corecrew:...`. The marketplace moves `coredev` and `corekit` installs to `corecrew`.
   Steps: [docs/migration-0.3.md](docs/migration-0.3.md).
-- **UPD** The plugin data folder is now `corecrew-corekit`. Git hook shims of 0.2.x (`# coredev hook shim`)
-  count as old: the session start names them, and `install-hooks.sh` replaces them.
-- **UPD** `<Core>/.coredev` keeps its name, so existing Cores need no change.
-- **UPD** The second plugin `effort-picker` is now `coreeffort` (0.2.0); its command is `/coreeffort`.
+- The plugin data folder is now `corecrew-corekit`; `install-hooks.sh` replaces the 0.2 git hook shims.
 
-## 0.2.1 — 2026-11-04
-- **NEW** New plugin setting `ui_language` (`en` default, `ru`): the language of every message the
-  hooks show. All hook texts live in one table, `hooks/messages.sh`; a new language is one more
-  column there. Commands, paths and file names in the messages stay as they are.
+## [0.2.1] - 2026-11-04
 
-## 0.2.0 — 2026-11-03
-- **UPD** Hooks read settings from the plugin options. When `core_dir` is not the default and the
-  options are not set (for example under `--plugin-dir`), the hooks stay silent: set
-  `core_dir` in `/plugin` → Installed → coredev → Configure options.
-- **FIX** The release attribution check matches only trailer lines (`Co-Authored-By:`,
-  `Generated with` at a line start), the same lines `save --no-attribution` drops.
-- **UPD** The plugin is now `coredev` (the marketplace and repo stay `corekit`). The marketplace
-  `renames` map migrates old installs; run `/plugin install coredev@corekit` once.
-  Commands are `/coredev:...`.
-- **NEW** Plugin settings (`userConfig`): `core_dir`, `attribution` (`allow`/`forbid`),
-  `model_profile` (`economy`/`balanced`/`strong`).
-- **UPD** `feature-dev` (from `claude-plugins-official`, or from claude.ai) is needed by `/coredev:task`
-  but is not declared as a hard dependency: a hard dependency stopped `coredev` from loading
-  when `feature-dev` came from claude.ai sync or another marketplace. Install it with
-  `/plugin install feature-dev@claude-plugins-official`; `task` checks for it at start.
-- **FIX** Settings: a value that is still the literal text `${user_config.…}` (plugin not configured)
-  counts as unset, so scripts fall back to `CLAUDE_PLUGIN_OPTION_*` and then the defaults.
-- **UPD** Added `tests/test_manifest.sh`.
-- **UPD** Git hooks installed in repos are small shims that run the plugin's scripts from a stable
-  copy in the plugin data folder (`sync-tools.sh`); the copy is refreshed on version change, so
-  hooks no longer go stale after an update. The copy is also refreshed when the scripts' content
-  changes without a version bump, and a folder that is not a coredev tools copy is never replaced. `install-hooks.sh` fails with exit 1 when its hook
-  sources are missing, and no longer copies `blocked-patterns` into `.git/hooks`.
-- **UPD** The Stop hook ships with the plugin (`hooks/hooks.json`, runs `hooks/stop-remind.sh`) and
-  stays silent outside a Core project. New projects no longer get a `hooks` block in
-  `code/.claude/settings.local.json`; existing projects must remove theirs (migration step 4).
-- **UPD** `install.sh` and its test are removed: install with `/plugin install coredev@corekit`.
-  The README says the plugin needs Claude Code 2.1.271 or newer.
-- **UPD** The project `CLAUDE.md` template names `save` and `undo-step` as plugin tools that Claude
-  runs, instead of `Core/bin/`.
-- **NEW** Added `/coredev:new-standard`: an interview, a research subagent and `scripts/check-standard.sh`
-  help the user write their own standards into `<Core>/standards/`; the plugin ships none.
-  `reference/knowledge.md` defines the knowledge files (`docs/knowledge/`, `<Core>/knowledge/`).
-- **UPD** Added `docs/migration-0.2.md`: the seven steps for an existing 0.1.x user.
-- **UPD** `.env.example`, `.env.sample` and `.env.template` are allowed everywhere: by `guard-secrets`, by
-  the code repo's pre-commit and pre-push hooks, and by the new-project `.gitignore`.
-- **UPD** `/coredev:task adopt` adds the missing coredev ignore lines (`CLAUDE.md`, `.claude/`, `.env`, ...)
-  to the repo's `.gitignore` in its "Move internal Claude files to Core" commit, so a local
-  `.claude/settings.local.json` or a `.claude/worktrees/` worktree never blocks `save`.
-- **NEW** Added `/coredev:task <task>`: the orchestrator runs a task along one of four paths (`fix`,
-  `full`, `question`, `batch`) and ends with a report with proof and one commit.
-- **NEW** `/coredev:task release <version>` runs seven checks (tests, wiki, version, changelog) and commits the release; it tags and pushes nothing.
-- **NEW** `/coredev:task adopt <folder>` (`scripts/adopt.sh`) moves an existing project into the Core
-  layout, keeps its git history and adds the missing wiki pages.
-- **NEW** Six agents: `engineer`, `tester`, `security`, `verifier`, `localizer`, `designer`.
-- **NEW** Five hooks: `session-start` (refreshes the tools, shows the project context), `one-suite`
-  (one test run at a time), `guard-code` (no internal files in `code/`), `guard-secrets`
-  (no `.env`, no `~/.ssh`) and `stop-remind` (the save reminder).
-- **NEW** Wiki rules (`reference/wiki.md`) and `scripts/wiki-check.sh`; `new-project` and adopt create a
-  wiki that passes the check.
-- **NEW** Knowledge: lessons per project (`docs/knowledge/`) and for all projects (`<Core>/knowledge/`),
-  read by the agents before they work.
-- **UPD** Install and update with the `claude plugin` commands on Mac and Windows (README); Windows
-  needs Git for Windows.
-- **UPD** Added the end-to-end fixture `tests/fixtures/make-test-coredev.sh` (a tiny project with a
-  planted bug) and `tests/test_fixture.sh`.
+### Added
 
-## 0.1.1 — 2026-11-03
-- **FIX** `save` reinstalls hooks when the code pre-push hook or `blocked-patterns` is missing
-  (without the patterns file every commit was blocked and `save` never recovered).
-- **FIX** `install.sh` no longer replaces a same-named skill it did not install; installed folders
-  get a `.corekit` marker, `--force` replaces anyway. A symlinked skill folder is left alone,
-  and it refuses to install into the repo's own `skills/` (that deleted the source).
-- **UPD** Stop hook reminds once per set of uncommitted changes and tells Claude not to save while
-  it waits for the user's answer. It notices edits in untracked files with non-ASCII names
-  and in repos without commits, and stays fast with thousands of untracked files.
-- **FIX** `scaffold.sh` joins a multi-line `--purpose` into one line (PROJECTS.md entry was split).
-- **UPD** Test suite passes on macOS (bash 3.2, BSD utilities); new `tests/test_portability.sh`
-  blocks bash 4 and GNU-only constructs. Added CLAUDE.md for contributors.
-- **UPD** Upgrade note: existing docs repos keep their old `Core/bin/` copies; copy the new `save`
-  and `stop-remind.sh` from `skills/new-project/core-bin/` there to get the fixes.
-  (Historical: that folder is gone; since 0.2 the tools live in the plugin's `scripts/` and `hooks/` and
-  nothing is copied into the docs repo.)
+- The `ui_language` setting (`en`, `ru`): the language of the hook messages.
 
-## 0.1.0 — 2026-11-03
-- **NEW** First public release: `new-project` skill (interview, stack and architecture analysis,
-  scaffold, private docs repo, protective git hooks, `save` / `undo-step`), per-user settings,
+## [0.2.0] - 2026-11-03
+
+### Added
+
+- `/coredev:task <task>` runs a task with a crew of six agents and ends with a report and one commit;
+  `release` and `adopt` paths.
+- `/coredev:new-standard` helps you write your own standards into the Core.
+- Plugin settings: `core_dir`, `attribution`, `model_profile`.
+- Five hooks: session start, one test suite at a time, the code guard, the secrets guard and the save reminder.
+- Wiki rules and `wiki-check.sh`; knowledge files per project and for all projects.
+
+### Changed
+
+- The plugin is now `coredev`. Install and update with `claude plugin` commands.
+- Git hooks in your repos are small shims that run the plugin's scripts from its data folder, so
+  they stay current after an update.
+- `feature-dev` is needed by `task` but is not a hard dependency.
+- `.env.example`, `.env.sample` and `.env.template` are allowed everywhere.
+- Upgrade steps from 0.1: [docs/migration-0.2.md](docs/migration-0.2.md).
+
+### Removed
+
+- `install.sh`: install with `/plugin install`.
+
+### Fixed
+
+- The release attribution check matches only trailer lines.
+- A setting that is still the literal `${user_config.…}` counts as unset.
+
+## [0.1.1] - 2026-11-03
+
+### Changed
+
+- The Stop hook reminds once per set of uncommitted changes and stays fast in large repos.
+- The test suite passes on macOS bash 3.2 with BSD tools.
+
+### Fixed
+
+- `save` reinstalls the git hooks when one of them or `blocked-patterns` is missing.
+- `install.sh` no longer replaces a skill it did not install.
+- `scaffold.sh` joins a multi-line `--purpose` into one line.
+
+## [0.1.0] - 2026-11-03
+
+### Added
+
+- First public release: the `new-project` skill (interview, stack and architecture analysis,
+  scaffold, private docs repo, protective git hooks, `save` and `undo-step`), per-user settings,
   Claude Code plugin and marketplace manifests.
