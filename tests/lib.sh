@@ -4,6 +4,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGIN="$ROOT/plugins/corecrew"   # the corecrew plugin; the repo root holds the marketplace
 SKILL="$PLUGIN/skills/new-project"
 SCRIPTS="$PLUGIN/scripts"
+# shellcheck disable=SC2034  # HOOKS is for the test files that source this one
 HOOKS="$PLUGIN/hooks"
 
 pass() { PASSES=$((PASSES + 1)); }

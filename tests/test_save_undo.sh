@@ -203,7 +203,7 @@ assert_no_file "$T/.git/hooks/pre-commit"; assert_no_file "$T/CLAUDE.local.md"
 grep -q 'code_dir_of "$NAME" 2>/dev/null' "$SCRIPTS/install-hooks.sh" && fail "install-hooks swallows the case-clash line" || pass
 mkdir -p "$SANDBOX/Projects/Clash" "$SANDBOX/Projects/clash" "$CORE_DIR/clash"; : > "$CORE_DIR/clash/CLAUDE.md"
 if [ "$(ls "$SANDBOX/Projects" | grep -ci '^clash$')" -eq 2 ]; then
-  CORE_DIR="$CORE_DIR" bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/clash" > "$SANDBOX/out" 2>&1; rc=$?
+  bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/clash" > "$SANDBOX/out" 2>&1; rc=$?
   [ "$rc" -ne 0 ] && pass || fail "install-hooks with a case clash exited 0"
   assert_contains "$SANDBOX/out" "two folders differ only in case"
 else

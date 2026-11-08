@@ -3,7 +3,7 @@
 source "$(dirname "$0")/lib.sh"
 
 # C1: undo-step must only touch the current project's steps
-new_sandbox; setup_core; sync_tools; S="$SKILL/scripts/scaffold.sh"
+new_sandbox; setup_core; sync_tools
 scaffold_old app-a; scaffold_old app-b
 SAVE="$SCRIPTS/save"; UNDO="$SCRIPTS/undo-step"
 (cd "$CORE_DIR/app-a/code" && bash "$SAVE" init) >/dev/null 2>&1

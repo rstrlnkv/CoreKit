@@ -28,7 +28,6 @@ ran_fake() { # ran_fake <cmd> — run it for real with the fake first on PATH; 0
 }
 command -v timeout >/dev/null 2>&1 || timeout() { shift; "$@"; }
 
-pad50="$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 51; i++) printf "ls; "; }')"
 q51="$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 51; i++) printf "bash -c '"'"'ls; ls'"'"'; " }')"
 nl="
 "

@@ -6,7 +6,6 @@ source "$(dirname "$0")/lib.sh"
 new_sandbox
 . "$SCRIPTS/lib.sh"
 SELF="$PLUGIN"
-T="$(printf '\t')"
 
 # pp <text> — the adapter output with the TAB shown as '>'
 pp() { patch_paths "$1" | tr '\t' '>'; }
@@ -67,6 +66,7 @@ assert_eq "$(pp "$b*** Add File: a$nl+x$nl$(printf '\302\240')*** Add File: docs
 assert_eq "$(pp "$b*** Add File: a$nl+x${nl}junk *** Add File: .env$nl$e")" "W>a${nl}X>unreadable" "junk before a header is X"
 assert_eq "$(pp "x *** Add File: .env" )" "X>unreadable" "strict: text with a header outside Begin is X"
 # a missing awk file prints nothing and fails; a reader that ran with no path prints nothing and succeeds
+# shellcheck disable=SC2034  # SELF is read by patch_paths (the sourced lib.sh)
 OUTP="$(SELF="$SANDBOX/nowhere"; patch_paths "$b*** Add File: a$nl$e")"; RCP=$?
 assert_eq "$OUTP" "" "missing adapter prints nothing"
 [ "$RCP" -ne 0 ] && pass || fail "missing adapter: status $RCP, want non-zero"

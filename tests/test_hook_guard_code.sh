@@ -436,11 +436,10 @@ assert_contains "$OD/err" "patch-paths.awk is missing or failed"
 
 # --- new layout: the code lives in <Projects>/<Name>, the private CLAUDE.md in the Core
 sec_new_layout() {
-  local PR="$SANDBOX/Projects" N="$SANDBOX/Projects/Foo" W
+  local PR="$SANDBOX/Projects" N="$SANDBOX/Projects/Foo"
   mkdir -p "$N/src" "$N/.claude" "$CORE_DIR/foo/docs" "$PR/Brain"
   echo '# foo' > "$CORE_DIR/foo/CLAUDE.md"; : > "$PR/Brain/CLAUDE.md"
   ln -s "$CORE_DIR/foo/CLAUDE.md" "$N/CLAUDE.local.md"
-  local nmsg
   nmsg() { printf 'corecrew: %s is an internal file and must not live in the code folder. Write it to %s instead.\nDocs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in %s.' "$1" "$2" "$CORE_DIR/foo/CLAUDE.md"; }
   run_file Write "$N/CLAUDE.md" "$N"; assert_eq "$RC" "2" "new: Write CLAUDE.md"; assert_eq "$ERR" "$(nmsg "$N/CLAUDE.md" "$CORE_DIR/foo/CLAUDE.md")" "new: message"
   run_file Write "$N/docs/x.md" "$N"; assert_eq "$RC" "2" "new: Write docs/x.md"
@@ -477,7 +476,7 @@ bg sec_new_odd_path
 FX="$ROOT/tests/fixtures/codex"
 mkdir -p "$CORE_DIR/r/code/docs" "$CORE_DIR/r/code/sub"; printf 'public-docs: docs/pub/\n' > "$CORE_DIR/r/CLAUDE.md"
 sec_codex() {
-  local R="$CORE_DIR/r/code" q
+  local R="$CORE_DIR/r/code"
   # fx <fixture> [cwd] — runs a fixture with @CWD@ replaced
   fx() { run_json "$(sed "s|@CWD@|${2-$C}|g" "$FX/$1.json")"; }
   # patch <patch text> [cwd] [tool] — a Codex tool call with the given patch text

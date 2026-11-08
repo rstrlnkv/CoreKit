@@ -25,7 +25,7 @@ try_commit() {  # try_commit <path> ; force-add past .gitignore to test the hook
 }
 for bad in CLAUDE.md sub/CLAUDE.local.md AGENTS.md sub/AGENTS.md agents.md .claude/x.json .env .env.local docs/superpowers/plan.md a.pem k.key; do
   try_commit "$bad" && fail "commit allowed: $bad" || pass
-  rm -rf "$C/$bad"
+  rm -rf "${C:?}/${bad:?}"
 done
 for ok in .env.example .env.sample .env.template sub/.env.sample src/main.dart docs/README.md MYAGENTS.md AGENTS.md.bak; do
   try_commit "$ok" && pass || fail "commit blocked: $ok"
