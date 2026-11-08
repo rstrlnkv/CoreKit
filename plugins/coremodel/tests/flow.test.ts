@@ -397,7 +397,7 @@ test('a Russian prompt gets the question in Russian', async ($, on) => {
   expect(w.efforts).toEqual(['medium'])
 })
 
-// CoreModel: the model part of a pick (spec §4.2, §4.3).
+// CoreModel: the model part of a pick.
 const MID = 'an earlier answer'
 
 test('first prompt in auto switches the model silently', { options: { mode: 'auto' } }, async ($, on) => {
@@ -623,7 +623,7 @@ test('pickModel off keeps CoreEffort behaviour', { options: { mode: 'auto', pick
   expect(w.efforts).toEqual(['high'])
 })
 
-// CoreModel: holding the pair (spec §4.4).
+// CoreModel: holding the pair.
 async function holdOpusHigh($: Eng, w: World) {
   w.answer = '{"level":"high","model":"opus","why":"x"}'
   await submit($, 'fix the login')

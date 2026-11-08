@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelCompleteResult, Register } from 'claude-code'
 
 import type { Band, Level, Mark, Stats } from '../types'
-import { buildPrompt, parseAnswer, type Pick, toLevel } from './classifier'
+import { buildPrompt, LEVELS, parseAnswer, type Pick, toLevel } from './classifier'
 import { detectModels, enabledModels, LADDER, MODELS, type ModelKey, requestModel, standIn, switchUsd, toModel } from './models'
 import { decide, decideModel, effortOptions, type Lang, type Mode, modelOptions, texts, uiLang } from './policy'
 
@@ -42,7 +42,7 @@ let modelHold: { key: ModelKey; base: string } | null = null
 let seen: Level | '' = ''
 // The model the last main-chat request named (the person's own unless held).
 let seenModel = ''
-// Models this account refused in this session (spec §4.5): never picked again until a new session.
+// Models this account refused in this session: never picked again until a new session.
 const unavailable = new Set<ModelKey>()
 // The models the account lists in /config (the Model row), read again before every pick and at a new
 // session; null when the row says nothing usable. Never stored: a model that appears later is seen.
@@ -50,6 +50,10 @@ let listed: ModelKey[] | null = null
 // The menu's own effort as the last main-chat request carried it.
 let asked = ''
 let lastLang: Lang = 'en'
+// Where the session draws: VS Code draws neither the band nor the footer, so a switch is told in a toast.
+let surface = ''
+// The last silent switch, for /coremodel undo after its band is gone.
+let lastUndo: Band | null = null
 
 /** Reads the /config Model row again; any failure means "no verdict" (nothing is filtered). */
 async function refreshListed($: EngineInterface): Promise<void> {
@@ -101,7 +105,7 @@ async function currentMode($: EngineInterface, options: { mode?: unknown }): Pro
   return MODES.includes(options.mode as Mode) ? (options.mode as Mode) : 'suggest'
 }
 
-/** Switches to `level` by holding it on this chat's requests (spec §4.4). */
+/** Switches to `level` by holding it on this chat's requests. */
 async function applyLevel($: EngineInterface, level: Level, base: string): Promise<void> {
   hold = { level, base }
   await syncOverride($)
@@ -145,6 +149,7 @@ async function releaseHold($: EngineInterface): Promise<void> {
  */
 async function newChat($: EngineInterface, fromEngine: boolean): Promise<void> {
   gen += 1
+  lastUndo = null
   held = fromEngine && held ? { ...held, gen } : null
   seen = toLevel(asked)
   await releaseHold($)
@@ -170,7 +175,7 @@ async function placeMark($: EngineInterface, change: Mark) {
   await $.ui.place({ id })
 }
 
-/** Switches to `key` by holding it on this chat's requests (spec §4.4, M7). */
+/** Switches to `key` by holding it on this chat's requests. */
 async function applyModel($: EngineInterface, key: ModelKey, base: string): Promise<void> {
   modelHold = { key, base }
   await syncOverride($)
@@ -187,7 +192,16 @@ async function chatTokens($: EngineInterface): Promise<number | undefined> {
 
 async function announce($: EngineInterface, change: Mark, undo: Band['undo']) {
   const b: Band = { id: nextBand++, ...change, undo }
+  lastUndo = undo ? b : null
   await update($, band, () => b)
+  if (surface === 'vscode') {
+    const t = texts(change.lang)
+    try {
+      $.ui.toast(`${t.change(change.model, change.fromModel, change.level, change.from, change.why)}${undo ? ` · ${t.undoHint}` : ''}`)
+    } catch {
+      // The transcript row still says it.
+    }
+  }
   void (async () => {
     await $.clock.sleep(BAND_MS)
     await update($, band, cur => (cur && cur.id === b.id ? null : cur))
@@ -325,7 +339,6 @@ async function runPick(
   if (pick.level === 'keep') return kept()
   const level = pick.level
 
-  // The model first (spec §4.3): it decides what the chat costs from here on.
   const isFirst = !(await $.session.messages()).some(m => m.role === 'assistant')
   const mAction = decideModel({ mode, pickModel: options.pickModel !== 'off', isFirst, now: nowModel, pick: pick.model, allowed })
   let modelTo: ModelKey | null = mAction === 'apply' && pick.model ? pick.model : null
@@ -333,7 +346,7 @@ async function runPick(
   const action = hasEffort ? decide(mode, now, pick) : 'none'
   let levelTo: Level | null = action === 'apply' ? level : null
 
-  // The model first (it decides what the chat costs from here on, spec §4.3), then the effort. In
+  // The model first (it decides what the chat costs from here on), then the effort. In
   // each question the recommended choice comes first and the current one is there to keep. When both
   // are asked, the effort question ends with "Back to the model", which asks the model again.
   let askModel: (() => Promise<void>) | null = null
@@ -408,6 +421,35 @@ async function runPick(
   }
 }
 
+/** Takes back what a silent switch changed, part by part; a part the person changed since stays. True when anything went back. */
+async function undoChange($: EngineInterface, b: Band): Promise<boolean> {
+  const undo = b.undo
+  if (!undo) return false
+  touched += 1
+  let done = false
+  if (undo.model && b.model && modelHold?.key === b.model) {
+    if (undo.model === 'release') await releaseModel($)
+    else await applyModel($, undo.model, modelHold.base)
+    done = true
+  }
+  if (undo.level && b.level && hold?.level === b.level) {
+    if (undo.level === 'release') await releaseLevel($)
+    else await applyLevel($, undo.level, hold.base)
+    done = true
+  }
+  if (lastUndo?.id === b.id) lastUndo = null
+  await update($, band, cur => (cur && cur.id === b.id ? null : cur))
+  return done
+}
+
+/** What an undo of `b` goes back to: a model and a level, each named or empty. */
+function undoTarget(b: Band): { model: ModelKey | '' | undefined; level: Level | '' | undefined } {
+  return {
+    model: b.undo?.model === 'release' ? b.fromModel : b.undo?.model,
+    level: b.undo?.level === 'release' ? b.from : b.undo?.level,
+  }
+}
+
 /** Sets the mode as `/coremodel <mode>` does; returns the reply. */
 async function setMode($: EngineInterface, options: { mode?: unknown; pickModel?: unknown }, arg: Mode | 'on'): Promise<string> {
   let text: string
@@ -442,7 +484,7 @@ async function paneChoice($: EngineInterface, level: Level | null): Promise<void
 }
 
 /**
- * A model the person presses in the pane. Mid-chat the cost question comes first (spec §7.5);
+ * A model the person presses in the pane. Mid-chat the cost question comes first;
  * the press itself is their yes, so no other question follows.
  */
 async function paneModel($: EngineInterface, key: ModelKey): Promise<void> {
@@ -464,9 +506,6 @@ async function paneModel($: EngineInterface, key: ModelKey): Promise<void> {
   await update($, band, () => null)
 }
 
-/** True when the `models` setting names `key` itself; an empty setting means all four without naming any. */
-const ASK_MODES: readonly Mode[] = ['auto', 'suggest', 'off']
-const LEVELS: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
 const MODEL_COLOR: Record<string, string> = { haiku: '#1D9E75', sonnet: '#378ADD', opus: '#7F77DD', fable: '#D4537E' }
 const LEVEL_SHADES = ['#B5D4F4', '#85B7EB', '#378ADD', '#185FA5', '#0C447C']
@@ -596,14 +635,15 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   on('session.start', async ($, e, next) => {
+    surface = e.surface ?? ''
     unavailable.clear()
     await refreshListed($)
     // A new session, or a reload of this module, starts with no held level: drop what $.state kept.
     await newChat($, false)
     await $.command.register({
       name: 'coremodel',
-      description: 'CoreModel: show what the chat runs at, set the mode (auto, suggest, off, on), or open the pane (panel); recheck reads the account\'s model list again',
-      argumentHint: '[auto|suggest|off|on|panel|recheck|probe]',
+      description: 'CoreModel: show what the chat runs at, set the mode (auto, suggest, off, on), open the pane (panel), take back the last switch (undo); recheck reads the account\'s model list again',
+      argumentHint: '[auto|suggest|off|on|panel|undo|recheck]',
     })
     return next(e)
   })
@@ -623,24 +663,32 @@ export const register: Register = (on, options) => {
       const names = allowedModels(options).map(k => MODELS[k].name)
       return { text: texts(lastLang).recheck(names, enabledModels(options).length, listed !== null, options.pickModel !== 'off') }
     }
+    if (arg === 'undo') {
+      const b = lastUndo
+      if (!b || !(await undoChange($, b))) return { text: texts(lastLang).nothingToUndo }
+      const to = undoTarget(b)
+      return { text: texts(lastLang).undone(to.model, to.level) }
+    }
     if (arg === 'probe') {
-      // What /config offers, for finding out whether it lists the models this account can use. Reads
-      // only; nothing is written or changed.
+      // A diagnostic, left out of the command's hint: what /config offers, to see whether it lists the
+      // models this account can use. Reads only, and writes to the debug log, never to the chat.
+      let rows: Awaited<ReturnType<typeof $.config.list>> = []
       try {
-        const rows = await $.config.list()
-        if (!rows.length) return { text: 'CoreModel probe: no rows.' }
-        const line = (r: (typeof rows)[number]) => {
-          const opts = r.options ? ` · options: ${r.options.slice(0, 16).join(', ')}${r.options.length > 16 ? ', …' : ''}` : ''
-          return `${r.key} · ${r.label} · ${r.kind} · value: ${String(r.value)}${opts}`
-        }
-        return { text: `CoreModel probe: ${rows.length} rows\n${rows.map(line).join('\n')}` }
+        rows = await $.config.list()
       } catch (err) {
-        return { text: `CoreModel probe: no rows (${err instanceof Error ? err.message : String(err)}).` }
+        await log($, 'probe', `no rows (${err instanceof Error ? err.message : String(err)})`)
+        return { text: texts(lastLang).probeLogged(0) }
       }
+      const line = (r: (typeof rows)[number]) => {
+        const opts = r.options ? ` · options: ${r.options.slice(0, 16).join(', ')}${r.options.length > 16 ? ', …' : ''}` : ''
+        return `${r.key} · ${r.label} · ${r.kind} · value: ${String(r.value)}${opts}`
+      }
+      await log($, 'probe', rows.length ? `${rows.length} rows\n${rows.map(line).join('\n')}` : 'no rows')
+      return { text: texts(lastLang).probeLogged(rows.length) }
     }
     const mode = await currentMode($, options)
     const level = hold?.level ?? seen
-    // pickModel off: the level only, as everywhere else (spec §6).
+    // pickModel off: the level only, as everywhere else.
     const model = options.pickModel !== 'off' ? modelHold?.key ?? toModel(seenModel) : ''
     const t = texts(lastLang)
     if (!arg) {
@@ -648,12 +696,12 @@ export const register: Register = (on, options) => {
       try {
         // The words are the keys in English and the mode names in Russian; the answer maps back.
         const label = (m: Mode) => (lastLang === 'ru' ? t.modeName(m) : m)
-        const picked = await $.ui.ask(t.modeQuestion(mode, model, level), { options: ASK_MODES.map(label), header: 'CoreModel' })
-        answer = ASK_MODES.find(m => label(m) === picked) ?? ''
+        const picked = await $.ui.ask(t.modeQuestion(mode, model, level), { options: MODES.map(label), header: 'CoreModel' })
+        answer = MODES.find(m => label(m) === picked) ?? ''
       } catch {
         // Dismissed: say where things stand, change nothing.
       }
-      if ((ASK_MODES as readonly string[]).includes(answer)) return { text: await setMode($, options, answer as Mode) }
+      if ((MODES as readonly string[]).includes(answer)) return { text: await setMode($, options, answer as Mode) }
     }
     return { text: t.status(mode, model, level, !!(hold || modelHold)) }
   })
@@ -697,7 +745,7 @@ export const register: Register = (on, options) => {
     const s = await read($, stats)
     const fault = await read($, failure)
     const allowed = allowedModels(options)
-    // pickModel off: effort only (spec §6).
+    // pickModel off: effort only.
     const pickOn = options.pickModel !== 'off'
     const act = (what: string, f: () => Promise<unknown>) => () => {
       f().catch(err => log($, what, err))
@@ -718,7 +766,7 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column" gap="sm">
         <Box key="now" flexDirection="column" gap="xs">
           <Text dimColor>{t.now}</Text>
-          <Text bold>{t.nowPair(pickOn ? nowModel : '', nowLevel)}</Text>
+          <Text weight="semibold">{t.nowPair(pickOn ? nowModel : '', nowLevel)}</Text>
           {held || heldModel ? <Text dimColor>{menu ? `${t.heldBy} · ${menu}` : t.heldBy}</Text> : null}
 
           {fault && fault.count >= FAIL_SHOW ? <Text key="fault" color="warning">{t.classifierDown(fault.reason)}</Text> : null}
@@ -780,7 +828,7 @@ export const register: Register = (on, options) => {
           <Text dimColor>{t.lastPick}</Text>
           {s?.last ? (
             <>
-              <Text bold>{`${t.nowPair(pickOn && s.last.model ? s.last.model : '', s.last.level)} · ${s.last.declined ? t.notApplied : t.pickApplied}`}</Text>
+              <Text weight="semibold">{`${t.nowPair(pickOn && s.last.model ? s.last.model : '', s.last.level)} · ${s.last.declined ? t.notApplied : t.pickApplied}`}</Text>
               {s.last.why ? <Text>{s.last.why}</Text> : null}
             </>
           ) : (
@@ -842,19 +890,9 @@ export const register: Register = (on, options) => {
       // An old band, or a part the person already changed: their own choice stands.
       const cur = await read($, band)
       if (!cur || cur.id !== b.id || !undo) return
-      touched += 1
-      if (undo.model && b.model && modelHold?.key === b.model) {
-        if (undo.model === 'release') await releaseModel($)
-        else await applyModel($, undo.model, modelHold.base)
-      }
-      if (undo.level && b.level && hold?.level === b.level) {
-        if (undo.level === 'release') await releaseLevel($)
-        else await applyLevel($, undo.level, hold.base)
-      }
-      await update($, band, () => null)
+      await undoChange($, b)
     }
-    const backModel = undo?.model === 'release' ? b.fromModel : undo?.model
-    const backLevel = undo?.level === 'release' ? b.from : undo?.level
+    const { model: backModel, level: backLevel } = undoTarget(b)
     return (
       <Box flexDirection="column">
         {rest}

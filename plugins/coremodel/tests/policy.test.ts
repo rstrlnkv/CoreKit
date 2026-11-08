@@ -73,7 +73,7 @@ test('the mode question ends as a question', () => {
   expect(texts('ru').modeQuestion('auto', '', '').endsWith('?')).toBe(true)
 })
 
-test('decideModel follows the spec rules', () => {
+test('decideModel follows the rules', () => {
   const base = { mode: 'auto' as const, pickModel: true, isFirst: true, now: 'sonnet' as const, pick: 'opus' as const, allowed: ['haiku', 'sonnet', 'opus', 'fable'] as const }
   expect(decideModel(base)).toBe('apply')
   expect(decideModel({ ...base, mode: 'suggest' })).toBe('ask')

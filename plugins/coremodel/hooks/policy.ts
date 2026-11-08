@@ -1,12 +1,12 @@
 // The consent rule and the words the person reads. No calls on `$` here.
 import type { Level } from '../types'
-import type { Pick } from './classifier'
+import { LEVELS, type Pick } from './classifier'
 import { LADDER, MODELS, type ModelKey, stronger } from './models'
 
 export type Mode = 'suggest' | 'auto' | 'off'
 export type Lang = 'ru' | 'en'
 
-/** Levels the plugin never switches to without the person's yes (spec E6). */
+/** Levels the plugin never switches to without the person's yes: they cost the most. */
 const ASK_FIRST: readonly Level[] = ['xhigh', 'max']
 
 /** What to do with a pick: nothing, switch now, or ask first. */
@@ -24,9 +24,7 @@ export function uiLang(text: string): Lang {
   return /[Ѐ-ӿ]{3,}/.test(text) ? 'ru' : 'en'
 }
 
-const ORDER: readonly Level[] = ['low', 'medium', 'high', 'xhigh', 'max']
-
-/** What to do with the model part of a pick (spec §4.2, M4, M6). */
+/** What to do with the model part of a pick. */
 export function decideModel(i: {
   mode: Mode
   pickModel: boolean
@@ -58,7 +56,7 @@ function nearest<T>(order: readonly T[], pick: T, now: T | '', allowed: readonly
 /**
  * The models the question offers. The current one is always among them, listed or not. Mid-chat
  * only the pick and the current: a weaker model never pays back the re-read, and the cost line
- * fits the pick alone (spec M4, M5).
+ * fits the pick alone.
  */
 export function modelOptions(pick: ModelKey, now: ModelKey | '', allowed: readonly ModelKey[], isFirst = true): ModelKey[] {
   if (!isFirst) return now ? [pick, now] : [pick]
@@ -66,7 +64,7 @@ export function modelOptions(pick: ModelKey, now: ModelKey | '', allowed: readon
 }
 
 export function effortOptions(pick: Level, now: Level | ''): Level[] {
-  return nearest(ORDER, pick, now, ORDER)
+  return nearest(LEVELS, pick, now, LEVELS)
 }
 
 const NAMES: Record<Lang, Record<Level, string>> = {
@@ -105,7 +103,7 @@ export function texts(lang: Lang) {
   const back = (l: Level) => (ru ? `Вернуть «${n(l)}»` : `Back to ${n(l)}`)
   const applied = (l: Level, from: Level | '', why: string) =>
     (ru ? `Усилие: ${n(l)}` : `Effort: ${n(l)}`) + (from ? (ru ? ` (было ${n(from)})` : ` (was ${n(from)})`) : '') + (why ? ` · ${why}` : '')
-  const markLevel = (l: Level, from: Level | '', why: string) => `${from && ORDER.indexOf(from) > ORDER.indexOf(l) ? '↓' : '↑'} ${applied(l, from, why)}`
+  const markLevel = (l: Level, from: Level | '', why: string) => `${from && LEVELS.indexOf(from) > LEVELS.indexOf(l) ? '↓' : '↑'} ${applied(l, from, why)}`
   return {
     levelName: n,
     question: (l: Level, why: string) =>
@@ -173,7 +171,7 @@ export function texts(lang: Lang) {
     kept: (k: number) => (ru ? `Без изменений: ${k}` : `Left as it was: ${k}`),
     release: ru ? 'Вернуть как в меню' : "Back to the menu's choice",
     noPicks: ru ? 'Пока нет выборов.' : 'No picks yet.',
-    // The pair (spec §7). With no model part each falls back to the effort-only text above.
+    // The pair. With no model part each falls back to the effort-only text above.
     change: (m: ModelKey | null | undefined, fromM: ModelKey | '' | undefined, l: Level | null, fromL: Level | '', why: string) => {
       if (!m && l) return applied(l, fromL, why)
       const was = [fromM ? MODELS[fromM].name : '', l && fromL ? n(fromL) : ''].filter(Boolean).join(' · ')
@@ -182,7 +180,7 @@ export function texts(lang: Lang) {
     },
     markPair: (m: ModelKey | null | undefined, fromM: ModelKey | '' | undefined, l: Level | null, fromL: Level | '', why: string) => {
       if (!m && l) return markLevel(l, fromL, why)
-      const down = m && fromM ? LADDER.indexOf(fromM) > LADDER.indexOf(m) : !!(l && fromL && ORDER.indexOf(fromL) > ORDER.indexOf(l))
+      const down = m && fromM ? LADDER.indexOf(fromM) > LADDER.indexOf(m) : !!(l && fromL && LEVELS.indexOf(fromL) > LEVELS.indexOf(l))
       return `${down ? '↓' : '↑'} ${texts(lang).change(m, fromM, l, fromL, why)}`
     },
     backPair: (m: ModelKey | '' | undefined, l: Level | '' | undefined) =>
@@ -217,6 +215,11 @@ export function texts(lang: Lang) {
       ru
         ? `CoreModel не может получить ответ классификатора (${reason}). Запросы идут без изменений. Подробности: claude --debug.`
         : `CoreModel cannot get an answer from its classifier (${reason}). Your prompts run unchanged. Details: claude --debug.`,
+    undone: (m: ModelKey | '' | undefined, l: Level | '' | undefined) =>
+      ru ? `Вернул: ${[m ? MODELS[m].name : '', l ? n(l) : ''].filter(Boolean).join(' · ')}.` : `Back to ${[m ? MODELS[m].name : '', l ? n(l) : ''].filter(Boolean).join(' · ')}.`,
+    nothingToUndo: ru ? 'Отменять нечего: последнюю смену уже вернули или изменили.' : 'Nothing to undo: the last switch was taken back or changed since.',
+    undoHint: ru ? 'отменить: /coremodel undo' : 'undo: /coremodel undo',
+    probeLogged: (n: number) => (ru ? `CoreModel probe: ${n} строк записано в журнал отладки (claude --debug).` : `CoreModel probe: ${n} rows written to the debug log (claude --debug).`),
     checking: ru ? 'подбираю модель и усилие…' : 'checking model and effort…',
     checkingEffort: ru ? 'подбираю усилие…' : 'checking effort…',
   }

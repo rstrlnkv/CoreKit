@@ -511,7 +511,7 @@ test('/coremodel with no argument asks for the mode', async ($, on) => {
   w.reply = 'auto'
   await start($)
   const text = await run($, '')
-  expect(w.asked.at(-1)).toEqual(['auto', 'suggest', 'off'])
+  expect(w.asked.at(-1)).toEqual(['suggest', 'auto', 'off'])
   expect(text).toContain('Mode: auto. Switches by itself')
   expect(text.startsWith('CoreModel')).toBe(false)
   await switchTo($, w, 'high', 'medium')
@@ -620,21 +620,21 @@ test('an undo button drawn before off does nothing when pressed after', { option
   expect(w.efforts.at(-1)).toBe('low')
 })
 
-// CoreModel: the pair in the interface (spec §7).
+// CoreModel: the pair in the interface.
 async function switchPair($: Eng, w: World, model: string, level: string, why = 'auth bug') {
   w.answer = `{"level":"${level}","model":"${model}","why":"${why}"}`
   await submit($, 'fix the login')
   await step($, 'medium')
 }
 
-test('/coremodel probe lists the /config rows with their choices and writes nothing', async ($, on) => {
+test('/coremodel probe writes the /config rows to the debug log, never to the chat', async ($, on) => {
   const w = world(on)
   engineFooter(on)
   await start($)
   const out = await run($, 'probe')
-  expect(out).toContain('effortLevel')
-  expect(out).toContain('Low, Medium, High, Extra high, Max')
-  expect(w.logs.length).toBe(0)
+  expect(out).not.toContain('effortLevel')
+  expect(w.logs.some(l => l.includes('effortLevel') && l.includes('Low, Medium, High, Extra high, Max'))).toBe(true)
+  expect(w.logSinks.every(s => s === 'debug')).toBe(true)
   expect(w.set.length).toBe(0)
 })
 
@@ -643,7 +643,8 @@ test('/coremodel probe says so when the rows cannot be read', async ($, on) => {
   engineFooter(on)
   w.row = null
   await start($)
-  expect(await run($, 'probe')).toContain('no rows')
+  await run($, 'probe')
+  expect(w.logs.some(l => l.includes('no rows'))).toBe(true)
 })
 
 test('/coremodel names the model and the level, in the prompt language', { options: { mode: 'auto' } }, async ($, on) => {
@@ -824,7 +825,7 @@ test('pane counts per model', { options: { mode: 'auto' } }, async ($, on) => {
   await ui.unmount()
 })
 
-// CoreModel: a model the account cannot use (spec §4.5).
+// CoreModel: a model the account cannot use.
 test('an unavailable model is dropped for the session', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.row = null
@@ -1150,7 +1151,7 @@ test('the mode question and the kept count read in Russian', async ($, on) => {
   await start($)
   await switchTo($, w, 'keep', 'medium', 'почини авторизацию')
   const text = await run($, '')
-  expect(w.asked.at(-1)).toEqual(['Автоматически', 'Спрашивать', 'Выкл'])
+  expect(w.asked.at(-1)).toEqual(['Спрашивать', 'Автоматически', 'Выкл'])
   expect(text).toContain('Режим: «Автоматически»')
   expect(await has($, /^Без изменений: 1$/)).toBe(true)
 })
@@ -1176,4 +1177,61 @@ test('the pane names a classifier that keeps failing, and drops the line once a 
   await submit($, 'fix the login')
   await step($, 'medium')
   expect(await has($, /classifier/)).toBe(false)
+})
+
+test('/coremodel undo takes back the last silent switch, after its band is gone too', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  await w.clock.advance(15_000)
+  expect(await undoButton($)).toBe(undefined)
+  expect(await run($, 'undo')).toContain('Sonnet · Medium')
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
+  expect(w.efforts.at(-1)).toBe('medium')
+  // nothing left to take back
+  expect(await run($, 'undo')).toContain('Nothing to undo')
+})
+
+test('/coremodel undo leaves a choice the person made since', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await pressPane($, 'level-low')
+  expect(await run($, 'undo')).toContain('Nothing to undo')
+  await step($, 'medium', 1)
+  expect(w.efforts.at(-1)).toBe('low')
+})
+
+test('in VS Code, where the band is not drawn, a silent switch is told in a toast with the undo command', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await $.session.start({ cwd: '/w', surface: 'vscode', isInteractive: true })
+  await switchTo($, w, 'high', 'medium')
+  expect(w.toasts.length).toBe(1)
+  expect(w.toasts[0]).toContain('High')
+  expect(w.toasts[0]).toContain('/coremodel undo')
+})
+
+test('on the terminal and the desktop a silent switch raises no toast: the band says it', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  expect(w.toasts).toEqual([])
+})
+
+test('the pane draws its bold text with weight, not the deprecated bold', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  const ui = await pane($)
+  const t = await ui.find({ type: 'Text', text: /^Opus · High$/ })
+  expect(t?.props.weight).toBe('semibold')
+  await ui.unmount()
 })
