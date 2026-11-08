@@ -58,6 +58,10 @@ refuses() {
 }
 inode() { ls -di "$1" | awk '{ print $1 }'; }
 
+# The sections below each start their own sandbox and share nothing: five groups run side by side
+# (bg, lib.sh), which keeps the file well under its serial time.
+
+part_new_layout() {
 # --- success: the repo stays where it is; internal files go to the Core; rules fold into CLAUDE.md
 new_sandbox; setup_core
 PR="$SANDBOX/Projects"
@@ -272,7 +276,10 @@ echo "$OUT" | grep -qF "$F" && pass || fail "plan lacks the folder: $OUT"
 echo "$OUT" | grep -q "^open:" && fail "dry run printed open:" || pass
 assert_exit 0 bash "$AD" --from "$F" --public-docs "docs/guide.md"
 bash "$WC" "$CORE_DIR/dry-app" >/dev/null 2>&1 && pass || fail "wiki-check (public page): $(bash "$WC" "$CORE_DIR/dry-app" 2>&1)"
+}
+bg part_new_layout
 
+part_refusals() {
 # --- refusals: one line, exit 2, nothing changed
 new_sandbox; setup_core
 PR="$SANDBOX/Projects"
@@ -356,7 +363,10 @@ assert_exit 2 bash "$AD" --from "$F"
 after="$(snap)"
 assert_eq "$after" "$before" "commit failure changed something (existing .gitignore)"
 assert_eq "$(cat "$F/.gitignore")" "build/" ".gitignore not restored"
+}
+bg part_refusals
 
+part_names_and_files() {
 # --- spaces and non-ASCII characters in file names
 new_sandbox; setup_core
 F="$SANDBOX/Projects/My-Proj"; mkrepo "$F"
@@ -514,7 +524,10 @@ assert_file "$F/src/a.sh"; assert_dir "$F/.git"
 assert_eq "$(git -C "$F" log -1 --format=%s)" "Move internal Claude files to Core" "repo commit kept"
 git -C "$F" cat-file -e HEAD~1:CLAUDE.md 2>/dev/null && pass || fail "history lost"
 assert_no_file "$F/CLAUDE.local.md"
+}
+bg part_names_and_files
 
+part_old_layout() {
 # =====================================================================================
 # Old layout: <Core>/<name>/code moves to <Projects>/<name>
 # =====================================================================================
@@ -696,7 +709,10 @@ assert_exit 0 bash "$AD" --from "$F"
 assert_eq "$(git -C "$F" rev-list --count HEAD)" "1" "commit made without changes"
 assert_eq "$(git -C "$F" status --porcelain)" "" "repo dirty (complete .gitignore)"
 assert_eq "$(cat "$F/.worktreeinclude")" "mine" ".worktreeinclude of the user's changed"
+}
+bg part_old_layout
 
+part_nested() {
 # --- tracked nested CLAUDE.md / AGENTS.md stay in the repo; the plan and the report warn that the hooks
 # will block changing them
 new_sandbox; setup_core
@@ -754,5 +770,8 @@ grep -qxF AGENTS.md "$F/.gitignore" && pass || fail ".gitignore lacks AGENTS.md"
 git -C "$CORE_DIR" ls-files -- ag-app/AGENTS.md | grep -qxF ag-app/AGENTS.md && pass || fail "AGENTS.md not in the Core commit"
 # like a nested CLAUDE.md, a nested AGENTS.md is not moved (only the root one is)
 assert_file "$F/src/AGENTS.md"
+}
+bg part_nested
 
+bg_wait
 finish

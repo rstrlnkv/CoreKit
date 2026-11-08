@@ -13,23 +13,10 @@ mkdir -p "$CORE_DIR/p/code/src" "$CORE_DIR/p/docs" "$CORE_DIR/q/code" "$SANDBOX/
 : > "$CORE_DIR/p/CLAUDE.md"; : > "$CORE_DIR/q/CLAUDE.md"
 C="$CORE_DIR/p/code"
 
-# The sections below that share nothing run at the same time (bg <function>): each in a subshell with its
-# own scratch folder OD and its own counts, and the output and counts are collected by bg_wait. This keeps
-# the file near 5 s (a hook run is about 40 ms and there are about 350 of them).
-OD="$SANDBOX"; BGN=0
-bg() { # bg <function>
-  BGN=$((BGN + 1)); local n=$BGN
-  ( OD="$SANDBOX/bg$n"; mkdir -p "$OD"; FAILS=0; PASSES=0; "$1"; echo "$PASSES $FAILS" > "$SANDBOX/bg$n.count" ) > "$SANDBOX/bg$n.log" 2>&1 &
-}
-bg_wait() {
-  local n p f
-  wait
-  for n in $(seq 1 $BGN); do
-    cat "$SANDBOX/bg$n.log"
-    if [ -f "$SANDBOX/bg$n.count" ]; then read -r p f < "$SANDBOX/bg$n.count"; PASSES=$((PASSES + p)); FAILS=$((FAILS + f))
-    else fail "background section $n did not finish"; fi
-  done
-}
+# The sections below that share nothing run at the same time (bg <function>, lib.sh): each in a subshell with
+# its own scratch folder OD and its own counts. This keeps the file near 5 s (a hook run is about 40 ms and
+# there are about 350 of them). The foreground uses OD="$SANDBOX".
+OD="$SANDBOX"
 
 # run_json <json> — stdout in OUT, stderr in ERR, exit code in RC
 run_json() { printf '%s' "$1" | bash "$H" >"$OD/out" 2>"$OD/err"; RC=$?; OUT="$(<"$OD/out")"; ERR="$(<"$OD/err")"; }

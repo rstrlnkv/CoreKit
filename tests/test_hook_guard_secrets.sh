@@ -19,21 +19,8 @@ ln -s "$C/.env" "$C/second-link"           # (same, second link)
 ln -s "$C/src/nothing" "$C/.env.link"          # a link NAMED .env.link that points elsewhere
 ln -s "$HOME/.ssh" "$C/sshlink"                # a folder link into ~/.ssh
 
-# Sections that share nothing run at the same time (bg <function>), as in test_hook_guard_code.sh.
-OD="$SANDBOX"; BGN=0
-bg() { # bg <function>
-  BGN=$((BGN + 1)); local n=$BGN
-  ( OD="$SANDBOX/bg$n"; mkdir -p "$OD"; FAILS=0; PASSES=0; "$1"; echo "$PASSES $FAILS" > "$SANDBOX/bg$n.count" ) > "$SANDBOX/bg$n.log" 2>&1 &
-}
-bg_wait() {
-  local n p f
-  wait
-  for n in $(seq 1 $BGN); do
-    cat "$SANDBOX/bg$n.log"
-    if [ -f "$SANDBOX/bg$n.count" ]; then read -r p f < "$SANDBOX/bg$n.count"; PASSES=$((PASSES + p)); FAILS=$((FAILS + f))
-    else fail "background section $n did not finish"; fi
-  done
-}
+# Sections that share nothing run at the same time (bg <function>, lib.sh). The foreground uses OD="$SANDBOX".
+OD="$SANDBOX"
 
 # run_json <json> — stdout in OUT, stderr in ERR, exit code in RC
 run_json() { printf '%s' "$1" | bash "$H" >"$OD/out" 2>"$OD/err"; RC=$?; OUT="$(<"$OD/out")"; ERR="$(<"$OD/err")"; }

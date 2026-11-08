@@ -20,10 +20,17 @@ dummy=""; FAKES=""
 PTMP="$(cd -P /tmp && pwd)"; NOTOWNED="$PTMP/onesuite-turn-$$"   # see "a state folder not owned by this user"
 trap '[ -z "$dummy" ] || kill "$dummy" 2>/dev/null; [ -z "$FAKES" ] || kill $FAKES 2>/dev/null; rm -rf "$NOTOWNED"' EXIT
 # fake <cwd> <argv0> — starts a fake test run (a renamed sleep) whose working folder is <cwd>; its pid in FAKE_PID.
+# Returns once the process shows its new name (up to 5 s), so the hook can see it.
 # The hook holds a call only for a run whose working folder is in the same place as the call.
 fake() {
   bash -c 'cd "$1" && exec -a "$2" sleep 120' _ "$1" "$2" >/dev/null 2>&1 & FAKE_PID=$!
   disown "$FAKE_PID" 2>/dev/null; FAKES="$FAKES $FAKE_PID"
+  local i=0
+  while [ $i -lt 50 ]; do
+    case "$(ps -p "$FAKE_PID" -o command= 2>/dev/null)" in "$2"*) return 0 ;; esac
+    sleep 0.1; i=$((i + 1))
+  done
+  fail "the fake run '$2' did not start in 5 s"
 }
 # stop <pid>... — kills fake runs and waits (up to 2 s) until they are gone
 stop() {
@@ -44,7 +51,6 @@ expect 0 "no run in progress" 'swift test --filter Foo'
 
 # --- a run is on (in this project's code folder)
 fake "$C" "$FAKE"; dummy=$FAKE_PID
-sleep 1
 for c in 'swift test --filter Foo' 'cd /x && swift test' '(cd /x; swift test)' 'FOO=1 swift test' 'time swift test' \
          'xcodebuild -scheme App test' 'xcodebuild test -scheme App' 'xcodebuild -scheme App -destination x test | xcpretty' 'xcodebuild test-without-building -scheme App' \
          'xcodebuild -scheme App -destination x test-without-building' \
@@ -91,14 +97,14 @@ expect 2 "cwd inside the project" 'swift test' "$C"
 mkdir -p "$CORE_DIR/foo" "$(dirname "$CORE_DIR")/Foo/src" "$(dirname "$CORE_DIR")/Brain"; : > "$CORE_DIR/foo/CLAUDE.md"
 F="$(dirname "$CORE_DIR")/Foo"
 expect 0 "new layout: a run in another project does not hold Projects/Foo" 'swift test' "$F/src"
-fake "$F" "$FAKE"; foo=$FAKE_PID; sleep 1
+fake "$F" "$FAKE"; foo=$FAKE_PID
 expect 2 "new layout: a run in Projects/Foo holds a call in Projects/Foo/src" 'swift test' "$F/src"
 expect 0 "new layout: Projects/Brain is not a project" 'swift test' "$(dirname "$CORE_DIR")/Brain"
 expect 2 "a run in Foo does not hide the run in app (every match is looked at)" 'swift test' "$C"
 stop "$foo"
 # lsof prints a non-ASCII byte of a working folder as \xNN; the name must still match
 U="$CORE_DIR/uni проект q %s/code"; mkdir -p "$U/src"; : > "$CORE_DIR/uni проект q %s/CLAUDE.md"
-fake "$U" "$FAKE"; uni=$FAKE_PID; sleep 1
+fake "$U" "$FAKE"; uni=$FAKE_PID
 expect 2 "a run in a folder with a non-ASCII name holds a call there" 'swift test' "$U/src"
 stop "$uni"
 
@@ -111,11 +117,10 @@ ONE_SUITE_PROCS="$OTHER" expect 0 "nothing of this pattern runs" 'swift test'
 fake "$SANDBOX/elsewhere" "$OTHER"; o1=$FAKE_PID
 fake "$CORE_DIR/foo" "$OTHER"; o2=$FAKE_PID
 fake "$F/src" "$OTHER"; o3=$FAKE_PID
-sleep 1
 ONE_SUITE_PROCS="$OTHER" expect 0 "a run in a folder outside every project does not hold" 'swift test'
 ONE_SUITE_PROCS="$OTHER" expect 0 "a run in another project does not hold" 'swift test' "$CORE_DIR/app"
 stop "$o1" "$o2" "$o3"
-fake "$C/sub/deep" "$OTHER"; o1=$FAKE_PID; sleep 1
+fake "$C/sub/deep" "$OTHER"; o1=$FAKE_PID
 ONE_SUITE_PROCS="$OTHER" expect 2 "a run deep in this project's code folder holds" 'swift test'
 case "$ERR" in *"$o1 "*) pass ;; *) fail "the refusal names the run in this project ($o1): $ERR" ;; esac
 ONE_SUITE_PROCS="$OTHER" expect 2 "a run in the code folder holds a call in the project's Core folder" 'swift test' "$CORE_DIR/app"
@@ -129,11 +134,11 @@ stop "$o1"
 git -C "$C" init -q && git -C "$C" commit -q --allow-empty -m init
 W="$C/wt/w1"; mkdir -p "$C/wt"; git -C "$C" worktree add -q "$W" -b w1 2>/dev/null
 assert_file "$W/.git"
-fake "$W" "$OTHER"; o1=$FAKE_PID; sleep 1
+fake "$W" "$OTHER"; o1=$FAKE_PID
 ONE_SUITE_PROCS="$OTHER" expect 0 "a run in a linked worktree does not hold the main checkout" 'swift test'
 ONE_SUITE_PROCS="$OTHER" expect 2 "a run in a linked worktree holds a call in the same worktree" 'swift test' "$W"
 stop "$o1"
-fake "$C/sub" "$OTHER"; o1=$FAKE_PID; sleep 1
+fake "$C/sub" "$OTHER"; o1=$FAKE_PID
 ONE_SUITE_PROCS="$OTHER" expect 0 "a run in the main checkout does not hold a linked worktree" 'swift test' "$W"
 stop "$o1"
 rm -rf "$ONE_SUITE_TURN"
@@ -169,19 +174,15 @@ GP="onesuite-gradle-$$"
 export ONE_SUITE_PROCS="$GP/gradlew( .*)? ([^ ]*:)?(test[A-Za-z0-9]*|[a-z][A-Za-z0-9]*Test)( |$)"
 fake "$C" "$GP/gradlew build -x test"; g1=$FAKE_PID
 fake "$C" "$GP/gradlew build --exclude-task=test"; g2=$FAKE_PID
-sleep 1
-kill "$dummy" 2>/dev/null   # the other fake run is not part of this check
-sleep 1
+stop "$dummy"   # the other fake run is not part of this check
 rm -rf "$ONE_SUITE_TURN"
 expect 0 "a running 'gradlew build -x test' is not a test run" 'swift test'
 fake "$C" "$GP/gradlew build test"; g3=$FAKE_PID
-sleep 1
 rm -rf "$ONE_SUITE_TURN"
 expect 2 "a running 'gradlew build test' is a test run" 'swift test'
 kill "$g1" "$g2" "$g3" 2>/dev/null
 export ONE_SUITE_PROCS="$FAKE"
 fake "$C" "$FAKE"; dummy=$FAKE_PID
-sleep 1
 rm -rf "$ONE_SUITE_TURN"
 
 # --- the turn must never make the hook spin: it either waits (sleeping) or lets the call through
@@ -206,7 +207,7 @@ assert_eq "$RC" "2" "run active, turn dir cannot exist: normal refusal"
 t0=$(date +%s); ONE_SUITE_WAIT=20 run_hook 'swift test'; t=$(( $(date +%s) - t0 ))
 assert_eq "$RC" "0" "a waiter is let through when the run ends"
 [ "$t" -ge 2 ] && [ "$t" -lt 15 ] && pass || fail "waiter waited ${t} s (want 2..14)"
-sleep 1; dummy=""
+stop "$dummy"; dummy=""
 
 # --- no run, and the turn cannot be claimed or cleared: fail open at once, never spin
 ONE_SUITE_TURN="$SANDBOX/missing-dir/turn" timed_hook 'swift test'
@@ -408,11 +409,10 @@ done
 # command's workdir, and an exit 2 carries a non-empty stderr (Codex ignores exit 2 with an empty one)
 FX="$ROOT/tests/fixtures/codex"
 cfx() { sed "s|@CWD@|$C|g" "$FX/$1.json" | bash "$H" >"$SANDBOX/out" 2>"$SANDBOX/err"; RC=$?; OUT="$(cat "$SANDBOX/out")"; ERR="$(cat "$SANDBOX/err")"; }
-kill "$dummy" 2>/dev/null; dummy=""; sleep 1
+stop "$dummy"; dummy=""
 cfx pre-bash; assert_eq "$RC" "0" "codex: no run in progress passes"
 cfx pre-bash-subagent; assert_eq "$RC" "0" "codex: a subagent's call passes"
 fake "$C" "$FAKE"; dummy=$FAKE_PID
-sleep 1
 cfx pre-bash; assert_eq "$RC" "2" "codex: a test run while another one is on is refused"
 assert_eq "$OUT" "" "codex: stdout"
 [ -n "$ERR" ] && pass || fail "codex: exit 2 with an empty stderr"

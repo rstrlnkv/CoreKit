@@ -86,6 +86,24 @@ sync_tools() { bash "$SCRIPTS/sync-tools.sh" "$PLUGIN" "$COREDEV_TOOLS" >/dev/nu
 # (NUL-separated, so names with spaces or non-ASCII characters are summed too.)
 tree_sum() { (cd "$1" && find . -type f -not -path '*/.git/*' -print0 | xargs -0 cksum | LC_ALL=C sort -k3); }
 
+# bg <function> — runs a section of a test file in the background: a subshell with its own counts and its own
+# scratch folder OD. Sections that share nothing run at the same time this way. bg_wait waits for all of them,
+# prints their output in the order they were started and adds their counts. A section must not call finish.
+BGN=0
+bg() {
+  BGN=$((BGN + 1)); local n=$BGN
+  ( OD="$TEST_TMP/bg$n"; mkdir -p "$OD"; FAILS=0; PASSES=0; "$1"; echo "$PASSES $FAILS" > "$TEST_TMP/bg$n.count" ) > "$TEST_TMP/bg$n.log" 2>&1 &
+}
+bg_wait() {
+  local n p f
+  wait
+  for n in $(seq 1 $BGN); do
+    cat "$TEST_TMP/bg$n.log"
+    if [ -f "$TEST_TMP/bg$n.count" ]; then read -r p f < "$TEST_TMP/bg$n.count"; PASSES=$((PASSES + p)); FAILS=$((FAILS + f))
+    else fail "background section $n did not finish"; fi
+  done
+}
+
 # finish — prints the counts, removes the sandboxes and exits: 0 when nothing failed, else 1.
 # It exits, so a file's own EXIT trap (which replaces the one above) cannot leave sandboxes behind.
 finish() {
