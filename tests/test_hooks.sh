@@ -55,7 +55,9 @@ printf '#!/bin/sh\necho "$GH_STUB"\n' > "$STUB/gh"; chmod +x "$STUB/gh"
 H="$CORE_DIR/.git/hooks/pre-push"; URL=https://github.com/someone/Core.git
 GH_STUB=true  PATH="$STUB:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && pass || fail "private Core push blocked"
 GH_STUB=false PATH="$STUB:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && fail "public Core push allowed" || pass
-PATH="$(path_without gh)" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && fail "push allowed without gh" || pass
+PATH="$(path_without gh)" bash "$H" origin "$URL" </dev/null >/dev/null 2>"$SANDBOX/nogh" && fail "push allowed without gh" || pass
+# the install hint is for every OS, the same as preflight's: the GitHub CLI site, not one package manager
+assert_contains "$SANDBOX/nogh" "https://cli.github.com"; assert_not_contains "$SANDBOX/nogh" "brew"
 GH_STUB=true PATH="$STUB:$PATH" bash "$H" origin "git@github.com:someone/Core.git" </dev/null >/dev/null 2>&1 && pass || fail "ssh url not parsed"
 # a failed gh call (network) is retried: 2 failures then "true" pass, 3 failures block, "false" is final
 FL="$SANDBOX/flaky"; mkdir -p "$FL"
