@@ -14,7 +14,9 @@
 #   Core and so passes), or <Core>/<p>/code/ in the old layout, or a worktree root <code root>/.claude/worktrees/<w>/ or any other linked git worktree of the code folder (worktree_of);
 #   inside a worktree the path relative to the worktree root is what counts.
 # - Blocked: docs and docs/** and .claude/** at the root, and CLAUDE.md / CLAUDE.local.md / AGENTS.md at
-#   ANY depth (the same as scripts/git-hooks/blocked-patterns, so the hook and the commit check agree).
+#   ANY depth. The pre-commit hook (scripts/git-hooks/blocked-patterns) is narrower: it blocks only docs/superpowers/,
+#   CLAUDE*.md, AGENTS.md, .claude/, .env* and key files, so a docs/x.md that got past this hook (a Bash form it does
+#   not read) can still be committed by hand; tests/test_hooks.sh lets docs/README.md through on purpose.
 # - Allowed: .claude/settings.local.json, .claude/worktrees/** (the worktree dirs themselves: mkdir, an
 #   existing directory or a trailing slash; a file written directly under .claude/worktrees/ is blocked), and the
 #   paths on a "public-docs: <paths>" line of <Core>/<p>/CLAUDE.md (space or comma separated, relative
@@ -72,8 +74,11 @@
 #   (guard_code_too_many) when the cwd or a target is in scope: judging them all would outlast the hook timeout. A link
 #   or a copy into a folder counts as three targets. A missing reader lets the Bash call pass;
 #   the file tools are still judged. The shell-patch refusal (Codex) runs before all this, in every folder.
-#   LIMIT (not followed, each pinned as a passing case in tests/test_hook_guard_code.sh): a relative target after cd,
-#   pushd or popd (`cd .. && echo x >> docs/INDEX.md` is the Core wiki); a target with $ ` * ? [ { (variables,
+#   A command that starts with `cd <absolute folder> &&` (or `;`, or a newline; one plain / word, the first command, not
+#   in a subshell) has the relative targets after it judged against that folder, until another cd, pushd or popd.
+#   LIMIT (not followed, each pinned as a passing case in tests/test_hook_guard_code.sh): any other relative target after
+#   cd, pushd or popd (`cd .. && echo x >> docs/INDEX.md` is the Core wiki; `(cd /x && ...)`, `cd /x || exit`,
+#   `cd -P /x`, `ls; cd /x`); a target with $ ` * ? [ { (variables,
 #   $(...), globs, braces); a command line handed to another shell (bash -c, sh -c, eval) or a script file; xargs,
 #   find -exec, interpreters (python -c, node -e); git -C <dir> mv; other writers (rsync, dd of=, tar -C, curl -o);
 #   a wrapper option whose value is not skipped (only -u -g -n -s -k -C -c take one: stdbuf -o L tee); past 100

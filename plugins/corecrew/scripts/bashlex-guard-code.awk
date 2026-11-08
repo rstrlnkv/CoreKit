@@ -11,7 +11,9 @@
 #                       is empty when it is made at run time (unknown)
 #   C                   the last line: too many targets to check (see below); the hook refuses the whole command
 # Not printed: a path with $ ` * ? [ { (made at run time), /dev/..., and after cd, pushd or popd a relative path
-# (the folder is unknown then). The first CAP distinct targets are printed; past that only those whose text
+# (the folder is unknown then), except after the one simple leading form `cd <absolute folder> &&` (or `;`, or a
+# newline), when it is the first command, not in a subshell, with one plain / word: the relative paths after it are
+# printed as <folder>/<path>, until another cd, pushd or popd. The first CAP distinct targets are printed; past that only those whose text
 # names an internal component (docs, .claude, CLAUDE.md, CLAUDE.local.md, AGENTS.md, any letter case). When more
 # than MORE such targets come past the first CAP, the reading stops with a C line, so the hook stays fast. A link
 # or a copy into a folder (L, J) counts as three targets toward CAP and MORE: it costs about that much to judge.
@@ -43,7 +45,8 @@ function plain(p,   x) {
 }
 function emit(kind, p, src,   key, w) {
   if (p == "" || index(p, "/dev/") == 1 || !plain(p)) return
-  if (cdseen && p !~ /^(\/|~$|~\/)/) return
+  if (p !~ /^(\/|~$|~\/)/) { if (cdseen) return; if (cdbase != "") p = cdbase "/" p }
+  if (src != "" && src !~ /^(\/|~$|~\/)/ && !cdseen && cdbase != "") src = cdbase "/" src
   if (kind == "J" && !plain(src)) return
   if (kind == "L" && !plain(src)) src = ""     # the link itself is still judged; its source is unknown
   key = kind SUBSEP p SUBSEP src
@@ -61,6 +64,10 @@ function emit(kind, p, src,   key, w) {
 
 # --- one command is complete: cmd and args[1..na]
 function finalize(   k, a, n, op, dd, tdir, script, inpl, dir, c, val) {
+  # the leading `cd <absolute folder>` ended by && ; or a newline: the folder the relative targets after it are in
+  if (cmd == "cd" && nstmt == 0 && !nosimple && na == 1 && args[1] ~ /^\// && plain(args[1]) && (sep == "&&" || sep == ";" || sep == "nl")) {
+    cdbase = args[1]; sub(/\/+$/, "", cdbase); cdseen = 0
+  }
   c = cmd; k = 1
   if (c == "git") { if (args[1] != "mv") return; c = "mv"; k = 2 }
   n = 0; dd = 0; tdir = ""; script = 0; inpl = 0; dir = 0
@@ -96,7 +103,8 @@ function finalize(   k, a, n, op, dd, tdir, script, inpl, dir, c, val) {
 }
 function stmt_end() {
   finalize()
-  split("", args); na = 0; cmd = ""; wrapped = 0; wskip = 0; want = ""; dup = 0
+  if (cmd != "") nstmt++
+  split("", args); na = 0; cmd = ""; wrapped = 0; wskip = 0; want = ""; dup = 0; sep = ""
 }
 
 # --- words
@@ -167,15 +175,17 @@ function lex(   c) {
   while (i <= len) {
     c = C[i]
     if (c == " " || c == "\t") { endword(); i++ }
-    else if (c == NL) { endword(); stmt_end(); i++; if (hdn) skip_bodies() }
+    else if (c == NL) { endword(); sep = "nl"; stmt_end(); i++; if (hdn) skip_bodies() }
     else if (c == "#" && !inword) { while (i <= len && C[i] != NL) i++ }
     else if (c == "\\") { if (C[i + 1] != NL) { add(C[i + 1]); inword = 1; wq = 1 }; i += 2 }
     else if (c == "'") { inword = 1; wq = 1; for (i++; i <= len && C[i] != "'"; i++) add(C[i]); i++ }
     else if (c == "\"") dquote()
-    else if (c == ";" || c == "|" || c == "(" || c == ")" || c == "`") { endword(); stmt_end(); i++ }
+    else if (c == ";" || c == "|") { endword(); sep = c; stmt_end(); i++ }
+    else if (c == "(" || c == ")" || c == "`") { endword(); sep = c; nosimple = 1; stmt_end(); i++ }
     else if (c == "&") {
       endword(); i++
-      if (C[i] == ">") { i++; if (C[i] == ">") i++; want = "out" } else stmt_end()
+      if (C[i] == ">") { i++; if (C[i] == ">") i++; want = "out" }
+      else { sep = "&"; if (C[i] == "&") { i++; sep = "&&" }; stmt_end() }
     } else if (c == ">") {                                       # > >> >| >& (>( is a process substitution)
       fdword(); i++
       if (C[i] == "(") continue

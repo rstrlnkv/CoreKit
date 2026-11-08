@@ -103,9 +103,13 @@ one). It does not cover git history (`git show HEAD:.env`).
   into a code folder: the file tools, and the common write commands in Bash. It does not follow: a
   command line given to `bash -c`, `sh -c` or `eval`, or a script file; a target with a variable, a
   glob, braces or `$(...)`; `xargs` and `find -exec`; a relative target after `cd`, `pushd` or
-  `popd`; interpreters (`python -c`, `node -e`); `git -C <dir> mv`; other writers (`rsync`,
+  `popd`, except when the command starts with `cd <absolute folder> &&` (or `;`); interpreters
+  (`python -c`, `node -e`); `git -C <dir> mv`; other writers (`rsync`,
   `dd of=`, `tar -C`, `curl -o`). The git pre-commit and pre-push hooks check what is committed
   and pushed.
+- The pre-commit hook's list (`blocked-patterns`) is narrower than the code guard's: it blocks
+  `CLAUDE*.md`, `AGENTS.md`, `.claude/`, the `superpowers` folder of `docs/`, `.env*` and key files,
+  not the rest of `docs/`. A `docs/` file that got past the code guard can still be committed by hand.
 - Codex subagents cannot be made read-only: the read-only steps of `/corecrew:task` are checked
   (the working tree before and after), not enforced.
 

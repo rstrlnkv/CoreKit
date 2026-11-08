@@ -20,9 +20,38 @@ host() {
   printf claude
 }
 
+# marketplace_name [plugin root] — the marketplace this plugin was installed from, read from the plugin root's path (the
+# folder of this lib.sh when none is given): Claude Code and Codex keep a plugin at .../plugins/cache/<marketplace>/corecrew/
+# <version>, and a marketplace clone lies under .../plugins/marketplaces/<marketplace>/. Any other shape (a checkout,
+# --plugin-dir), or a name that is no plain folder name, is "corekit", the marketplace corecrew is published in.
+marketplace_name() {
+  local r="${1:-}" m="" rest
+  [ -n "$r" ] || r="$(cd "$_LIB_DIR/.." 2>/dev/null && pwd)"
+  case "$r" in
+    */plugins/cache/?*/corecrew/?*) rest="${r#*/plugins/cache/}"; m="${rest%%/*}"; rest="${rest#*/}"
+      case "$rest" in corecrew/?*) ;; *) m="" ;; esac ;;
+    */plugins/marketplaces/?*/?*) rest="${r#*/plugins/marketplaces/}"; m="${rest%%/*}" ;;
+  esac
+  case "$m" in ""|*[!A-Za-z0-9._-]*|.|..) m=corekit ;; esac
+  printf '%s' "$m"
+}
+
+# default_data_dir [plugin root] — the plugin's data folder when the host names none (CLAUDE_PLUGIN_DATA unset):
+# <CODEX_HOME>/plugins/data/corecrew-<marketplace> on Codex, <HOME>/.claude/plugins/data/corecrew-<marketplace> else, under
+# an absolute CODEX_HOME or HOME only; prints nothing when none is known (a relative HOME must not put it under the cwd).
+default_data_dir() {
+  local d m; m="$(marketplace_name "${1:-}")"
+  if [ "$(host)" = codex ]; then
+    d="$(codex_home)" && printf '%s/plugins/data/corecrew-%s' "$d" "$m"
+  else
+    case "${HOME:-}" in /*) printf '%s/.claude/plugins/data/corecrew-%s' "$HOME" "$m" ;; esac
+  fi
+  return 0
+}
+
 # tools_dir — where the tools copy (git hook shims run it) lives: COREDEV_TOOLS, else $CLAUDE_PLUGIN_DATA/tools, else
-# <data>/tools when this lib.sh is a tools copy that knows its data folder (.data-dir, written by sync-tools.sh), else the
-# host's data folder under an absolute HOME or CODEX_HOME; prints nothing when none is known.
+# <data>/tools when this lib.sh is a tools copy that knows its data folder (.data-dir, written by sync-tools.sh), else
+# default_data_dir/tools; prints nothing when none is known.
 tools_dir() {
   local d=""
   if [ -n "${COREDEV_TOOLS:-}" ]; then printf '%s' "$COREDEV_TOOLS"; return 0; fi
@@ -31,11 +60,7 @@ tools_dir() {
     { IFS= read -r d < "$_LIB_DIR/.data-dir"; } 2>/dev/null
     case "$d" in /*) printf '%s/tools' "${d%/}"; return 0 ;; esac
   fi
-  if [ "$(host)" = codex ]; then
-    d="$(codex_home)" && printf '%s/plugins/data/corecrew-corekit/tools' "$d"
-  else
-    case "${HOME:-}" in /*) printf '%s/.claude/plugins/data/corecrew-corekit/tools' "$HOME" ;; esac
-  fi
+  d="$(default_data_dir)"; [ -z "$d" ] || printf '%s/tools' "$d"
   return 0
 }
 

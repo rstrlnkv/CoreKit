@@ -144,6 +144,12 @@ for doc in $docs; do check_anchors "$ROOT/$doc"; done
 section() { awk -v h="$2" '$0 == h { s = 1; next } s && /^#{1,3} / { exit } s' "$1"; }
 section "$ROOT/README.md" '### Claude Code' | grep -qF 'SECURITY.md#recommended-host-settings' && pass \
   || fail "README's Claude Code install section does not link SECURITY.md#recommended-host-settings"
+# SECURITY.md, Known limits: the code guard blocks docs/** while the pre-commit hook (scripts/git-hooks/blocked-patterns)
+# does not, so a docs/ file can still be committed by hand; the section says so, and the guard's header no longer
+# claims the two sets agree
+section "$ROOT/SECURITY.md" '### Known limits of the hooks' | grep -qF 'blocked-patterns' && pass \
+  || fail "SECURITY.md Known limits does not name blocked-patterns (the pre-commit hook's list)"
+assert_not_contains "$PLUGIN/hooks/guard-code.sh" "so the hook and the commit check agree"
 
 # the self-check: a made-up path is caught, a real one is not, placeholders are skipped
 new_sandbox

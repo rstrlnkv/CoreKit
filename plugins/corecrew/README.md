@@ -233,7 +233,8 @@ the same way, except `ui_language`, which falls back to `en` silently.
 
 - The tools copy in the plugin's data folder: `~/.claude/plugins/data/corecrew-corekit/` (Claude
   Code) or `~/.codex/plugins/data/corecrew-corekit/` (Codex; under `$CODEX_HOME` when set), refreshed at session start. Git hooks
-  run the scripts from there.
+  run the scripts from there. Installed from a marketplace with another name, the folder is
+  `corecrew-<marketplace>`.
 - Your Core (the `core_dir` setting): read and written.
 - In each code repo beside the Core: the `CLAUDE.local.md` and `AGENTS.md` links, git hooks
   (pre-commit, pre-push), and ignore lines in `.gitignore` when a project is adopted. In the Core: a

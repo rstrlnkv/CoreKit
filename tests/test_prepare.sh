@@ -149,7 +149,7 @@ for H in "" "relhome"; do
 done
 
 # --- host, tools_dir, hooks_marker_path; session-start writes the marker on Codex only
-CP="$CODEX_HOME/plugins/cache/corekit/corecrew/$VER"; mkdir -p "$(dirname "$CP")"; cp -R "$PLUGIN" "$CP"
+CP="$CODEX_HOME/plugins/cache/mart/corecrew/$VER"; mkdir -p "$(dirname "$CP")"; cp -R "$PLUGIN" "$CP"
 assert_eq "$(. "$CP/scripts/lib.sh"; host)" "codex" "host: plugin under CODEX_HOME"
 assert_eq "$(. "$SCRIPTS/lib.sh"; host)" "claude" "host: plugin elsewhere"
 assert_eq "$(. "$SCRIPTS/lib.sh"; COREKIT_HOST=codex host)" "codex" "host: COREKIT_HOST"
@@ -159,6 +159,23 @@ assert_eq "$(. "$SCRIPTS/lib.sh"; unset COREDEV_TOOLS; tools_dir)" "$CLAUDE_PLUG
 assert_eq "$(. "$SCRIPTS/lib.sh"; unset COREDEV_TOOLS CLAUDE_PLUGIN_DATA; tools_dir)" "$HOME/.claude/plugins/data/corecrew-corekit/tools" "tools_dir: claude default"
 assert_eq "$(. "$SCRIPTS/lib.sh"; unset COREDEV_TOOLS CLAUDE_PLUGIN_DATA; COREKIT_HOST=codex tools_dir)" "$CODEX_HOME/plugins/data/corecrew-corekit/tools" "tools_dir: codex default"
 assert_eq "$(. "$SCRIPTS/lib.sh"; unset COREDEV_TOOLS CLAUDE_PLUGIN_DATA; HOME=rel; tools_dir)" "" "tools_dir: relative HOME"
+# the data folder follows the marketplace the plugin was installed from, read from the plugin root's path (Claude Code
+# and Codex keep a plugin at plugins/cache/<marketplace>/corecrew/<version>; a marketplace clone lies under
+# plugins/marketplaces/<marketplace>/); a checkout or any other shape falls back to corekit
+assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name /h/.claude/plugins/cache/shop/corecrew/1.2.3)" "shop" "marketplace_name: Claude Code cache"
+assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name /h/.codex/plugins/cache/shop/corecrew/1.2.3)" "shop" "marketplace_name: Codex cache"
+assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name /h/.claude/plugins/marketplaces/shop/plugins/corecrew)" "shop" "marketplace_name: marketplace clone"
+assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name /h/Projects/CoreKit/plugins/corecrew)" "corekit" "marketplace_name: a checkout"
+assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name /h/.claude/plugins/cache/shop/other/1.2.3)" "corekit" "marketplace_name: another plugin's cache path"
+assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name /h/.claude/plugins/cache/shop)" "corekit" "marketplace_name: cache path without the plugin"
+assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name "/h/.claude/plugins/cache/bad name/corecrew/1.2.3")" "corekit" "marketplace_name: a name with a space"
+assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name)" "corekit" "marketplace_name: this checkout, no argument"
+assert_eq "$(. "$CP/scripts/lib.sh"; marketplace_name)" "mart" "marketplace_name: the plugin under a cache path, no argument"
+assert_eq "$(. "$SCRIPTS/lib.sh"; default_data_dir /h/.claude/plugins/cache/shop/corecrew/1.2.3)" "$HOME/.claude/plugins/data/corecrew-shop" "default_data_dir: claude"
+assert_eq "$(. "$SCRIPTS/lib.sh"; COREKIT_HOST=codex default_data_dir /h/.codex/plugins/cache/shop/corecrew/1.2.3)" "$CODEX_HOME/plugins/data/corecrew-shop" "default_data_dir: codex"
+assert_eq "$(. "$SCRIPTS/lib.sh"; default_data_dir)" "$HOME/.claude/plugins/data/corecrew-corekit" "default_data_dir: this checkout"
+assert_eq "$(. "$SCRIPTS/lib.sh"; HOME=rel default_data_dir /h/.claude/plugins/cache/shop/corecrew/1.2.3)" "" "default_data_dir: relative HOME"
+assert_eq "$(. "$CP/scripts/lib.sh"; unset COREDEV_TOOLS CLAUDE_PLUGIN_DATA; tools_dir)" "$CODEX_HOME/plugins/data/corecrew-mart/tools" "tools_dir: codex default follows the cache marketplace"
 assert_eq "$(. "$SCRIPTS/lib.sh"; COREKIT_HOST=codex hooks_marker_path)" "$MARK" "hooks_marker_path"
 assert_eq "$(. "$SCRIPTS/lib.sh"; unset XDG_CONFIG_HOME; HOME=""; COREKIT_HOST=codex hooks_marker_path)" "" "hooks_marker_path: no settings folder"
 SS="{\"session_id\":\"s\",\"cwd\":\"$C\",\"hook_event_name\":\"SessionStart\",\"source\":\"startup\"}"

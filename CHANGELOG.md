@@ -18,6 +18,12 @@ commit log has the full detail.
   to delete it.
 - `save --push` always says that the code is published by `ship`, before the Core push is attempted,
   so a Core push that fails no longer hides the line.
+- The code guard follows a Bash command that starts with `cd <absolute folder> &&` (or `;`): the
+  relative targets after it are judged against that folder, so `cd /…/code && printf x > docs/y.md`
+  is refused. Any other `cd`, `pushd` or `popd` stays a documented limit.
+- The plugin's data folder (the tools copy and the state markers) follows the marketplace the plugin
+  was installed from, `corecrew-<marketplace>`, when the host names no data folder; before, it was
+  always `corecrew-corekit`.
 
 ## [0.10.0] - 2026-11-09
 

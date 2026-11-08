@@ -9,11 +9,6 @@
 # Always exits 0: a hook must never block a session.
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)"
 ROOT="${CLAUDE_PLUGIN_ROOT:-$SELF}"
-# The data folder (state markers): CLAUDE_PLUGIN_DATA, else under HOME when that is an absolute path; else unknown (empty): no
-# state marker, no save hint. An empty or relative HOME would write to /.claude or <cwd>/<HOME>/.claude.
-# The tools copy (lib.sh tools_dir) follows the same rule, host by host.
-DATA="${CLAUDE_PLUGIN_DATA:-}"
-if [ -z "$DATA" ]; then case "${HOME:-}" in /*) DATA="$HOME/.claude/plugins/data/corecrew-corekit" ;; esac; fi
 in=""; [ -t 0 ] || in="$(cat)"
 
 # 1. Tools: quiet unless it failed (scripts/prepare.sh --part tools).
@@ -22,6 +17,11 @@ syncerr="$(bash "$SELF/scripts/prepare.sh" --part tools 2>&1)"
 
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
+# The data folder (state markers): CLAUDE_PLUGIN_DATA, else lib-host.sh default_data_dir (the marketplace read from the plugin
+# root's path, under an absolute HOME or CODEX_HOME); else unknown (empty): no state marker, no save hint. An empty or
+# relative HOME would write to /.claude or <cwd>/<HOME>/.claude. The tools copy (lib.sh tools_dir) follows the same rule.
+DATA="${CLAUDE_PLUGIN_DATA:-}"
+[ -n "$DATA" ] || DATA="$(default_data_dir "$ROOT")"
 load_settings
 cwd="$(json_str "$in" cwd)"
 [ -n "$cwd" ] || cwd="$PWD"

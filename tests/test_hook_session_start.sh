@@ -36,6 +36,16 @@ rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
 OUT="$(cd "$SANDBOX/elsewhere" && bash "$H" </dev/null 2>&1)"; assert_eq "$?" "0" "empty stdin: exit"
 OUT="$(printf '{"cwd":"unterminated' | bash "$H" 2>&1)"; assert_eq "$?" "0" "broken JSON: exit"
 
+# --- no CLAUDE_PLUGIN_DATA: the data folder follows the marketplace in the plugin root's path (plugins/cache/<marketplace>/
+# corecrew/<version>), not a fixed corecrew-corekit
+LNK="$SANDBOX/mkt/.claude/plugins/cache/shop/corecrew/1.0.0"; mkdir -p "$(dirname "$LNK")"; ln -s "$PLUGIN" "$LNK"
+OUT="$(input "$SANDBOX/elsewhere" | env -u CLAUDE_PLUGIN_DATA -u COREDEV_TOOLS HOME="$SANDBOX/mkt" CLAUDE_PLUGIN_ROOT="$LNK" bash "$LNK/hooks/session-start.sh" 2>&1)"; RC=$?
+assert_eq "$RC" "0" "marketplace data folder: exit"
+case "$OUT" in *"Core not found"*) pass ;; *) fail "marketplace data folder: no hint: $OUT" ;; esac
+assert_file "$SANDBOX/mkt/.claude/plugins/data/corecrew-shop/state/core-hint-shown"
+assert_file "$SANDBOX/mkt/.claude/plugins/data/corecrew-shop/tools/VERSION"
+assert_no_file "$SANDBOX/mkt/.claude/plugins/data/corecrew-corekit"
+
 # --- Core set up, session elsewhere: silent (tools still synced)
 setup_core
 scaffold_old sess-app

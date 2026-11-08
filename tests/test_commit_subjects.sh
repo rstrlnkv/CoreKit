@@ -45,6 +45,15 @@ assert_exit 0 inrepo bash "$S" --range "$root..$root"
 # the range is read from the current folder: a bad one is a usage error (2), not a pass
 (cd "$R" && bash "$S" --range "$root..$good_end") >/dev/null 2>&1; assert_eq "$?" "0" "--range from inside the repo"
 (cd "$R" && bash "$S" --range "nosuch..HEAD") >/dev/null 2>&1; assert_eq "$?" "2" "--range with an unknown revision"
+# a bad range and a folder outside a repo: exit 2 with one own line, not git's fatal: line and the Usage line
+(cd "$R" && bash "$S" --range "nosuch..HEAD") >"$SANDBOX/out" 2>"$SANDBOX/err"
+assert_eq "$(cat "$SANDBOX/err")" "commit-subjects: bad range nosuch..HEAD" "--range with an unknown revision: one own line"
+assert_eq "$(cat "$SANDBOX/out")" "" "--range with an unknown revision: nothing on stdout"
+mkdir -p "$SANDBOX/norepo"
+(cd "$SANDBOX/norepo" && bash "$S" --range "$root..HEAD") >"$SANDBOX/out" 2>"$SANDBOX/err"; rc=$?
+assert_eq "$rc" "2" "--range outside a git repo"
+assert_eq "$(cat "$SANDBOX/err")" "commit-subjects: not a git repository" "--range outside a git repo: one own line"
+assert_eq "$(cat "$SANDBOX/out")" "" "--range outside a git repo: nothing on stdout"
 
 # --file: the subject is the first line that is neither blank nor a # comment
 f="$SANDBOX/msg"
