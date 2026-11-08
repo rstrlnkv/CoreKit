@@ -24,16 +24,6 @@ test('a subagent request is untouched', async ($, on) => {
   expect(w.efforts).toEqual(['medium'])
 })
 
-test('suggest asks and Switch applies', async ($, on) => {
-  const w = world(on)
-  w.reply = 'High (recommended)'
-  await start($)
-  await submit($, 'fix the login, it throws 500')
-  await step($, 'medium')
-  expect(w.asked).toEqual([['High (recommended)', 'Keep Medium', 'Extra high', 'Low']])
-  expect(w.efforts).toEqual(['high'])
-})
-
 test('the app setting is never written: the level is held in the chat', async ($, on) => {
   const w = world(on)
   w.reply = 'High (recommended)'
@@ -118,12 +108,13 @@ test('a pick still running when a new chat starts is dropped', { options: { mode
   expect(w.models).toEqual(['claude-sonnet-5-5', 'claude-sonnet-5-5'])
 })
 
-test('suggest Keep, a dismissed question and an other answer keep the level', async ($, on) => {
+test('Keep, a dismissed question and an other answer keep the level', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
+  w.answer = '{"level":"xhigh","why":"w"}'
   await start($)
   for (const r of ['Keep Medium', null, 'maybe later']) {
     w.reply = r
-    await submit($, 'fix the login')
+    await submit($, 'build the whole app')
     await step($, 'medium')
   }
   expect(w.asked.length).toBe(3)
@@ -333,8 +324,9 @@ test('calls cut by an Esc before 8 s are not logged as a timeout', { options: { 
   expect(w.logs[0]!.includes('classify: classifier gave no answer: aborted')).toBe(true)
 })
 
-test('a stale pick is dropped', async ($, on) => {
+test('a stale pick is dropped', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
+  w.answer = '{"level":"xhigh","why":"w"}'
   let answer!: (r: string) => void
   w.reply = new Promise<string>(r => (answer = r))
   await start($)
@@ -345,7 +337,7 @@ test('a stale pick is dropped', async ($, on) => {
     await w.clock.settle()
   }
   await submit($, 'never mind, fix a typo')
-  answer('High (recommended)')
+  answer('Extra high (recommended)')
   await first
   expect(w.set.length).toBe(0)
   expect(w.efforts).toEqual(['medium'])
@@ -386,13 +378,14 @@ test('haiku when the setting says so', { options: { classifier: 'haiku' } }, asy
   expect(w.model).toEqual(['haiku'])
 })
 
-test('a Russian prompt gets the question in Russian', async ($, on) => {
+test('a Russian prompt gets the question in Russian', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
+  w.answer = '{"level":"xhigh","why":"w"}'
   w.reply = 'Оставить «Среднее»'
   await start($)
-  await submit($, 'почини авторизацию')
+  await submit($, 'собери всё приложение')
   await step($, 'medium')
-  expect(w.asked[0]).toEqual(['Высокое (советую)', 'Оставить «Среднее»', 'Очень высокое', 'Низкое'])
+  expect(w.asked[0]).toEqual(['Очень высокое (советую)', 'Оставить «Среднее»', 'Высокое', 'Максимальное'])
   expect(w.headers[0]).toBe('Усилие')
   expect(w.efforts).toEqual(['medium'])
 })
@@ -410,18 +403,6 @@ test('first prompt in auto switches the model silently', { options: { mode: 'aut
   expect(w.models).toEqual(['opus'])
 })
 
-test('first prompt in suggest asks the model', async ($, on) => {
-  const w = world(on)
-  w.answer = '{"level":"medium","model":"opus","why":"many files"}'
-  w.reply = ['Opus (recommended)']
-  await start($)
-  await submit($, 'refactor the module')
-  await step($, 'medium')
-  expect(w.asked[0]).toEqual(['Opus (recommended)', 'Keep Sonnet', 'Fable', 'Haiku'])
-  expect(w.headers[0]).toBe('Model')
-  expect(w.models).toEqual(['opus'])
-})
-
 test('fable always asks', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.answer = '{"level":"medium","model":"fable","why":"whole app"}'
@@ -434,45 +415,47 @@ test('fable always asks', { options: { mode: 'auto' } }, async ($, on) => {
 
 // The model is asked first, then the effort; in each the recommended choice comes first and the
 // current one is there to keep. When both are asked the effort question can go back to the model.
-test('suggest mode asks the model, then the effort, the pick first', async ($, on) => {
+test('auto asks the model, then the effort, the pick first', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
-  w.answer = '{"level":"high","model":"opus","why":"auth bug"}'
-  w.reply = ['Opus (recommended)', 'High (recommended)']
+  w.answer = '{"level":"xhigh","model":"fable","why":"whole app"}'
+  w.reply = ['Fable (recommended)', 'Extra high (recommended)']
   await start($)
-  await submit($, 'fix the login, it throws 500')
+  await submit($, 'build the whole app, work alone')
   await step($, 'medium')
   expect(w.dialogs).toEqual([
-    [['Opus (recommended)', 'Keep Sonnet', 'Fable', 'Haiku']],
-    [['High (recommended)', 'Keep Medium', 'Extra high', '← Back to the model']],
+    [['Fable (recommended)', 'Keep Sonnet', 'Opus', 'Haiku']],
+    [['Extra high (recommended)', 'Keep Medium', 'High', '← Back to the model']],
   ])
   expect(w.headers).toEqual(['Model', 'Effort'])
-  expect(w.models.at(-1)).toBe('opus')
-  expect(w.efforts.at(-1)).toBe('high')
-})
-
-test('Back to the model asks the model again, then the effort', async ($, on) => {
-  const w = world(on)
-  w.answer = '{"level":"high","model":"opus","why":"auth bug"}'
-  w.reply = ['Opus (recommended)', '← Back to the model', 'Keep Sonnet', 'Extra high']
-  await start($)
-  await submit($, 'fix the login')
-  await step($, 'medium')
-  expect(w.headers).toEqual(['Model', 'Effort', 'Model', 'Effort'])
-  expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
+  expect(w.models.at(-1)).toBe('fable')
   expect(w.efforts.at(-1)).toBe('xhigh')
 })
 
-test('the effort question alone has no Back and four levels', async ($, on) => {
+test('Back to the model asks the model again, then the effort', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
-  w.reply = 'High (recommended)'
+  w.answer = '{"level":"xhigh","model":"fable","why":"whole app"}'
+  w.reply = ['Fable (recommended)', '← Back to the model', 'Keep Sonnet', 'Max']
   await start($)
-  await submit($, 'fix the login')
+  await submit($, 'build the whole app, work alone')
   await step($, 'medium')
-  expect(w.asked).toEqual([['High (recommended)', 'Keep Medium', 'Extra high', 'Low']])
+  expect(w.headers).toEqual(['Model', 'Effort', 'Model', 'Effort'])
+  expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
+  expect(w.efforts.at(-1)).toBe('max')
 })
 
-test('a level typed under Other counts, in English or Russian', async ($, on) => {
+test('the effort question alone has no Back and four levels', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
+  w.answer = '{"level":"xhigh","why":"w"}'
+  w.reply = 'Extra high (recommended)'
+  await start($)
+  await submit($, 'build the whole app')
+  await step($, 'medium')
+  expect(w.asked).toEqual([['Extra high (recommended)', 'Keep Medium', 'High', 'Max']])
+})
+
+test('a level typed under Other counts, in English or Russian', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answer = '{"level":"xhigh","why":"w"}'
   await start($)
   w.reply = 'max'
   await submit($, 'fix the login')
@@ -483,23 +466,23 @@ test('a level typed under Other counts, in English or Russian', async ($, on) =>
   expect(w.efforts).toEqual(['max', 'low'])
 })
 
-test('a question left unanswered keeps its part; the other part is applied', async ($, on) => {
+test('a question left unanswered keeps its part; the other part is applied', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
-  w.answer = '{"level":"high","model":"opus","why":"auth bug"}'
-  w.reply = ['Opus (recommended)', null]
+  w.answer = '{"level":"xhigh","model":"fable","why":"whole app"}'
+  w.reply = ['Fable (recommended)', null]
   await start($)
-  await submit($, 'fix the login')
+  await submit($, 'build the whole app, work alone')
   await step($, 'medium')
-  expect(w.models.at(-1)).toBe('opus')
+  expect(w.models.at(-1)).toBe('fable')
   expect(w.efforts.at(-1)).toBe('medium')
 })
 
-test('dismissed questions change nothing', async ($, on) => {
+test('dismissed questions change nothing', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
-  w.answer = '{"level":"high","model":"opus","why":"auth bug"}'
+  w.answer = '{"level":"xhigh","model":"fable","why":"whole app"}'
   w.reply = null
   await start($)
-  await submit($, 'fix the login')
+  await submit($, 'build the whole app, work alone')
   await step($, 'medium')
   expect(w.headers).toEqual(['Model', 'Effort'])
   expect(w.models).toEqual(['claude-sonnet-5-5'])
@@ -532,27 +515,18 @@ test('the Extra high and Max questions list the pick first', { options: { mode: 
   expect(w.asked[1]).toContain('Keep Extra high')
 })
 
-test('a plain High question keeps the pick first', async ($, on) => {
-  const w = world(on)
-  w.reply = 'High (recommended)'
-  await start($)
-  await submit($, 'fix the login, it throws 500')
-  await step($, 'medium')
-  expect(w.asked[0]![0]).toBe('High (recommended)')
-})
-
 test('mid-chat stronger pick asks with the cost',{ options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.lastReply = MID
   w.tokens = 100_000
   w.answer = '{"level":"medium","model":"opus","why":"x"}'
-  w.reply = ['Opus (recommended)']
+  w.reply = ['Switch to Opus']
   await start($)
   await submit($, 'now the hard part')
   await step($, 'medium')
   expect(w.questions[0]).toContain('≈ 100k tokens')
   expect(w.questions[0]).toContain('about $0.50')
-  expect(w.questions[0]).toContain('(x)')
+  expect(w.questions[0]).toContain('Because: x.')
   expect(w.models).toEqual(['opus'])
 })
 
@@ -563,7 +537,7 @@ test('mid-chat question without a known size says it costs tokens', { options: {
   await start($)
   await submit($, 'now the hard part')
   await step($, 'medium')
-  expect(w.questions[0]).toContain('read again once, which costs tokens')
+  expect(w.questions[0]).toContain('re-reads this chat once, which costs tokens')
 })
 
 test('mid-chat weaker pick changes nothing', { options: { mode: 'auto' } }, async ($, on) => {
@@ -577,16 +551,16 @@ test('mid-chat weaker pick changes nothing', { options: { mode: 'auto' } }, asyn
   expect(w.models).toEqual(['claude-sonnet-5-5'])
 })
 
-test('dismissed model question still asks effort', async ($, on) => {
+test('dismissed model question still asks effort', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
-  w.answer = '{"level":"high","model":"opus","why":"x"}'
-  w.reply = [null, 'High (recommended)']
+  w.answer = '{"level":"xhigh","model":"fable","why":"whole app"}'
+  w.reply = [null, 'Extra high (recommended)']
   await start($)
-  await submit($, 'fix the login')
+  await submit($, 'build the whole app, work alone')
   await step($, 'medium')
   expect(w.headers).toEqual(['Model', 'Effort'])
   expect(w.models).toEqual(['claude-sonnet-5-5'])
-  expect(w.efforts).toEqual(['high'])
+  expect(w.efforts).toEqual(['xhigh'])
 })
 
 test('a model switched off is replaced by the nearest one below it', { options: { mode: 'auto', useFable: false } }, async ($, on) => {
@@ -687,27 +661,27 @@ test('mid-chat the model question offers only the pick and Keep', { options: { m
   await start($)
   await submit($, 'now the hard part')
   await step($, 'medium')
-  expect(w.asked[0]).toEqual(['Opus (recommended)', 'Keep Sonnet'])
+  expect(w.asked[0]).toEqual(['Switch to Opus', 'Keep Sonnet'])
 })
 
-test('Keep is offered for a current model outside the list', { options: { useOpus: false, useFable: false } }, async ($, on) => {
+test('Keep is offered for a current model outside the list', { options: { mode: 'auto', useOpus: false } }, async ($, on) => {
   const w = world(on)
-  w.answer = '{"level":"medium","model":"sonnet","why":"x"}'
+  w.answer = '{"level":"medium","model":"fable","why":"x"}'
   w.reply = ['Keep Opus']
   await start($)
-  await submit($, 'write the report')
+  await submit($, 'write the whole report')
   await step($, 'medium', 0, undefined, 'claude-opus-5-5')
-  expect(w.asked[0]).toEqual(['Sonnet (recommended)', 'Keep Opus', 'Haiku'])
+  expect(w.asked[0]).toEqual(['Fable (recommended)', 'Keep Opus', 'Sonnet', 'Haiku'])
   expect(w.models).toEqual(['claude-opus-5-5'])
 })
 
-test('a one-model list still gives two options', { options: { useHaiku: false, useSonnet: false, useFable: false } }, async ($, on) => {
+test('a one-model list still gives two options', { options: { mode: 'auto', useHaiku: false, useSonnet: false, useOpus: false } }, async ($, on) => {
   const w = world(on)
-  w.answer = '{"level":"medium","model":"opus","why":"x"}'
+  w.answer = '{"level":"medium","model":"fable","why":"x"}'
   await start($)
-  await submit($, 'refactor it')
+  await submit($, 'build it all')
   await step($, 'medium')
-  expect(w.asked[0]).toEqual(['Opus (recommended)', 'Keep Sonnet'])
+  expect(w.asked[0]).toEqual(['Fable (recommended)', 'Keep Sonnet'])
 })
 
 test('a current model of no known family is never switched or asked about', async ($, on) => {
@@ -832,16 +806,16 @@ test('a model the account does not list is never picked or asked about; the near
   expect(w.models).toEqual(['opus'])
 })
 
-test('suggest mode asks about the stand-in and says why', async ($, on) => {
+test('the cost question for a stand-in says why', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.modelRow = WITHOUT_FABLE
+  w.lastReply = MID
   w.answer = '{"level":"medium","model":"fable","why":"whole app"}'
-  w.reply = ['Opus (recommended)']
+  w.reply = ['Switch to Opus']
   await start($)
   await submit($, 'build the whole app, work alone')
   await step($, 'medium')
-  expect(w.asked[0]![0]).toBe('Opus (recommended)')
-  expect(w.asked[0]).not.toContain('Fable')
+  expect(w.asked[0]).toEqual(['Switch to Opus', 'Keep Sonnet'])
   expect(w.questions[0]).toContain('Fable is not available, Opus instead')
   expect(w.models).toEqual(['opus'])
 })

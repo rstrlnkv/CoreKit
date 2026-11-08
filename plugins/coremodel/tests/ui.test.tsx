@@ -32,13 +32,13 @@ test('the applied line shows level, from and why, then goes after 15 s', { optio
   await switchTo($, w, 'high', 'medium')
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...ABOVE, surface })
-    expect((await ui.find({ type: 'Text', text: /Effort: High \(was Medium\) · auth bug/ })) !== undefined).toBe(true)
+    expect((await ui.find({ type: 'Text', text: /^✓ CoreModel: Effort High \(was Medium\) · auth bug/ })) !== undefined).toBe(true)
     await ui.unmount()
   }
   await w.clock.advance(15_000)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...ABOVE, surface })
-    expect(await ui.find({ type: 'Text', text: /Effort:/ })).toBe(undefined)
+    expect(await ui.find({ type: 'Text', text: /CoreModel:/ })).toBe(undefined)
     await ui.unmount()
   }
 })
@@ -49,24 +49,24 @@ test('a Russian prompt gives the line in Russian', { options: { mode: 'auto' } }
   await start($)
   await switchTo($, w, 'high', 'medium', 'почини авторизацию')
   const ui = await $.ui.mount({ ...ABOVE, surface: 'desktop' })
-  expect((await ui.find({ type: 'Text', text: /Усилие: Высокое \(было Среднее\)/ })) !== undefined).toBe(true)
+  expect((await ui.find({ type: 'Text', text: /Усилие Высокое \(было Среднее\)/ })) !== undefined).toBe(true)
   await ui.unmount()
 })
 
-test('the footer names a held level and leaves the slot alone otherwise', { options: { mode: 'auto' } }, async ($, on) => {
+test('the footer names what CoreModel set and is a plain button otherwise', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   engineFooter(on)
   w.row = null
   await start($)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...MODE, surface })
-    expect(await ui.find({ type: 'Text', text: /High/ })).toBe(undefined)
+    expect(String((await ui.find({ type: 'Button', key: 'pane' }))?.props.label)).toBe('CoreModel')
     await ui.unmount()
   }
   await switchTo($, w, 'high', 'medium')
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...MODE, surface })
-    expect((await ui.find({ type: 'Text', text: /• High$/ })) !== undefined).toBe(true)
+    expect(String((await ui.find({ type: 'Button', key: 'pane' }))?.props.label)).toBe('CoreModel · Sonnet · High')
     expect((await ui.find({ type: 'Text', text: /default/ })) !== undefined).toBe(true)
     await ui.unmount()
   }
@@ -103,24 +103,24 @@ test('/coremodel reports the mode and the level the chat runs at', async ($, on)
   expect(await run($, '')).toContain('High')
 })
 
-test('/coremodel auto, suggest, off and on store the mode over the setting', async ($, on) => {
+test('/coremodel auto, suggest, off and on store the mode over the setting', { options: { mode: 'suggest' } }, async ($, on) => {
   const w = world(on)
   engineFooter(on)
   await start($)
   await run($, 'auto')
   await switchTo($, w, 'high', 'medium')
-  expect(w.asked.length).toBe(0)
+  expect(w.efforts.at(-1)).toBe('high')
   await run($, 'off')
   await switchTo($, w, 'low', 'high')
   expect(w.model.length).toBe(1)
   await run($, 'on')
   await switchTo($, w, 'low', 'high')
-  expect(w.asked.length).toBe(0)
   expect(w.efforts.at(-1)).toBe('low')
   await run($, 'suggest')
-  w.reply = 'Keep Low'
   await switchTo($, w, 'medium', 'low')
-  expect(w.asked.length).toBe(1)
+  // Suggest offers it above the prompt; the request runs as it was
+  expect(w.asked.length).toBe(0)
+  expect(w.efforts.at(-1)).toBe('low')
 })
 
 test('off clears a held level and its label', { options: { mode: 'auto' } }, async ($, on) => {
@@ -181,13 +181,14 @@ test('undo holds the previous held level', { options: { mode: 'auto' } }, async 
   expect(w.efforts.at(-1)).toBe('high')
 })
 
-test('no undo after an agreed switch', async ($, on) => {
+test('no undo after an agreed switch', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   engineFooter(on)
   w.row = null
-  w.reply = 'High (recommended)'
+  w.reply = 'Extra high (recommended)'
   await start($)
-  await switchTo($, w, 'high', 'medium')
+  await switchTo($, w, 'xhigh', 'medium')
+  expect(w.efforts.at(-1)).toBe('xhigh')
   expect(await undoButton($)).toBe(undefined)
 })
 
@@ -222,7 +223,7 @@ test('each applied switch places one mark', { options: { mode: 'auto' } }, async
   expect(w.placed).toEqual(['mark-1', 'mark-2'])
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...placed('mark-2'), surface })
-    expect((await ui.find({ type: 'Text', text: /↓ Effort: Low \(was High\)/ })) !== undefined).toBe(true)
+    expect((await ui.find({ type: 'Text', text: /↓ Effort Low \(was High\)/ })) !== undefined).toBe(true)
     await ui.unmount()
   }
 })
@@ -250,7 +251,7 @@ test('mark ids stay unique across a session restart', { options: { mode: 'auto' 
   await switchTo($, w, 'low', 'medium', 'rename it')
   expect(w.placed).toEqual(['mark-1', 'mark-2'])
   const ui = await $.ui.mount({ ...placed('mark-1'), surface: 'desktop' })
-  expect((await ui.find({ type: 'Text', text: /Effort: High/ })) !== undefined).toBe(true)
+  expect((await ui.find({ type: 'Text', text: /Effort High/ })) !== undefined).toBe(true)
   await ui.unmount()
 })
 
@@ -309,20 +310,6 @@ test('the footer carries a button that opens and closes the pane without the cha
   expect(w.prompts.length).toBe(0)
 })
 
-test('the footer button shows beside a held level too', { options: { mode: 'auto' } }, async ($, on) => {
-  const w = world(on)
-  engineFooter(on)
-  w.row = null
-  await start($)
-  await switchTo($, w, 'high', 'medium')
-  for (const surface of SURFACES) {
-    const ui = await $.ui.mount({ ...MODE, surface })
-    expect((await ui.find({ type: 'Text', text: /• High$/ })) !== undefined).toBe(true)
-    expect((await ui.find({ type: 'Button', key: 'pane' })) !== undefined).toBe(true)
-    await ui.unmount()
-  }
-})
-
 test('/coremodel panel opens the pane', async ($, on) => {
   const w = world(on)
   await start($)
@@ -330,32 +317,32 @@ test('/coremodel panel opens the pane', async ($, on) => {
   expect(w.opened).toEqual([{ id: 'coremodel', title: 'CoreModel' }])
 })
 
-test('the pane shows mode, level, last pick and counts', { options: { mode: 'auto' } }, async ($, on) => {
+test('the pane shows the mode, what the chat runs at, and the session', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.row = null
   await start($)
   await switchTo($, w, 'high', 'medium')
   for (const surface of SURFACES) {
-    expect(await has($, /^Now in the chat$/, surface)).toBe(true)
+    expect(await has($, /^CoreModel · Auto$/, surface)).toBe(true)
+    expect(await has($, /^This chat$/, surface)).toBe(true)
     expect(await has($, /^Sonnet · High$/, surface)).toBe(true)
-    expect(await has($, /^held by CoreModel · in the menu: Medium \(yours\)$/, surface)).toBe(true)
-    expect(await has($, /^Last pick$/, surface)).toBe(true)
-    expect(await has($, /^auth bug$/, surface)).toBe(true)
-    expect(await has($, /^High +█+ 1$/, surface)).toBe(surface === 'terminal')
-    expect(await has($, /^High · applied$/, surface)).toBe(true)
-    expect(await has($, /▇/, surface)).toBe(false)
+    expect(await has($, /^Set by CoreModel for this chat · your default: Medium$/, surface)).toBe(true)
+    expect(await has($, /^This session$/, surface)).toBe(true)
+    expect(await has($, /^High 1$/, surface)).toBe(true)
+    // the last pick is what the chat runs at: not said twice
+    expect(await has($, /^Last pick$/, surface)).toBe(false)
     expect(await has($, /^Model$/, surface)).toBe(true)
-    expect(await has($, /^Level$/, surface)).toBe(true)
-    expect(await has($, /Switches by itself, asks before Fable/, surface)).toBe(true)
+    expect(await has($, /^Effort$/, surface)).toBe(true)
+    expect(await has($, /Asks only before Fable/, surface)).toBe(true)
     const ui = await pane($, surface)
     const auto = await ui.find({ type: 'Button', key: 'mode-auto' })
-    expect(String(auto?.props.label)).toBe('Auto')
+    expect(String(auto?.props.label)).toBe('● Auto')
     expect(auto?.props.variant).toBe('primary')
     expect((await ui.find({ type: 'Button', key: 'mode-off' }))?.props.variant).toBe(undefined)
     expect((await ui.find({ type: 'Button', key: 'level-high' }))?.props.variant).toBe('primary')
     expect((await ui.find({ type: 'Button', key: 'level-medium' }))?.props.variant).toBe(undefined)
     expect((await ui.find({ type: 'Button', key: 'model-sonnet' }))?.props.variant).toBe('primary')
-    expect(String((await ui.find({ type: 'Button', key: 'release' }))?.props.label)).toBe("Back to the menu's choice")
+    expect(String((await ui.find({ type: 'Button', key: 'release' }))?.props.label)).toBe('Use my default')
     await ui.unmount()
   }
 })
@@ -365,20 +352,19 @@ test('the pane speaks Russian after a Russian prompt', { options: { mode: 'auto'
   w.row = null
   await start($)
   await switchTo($, w, 'high', 'medium', 'почини авторизацию')
-  expect(await has($, /^Сейчас в чате$/)).toBe(true)
+  expect(await has($, /^Этот чат$/)).toBe(true)
   expect(await has($, /^Sonnet · Высокое$/)).toBe(true)
-  expect(await has($, /^держит CoreModel · в меню: Среднее \(ваше\)$/)).toBe(true)
-  expect(await has($, /^Режим$/)).toBe(true)
+  expect(await has($, /^Выбрано CoreModel для этого чата · ваш выбор по умолчанию: Среднее$/)).toBe(true)
+  expect(await has($, /^CoreModel · Автоматически$/)).toBe(true)
   expect(await has($, /^Модель$/)).toBe(true)
-  expect(await has($, /^Уровень$/)).toBe(true)
-  expect(await has($, /^Последний выбор$/)).toBe(true)
-  expect(await has($, /^Высокое · применён$/)).toBe(true)
-  expect(await has($, /Меняет сам, спрашивает перед Fable, уровнями «Очень высокое» и «Максимальное» и перед сменой модели/)).toBe(true)
+  expect(await has($, /^Усилие$/)).toBe(true)
+  expect(await has($, /^За сессию$/)).toBe(true)
+  expect(await has($, /Спрашивает только перед Fable/)).toBe(true)
   const ui = await pane($)
-  expect(String((await ui.find({ type: 'Button', key: 'mode-suggest' }))?.props.label)).toBe('Спрашивать')
-  expect(String((await ui.find({ type: 'Button', key: 'mode-auto' }))?.props.label)).toBe('Автоматически')
+  expect(String((await ui.find({ type: 'Button', key: 'mode-suggest' }))?.props.label)).toBe('Советовать')
+  expect(String((await ui.find({ type: 'Button', key: 'mode-auto' }))?.props.label)).toBe('● Автоматически')
   expect(String((await ui.find({ type: 'Button', key: 'mode-off' }))?.props.label)).toBe('Выкл')
-  expect(String((await ui.find({ type: 'Button', key: 'release' }))?.props.label)).toBe('Вернуть как в меню')
+  expect(String((await ui.find({ type: 'Button', key: 'release' }))?.props.label)).toBe('Вернуть мой выбор')
   await ui.unmount()
 })
 
@@ -392,7 +378,7 @@ test('the pane marks what the chat runs at when nothing is held', async ($, on) 
   expect((await ui.find({ type: 'Button', key: 'model-sonnet' }))?.props.variant).toBe('primary')
   expect(await ui.find({ type: 'Button', key: 'release' })).toBe(undefined)
   await ui.unmount()
-  expect(await has($, /held by/)).toBe(false)
+  expect(await has($, /Set by/)).toBe(false)
 })
 
 test('a mode button in the pane sets the mode', { options: { mode: 'auto' } }, async ($, on) => {
@@ -458,63 +444,36 @@ test('off from the pane clears the band and its undo', { options: { mode: 'auto'
   expect(w.efforts.at(-1)).toBe('medium')
 })
 
-test('a fresh pane says there are no picks yet', async ($, on) => {
-  const w = world(on)
-  w.answer = new Error('down')
+test('a fresh pane says when the chat shows what it runs at', async ($, on) => {
+  world(on)
   await start($)
   await submit($, 'почини авторизацию')
-  await step($, 'medium')
-  expect(await has($, /Пока нет выборов/)).toBe(true)
+  expect(await has($, /^появится после первого сообщения$/)).toBe(true)
 })
 
-test('the pane counts kept prompts', async ($, on) => {
+test('the pane counts kept prompts', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.row = null
   w.reply = 'Keep Medium'
   await start($)
-  await switchTo($, w, 'high', 'medium')
+  await switchTo($, w, 'xhigh', 'medium')
   await switchTo($, w, 'keep', 'medium', 'ok')
   // Prompts the person kept are not counted as picks.
-  expect(await has($, /^High +█+/, 'terminal')).toBe(false)
-  expect(await has($, /^Left as it was: 2$/)).toBe(true)
+  expect(await has($, /Extra high 1/)).toBe(false)
+  expect(await has($, /^unchanged 2$/)).toBe(true)
   // The person answered Keep, so the last pick is shown as not applied.
-  expect(await has($, /^High · not applied$/)).toBe(true)
-})
-
-const SPIN = { plugin: 'coremodel', component: 'Spinner', props: { word: 'Thinking', message: null, suffix: '…', mode: 'thinking' } } as const
-
-async function spinner($: Eng, surface: 'terminal' | 'desktop') {
-  const ui = await $.ui.mount({ ...SPIN, surface })
-  const t = await ui.find({ type: 'Text' })
-  await ui.unmount()
-  return t?.text
-}
-
-test('the working line names a held level', { options: { mode: 'auto' } }, async ($, on) => {
-  const w = world(on)
-  on('ui.render', { component: 'Spinner' }, ($, e) => {
-    const { Text } = $.ui.resolve(e)
-    const p = e.props as { word: string; suffix: string }
-    return <Text>{p.word + p.suffix}</Text>
-  })
-  w.row = null
-  await start($)
-  for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking…')
-  await switchTo($, w, 'high', 'medium')
-  for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking… · High')
-  await run($, 'off')
-  for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking…')
+  expect(await has($, /^Extra high · auth bug · not applied$/)).toBe(true)
 })
 
 test('/coremodel with no argument asks for the mode', async ($, on) => {
   const w = world(on)
-  w.reply = 'auto'
+  w.reply = 'Suggest'
   await start($)
   const text = await run($, '')
-  expect(w.asked.at(-1)).toEqual(['suggest', 'auto', 'off'])
-  expect(text).toContain('Mode: auto. Switches by itself')
+  expect(w.asked.at(-1)).toEqual(['Auto', 'Suggest', 'Off'])
+  expect(text).toContain('Mode: Suggest. Never asks')
   expect(text.startsWith('CoreModel')).toBe(false)
-  await switchTo($, w, 'high', 'medium')
+  await switchTo($, w, 'xhigh', 'medium')
   expect(w.asked.length).toBe(1)
 })
 
@@ -524,9 +483,8 @@ test('a dismissed mode question changes nothing', async ($, on) => {
   await start($)
   const text = await run($, '')
   expect(w.asked.length).toBe(1)
-  expect(text).toContain('Mode: suggest.')
-  w.reply = 'Keep Medium'
-  await switchTo($, w, 'high', 'medium')
+  expect(text).toContain('Mode: Auto.')
+  await switchTo($, w, 'xhigh', 'medium')
   expect(w.asked.length).toBe(2)
 })
 
@@ -579,15 +537,15 @@ test('the pane button rows wrap in a narrow pane', async ($, on) => {
   }
 })
 
-test('the pane hides the menu line until a request shows the menu', async ($, on) => {
+test('the pane names your default only once a request shows it', async ($, on) => {
   const w = world(on)
   w.row = null
   await start($)
   await pressPane($, 'level-high')
-  expect(await has($, /in the menu/)).toBe(false)
-  expect(await has($, /^held by CoreModel$/)).toBe(true)
+  expect(await has($, /your default/)).toBe(false)
+  expect(await has($, /^Set by CoreModel for this chat$/)).toBe(true)
   await step($, 'medium')
-  expect(await has($, /in the menu: Medium/)).toBe(true)
+  expect(await has($, /your default: Medium/)).toBe(true)
 })
 
 test('no undo when the previous level is unknown', { options: { mode: 'auto' } }, async ($, on) => {
@@ -656,7 +614,7 @@ test('/coremodel names the model and the level, in the prompt language', { optio
   await switchPair($, w, 'opus', 'high')
   const en = await run($, '')
   expect(en).toContain('Opus · High')
-  expect(en).toContain('held by CoreModel')
+  expect(en).toContain('set by CoreModel; your default: Sonnet · Medium')
   w.answer = '{"level":"high","model":"opus","why":"x"}'
   await submit($, 'почини авторизацию')
   await step($, 'high', 1, undefined, 'claude-opus-5-5')
@@ -665,7 +623,7 @@ test('/coremodel names the model and the level, in the prompt language', { optio
   expect(ru).toContain('/coremodel auto')
   expect(ru).not.toContain('This chat runs at')
   // the mode replies follow the same language
-  expect(await run($, 'suggest')).toContain('Режим: «Спрашивать»')
+  expect(await run($, 'suggest')).toContain('Режим: «Советовать»')
   expect(await run($, 'off')).toContain('/coremodel on')
   expect(await run($, 'off')).not.toContain('Off.')
   expect(await run($, 'on')).toContain('Включён')
@@ -762,19 +720,6 @@ test('a new chat clears the rows of the old chat, a reload keeps them', { option
   expect(await shown()).toBe(false)
 })
 
-test('working line names the pair', { options: { mode: 'auto' } }, async ($, on) => {
-  const w = world(on)
-  on('ui.render', { component: 'Spinner' }, ($, e) => {
-    const { Text } = $.ui.resolve(e)
-    const p = e.props as { word: string; suffix: string }
-    return <Text>{p.word + p.suffix}</Text>
-  })
-  w.row = null
-  await start($)
-  await switchPair($, w, 'opus', 'high')
-  for (const surface of SURFACES) expect(await spinner($, surface)).toBe('Thinking… · Opus · High')
-})
-
 test('pane model buttons only for allowed models', { options: { useHaiku: false, useFable: false } }, async ($, on) => {
   world(on)
   await start($)
@@ -815,10 +760,9 @@ test('pane counts per model', { options: { mode: 'auto' } }, async ($, on) => {
   w.row = null
   await start($)
   await switchPair($, w, 'opus', 'high')
-  expect(await has($, /^Opus +█+ 1$/, 'terminal')).toBe(true)
+  for (const surface of SURFACES) expect(await has($, /^Opus 1 · High 1$/, surface)).toBe(true)
   expect(await has($, /^Opus · High$/)).toBe(true)
-  expect(await has($, /^held by CoreModel · in the menu: Sonnet · Medium \(yours\)$/)).toBe(true)
-  expect(await has($, /^Opus · High · applied$/)).toBe(true)
+  expect(await has($, /^Set by CoreModel for this chat · your default: Sonnet · Medium$/)).toBe(true)
   const ui = await pane($)
   expect((await ui.find({ type: 'Button', key: 'model-opus' }))?.props.variant).toBe('primary')
   expect((await ui.find({ type: 'Button', key: 'model-sonnet' }))?.props.variant).toBe(undefined)
@@ -947,7 +891,7 @@ test('with pickModel off the pane shows no model buttons or model counts', { opt
   await switchPair($, w, 'opus', 'high')
   const ui = await pane($)
   expect(await ui.find({ type: 'Button', key: 'model-opus' })).toBe(undefined)
-  expect(await ui.find({ type: 'Text', text: /^Opus +█+ 1$/ })).toBe(undefined)
+  expect(await ui.find({ type: 'Text', text: /Opus/ })).toBe(undefined)
   expect(await ui.find({ type: 'Text', text: /Fable/ })).toBe(undefined)
   expect((await ui.find({ type: 'Text', text: /^High$/ })) !== undefined).toBe(true)
   await ui.unmount()
@@ -965,23 +909,23 @@ test('after Back the pane shows the menu level at once', { options: { mode: 'aut
   expect(await has($, /^Sonnet · High$/)).toBe(false)
 })
 
-test('a pick the person kept is marked not applied in the pane', async ($, on) => {
+test('a pick the person kept is marked not applied in the pane', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.reply = 'Keep Medium'
   await start($)
-  await switchTo($, w, 'high', 'medium')
-  expect(await has($, /^High · not applied$/)).toBe(true)
-  w.reply = 'High (recommended)'
-  await switchTo($, w, 'high', 'medium')
-  expect(await has($, /^High · applied$/)).toBe(true)
+  await switchTo($, w, 'xhigh', 'medium')
+  expect(await has($, /^Extra high · auth bug · not applied$/)).toBe(true)
+  w.reply = 'Extra high (recommended)'
+  await switchTo($, w, 'xhigh', 'medium')
+  expect(await has($, /not applied/)).toBe(false)
 })
 
-test('a not applied pick reads in Russian too', async ($, on) => {
+test('a not applied pick reads in Russian too', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.reply = 'Оставить «Среднее»'
   await start($)
-  await switchTo($, w, 'high', 'medium', 'почини авторизацию')
-  expect(await has($, /^Высокое · не применён$/)).toBe(true)
+  await switchTo($, w, 'xhigh', 'medium', 'почини авторизацию')
+  expect(await has($, /^Очень высокое · auth bug · не применён$/)).toBe(true)
 })
 
 test('no model warning and no log line with the default switches', async ($, on) => {
@@ -1001,13 +945,13 @@ test('a model switched off in the settings has no pane button and is never picke
   await ui.unmount()
 })
 
-test('/coremodel replies speak of the pair, not only the level', async ($, on) => {
+test('/coremodel replies say what each mode does', async ($, on) => {
   world(on)
   await start($)
-  expect(await run($, 'auto')).toContain('asks before Fable, Extra high, Max')
-  expect(await run($, 'suggest')).toContain('Asks before every switch')
+  expect(await run($, 'auto')).toBe('Mode: Auto. Asks only before Fable, Extra high, Max and a stronger model mid-chat.')
+  expect(await run($, 'suggest')).toBe('Mode: Suggest. Never asks: suggests above the prompt, you press to switch.')
   expect(await run($, 'off')).toBe('Off. /coremodel on turns it back on.')
-  expect(await run($, 'on')).toMatch(/^On: (auto|suggest)\.$/)
+  expect(await run($, 'on')).toBe('On: Suggest.')
   expect(await run($, 'panel')).toBe('The pane is open.')
 })
 
@@ -1045,9 +989,10 @@ async function waitForQuestion(w: World) {
   }
 }
 
-test('a level pressed in the pane while a question is open is not overridden by the late answer', async ($, on) => {
+test('a level pressed in the pane while a question is open is not overridden by the late answer', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.row = null
+  w.answer = '{"level":"xhigh","why":"w"}'
   let answer!: (r: string) => void
   w.reply = new Promise<string>(r => (answer = r))
   await start($)
@@ -1055,7 +1000,7 @@ test('a level pressed in the pane while a question is open is not overridden by 
   const first = step($, 'medium')
   await waitForQuestion(w)
   await pressPane($, 'level-low')
-  answer('High (recommended)')
+  answer('Extra high (recommended)')
   await first
   await step($, 'medium', 1)
   expect(w.efforts.at(-1)).toBe('low')
@@ -1081,44 +1026,18 @@ test('Release pressed in the pane while the classifier runs is not overridden by
   expect(w.efforts.at(-1)).toBe('medium')
 })
 
-test('on the desktop the session counts are one drawing, on the terminal text bars', { options: { mode: 'auto' } }, async ($, on) => {
+test('session counts follow what was applied, not what the classifier asked for', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.row = null
+  w.answer = '{"level":"xhigh","model":"fable","why":"x"}'
+  w.reply = [null, 'Extra high (recommended)']
   await start($)
-  await switchPair($, w, 'opus', 'high')
-  const ui = await pane($, 'desktop')
-  const svg = (await ui.findAll({ type: 'Svg' })).find(x => /Opus/.test(String(x.props.alt)))
-  expect(svg).not.toBe(undefined)
-  expect(String(svg?.props.source)).toMatch(/^<svg /)
-  expect(String(svg?.props.source)).toContain('Opus')
-  expect(String(svg?.props.source)).toContain('High')
-  expect(String(svg?.props.alt)).toMatch(/Opus 1/)
-  await ui.unmount()
-  const tui = await pane($, 'terminal')
-  expect(await tui.findAll({ type: 'Svg' })).toHaveLength(0)
-  await tui.unmount()
-  expect(await has($, /█/, 'desktop')).toBe(false)
-})
-
-test('session counts follow what was applied, not what the classifier asked for', async ($, on) => {
-  const w = world(on)
-  w.row = null
-  w.answer = '{"level":"high","model":"opus","why":"x"}'
-  w.reply = [null, 'High (recommended)']
-  await start($)
-  await submit($, 'fix the login')
+  await submit($, 'build the whole app')
   await step($, 'medium')
-  const ui = await pane($, 'desktop')
-  const alt = String((await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt)).join('|'))
-  expect(alt).toContain('High 1')
-  expect(alt).not.toContain('Opus')
-  await ui.unmount()
-  const tui = await pane($, 'terminal')
-  expect(await tui.find({ type: 'Text', text: /^Opus/ })).toBe(undefined)
-  await tui.unmount()
+  for (const surface of SURFACES) expect(await has($, /^Extra high 1$/, surface)).toBe(true)
 })
 
-test('footer shows the held pair beside the button', { options: { mode: 'auto' } }, async ($, on) => {
+test('footer shows the held pair on the button', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   engineFooter(on)
   w.row = null
@@ -1126,20 +1045,22 @@ test('footer shows the held pair beside the button', { options: { mode: 'auto' }
   await switchPair($, w, 'opus', 'high')
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...MODE, surface })
-    expect(String((await ui.find({ type: 'Button', key: 'pane' }))?.props.label)).toBe('CoreModel')
-    expect((await ui.find({ type: 'Text', text: /Opus • High/ })) !== undefined).toBe(true)
+    expect(String((await ui.find({ type: 'Button', key: 'pane' }))?.props.label)).toBe('CoreModel · Opus · High')
     await ui.unmount()
   }
 })
 
-test('every pane section keeps its caption apart from what follows', { options: { mode: 'auto' } }, async ($, on) => {
+test('every pane row keeps its caption apart from what follows', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.row = null
   await start($)
   await switchPair($, w, 'opus', 'high')
   const ui = await pane($, 'desktop')
-  for (const key of ['now', 'choose-model', 'choose', 'mode', 'last', 'session']) {
-    expect((await ui.find({ type: 'Box', key }))?.props.gap).toBe('xs')
+  for (const key of ['mode', 'now']) expect((await ui.find({ type: 'Box', key }))?.props.gap).toBe('xs')
+  for (const key of ['chat', 'choose-model', 'choose', 'session']) {
+    const b = await ui.find({ type: 'Box', key })
+    expect(b?.props.flexDirection).toBe('row')
+    expect(b?.props.gap).toBe('sm')
   }
   await ui.unmount()
 })
@@ -1151,9 +1072,9 @@ test('the mode question and the kept count read in Russian', async ($, on) => {
   await start($)
   await switchTo($, w, 'keep', 'medium', 'почини авторизацию')
   const text = await run($, '')
-  expect(w.asked.at(-1)).toEqual(['Спрашивать', 'Автоматически', 'Выкл'])
+  expect(w.asked.at(-1)).toEqual(['Автоматически', 'Советовать', 'Выкл'])
   expect(text).toContain('Режим: «Автоматически»')
-  expect(await has($, /^Без изменений: 1$/)).toBe(true)
+  expect(await has($, /^без изменений 1$/)).toBe(true)
 })
 
 test('/coremodel recheck says when every model is switched off in the settings', { options: { useHaiku: false, useSonnet: false, useOpus: false, useFable: false } }, async ($, on) => {

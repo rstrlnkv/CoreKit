@@ -3,7 +3,7 @@ export type Level = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 /** The models CoreModel picks from, weakest to strongest. */
 export type ModelKey = 'haiku' | 'sonnet' | 'opus' | 'fable'
 
-/** The line above the prompt after a switch. */
+/** The line above the prompt: a silent switch with its undo, or (Suggest) a pick the person may take. */
 export type Band = {
   /** Changes with every new band, so an old timer never clears a newer one. */
   id: number
@@ -20,6 +20,8 @@ export type Band = {
   fromModel?: ModelKey | ''
   /** What the undo button restores per part: a level or model to hold, or 'release'; null: no button. */
   undo: { level?: Level | 'release'; model?: ModelKey | 'release' } | null
+  /** A suggestion: `model` and `level` are what it offers (null: that part stays); Switch holds them. */
+  suggest?: boolean
 }
 
 /** One switch, drawn as a row in the transcript. */

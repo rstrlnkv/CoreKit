@@ -3,7 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Level } from '../types'
 import { decide, decideModel, effortOptions, modelOptions, texts, uiLang } from '../hooks/policy'
 
-const pick = (level: Level | 'keep') => ({ level, why: '' })
+const pick = (level: Level | 'keep') => ({ level, model: '' as const, why: '' })
 
 test('decide does nothing when off, without a pick, on keep, or on the same level', () => {
   expect(decide('off', 'high', pick('low'))).toBe('none')
@@ -13,9 +13,9 @@ test('decide does nothing when off, without a pick, on keep, or on the same leve
   expect(decide('auto', 'high', pick('high'))).toBe('none')
 })
 
-test('suggest asks on every different level', () => {
+test('suggest offers every different level, never asks', () => {
   for (const l of ['low', 'medium', 'high', 'xhigh', 'max'] as const) {
-    expect(decide('suggest', l === 'medium' ? 'high' : 'medium', pick(l))).toBe('ask')
+    expect(decide('suggest', l === 'medium' ? 'high' : 'medium', pick(l))).toBe('suggest')
   }
 })
 
@@ -45,8 +45,10 @@ test('texts name the level in each language', () => {
   expect(texts('en').levelOption('high', true)).toBe('High (recommended)')
   expect(texts('ru').levelOption('high', true)).toBe('Высокое (советую)')
   expect(texts('ru').keepModel('sonnet')).toBe('Оставить Sonnet')
-  const line = texts('en').applied('high', 'medium', 'auth bug')
-  for (const w of ['High', 'Medium', 'auth bug']) expect(line.includes(w)).toBe(true)
+  expect(texts('ru').keepLevel('medium')).toBe('Оставить «Среднее»')
+  expect(texts('en').change(null, '', 'high', 'medium', 'auth bug')).toBe('Effort High (was Medium) · auth bug')
+  expect(texts('en').change('opus', 'sonnet', 'high', 'medium', '')).toBe('Opus · High (was Sonnet · Medium)')
+  expect(texts('en').change('opus', 'sonnet', null, '', '')).toBe('Opus (was Sonnet)')
 })
 
 test('the effort question says an Extra high, a High', () => {
@@ -55,28 +57,29 @@ test('the effort question says an Extra high, a High', () => {
   expect(texts('en').question('max', 'x')).toContain('a Max effort task')
 })
 
-test('back names the level to go back to', () => {
-  expect(texts('en').back('low').includes('Low')).toBe(true)
-  expect(texts('ru').back('low').includes('Низкое')).toBe(true)
+test('back names what to go back to', () => {
+  expect(texts('en').backTo(texts('en').pair('', 'low'))).toBe('Back to Low')
+  expect(texts('ru').backTo(texts('ru').pair('sonnet', 'low'))).toBe('Вернуть Sonnet · Низкое')
 })
 
 test('mark points up or down by level and says it in the prompt language', () => {
   expect(texts('en').markPair(null, '', 'high', 'low', 'x').startsWith('↑')).toBe(true)
   expect(texts('en').markPair(null, '', 'low', 'high', 'x').startsWith('↓')).toBe(true)
   expect(texts('en').markPair(null, '', 'medium', '', 'x').startsWith('↑')).toBe(true)
-  expect(texts('en').markPair(null, '', 'high', 'low', 'auth bug').includes('Effort: High (was Low) · auth bug')).toBe(true)
+  expect(texts('en').markPair(null, '', 'high', 'low', 'auth bug').includes('Effort High (was Low) · auth bug')).toBe(true)
   expect(texts('ru').markPair(null, '', 'high', 'low', 'x').includes('Усилие')).toBe(true)
 })
 
 test('the mode question ends as a question', () => {
-  expect(texts('en').modeQuestion('auto', 'opus', 'high').endsWith('?')).toBe(true)
-  expect(texts('ru').modeQuestion('auto', '', '').endsWith('?')).toBe(true)
+  expect(texts('en').modeQuestionFor('auto', 'opus', 'high').endsWith('?')).toBe(true)
+  expect(texts('ru').modeQuestionFor('auto', '', '').endsWith('?')).toBe(true)
 })
 
 test('decideModel follows the rules', () => {
   const base = { mode: 'auto' as const, pickModel: true, isFirst: true, now: 'sonnet' as const, pick: 'opus' as const, allowed: ['haiku', 'sonnet', 'opus', 'fable'] as const }
   expect(decideModel(base)).toBe('apply')
-  expect(decideModel({ ...base, mode: 'suggest' })).toBe('ask')
+  expect(decideModel({ ...base, mode: 'suggest' })).toBe('suggest')
+  expect(decideModel({ ...base, mode: 'suggest', isFirst: false, pick: 'haiku' })).toBe('none')
   expect(decideModel({ ...base, pick: 'fable' })).toBe('ask')
   expect(decideModel({ ...base, isFirst: false })).toBe('ask')
   expect(decideModel({ ...base, isFirst: false, pick: 'haiku' })).toBe('none')
@@ -96,16 +99,17 @@ test('options put the pick first, then the current, then the nearest', () => {
 })
 
 
-test('the model question names the reason and the one-time cost in the prompt language', () => {
-  const ru = texts('ru').modelQuestion('opus', 0.5, 100_000, false, 'много файлов')
-  expect(ru).toContain('Перейти на Opus (много файлов)?')
-  expect(ru).toContain('Чат один раз перечитается заново: ≈ 100 тыс. токенов, около $0,50')
-  const en = texts('en').modelQuestion('opus', 0.5, 100_000, false, 'many files')
-  expect(en).toContain('Switch to Opus (many files)?')
-  expect(en).toContain('The chat is read again once: ≈ 100k tokens, about $0.50 at API prices.')
-  // No "ordinary replies" figure and no claim that replies get cheap: a stronger model costs more per reply.
-  for (const t of [ru, en]) expect(/replies|ответ|cheap|дешёв/.test(t)).toBe(false)
-  expect(texts('en').modelQuestion('haiku', 0.004, 100_000, false, '')).toContain('< $0.01')
-  expect(texts('en').modelQuestion('opus', null, undefined, false, '')).toContain('read again once, which costs tokens')
-  expect(texts('en').modelQuestion('opus', null, undefined, true, 'many files')).toContain('Opus')
+test('the cost question names the lasting price, then the one-off re-read, then the reason', () => {
+  const en = texts('en').costQuestion('opus', 'sonnet', 100_000, 'many files')
+  expect(en).toBe('Switch to Opus? From now on each reply costs about 2× Sonnet. Switching also re-reads this chat once: ≈ 100k tokens, about $0.50 at API prices (on a subscription it counts toward your limits). Because: many files.')
+  const ru = texts('ru').costQuestion('opus', 'sonnet', 100_000, 'много файлов')
+  expect(ru).toContain('Перейти на Opus?')
+  expect(ru).toContain('примерно 2× от цены на Sonnet')
+  expect(ru).toContain('≈ 100 тыс. токенов, около $0,50')
+  expect(ru).toContain('Причина: много файлов.')
+  expect(texts('en').costQuestion('fable', 'opus', undefined, '')).toContain('about 2.5× Opus')
+  expect(texts('en').costQuestion('sonnet', 'opus', undefined, '')).toContain('about 1/2 of Opus, after this chat is re-read once')
+  expect(texts('en').costQuestion('haiku', 'sonnet', 50_000, '')).toContain('< $0.01')
+  expect(texts('en').costQuestion('opus', '', undefined, '')).toBe('Switch to Opus? Switching also re-reads this chat once, which costs tokens.')
+  expect(texts('en').firstModel('opus', 'many files')).toBe('This looks like work for Opus: many files. Switch the model?')
 })

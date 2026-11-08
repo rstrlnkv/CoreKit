@@ -1,19 +1,30 @@
 // The consent rule and the words the person reads. No calls on `$` here.
 import type { Level } from '../types'
 import { LEVELS, type Pick } from './classifier'
-import { LADDER, MODELS, type ModelKey, stronger } from './models'
+import { en, type Strings } from './locales/en'
+import { ru } from './locales/ru'
+import { LADDER, MODELS, type ModelKey, stronger, switchUsd } from './models'
 
 export type Mode = 'suggest' | 'auto' | 'off'
 export type Lang = 'ru' | 'en'
 
+/** The modes in the one order every surface shows them; the first is the default. */
+export const MODES: readonly Mode[] = ['auto', 'suggest', 'off']
+
+/**
+ * What to do with one part of a pick: nothing, switch now (Auto, with an undo), ask first (Auto,
+ * a dialog before Claude starts), or suggest (Suggest: a band, never a dialog).
+ */
+export type Action = 'none' | 'apply' | 'ask' | 'suggest'
+
 /** Levels the plugin never switches to without the person's yes: they cost the most. */
 const ASK_FIRST: readonly Level[] = ['xhigh', 'max']
 
-/** What to do with a pick: nothing, switch now, or ask first. */
-export function decide(mode: Mode, now: Level | '', pick: Pick | null): 'none' | 'apply' | 'ask' {
+/** What to do with the effort part of a pick. */
+export function decide(mode: Mode, now: Level | '', pick: Pick | null): Action {
   if (mode === 'off' || !pick || pick.level === 'keep' || pick.level === now) return 'none'
-  if (mode === 'suggest' || ASK_FIRST.includes(pick.level)) return 'ask'
-  return 'apply'
+  if (mode === 'suggest') return 'suggest'
+  return ASK_FIRST.includes(pick.level) ? 'ask' : 'apply'
 }
 
 /**
@@ -32,14 +43,14 @@ export function decideModel(i: {
   now: ModelKey | ''
   pick: ModelKey | ''
   allowed: readonly ModelKey[]
-}): 'none' | 'apply' | 'ask' {
+}): Action {
   if (i.mode === 'off' || !i.pickModel || !i.pick || !i.allowed.includes(i.pick) || i.pick === i.now) return 'none'
   // A model of no known family (a gateway's own name) is the person's choice: never switched or asked about.
   if (!i.now) return 'none'
   // Mid-chat a switch re-reads the whole chat: only a stronger model, and only with a question.
   if (!i.isFirst && !stronger(i.pick, i.now)) return 'none'
-  if (i.mode === 'suggest' || i.pick === 'fable' || !i.isFirst) return 'ask'
-  return 'apply'
+  if (i.mode === 'suggest') return 'suggest'
+  return i.pick === 'fable' || !i.isFirst ? 'ask' : 'apply'
 }
 
 /** The pick, then the current, then the nearest others by distance (cheaper first on a tie); at most four. */
@@ -67,160 +78,85 @@ export function effortOptions(pick: Level, now: Level | ''): Level[] {
   return nearest(LEVELS, pick, now, LEVELS)
 }
 
-const NAMES: Record<Lang, Record<Level, string>> = {
-  en: { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' },
-  ru: { low: 'Низкое', medium: 'Среднее', high: 'Высокое', xhigh: 'Очень высокое', max: 'Максимальное' },
+
+const LOCALES: Record<Lang, Strings> = { en, ru }
+
+/** The language of the words: the setting when it names one, else the language of the last prompt. */
+export function settingLang(v: unknown): Lang | null {
+  return v === 'en' || v === 'ru' ? v : null
 }
 
-const MODE_NAMES: Record<Lang, Record<Mode, string>> = {
-  en: { suggest: 'Suggest', auto: 'Auto', off: 'Off' },
-  ru: { suggest: 'Спрашивать', auto: 'Автоматически', off: 'Выкл' },
-}
+const fmt = (x: number) => String(Math.round(x * 10) / 10)
 
-// One line under the mode buttons: what the chosen mode does.
-const MODE_HINTS: Record<Lang, Record<Mode, string>> = {
-  en: {
-    suggest: 'Asks before every switch',
-    auto: 'Switches by itself, asks before Fable, Extra high, Max and a model change mid-chat',
-    off: 'Changes nothing',
-  },
-  ru: {
-    suggest: 'Спрашивает перед каждой сменой',
-    auto: 'Меняет сам, спрашивает перед Fable, уровнями «Очень высокое» и «Максимальное» и перед сменой модели посреди чата',
-    off: 'Ничего не меняет',
-  },
-}
-
-// auto with pickModel off: effort only.
-const AUTO_EFFORT_HINT: Record<Lang, string> = {
-  en: 'Changes the level by itself, asks before Extra high and Max',
-  ru: 'Меняет уровень сам, спрашивает перед уровнями «Очень высокое» и «Максимальное»',
-}
-
+/**
+ * The words in `lang`: the locale table, and the phrases built from it the same way in every language
+ * (a pair is "Opus · High", a change names what was before it, a row points up or down).
+ */
 export function texts(lang: Lang) {
-  const n = (l: Level) => NAMES[lang][l]
-  const ru = lang === 'ru'
-  const back = (l: Level) => (ru ? `Вернуть «${n(l)}»` : `Back to ${n(l)}`)
-  const applied = (l: Level, from: Level | '', why: string) =>
-    (ru ? `Усилие: ${n(l)}` : `Effort: ${n(l)}`) + (from ? (ru ? ` (было ${n(from)})` : ` (was ${n(from)})`) : '') + (why ? ` · ${why}` : '')
-  const markLevel = (l: Level, from: Level | '', why: string) => `${from && LEVELS.indexOf(from) > LEVELS.indexOf(l) ? '↓' : '↑'} ${applied(l, from, why)}`
+  const s = LOCALES[lang]
+  const n = (l: Level) => s.level[l]
+  const name = (m: ModelKey) => MODELS[m].name
+  const pair = (m: ModelKey | '' | null | undefined, l: Level | '' | null | undefined) => [m ? name(m) : '', l ? n(l) : ''].filter(Boolean).join(' · ')
+  /** "Opus · High (was Sonnet · Medium) · why"; the effort alone: "Effort High (was Medium) · why". */
+  const change = (m: ModelKey | null | undefined, fromM: ModelKey | '' | undefined, l: Level | null, fromL: Level | '', why: string) => {
+    const now = m ? pair(m, l) : l ? `${s.effortWord} ${n(l)}` : ''
+    const was = m ? pair(fromM, l ? fromL : '') : fromL ? n(fromL) : ''
+    return now + (was ? ` (${s.was(was)})` : '') + (why ? ` · ${why}` : '')
+  }
   return {
+    ...s,
     levelName: n,
-    question: (l: Level, why: string) =>
-      ru
-        ? `Похоже, задаче нужно усилие «${n(l)}»${why ? `: ${why}` : ''}. Переключить, пока Claude не начал?`
-        : `This looks like ${l === 'xhigh' ? 'an' : 'a'} ${n(l)} effort task${why ? `: ${why}` : ''}. Switch before Claude starts?`,
-    effortHeader: ru ? 'Усилие' : 'Effort',
-    // The reason a stand-in took the place of an unavailable pick; it leads the pick's own reason.
-    insteadOf: (from: ModelKey, to: ModelKey) =>
-      ru ? `${MODELS[from].name} недоступна, вместо неё ${MODELS[to].name}` : `${MODELS[from].name} is not available, ${MODELS[to].name} instead`,
-    backToModel: ru ? '← Назад к модели' : '← Back to the model',
-    levelOption: (l: Level, recommended: boolean) => `${n(l)}${recommended ? (ru ? ' (советую)' : ' (recommended)') : ''}`,
-    modelHeader: ru ? 'Модель' : 'Model',
-    modelOption: (m: ModelKey, recommended: boolean) => `${MODELS[m].name}${recommended ? (ru ? ' (советую)' : ' (recommended)') : ''}`,
-    keepCurrent: ru ? 'Оставить текущую модель' : 'Keep the current model',
-    keepModel: (m: ModelKey) => (ru ? `Оставить ${MODELS[m].name}` : `Keep ${MODELS[m].name}`),
-    modelQuestion: (to: ModelKey, usd: number | null, tokens: number | undefined, isFirst: boolean, why: string) => {
-      const name = MODELS[to].name
-      if (isFirst) return ru ? `Похоже, это работа для ${name}${why ? `: ${why}` : ''}. Сменить модель?` : `This looks like work for ${name}${why ? `: ${why}` : ''}. Switch the model?`
-      // Mid-chat the new model reads the whole chat again, once: say why, and what that costs.
-      const head = ru ? `Перейти на ${name}${why ? ` (${why})` : ''}?` : `Switch to ${name}${why ? ` (${why})` : ''}?`
-      if (usd === null || !tokens) return ru ? `${head} Чат один раз перечитается заново, это стоит токенов.` : `${head} The chat is read again once, which costs tokens.`
-      const k = Math.max(1, Math.round(tokens / 1000))
-      const money = usd < 0.01 ? '< $0.01' : `$${usd.toFixed(2)}`
-      return ru
-        ? `${head} Чат один раз перечитается заново: ≈ ${k} тыс. токенов, около ${money.replace('.', ',')} по ценам API.`
-        : `${head} The chat is read again once: ≈ ${k}k tokens, about ${money} at API prices.`
-    },
-    back,
-    keep: (now: Level | '') =>
-      now ? (ru ? `Оставить «${n(now)}»` : `Keep ${n(now)}`) : ru ? 'Оставить как есть' : 'Keep it as it is',
-    applied,
-    inMenu: (l: Level | '') => (ru ? `в меню: ${l ? n(l) : '?'} (ваше)` : `in the menu: ${l ? n(l) : '?'} (yours)`),
-    modeQuestion: (mode: Mode, m: ModelKey | '', l: Level | '') =>
-      ru
-        ? `CoreModel: ${MODE_NAMES.ru[mode]}. Сейчас в чате: ${texts(lang).nowPair(m, l)}. Какой режим?`
-        : `CoreModel: ${mode}. Now in the chat: ${texts(lang).nowPair(m, l)}. Which mode?`,
-    // The /coremodel reply when the mode question is dismissed: where things stand.
-    status: (mode: Mode, m: ModelKey | '', l: Level | '', held: boolean) =>
-      (ru
-        ? [`Режим: «${MODE_NAMES.ru[mode]}».`, `Сейчас в чате: ${texts(lang).nowPair(m, l)}${held ? ' (держит CoreModel; в меню по-прежнему ваш выбор)' : ''}.`, 'Команды: /coremodel auto, suggest, off, on, panel или recheck.']
-        : [`Mode: ${mode}.`, `Now in the chat: ${texts(lang).nowPair(m, l)}${held ? ' (held by CoreModel; the menu still shows your own choice)' : ''}.`, 'Type /coremodel auto, suggest, off, on, panel or recheck.']
-      ).join('\n'),
-    now: ru ? 'Сейчас в чате' : 'Now in the chat',
-    paneModel: ru ? 'Модель' : 'Model',
-    paneLevel: ru ? 'Уровень' : 'Level',
-    pickApplied: ru ? 'применён' : 'applied',
-    nowPair: (m: ModelKey | '', l: Level | '') =>
-      [m ? MODELS[m].name : '', l ? n(l) : ''].filter(Boolean).join(' · ') || (ru ? 'пока неизвестно' : 'unknown yet'),
-    heldBy: ru ? 'держит CoreModel' : 'held by CoreModel',
-    mode: ru ? 'Режим' : 'Mode',
-    modeName: (m: Mode) => MODE_NAMES[lang][m],
-    modeHint: (m: Mode, pickModel: boolean) => (m === 'auto' && !pickModel ? AUTO_EFFORT_HINT[lang] : MODE_HINTS[lang][m]),
-    lastPick: ru ? 'Последний выбор' : 'Last pick',
-    notApplied: ru ? 'не применён' : 'not applied',
-    modeSet: (mode: 'auto' | 'suggest', pickModel: boolean) =>
-      ru
-        ? `Режим: «${MODE_NAMES.ru[mode]}». ${mode === 'auto' && !pickModel ? AUTO_EFFORT_HINT.ru : MODE_HINTS.ru[mode]}.`
-        : `Mode: ${mode}. ${mode === 'auto' && !pickModel ? AUTO_EFFORT_HINT.en : MODE_HINTS.en[mode]}.`,
-    modeOff: ru ? 'CoreModel выключен. Включить снова: /coremodel on.' : 'Off. /coremodel on turns it back on.',
-    modeOn: (mode: Mode) => (ru ? `Включён: «${MODE_NAMES.ru[mode]}».` : `On: ${mode}.`),
-    paneOpen: ru ? 'Панель открыта.' : 'The pane is open.',
-    paneWaiting: (reason: string) => (ru ? `Панель ждёт: ${reason}` : `The pane is waiting: ${reason}`),
-    session: ru ? 'За сессию' : 'This session',
-    kept: (k: number) => (ru ? `Без изменений: ${k}` : `Left as it was: ${k}`),
-    release: ru ? 'Вернуть как в меню' : "Back to the menu's choice",
-    noPicks: ru ? 'Пока нет выборов.' : 'No picks yet.',
-    // The pair. With no model part each falls back to the effort-only text above.
-    change: (m: ModelKey | null | undefined, fromM: ModelKey | '' | undefined, l: Level | null, fromL: Level | '', why: string) => {
-      if (!m && l) return applied(l, fromL, why)
-      const was = [fromM ? MODELS[fromM].name : '', l && fromL ? n(fromL) : ''].filter(Boolean).join(' · ')
-      const now = m ? (l ? `${MODELS[m].name} · ${n(l)}` : `${ru ? 'Модель' : 'Model'}: ${MODELS[m].name}`) : ''
-      return now + (was ? (ru ? ` (было ${was})` : ` (was ${was})`) : '') + (why ? ` · ${why}` : '')
-    },
+    modeName: (m: Mode) => s.mode[m],
+    modeHintFor: (m: Mode, pickModel: boolean) => (m === 'auto' && !pickModel ? s.autoEffortHint : s.modeHint[m]),
+    pair,
+    change,
+    /** A transcript row: an arrow up or down, then the change. */
     markPair: (m: ModelKey | null | undefined, fromM: ModelKey | '' | undefined, l: Level | null, fromL: Level | '', why: string) => {
-      if (!m && l) return markLevel(l, fromL, why)
       const down = m && fromM ? LADDER.indexOf(fromM) > LADDER.indexOf(m) : !!(l && fromL && LEVELS.indexOf(fromL) > LEVELS.indexOf(l))
-      return `${down ? '↓' : '↑'} ${texts(lang).change(m, fromM, l, fromL, why)}`
+      return `${down ? '↓' : '↑'} ${change(m, fromM, l, fromL, why)}`
     },
-    backPair: (m: ModelKey | '' | undefined, l: Level | '' | undefined) =>
-      m && l ? (ru ? `Вернуть ${MODELS[m].name} · ${n(l)}` : `Back to ${MODELS[m].name} · ${n(l)}`) : m ? (ru ? `Вернуть ${MODELS[m].name}` : `Back to ${MODELS[m].name}`) : l ? back(l) : '',
-    pairSuffix: (m: ModelKey | null, l: Level | null) => [m ? MODELS[m].name : '', l ? n(l) : ''].filter(Boolean).join(' · '),
-    inMenuPair: (m: ModelKey | '', l: Level | '') => {
-      const what = [m ? MODELS[m].name : '?', l ? n(l) : ''].filter(Boolean).join(' · ')
-      return ru ? `в меню: ${what} (ваше)` : `in the menu: ${what} (yours)`
+    question: (l: Level, why: string) => s.effortQuestion(n(l), l === 'xhigh', why),
+    levelOption: (l: Level, recommended: boolean) => (recommended ? s.recommended(n(l)) : n(l)),
+    modelOption: (m: ModelKey, recommended: boolean) => (recommended ? s.recommended(name(m)) : name(m)),
+    keepLevel: (now: Level | '') => (now ? s.keepLevel(n(now)) : s.keepAsIs),
+    keepModel: (m: ModelKey) => s.keep(name(m)),
+    switchToModel: (m: ModelKey) => s.switchTo(name(m)),
+    firstModel: (to: ModelKey, why: string) => s.firstModelQuestion(name(to), why),
+    /**
+     * A switch mid-chat: the lasting price per reply first (by the input price of the two models),
+     * then the one-off re-read of the chat, then the reason.
+     */
+    costQuestion: (to: ModelKey, from: ModelKey | '', tokens: number | undefined, why: string) => {
+      const parts = [s.costHead(name(to))]
+      if (from && from !== to) {
+        const r = MODELS[to].input / MODELS[from].input
+        if (r > 1) parts.push(s.costMore(fmt(r), name(from)))
+        else if (r < 1) parts.push(s.costLess(fmt(1 / r), name(from)))
+      }
+      const usd = switchUsd(tokens, to)
+      if (usd === null || !tokens) parts.push(s.reread)
+      else parts.push(s.rereadSized(Math.max(1, Math.round(tokens / 1000)), usd < 0.01 ? '< $0.01' : `$${usd.toFixed(2)}`))
+      if (why) parts.push(s.because(why))
+      return parts.join(' ')
     },
-    switchModel: (m: ModelKey) => (ru ? `Перейти на ${MODELS[m].name}` : `Switch to ${MODELS[m].name}`),
-    cancel: ru ? 'Отмена' : 'Cancel',
-    unavailable: (m: ModelKey) =>
-      ru
-        ? `Модель ${MODELS[m].name} недоступна — CoreModel больше не выберет её в этой сессии (/coremodel recheck попробует снова)`
-        : `${MODELS[m].name} is not available — CoreModel will not pick it again this session (/coremodel recheck tries again)`,
-    // /coremodel recheck: what CoreModel may pick now. `usable` is false when the account's list could not be used.
+    insteadOfModel: (from: ModelKey, to: ModelKey) => s.insteadOf(name(from), name(to)),
+    unavailableModel: (m: ModelKey) => s.unavailable(name(m)),
+    modeQuestionFor: (mode: Mode, m: ModelKey | '', l: Level | '') => s.modeQuestion(s.mode[mode], pair(m, l) || s.unknownPair),
+    modeSet: (mode: Mode, pickModel: boolean) => s.modeIs(s.mode[mode], mode === 'auto' && !pickModel ? s.autoEffortHint : s.modeHint[mode]),
+    modeOnFor: (mode: Mode) => s.modeOn(s.mode[mode]),
+    /** The /coremodel reply: the mode, what the chat runs at, the commands. */
+    status: (mode: Mode, pickModel: boolean, m: ModelKey | '', l: Level | '', held: boolean, yours: string) =>
+      [
+        s.modeIs(s.mode[mode], mode === 'auto' && !pickModel ? s.autoEffortHint : s.modeHint[mode]),
+        held ? s.chatIsSet(pair(m, l) || s.unknownPair, yours) : s.chatIs(pair(m, l) || s.unknownPair),
+        s.commands,
+      ].join('\n'),
+    /** /coremodel recheck: what CoreModel may pick now. `usable` is false when the account's list could not be used. */
     recheck: (names: string[], enabled: number, usable: boolean, pickModel: boolean) => {
-      if (!pickModel) return ru ? 'pickModel выключен: CoreModel выбирает только усилие.' : 'pickModel is off: CoreModel picks the effort only.'
-      if (!enabled)
-        return ru
-          ? 'Все модели выключены в настройках плагина: CoreModel выбирает только усилие. Включите нужные в настройках.'
-          : 'Every model is switched off in the settings, so CoreModel picks the effort only. Switch the ones you want on in the plugin settings.'
-      if (!names.length)
-        return ru
-          ? 'Выбирать нечего: модели, включённые в настройках, и список моделей аккаунта не имеют общих. Включите другие модели в настройках.'
-          : "Nothing to pick: the models switched on in the settings and the account's model list share no model. Switch other models on in the plugin settings."
-      const head = ru ? `Модели, которые может выбрать CoreModel: ${names.join(', ')}.` : `Models CoreModel may pick: ${names.join(', ')}.`
-      if (usable) return head
-      return head + (ru ? ' Список моделей аккаунта прочитать не удалось, поэтому ничего не отфильтровано.' : " The account's model list could not be used, so nothing was filtered.")
+      if (!pickModel) return s.recheckEffortOnly
+      if (!enabled) return s.recheckAllOff
+      if (!names.length) return s.recheckNone
+      return s.recheckModels(names.join(', ')) + (usable ? '' : s.recheckUnfiltered)
     },
-    classifierDown: (reason: string) =>
-      ru
-        ? `CoreModel не может получить ответ классификатора (${reason}). Запросы идут без изменений. Подробности: claude --debug.`
-        : `CoreModel cannot get an answer from its classifier (${reason}). Your prompts run unchanged. Details: claude --debug.`,
-    undone: (m: ModelKey | '' | undefined, l: Level | '' | undefined) =>
-      ru ? `Вернул: ${[m ? MODELS[m].name : '', l ? n(l) : ''].filter(Boolean).join(' · ')}.` : `Back to ${[m ? MODELS[m].name : '', l ? n(l) : ''].filter(Boolean).join(' · ')}.`,
-    nothingToUndo: ru ? 'Отменять нечего: последнюю смену уже вернули или изменили.' : 'Nothing to undo: the last switch was taken back or changed since.',
-    undoHint: ru ? 'отменить: /coremodel undo' : 'undo: /coremodel undo',
-    probeLogged: (n: number) => (ru ? `CoreModel probe: ${n} строк записано в журнал отладки (claude --debug).` : `CoreModel probe: ${n} rows written to the debug log (claude --debug).`),
-    checking: ru ? 'подбираю модель и усилие…' : 'checking model and effort…',
-    checkingEffort: ru ? 'подбираю усилие…' : 'checking effort…',
   }
 }
