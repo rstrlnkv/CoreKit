@@ -107,7 +107,7 @@ code 'bash -c "ls docs"'; assert_eq "$RC" "0" "bash -c ls docs passes"
 
 # 8. << as a shift is not a heredoc
 export ONE_SUITE_PROCS="onesuite-fake-run-$$" ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0 ONE_SUITE_TURN="$SANDBOX/turn"
-bash -c "exec -a onesuite-fake-run-$$ sleep 120" >/dev/null 2>&1 & dummy=$!; disown "$dummy" 2>/dev/null
+(cd "$C" && exec bash -c "exec -a onesuite-fake-run-$$ sleep 120") >/dev/null 2>&1 & dummy=$!; disown "$dummy" 2>/dev/null
 sleep 1
 for c in 'echo $((1<<3)); swift test' 'x=$(( 1 << 3 )) && pytest' 'echo $(( (1<<3)+1 )); swift test'; do
   bash_json "$c" "$C" | bash "$HOOKS/one-suite.sh" >/dev/null 2>&1; RC=$?

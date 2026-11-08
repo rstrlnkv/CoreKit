@@ -194,7 +194,7 @@ Except for the first item and the read-only checker rule in the code guard (whic
 - **Code guard** refuses to write `CLAUDE.md`, `AGENTS.md`, `docs/` and `.claude/` into the code folder, which may be public; they belong in the Core.
 - **Read-only checkers**: the designer, localizer, security and verifier agents may change nothing but the temp folders. Their Bash writes, removals, in-place edits, links, downloads, unpacking and git changes are refused, wherever they run; a command the check cannot read whole is refused too.
   After a `cd` only absolute paths may be written (`/tmp/log`, not `log`). It reads the shell command, not the programs it starts: a build, `python -c` or `node -e` is not judged.
-- **One suite at a time** holds a test run while another one runs on the machine, so two suites do not break each other.
+- **One suite at a time** holds a test run (up to 120 s) while another one runs in the same project folder or worktree, so two runs do not break each other; runs in other folders never wait.
 - **Stop** reminds Claude to save a step that is left uncommitted.
 
 Outside a Core project there are two exceptions: the session-start hook refreshes the plugin's tools and, once per machine, prints a hint that the Core is not set up; and the code guard still refuses the writes of a read-only checker agent. Every other hook exits at once and prints nothing.

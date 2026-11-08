@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Claude Code PreToolUse hook on Bash: holds a test run while another one is running on this
-# machine, and lets it through when that one ends. Two suites at once fail each other — they share
-# settings, the Trash, $TMPDIR and a scratch path — and a note in a project's knowledge saying so
-# does not stop anyone from doing it. The hook waits here rather than refusing: a refused agent has
+# Claude Code PreToolUse hook on Bash: holds a test run while another one is running in the same
+# place, and lets it through when that one ends. Two suites at once in one checkout fail each other —
+# they share build folders, settings and scratch paths — and a note in a project's knowledge saying so
+# does not stop anyone from doing it. The same place: the project's main code folder and its folder in
+# the Core count as one; each linked git worktree is a place of its own. A test run anywhere else on
+# the machine (another repo, another project, another worktree) never holds the call, and neither
+# does one whose working folder cannot be read. The hook waits here rather than refusing: a refused agent has
 # nothing to wait with, so it asks again or looks at `ps` once per step, and every step re-reads its
 # whole context. Only a wait longer than ONE_SUITE_WAIT seconds is refused (exit 2; stderr goes back
 # to the caller: "run the same command again").
@@ -15,16 +18,17 @@
 # through.
 #
 # Env knobs, for tests: ONE_SUITE_PROCS (the process pattern, replaces the default), ONE_SUITE_WAIT
-# (seconds to wait; default 480), ONE_SUITE_GRACE (seconds a turn stays fresh; default 3),
-# ONE_SUITE_TURN (the turn directory).
+# (seconds to wait; default 120), ONE_SUITE_GRACE (seconds a turn stays fresh; default 3),
+# ONE_SUITE_TURN (the turn directory; by default it lives in a folder of this user's own, see below).
 # Known limits: the grace of 3 s is short against a permission prompt the person answers slowly, after
 # which a second run may start; and a mkdir lock left by a hook that was killed while holding it is
 # broken by the next waiter only after 2 s. The takeover of a stale turn runs under a short lock
 # (flock, else mkdir; see stale_take), so waiters that find the same stale turn together no longer go
 # together (tried before: one atomic rename; it only narrowed the window, since a fresh turn taken by
 # mistake had to be put back).
-# The default wait of 480 s must stay under this hook's `timeout` in hooks/hooks.json (Task 19 sets
-# it to 540) and under the stream watchdog, which stops an agent that is silent for 600 s.
+# The default wait of 120 s must stay under this hook's `timeout` in hooks/hooks.json (150: room for
+# the last check and a takeover lock) and well under the stream watchdog, which stops an agent that is
+# silent for 600 s.
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
@@ -34,7 +38,8 @@ in=""; [ -t 0 ] || in="$(cat)"
 cwd="$(json_str "$in" cwd)"
 [ -n "$cwd" ] || exit 0
 load_settings
-project_of "$cwd" >/dev/null 2>&1 || exit 0
+name="$(project_of "$cwd" 2>/dev/null)" || exit 0
+[ -n "$name" ] || exit 0
 
 cmd="$(json_str "$in" command)"
 [ -n "$cmd" ] || exit 0
@@ -83,28 +88,87 @@ procs="${ONE_SUITE_PROCS:-$default_procs}"
 # moment and start together. A turn older than its grace belongs to a run that has started or never
 # will, and the next waiter takes it. The grace is short (3 s): a run shows among the processes
 # within a second of being let through, and a quick suite re-run at once should not wait long.
-# If the turn can be neither made nor cleared (its folder is
-# missing or read-only, a stale turn belongs to someone else) waiting cannot help: the call is let
+# If the turn can be neither made nor cleared (its folder is missing, read-only or not this user's
+# own, a stale turn cannot be removed) waiting cannot help: the call is let
 # through. Every other path through the loop below reaches the limit check and the sleep.
-turn="${ONE_SUITE_TURN:-${TMPDIR:-/tmp}/corecrew-one-suite.turn}"
-grace="${ONE_SUITE_GRACE:-3}"; limit="${ONE_SUITE_WAIT:-480}"
+# The turn lives in a folder of this user's own: the plugin's data folder (CLAUDE_PLUGIN_DATA) when the
+# host gives one, else <TMPDIR>/corecrew-one-suite-<uid>, made with mode 700. A shared name in /tmp could
+# be made first by another user, who could then keep a fresh turn in it and stall every call. A folder
+# that is not this user's own (a symlink, someone else's, not writable) is not used: the call goes.
+if [ -n "${ONE_SUITE_TURN:-}" ]; then
+  turn="$ONE_SUITE_TURN"
+else
+  if [ -n "${CLAUDE_PLUGIN_DATA:-}" ]; then
+    sdir="${CLAUDE_PLUGIN_DATA%/}/one-suite"
+    [ -d "$CLAUDE_PLUGIN_DATA" ] || mkdir -p "$CLAUDE_PLUGIN_DATA" 2>/dev/null
+  else
+    sdir="${TMPDIR:-/tmp}"; sdir="${sdir%/}/corecrew-one-suite-$(id -u 2>/dev/null || echo unknown)"
+  fi
+  [ -e "$sdir" ] || [ -L "$sdir" ] || mkdir -m 700 "$sdir" 2>/dev/null
+  turn="$sdir/turn"
+fi
+grace="${ONE_SUITE_GRACE:-3}"; limit="${ONE_SUITE_WAIT:-120}"
 case "$grace" in ''|*[!0-9]*) grace=3 ;; esac
-case "$limit" in ''|*[!0-9]*) limit=480 ;; esac
+case "$limit" in ''|*[!0-9]*) limit=120 ;; esac
 
-# running_line — the first other process (pid and command line) that matches $procs. A gradlew run
-# whose test task follows -x / --exclude-task is dropped: a regular expression cannot say "not after -x".
+# turn_usable — exit 0 when the turn's folder is this user's own (a real folder, not a symlink, owned by
+# this user, writable) and the turn in it, if there is one, is this user's own too.
+turn_usable() {
+  [ -d "$tdir" ] && [ ! -L "$tdir" ] && [ -O "$tdir" ] && [ -w "$tdir" ] || return 1
+  if [ -e "$turn" ] || [ -L "$turn" ]; then [ ! -L "$turn" ] && [ -O "$turn" ] || return 1; fi
+  return 0
+}
+
+# The place of this call: its linked worktree (here_wt), else the project's main code folder (code) and its
+# folder in the Core (pdir), which count as one place.
+here_wt=""; worktree_of "$cwd" && here_wt="$WT_ROOT"
+code="$(code_dir_of "$name" 2>/dev/null)" && code="$(canon_dir "$code")" || code=""
+pdir="$CORE_DIR/$name"
+
+# same_place <dir> — exit 0 when <dir> (a process's working folder) is in the place of this call.
+same_place() {
+  local d; d="$(canon_dir "$1")"
+  if worktree_of "$d"; then [ -n "$here_wt" ] && [ "$WT_ROOT" = "$here_wt" ]; return; fi
+  [ -z "$here_wt" ] || return 1
+  case "$d/" in "$pdir"/*) return 0 ;; esac
+  [ -n "$code" ] || return 1
+  case "$d/" in "$code"/*) return 0 ;; esac
+  return 1
+}
+
+# proc_cwd <pid> — the working folder of a process: /proc/<pid>/cwd on Linux, lsof elsewhere (macOS). Prints
+# nothing when it cannot be read (another user's process, no lsof, the process is gone). Such a process
+# does not hold the call: this hook is a convenience, not a security boundary, so it fails open.
+proc_cwd() {
+  local d=""
+  [ -d /proc/self ] && d="$(readlink "/proc/$1/cwd" 2>/dev/null)"
+  if [ -z "$d" ] && command -v lsof >/dev/null 2>&1; then
+    d="$(lsof -a -p "$1" -d cwd -Fn -w 2>/dev/null | sed -n 's/^n//p' | head -1)"
+    # lsof writes a non-ASCII byte as \xNN and a backslash as \\; printf %b turns them back into bytes
+    case "$d" in *\\*) d="$(printf '%b' "$d")" ;; esac
+  fi
+  printf '%s' "$d"
+}
+
+# running_line — the first other process (pid and command line) that matches $procs and works in the
+# place of this call. A gradlew run whose test task follows -x / --exclude-task is dropped: a regular
+# expression cannot say "not after -x".
 running_line() {
-  local line rest
+  local line rest pid d
   pgrep -fl "$procs" 2>/dev/null | while IFS= read -r line; do
-    [ "${line%% *}" = "$$" ] && continue
+    pid="${line%% *}"
+    [ "$pid" = "$$" ] && continue
     rest="${line#* }"
     case "$rest" in
       *gradlew*)
         rest="$(printf '%s' "$rest" | LC_ALL=C sed -E 's/[[:space:]](-x|--exclude-task)([[:space:]]+|=)[^[:space:]]+//g')"
         printf '%s' "$rest" | LC_ALL=C grep -qE -- "$procs" || continue ;;
     esac
+    d="$(proc_cwd "$pid")"
+    [ -n "$d" ] && same_place "$d" || continue
     printf '%s\n' "$line"
-  done | head -1
+    break
+  done
 }
 
 # stale_take — take a stale turn over, under a short lock. Two waiters that find the same stale turn
@@ -157,8 +221,8 @@ while :; do
   running="$(running_line)"
   now="$(date +%s)"
   if [ -z "$running" ]; then
+    turn_usable || exit 0
     if mkdir "$turn" 2>/dev/null; then echo "$now" > "$turn/at"; exit 0; fi
-    [ -d "$tdir" ] && [ -w "$tdir" ] || exit 0
     at="$(cat "$turn/at" 2>/dev/null)"; case "$at" in ''|*[!0-9]*) at=0 ;; esac
     if [ $((now - at)) -ge "$grace" ]; then
       stale_take; case $? in 0|2) exit 0 ;; esac

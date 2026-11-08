@@ -20,7 +20,8 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/one-suite.sh\"",
-            "timeout": 540
+            "timeout": 150,
+            "statusMessage": "corecrew: checking for a running test suite"
           }
         ]
       },

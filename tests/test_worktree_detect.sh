@@ -43,7 +43,7 @@ printf '{"session_id":"x","cwd":"%s","hook_event_name":"Stop","stop_hook_active"
 assert_eq "$?" "2" "stop-remind is active in the worktree"
 rm -f "$W/new.txt" "$W/.env"
 # one-suite: a run is on, a test command is refused in the worktree
-FAKE="onesuite-fake-run-$$"; bash -c "exec -a $FAKE sleep 30" >/dev/null 2>&1 & dummy=$!; disown "$dummy" 2>/dev/null
+FAKE="onesuite-fake-run-$$"; (cd "$W" && exec bash -c "exec -a $FAKE sleep 30") >/dev/null 2>&1 & dummy=$!; disown "$dummy" 2>/dev/null
 trap 'kill "$dummy" 2>/dev/null; chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
 sleep 1
 printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"swift test","description":"r"}}' "$W" \

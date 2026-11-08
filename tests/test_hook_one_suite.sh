@@ -16,8 +16,21 @@ FAKE="onesuite-fake-run-$$"
 export ONE_SUITE_PROCS="$FAKE"
 # no waiting unless a test asks for it; a turn of this run's own that the next call may take at once
 export ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0 ONE_SUITE_TURN="$SANDBOX/turn"
-dummy=""
-trap '[ -z "$dummy" ] || kill "$dummy" 2>/dev/null; chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
+dummy=""; FAKES=""
+PTMP="$(cd -P /tmp && pwd)"; NOTOWNED="$PTMP/onesuite-turn-$$"   # see "a state folder not owned by this user"
+trap '[ -z "$dummy" ] || kill "$dummy" 2>/dev/null; [ -z "$FAKES" ] || kill $FAKES 2>/dev/null; rm -rf "$NOTOWNED"; chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
+# fake <cwd> <argv0> — starts a fake test run (a renamed sleep) whose working folder is <cwd>; its pid in FAKE_PID.
+# The hook holds a call only for a run whose working folder is in the same place as the call.
+fake() {
+  bash -c 'cd "$1" && exec -a "$2" sleep 120' _ "$1" "$2" >/dev/null 2>&1 & FAKE_PID=$!
+  disown "$FAKE_PID" 2>/dev/null; FAKES="$FAKES $FAKE_PID"
+}
+# stop <pid>... — kills fake runs and waits (up to 2 s) until they are gone
+stop() {
+  local p i
+  kill "$@" 2>/dev/null
+  for p in "$@"; do i=0; while kill -0 "$p" 2>/dev/null && [ $i -lt 20 ]; do sleep 0.1; i=$((i + 1)); done; done
+}
 
 # payload <json-escaped command> [cwd] [description]
 payload() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"%s"}}' "${2-$C}" "$1" "${3:-run}"; }
@@ -29,8 +42,8 @@ expect() { local want="$1" label="$2"; shift 2; run_hook "$@"; assert_eq "$RC" "
 # --- nothing running: every command passes
 expect 0 "no run in progress" 'swift test --filter Foo'
 
-# --- a run is on
-bash -c "exec -a $FAKE sleep 120" >/dev/null 2>&1 & dummy=$!; disown "$dummy" 2>/dev/null
+# --- a run is on (in this project's code folder)
+fake "$C" "$FAKE"; dummy=$FAKE_PID
 sleep 1
 for c in 'swift test --filter Foo' 'cd /x && swift test' '(cd /x; swift test)' 'FOO=1 swift test' 'time swift test' \
          'xcodebuild -scheme App test' 'xcodebuild test -scheme App' 'xcodebuild -scheme App -destination x test | xcpretty' 'xcodebuild test-without-building -scheme App' \
@@ -76,8 +89,54 @@ expect 0 "cwd does not exist" 'swift test' "$SANDBOX/no/such/dir"
 expect 2 "cwd is the project folder" 'swift test' "$CORE_DIR/app"
 expect 2 "cwd inside the project" 'swift test' "$C"
 mkdir -p "$CORE_DIR/foo" "$(dirname "$CORE_DIR")/Foo/src" "$(dirname "$CORE_DIR")/Brain"; : > "$CORE_DIR/foo/CLAUDE.md"
-expect 2 "new layout: cwd in Projects/Foo waits" 'swift test' "$(dirname "$CORE_DIR")/Foo/src"
+F="$(dirname "$CORE_DIR")/Foo"
+expect 0 "new layout: a run in another project does not hold Projects/Foo" 'swift test' "$F/src"
+fake "$F" "$FAKE"; foo=$FAKE_PID; sleep 1
+expect 2 "new layout: a run in Projects/Foo holds a call in Projects/Foo/src" 'swift test' "$F/src"
 expect 0 "new layout: Projects/Brain is not a project" 'swift test' "$(dirname "$CORE_DIR")/Brain"
+expect 2 "a run in Foo does not hide the run in app (every match is looked at)" 'swift test' "$C"
+stop "$foo"
+# lsof prints a non-ASCII byte of a working folder as \xNN; the name must still match
+U="$CORE_DIR/uni проект q %s/code"; mkdir -p "$U/src"; : > "$CORE_DIR/uni проект q %s/CLAUDE.md"
+fake "$U" "$FAKE"; uni=$FAKE_PID; sleep 1
+expect 2 "a run in a folder with a non-ASCII name holds a call there" 'swift test' "$U/src"
+stop "$uni"
+
+# --- only a run in the same place holds a call: the project's main code folder and its folder in the Core are one
+# place, each linked worktree is a place of its own; a run elsewhere on the machine (another repo, another project,
+# another worktree) never holds it, and neither does a run whose working folder cannot be read
+OTHER="onesuite-other-run-$$"
+mkdir -p "$C/sub/deep"
+ONE_SUITE_PROCS="$OTHER" expect 0 "nothing of this pattern runs" 'swift test'
+fake "$SANDBOX/elsewhere" "$OTHER"; o1=$FAKE_PID
+fake "$CORE_DIR/foo" "$OTHER"; o2=$FAKE_PID
+fake "$F/src" "$OTHER"; o3=$FAKE_PID
+sleep 1
+ONE_SUITE_PROCS="$OTHER" expect 0 "a run in a folder outside every project does not hold" 'swift test'
+ONE_SUITE_PROCS="$OTHER" expect 0 "a run in another project does not hold" 'swift test' "$CORE_DIR/app"
+stop "$o1" "$o2" "$o3"
+fake "$C/sub/deep" "$OTHER"; o1=$FAKE_PID; sleep 1
+ONE_SUITE_PROCS="$OTHER" expect 2 "a run deep in this project's code folder holds" 'swift test'
+case "$ERR" in *"$o1 "*) pass ;; *) fail "the refusal names the run in this project ($o1): $ERR" ;; esac
+ONE_SUITE_PROCS="$OTHER" expect 2 "a run in the code folder holds a call in the project's Core folder" 'swift test' "$CORE_DIR/app"
+# the working folder cannot be read (another user's process, no lsof): no hold
+mkdir -p "$SANDBOX/nocwd"
+printf '#!/bin/sh\nexit 1\n' > "$SANDBOX/nocwd/lsof"; printf '#!/bin/sh\nexit 1\n' > "$SANDBOX/nocwd/readlink"
+chmod +x "$SANDBOX/nocwd/lsof" "$SANDBOX/nocwd/readlink"
+PATH="$SANDBOX/nocwd:$PATH" ONE_SUITE_PROCS="$OTHER" expect 0 "a run whose working folder cannot be read does not hold" 'swift test'
+stop "$o1"
+# linked worktrees: each is its own place
+git -C "$C" init -q && git -C "$C" commit -q --allow-empty -m init
+W="$C/wt/w1"; mkdir -p "$C/wt"; git -C "$C" worktree add -q "$W" -b w1 2>/dev/null
+assert_file "$W/.git"
+fake "$W" "$OTHER"; o1=$FAKE_PID; sleep 1
+ONE_SUITE_PROCS="$OTHER" expect 0 "a run in a linked worktree does not hold the main checkout" 'swift test'
+ONE_SUITE_PROCS="$OTHER" expect 2 "a run in a linked worktree holds a call in the same worktree" 'swift test' "$W"
+stop "$o1"
+fake "$C/sub" "$OTHER"; o1=$FAKE_PID; sleep 1
+ONE_SUITE_PROCS="$OTHER" expect 0 "a run in the main checkout does not hold a linked worktree" 'swift test' "$W"
+stop "$o1"
+rm -rf "$ONE_SUITE_TURN"
 OUT="$(printf '{"tool_input":{"command":"swift test"}}' | bash "$H" 2>&1)"; assert_eq "$?" "0" "no cwd: exit"; assert_eq "$OUT" "" "no cwd: silent"
 OUT="$(printf '{"cwd":"","tool_input":{"command":"swift test"}}' | bash "$H" 2>&1)"; assert_eq "$?" "0" "empty cwd: exit"
 # inside the Core, but pgrep is not on PATH: let the call through
@@ -108,20 +167,20 @@ case "$msg" in *"do not poll"*) fail "refusal still says do not poll: $msg" ;; *
 # (the pattern below names a marker no real process has; the exclusion is the hook's own filter)
 GP="onesuite-gradle-$$"
 export ONE_SUITE_PROCS="$GP/gradlew( .*)? ([^ ]*:)?(test[A-Za-z0-9]*|[a-z][A-Za-z0-9]*Test)( |$)"
-bash -c "exec -a '$GP/gradlew build -x test' sleep 60" >/dev/null 2>&1 & g1=$!; disown "$g1" 2>/dev/null
-bash -c "exec -a '$GP/gradlew build --exclude-task=test' sleep 60" >/dev/null 2>&1 & g2=$!; disown "$g2" 2>/dev/null
+fake "$C" "$GP/gradlew build -x test"; g1=$FAKE_PID
+fake "$C" "$GP/gradlew build --exclude-task=test"; g2=$FAKE_PID
 sleep 1
 kill "$dummy" 2>/dev/null   # the other fake run is not part of this check
 sleep 1
 rm -rf "$ONE_SUITE_TURN"
 expect 0 "a running 'gradlew build -x test' is not a test run" 'swift test'
-bash -c "exec -a '$GP/gradlew build test' sleep 60" >/dev/null 2>&1 & g3=$!; disown "$g3" 2>/dev/null
+fake "$C" "$GP/gradlew build test"; g3=$FAKE_PID
 sleep 1
 rm -rf "$ONE_SUITE_TURN"
 expect 2 "a running 'gradlew build test' is a test run" 'swift test'
 kill "$g1" "$g2" "$g3" 2>/dev/null
 export ONE_SUITE_PROCS="$FAKE"
-bash -c "exec -a $FAKE sleep 120" >/dev/null 2>&1 & dummy=$!; disown "$dummy" 2>/dev/null
+fake "$C" "$FAKE"; dummy=$FAKE_PID
 sleep 1
 rm -rf "$ONE_SUITE_TURN"
 
@@ -163,6 +222,47 @@ ONE_SUITE_TURN="$SANDBOX/stuck/turn" timed_hook 'swift test'
 assert_eq "$RC" "0" "a stale turn that cannot be removed: let through"
 [ "$T" -lt 5 ] && pass || fail "stale turn that cannot be removed: took ${T} s"
 chmod -R u+rwx "$SANDBOX/stuck" "$SANDBOX/ro"
+
+# --- where the turn lives: a folder of this user's own, never a shared name in /tmp that another user could make
+# first (and fill with a fresh turn that would stall every call). CLAUDE_PLUGIN_DATA/one-suite when that is set,
+# else <TMPDIR>/corecrew-one-suite-<uid>, made with mode 700. A folder there that is not this user's own (a symlink,
+# someone else's, not writable) cannot be used: the call goes at once.
+UID_="$(id -u)"; NONE='onesuite-fake[-]none'
+( unset ONE_SUITE_TURN; export CLAUDE_PLUGIN_DATA="$SANDBOX/pd" ONE_SUITE_PROCS="$NONE"; run_hook 'swift test'; exit $RC )
+assert_eq "$?" "0" "state in CLAUDE_PLUGIN_DATA: the call goes"
+assert_file "$SANDBOX/pd/one-suite/turn/at"
+mkdir -p "$SANDBOX/tmpd"
+( unset ONE_SUITE_TURN CLAUDE_PLUGIN_DATA; export TMPDIR="$SANDBOX/tmpd/" ONE_SUITE_PROCS="$NONE"; run_hook 'swift test'; exit $RC )
+assert_eq "$?" "0" "state in TMPDIR: the call goes"
+assert_file "$SANDBOX/tmpd/corecrew-one-suite-$UID_/turn/at"
+assert_eq "$(ls -ld "$SANDBOX/tmpd/corecrew-one-suite-$UID_" | cut -c1-10)" "drwx------" "the state folder in TMPDIR is private"
+# made in advance as a symlink to a folder that holds a fresh turn: not used, nothing written through it
+mkdir -p "$SANDBOX/tmpe" "$SANDBOX/planted/turn"; date +%s > "$SANDBOX/planted/turn/at"
+ln -s "$SANDBOX/planted" "$SANDBOX/tmpe/corecrew-one-suite-$UID_"
+( unset ONE_SUITE_TURN CLAUDE_PLUGIN_DATA; export TMPDIR="$SANDBOX/tmpe" ONE_SUITE_PROCS="$NONE" ONE_SUITE_GRACE=1000 ONE_SUITE_WAIT=3
+  timed_hook 'swift test'; echo "$RC $T" > "$SANDBOX/res" )
+read -r rc t < "$SANDBOX/res"
+assert_eq "$rc" "0" "a state folder that is a symlink: the call goes"
+[ "$t" -lt 2 ] && pass || fail "a state folder that is a symlink: took ${t} s"
+assert_no_file "$SANDBOX/planted/turn.lock"
+# made in advance and not writable, with a fresh turn in it: the call goes at once
+mkdir -p "$SANDBOX/tmpf/corecrew-one-suite-$UID_/turn"; date +%s > "$SANDBOX/tmpf/corecrew-one-suite-$UID_/turn/at"
+chmod 555 "$SANDBOX/tmpf/corecrew-one-suite-$UID_"
+( unset ONE_SUITE_TURN CLAUDE_PLUGIN_DATA; export TMPDIR="$SANDBOX/tmpf" ONE_SUITE_PROCS="$NONE" ONE_SUITE_GRACE=1000 ONE_SUITE_WAIT=3
+  timed_hook 'swift test'; echo "$RC $T" > "$SANDBOX/res" )
+read -r rc t < "$SANDBOX/res"
+assert_eq "$rc" "0" "a state folder that is not writable: the call goes"
+[ "$t" -lt 2 ] && pass || fail "a state folder that is not writable: took ${t} s"
+chmod -R u+rwx "$SANDBOX/tmpf"
+# a state folder not owned by this user: /tmp itself (root's, writable by all) as the turn's folder. The turn
+# is not made there. (Ownership cannot be faked without root; /tmp is a real folder of someone else's.)
+if [ "$UID_" != "0" ] && [ ! -O "$PTMP" ] && [ -w "$PTMP" ]; then
+  ONE_SUITE_TURN="$NOTOWNED" ONE_SUITE_PROCS="$NONE" timed_hook 'swift test'
+  assert_eq "$RC" "0" "a state folder not owned by this user: the call goes"
+  assert_no_file "$NOTOWNED"
+else
+  pass   # running as root, or /tmp is this user's: nothing to check here
+fi
 export ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0
 
 # --- the turn: of two waiters that find nothing running, one goes and the other waits out the grace
@@ -276,6 +376,14 @@ assert_eq "$rc" "0" "a dead hook's mkdir lock is broken and the turn taken"
 [ "$t" -ge 1 ] && [ "$t" -le 8 ] && pass || fail "dead lock: took ${t} s (want 1..8)"
 assert_no_file "$SANDBOX/lk/turn.lockd"
 
+# --- the default wait is short (a stalled call costs the person minutes), and the hook's entry in hooks.json gives
+# it a timeout above that wait and a status line, so the person sees what the call waits for
+assert_contains "$H" 'limit="${ONE_SUITE_WAIT:-120}"'
+HJ="$HOOKS/hooks.json"
+suite_to="$(awk '/one-suite.sh/ { on = 1 } on && /"timeout":/ { print; exit }' "$HJ" | sed -n 's/.*"timeout": *\([0-9]*\).*/\1/p')"
+[ -n "$suite_to" ] && [ "$suite_to" -gt 120 ] && [ "$suite_to" -le 180 ] && pass || fail "one-suite timeout in hooks.json: '$suite_to' (want 121..180)"
+assert_contains "$HJ" '"statusMessage": "corecrew: checking for a running test suite"'
+
 # --- the default process pattern (checked as text: it never touches real processes)
 DEF="$(sed -n "s/^default_procs='\(.*\)'\$/\1/p" "$H")"
 [ -n "$DEF" ] && pass || fail "default_procs line not found in the hook"
@@ -303,7 +411,7 @@ cfx() { sed "s|@CWD@|$C|g" "$FX/$1.json" | bash "$H" >"$SANDBOX/out" 2>"$SANDBOX
 kill "$dummy" 2>/dev/null; dummy=""; sleep 1
 cfx pre-bash; assert_eq "$RC" "0" "codex: no run in progress passes"
 cfx pre-bash-subagent; assert_eq "$RC" "0" "codex: a subagent's call passes"
-bash -c "exec -a $FAKE sleep 120" >/dev/null 2>&1 & dummy=$!; disown "$dummy" 2>/dev/null
+fake "$C" "$FAKE"; dummy=$FAKE_PID
 sleep 1
 cfx pre-bash; assert_eq "$RC" "2" "codex: a test run while another one is on is refused"
 assert_eq "$OUT" "" "codex: stdout"
