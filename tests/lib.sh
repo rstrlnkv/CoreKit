@@ -1,4 +1,4 @@
-# Shared helpers for bash tests. Source this file; call `finish` at the end.
+# Shared helpers for bash tests. Source this file; call `finish` at the end (it exits).
 FAILS=0; PASSES=0
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGIN="$ROOT/plugins/corecrew"   # the corecrew plugin; the repo root holds the marketplace
@@ -8,12 +8,21 @@ HOOKS="$PLUGIN/hooks"
 
 pass() { PASSES=$((PASSES + 1)); }
 fail() { FAILS=$((FAILS + 1)); echo "  FAIL: $*"; }
+# skip <label> <reason> — a part of this file did not run. run.sh lists every SKIP line after the result.
+# To skip the rest of the file: skip <label> <reason>; finish
+skip() { printf 'SKIP %s: %s: %s\n' "$(basename "$0")" "$1" "$2"; }
+# note <text> — a remark for the reader; printed only with VERBOSE=1
+note() { [ -z "${VERBOSE:-}" ] || echo "  note: $*"; }
 
 assert_file()    { [ -f "$1" ] && pass || fail "missing file $1"; }
 assert_dir()     { [ -d "$1" ] && pass || fail "missing dir $1"; }
 assert_no_file() { [ ! -e "$1" ] && pass || fail "should not exist: $1"; }
 assert_contains() { grep -qF -- "$2" "$1" 2>/dev/null && pass || fail "$1 lacks: $2"; }
-assert_not_contains() { grep -qF -- "$2" "$1" 2>/dev/null && fail "$1 contains: $2" || pass; }
+assert_not_contains() {
+  if [ ! -e "$1" ]; then fail "missing file $1 (cannot check it lacks: $2)"
+  elif grep -qF -- "$2" "$1"; then fail "$1 contains: $2"
+  else pass; fi
+}
 assert_eq() { [ "$1" = "$2" ] && pass || fail "${3:-values differ}: '$1' != '$2'"; }
 # assert_exit <code> <cmd...> — runs cmd, output saved in $OUT
 assert_exit() {
@@ -22,10 +31,23 @@ assert_exit() {
   [ "$got" = "$want" ] && pass || fail "exit $got (want $want): $* :: $OUT"
 }
 
+# Every sandbox of this file lives in one temp folder, removed when the file exits (by finish, or by the
+# EXIT trap when the file exits another way). KEEP_SANDBOX=1 keeps it and prints its path.
+TEST_TMP="$(mktemp -d "${TMPDIR:-/tmp}/np-test.XXXXXX")" || { echo "lib.sh: cannot make a temp folder" >&2; exit 1; }
+TEST_TMP="$(cd -P "$TEST_TMP" && pwd)"
+remove_sandboxes() {
+  [ -d "$TEST_TMP" ] || return 0
+  if [ -n "${KEEP_SANDBOX:-}" ]; then
+    [ -n "${KEPT_SAID:-}" ] || echo "kept: $TEST_TMP"; KEPT_SAID=1; return 0
+  fi
+  chmod -R u+rwx "$TEST_TMP" 2>/dev/null; rm -rf "$TEST_TMP"
+}
+trap remove_sandboxes EXIT
+
 # Fresh sandbox: exports CORE_DIR inside a new temp dir; git identity for commits; HOME, XDG and
 # git config isolated (see below).
 new_sandbox() {
-  SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/np-test.XXXXXX")"
+  SANDBOX="$(mktemp -d "$TEST_TMP/sb.XXXXXX")"
   SANDBOX="$(cd -P "$SANDBOX" && pwd)"   # physical path: scripts print canonical paths
   export CORE_DIR="$SANDBOX/Projects/Core"
   export CLAUDE_PLUGIN_DATA="$SANDBOX/plugin-data"   # never the real ~/.claude
@@ -64,7 +86,11 @@ sync_tools() { bash "$SCRIPTS/sync-tools.sh" "$PLUGIN" "$COREDEV_TOOLS" >/dev/nu
 # (NUL-separated, so names with spaces or non-ASCII characters are summed too.)
 tree_sum() { (cd "$1" && find . -type f -not -path '*/.git/*' -print0 | xargs -0 cksum | LC_ALL=C sort -k3); }
 
+# finish — prints the counts, removes the sandboxes and exits: 0 when nothing failed, else 1.
+# It exits, so a file's own EXIT trap (which replaces the one above) cannot leave sandboxes behind.
 finish() {
   echo "$(basename "$0"): $PASSES passed, $FAILS failed"
-  [ "$FAILS" -eq 0 ]
+  remove_sandboxes
+  [ "$FAILS" -eq 0 ] && exit 0
+  exit 1
 }
