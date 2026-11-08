@@ -121,6 +121,36 @@ assert_eq "$secs" "## Skill folder|## Settings and skill names|## Writable folde
 sf="$(awk '/^## /{on = ($0 == "## Skill folder")} on' "$CH")"
 case "$sf" in *'plugins/cache/'*'no `..`'*'no `"`'*'run nothing'*) pass ;; *) fail "codex-host.md Skill folder lacks the location check" ;; esac
 grep -qF '${' "$CH" && fail "codex-host.md is read with Read, which substitutes nothing: no \${...} in it" || pass
+# The location check shows a filled-in example path (no placeholders), so a model does not read the template literally.
+printf '%s\n' "$sf" | grep -qE '(^|[^<])plugins/cache/[a-z0-9-]+/corecrew/[0-9]+\.[0-9]+\.[0-9]+/skills/[a-z-]+' && pass ||
+  fail "codex-host.md Skill folder: no concrete example path (plugins/cache/<name>/corecrew/<x.y.z>/skills/<skill>)"
+# No approval (codex exec): only the step that needs it stops, the same stop line the task chain reports;
+# the Approval section never tells the model to stop the whole skill.
+ap="$(awk '/^## /{on = ($0 == "## Approval outside the sandbox")} on' "$CH")"
+cx_stop="$(awk '/^## /{on = ($0 == "## Commit in Codex")} on' "$PLUGIN/skills/task/references/codex.md" | grep -oE '`Commit: stopped[^`]*`' | head -1)"
+[ -n "$cx_stop" ] && pass || fail "task/references/codex.md lacks the Commit: stopped line"
+case "$ap" in *'codex exec'*"$cx_stop"*) pass ;; *) fail "codex-host.md Approval: the codex exec case must name $cx_stop" ;; esac
+printf '%s\n' "$ap" | tr '\n' ' ' | grep -qiE 'not possible[^.]*, stop and report' &&
+  fail "codex-host.md Approval: a missing approval must stop only that step, not the whole skill" || pass
+# Codex 0.166 keeps spawn_agent with --disable multi_agent: no text promises what the feature switch does.
+for f in "$CH" "$PLUGIN/README.md" "$PLUGIN/../../README.md"; do
+  grep -qE -- '--disable multi_agent|multi_agent` turns them on' "$f" && fail "$f promises what the multi_agent switch does" || pass
+done
+
+# new-project: the open command is written out for both hosts, not left to another file.
+vf="$(awk '/^\*\*6\. Verify\.\*\*/{on=1} /^\*\*7\./{on=0} on' "$NP")"
+for w in 'cd "<Projects>/<name>" && claude' 'cd "<Projects>/<name>" && codex --add-dir "<Core>"'; do
+  case "$vf" in *"$w"*) pass ;; *) fail "new-project Verify: open command missing: $w" ;; esac
+done
+# A taken name (preflight name-local / name-github FAIL) stops and asks for another name; it is never a resume.
+nm="$(awk '/^\*\*2\. Name\.\*\*/{on=1} /^\*\*3\./{on=0} on' "$NP")"
+PF="$PLUGIN/skills/new-project/scripts/preflight.sh"
+for id in name-local name-github; do
+  grep -qF "\"$id " "$PF" && pass || fail "preflight.sh no longer prints $id"
+  case "$nm" in *"$id"*) pass ;; *) fail "new-project Name: does not say what to do on $id" ;; esac
+done
+st="$(awk '/^## /{on = ($0 == "## Stages")} on' "$NP" | tr '\n' ' ')"
+case "$st" in *'already has a brief, read it and resume'*) fail "new-project Stages: resume must need the user's word or this run's project" ;; *) pass ;; esac
 
 # Every file path a corecrew prompt names through a placeholder exists: <plugin>/..., <scripts>/..., the skill's own
 # <skill>/... and references/... (placeholders inside the rest of the path are skipped).

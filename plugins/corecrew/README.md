@@ -49,7 +49,9 @@ codex plugin add corecrew@corekit
 Then:
 
 1. **Trust the hooks.** Start `codex`, open `/hooks`, review and enable the `corecrew` hooks. Until
-   you do, the guards do not run. Do it again after each update.
+   you do, corecrew's guards (project docs in code, secrets) stay off, and a plain Codex start does
+   not warn you: only `new-project` and `task` remind you when they run. Do it again after each
+   update.
 2. **Write the settings file.** Codex has no options screen; see [Settings](#settings).
 3. **Give Codex your Core.** Codex writes only in the working folder and `--add-dir` folders, so
    start it as `codex --add-dir "<Core>"` (`~/Projects/Core` by default). For new-project, start it
@@ -65,11 +67,12 @@ What differs from Claude Code:
 - The crew roles are role files that `/corecrew:task` hands to Codex subagents as text, with the
   model and effort from `model_profile`, or from `codex_model` / `codex_model_<role>` when set.
   `feature-dev` is not used.
-- The crew needs Codex subagents (`multi_agent`, on by default). Without them the chain stops and
-  says to run `codex features enable multi_agent`.
+- The crew needs Codex subagents (the `multi_agent` feature, on by default; `codex features list`
+  shows it). In a session without the `spawn_agent` tool the chain stops and says so.
 - Commits ask for your approval: the Codex sandbox keeps `.git` read-only, so `save` runs outside
-  it after you approve. In non-interactive `codex exec` the task stops with
-  `Commit: stopped — Codex sandbox keeps .git read-only` and the files stay uncommitted.
+  it after you approve. In non-interactive `codex exec` the whole chain still runs; only the commit
+  stops, with `Commit: stopped — Codex sandbox keeps .git read-only`, and the files stay
+  uncommitted.
 - `gh`, pushes and project generators also run outside the sandbox after your approval: the
   sandbox has no network.
 - Codex subagents cannot be made read-only, so the read-only steps are checked, not enforced: the

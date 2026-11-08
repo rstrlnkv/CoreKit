@@ -49,4 +49,5 @@ In a wave, compare once after all have answered.
 ## Commit in Codex
 `save` writes to `.git`, which the sandbox keeps read-only: run it with approval to leave the sandbox (codex-host.md,
 section Approval outside the sandbox). If approval is not possible, or `save` still prints `save: git could not write ...`,
-report `Commit: stopped — Codex sandbox keeps .git read-only` with the files left uncommitted.
+report `Commit: stopped — Codex sandbox keeps .git read-only` with the files left uncommitted. Only the commit stops:
+run every step before it as usual, even when you expect no approval (a non-interactive `codex exec`).

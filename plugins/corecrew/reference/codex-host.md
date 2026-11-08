@@ -10,9 +10,10 @@ for this skill (`(file: …/SKILL.md)` in the skills list, or the path of the sk
 path that starts with a root alias such as `r1/` starts with the folder listed under "Skill roots").
 Check it before you run anything: `<skill>` must lie inside a
 `plugins/cache/<marketplace>/corecrew/<version>/skills/` folder, its text must have no `..` component,
-and it must contain no `"`, `$` or backtick. If it fails that, ask the user and run nothing. Then go
-on with the skill's Paths section (`lib.sh plugin-root`). This file is
-`<skill>/../../reference/codex-host.md`.
+and it must contain no `"`, `$` or backtick. Any marketplace name and any version match; for example
+`~/.codex/plugins/cache/corekit/corecrew/0.9.2/skills/task` (the home folder in place of `~`) passes.
+If it fails that, ask the user and run nothing. Then go on with the skill's Paths section
+(`lib.sh plugin-root`). This file is `<skill>/../../reference/codex-host.md`.
 
 ## Settings and skill names
 Codex has no options screen. The settings live in the settings file, whose path
@@ -48,9 +49,13 @@ approval to leave the sandbox (escalated permissions), and let the user approve 
   `git fetch`, package installs and project generators (`npm create`, `npm install`,
   `flutter create`, `uv add`, ...).
 
-If approval is not possible (a non-interactive `codex exec`), stop and report what was left undone.
-Never look for a way around the sandbox. `save` printing `save: git could not write ...` means it
-ran inside the sandbox: run it again with approval.
+Approval applies to one step. When it is not possible (a non-interactive `codex exec`), only the step
+that needs it stops: do every other step that does not need its result as usual; report the stopped
+step, and any step that needed its result, as not done and why. In
+`task` that is the commit: the chain runs to the end, the files stay uncommitted, and the report says
+`Commit: stopped — Codex sandbox keeps .git read-only`. Never look for a way around the sandbox.
+`save` printing `save: git could not write ...` means it ran inside the sandbox: run it again with
+approval.
 
 ## Questions
 Codex has no AskUserQuestion tool. Ask in plain chat instead: at most three questions in one message,
@@ -75,7 +80,8 @@ Then call `wait_agent` until the final answer arrives; on a timeout, wait again 
 3600000). Several subagents at once: spawn them all, then wait for all of them. Never go on while a
 subagent whose answer you need still runs.
 
-No `spawn_agent` tool at all: say in plain words that this step needs Codex subagents, which are off
-in this session (`codex features enable multi_agent` turns them on; then start a new session). A
-step whose skill names a fallback for a failed subagent (a research step) uses that fallback; any
-other step stops there. Do not do a crew role's work yourself instead.
+No `spawn_agent` tool at all: say in plain words that this step needs Codex subagents, which this
+session does not offer (the Codex feature `multi_agent` controls them; check that it is on in
+`codex features list`, then start a new session). A step whose skill names a fallback for a failed
+subagent (a research step) uses that fallback; any other step stops there. Do not do a crew role's
+work yourself instead.

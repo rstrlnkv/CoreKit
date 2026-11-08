@@ -54,8 +54,9 @@ stored in `<Core>/.coredev`:
 
 ## Stages
 Progress lives in the last section `## Progress` of `<Core>/<name>/docs/brief.md`, one line
-`Stage: <stage>`; never add a front-matter field (the wiki allows exactly six). If the user mentions a
-project that already has a brief, read it and resume at the next stage instead of starting over.
+`Stage: <stage>`; never add a front-matter field (the wiki allows exactly six). Resume only the
+project this run started, or one the user asks you to continue: read its brief and go on at the next
+stage instead of starting over. A taken name is never a reason to resume (step 2).
 An older brief with `stage: <v>` in its front matter: see `<plugin>/reference/older-formats.md`,
 section Brief with a stage field.
 
@@ -98,7 +99,9 @@ plain chat questions: codex-host.md, section Questions).
 Never ask the user to pick a stack.
 
 **2. Name.** Propose a name (Latin, lowercase, hyphens, 3–40 chars) and a one-sentence purpose
-in English. Get approval (the app id prefix is not needed yet; it is asked in stage 4). `CORE_DIR="<Core>" bash "<skill>/scripts/preflight.sh" --name <name>` — stop if taken. Then
+in English. Get approval (the app id prefix is not needed yet; it is asked in stage 4). `CORE_DIR="<Core>" bash "<skill>/scripts/preflight.sh" --name <name>`. A FAIL on
+`name-local` or `name-github` means the name is taken: stop, touch nothing in that project, and offer
+another name (run preflight again). Resume that existing project only if the user says so. Then
 `CORE_DIR="<Core>" bash "<skill>/scripts/scaffold.sh" --name <name> --purpose "<purpose>"` creates the folders, both git
 repos and the docs skeleton. If scaffold exits 2 with `target exists: <path>`, a folder of that
 name already sits beside the Core and is not a corecrew project: it is never touched. Say so in
@@ -136,8 +139,8 @@ test/check command, run in `<Projects>/<name>`; hooks and the verifier read it).
 `bash "<scripts>/wiki-check.sh" "<Core>/<name>"` and fix every
 `wiki-check:` line it prints (silent = green). Set `Stage: ready` and, from `<Projects>/<name>`,
 run `bash "<scripts>/save" "Ready"`. Report in the user's language: what was created and where; how to open it
-(`cd <Projects>/<name> && claude`; in Codex, the command `<plugin>/reference/codex-host.md`
-gives); how to check it themselves; what may break.
+(in Claude Code: `cd "<Projects>/<name>" && claude`; in Codex:
+`cd "<Projects>/<name>" && codex --add-dir "<Core>"`); how to check it themselves; what may break.
 
 **7. Offer a plan.** Offer a v1 plan, saved to `<Core>/<name>/docs/plans/`: if a planning skill
 is available (for example `superpowers:writing-plans`), use it; otherwise write a short plan

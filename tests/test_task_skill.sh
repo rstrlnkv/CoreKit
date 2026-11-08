@@ -263,4 +263,20 @@ case "$(grep -oE 'Start, \*\*[^*]+\*\*|[Ss]tart step [0-9]' "$T/x.md" | tr '\n' 
 rm -rf "$T"
 # Release writes the changelog in Keep a Changelog 1.1.0 when the project's own standard does not say otherwise
 for w in '[Unreleased]' Added Changed Deprecated Removed Fixed Security 'Keep a Changelog'; do assert_contains "$REL" "$w"; done
+
+# The Codex README section agrees with references/codex.md: without approval only the commit stops (the same line),
+# and it says the guards are off until /hooks trust, with the skills that remind (the ones that run prepare.sh).
+CX_STOP="$(section "$PLUGIN/skills/task/references/codex.md" 'Commit in Codex' | grep -oE '`Commit: stopped[^`]*`' | head -1)"
+[ -n "$CX_STOP" ] && pass || fail "codex.md Commit in Codex lacks the stop line"
+RCX="$(awk '/^### /{on = ($0 == "### Codex")} /^## /{on=0} on' "$PLUGIN/README.md")"
+case "$RCX" in *"$CX_STOP"*) pass ;; *) fail "README Codex section does not name $CX_STOP" ;; esac
+printf '%s\n' "$RCX" | grep -F 'codex exec' | grep -qiE 'task stops' &&
+  fail "README Codex: codex exec must stop only the commit, not the task" || pass
+case "$RCX" in *'/hooks'*) pass ;; *) fail "README Codex section: no /hooks trust step" ;; esac
+for sk in "$PLUGIN"/skills/*/SKILL.md; do
+  n="$(basename "$(dirname "$sk")")"
+  if grep -qF 'prepare.sh' "$sk"; then
+    case "$RCX" in *"$n"*remind*|*remind*"$n"*) pass ;; *) fail "README Codex: does not say $n reminds about untrusted hooks" ;; esac
+  fi
+done
 finish

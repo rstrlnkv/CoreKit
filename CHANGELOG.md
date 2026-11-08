@@ -104,6 +104,16 @@ commit log has the full detail.
 - README: ship's row names the default branch, the tag and the release; Codex setup gives
   `--add-dir "<Projects>"` for new-project and the `codex_model` settings; the network notes say
   which GitHub calls are read-only checks.
+- Codex: without approval (a non-interactive `codex exec`), only the step that needs it stops;
+  `task` runs the whole chain and reports `Commit: stopped — ...` with the files left uncommitted.
+- new-project: a name that is already taken stops and asks for another name; an existing project
+  is resumed only when you ask.
+- new-project: the final report gives the command to open the project in Codex
+  (`codex --add-dir "<Core>"`) as well as in Claude Code.
+- Codex: the skill-folder check shows a real example path, so any marketplace name and version
+  pass without a question.
+- Codex docs no longer promise what switching the `multi_agent` feature does, and say that the
+  guards stay off until you trust the hooks in `/hooks`.
 
 ### Security
 

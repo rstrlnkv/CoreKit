@@ -39,7 +39,8 @@ codex plugin add corecrew@corekit
 codex plugin add coremodel@corekit
 ```
 
-Then start `codex`, open `/hooks` and trust the plugins' hooks; until you do, they do not run.
+Then start `codex`, open `/hooks` and trust the plugins' hooks; until you do, they do not run, and
+Codex does not tell you so (corecrew's skills remind you).
 The plugin READMEs list the remaining steps.
 
 ### Update
