@@ -1,6 +1,6 @@
 ---
 name: second-opinion
-description: Use when the user wants a second opinion or an outside review from OpenAI's GPT through the Codex CLI — phrases like "second opinion", "ask ChatGPT", "ask GPT", "ask Codex", "review with GPT", "what would GPT say", "второе мнение", "спроси GPT", "спроси ChatGPT". GPT only reads and answers; Claude shows its answer with Claude's own assessment and makes any change itself, only after the user approves.
+description: Use when the user wants a second opinion or an outside review from OpenAI's GPT through the Codex CLI — phrases like "second opinion", "ask ChatGPT", "ask GPT", "ask Codex", "review with GPT", "what would GPT say", in any language. GPT only reads and answers; Claude shows its answer with Claude's own assessment and makes any change itself, only after the user approves.
 allowed-tools: Bash(bash ${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh *), Bash(bash ${CLAUDE_SKILL_DIR}/scripts/allowed-files.sh *)
 ---
 
@@ -23,7 +23,8 @@ command -v codex && codex --version
 
 If `codex` is not found, stop and tell the user:
 
-- install the Codex CLI: `npm install -g @openai/codex` (or `brew install codex`);
+- install the Codex CLI: `npm install -g @openai/codex` on any system (it needs Node.js), or one of
+  the other ways on https://developers.openai.com/codex/cli (on macOS also `brew install codex`);
 - sign in once in a normal terminal: `codex login` (a ChatGPT plan such as Plus works; each
   review counts against that plan's usage);
 - then ask again.

@@ -90,8 +90,8 @@ Claude says what failed and never pretends a review happened:
 - **OS:** macOS or Linux, wherever the Codex CLI runs; the run script is portable bash.
 - **Claude Code** 2.1.271 or newer (`claude --version`), as for corecrew: the skill's commands use
   `${CLAUDE_SKILL_DIR}`.
-- **The Codex CLI** (`codex --version`), installed with `npm install -g @openai/codex` or
-  `brew install codex`.
+- **The Codex CLI** (`codex --version`): `npm install -g @openai/codex` on any system, or the other
+  ways on https://developers.openai.com/codex/cli (on macOS also `brew install codex`).
 - **A ChatGPT plan** (Plus or higher): run `codex login` once in a normal terminal;
   `codex login status` shows it. **Each review counts against that plan's Codex usage.**
 - **Network:** OpenAI, through the Codex CLI only, with the files you confirmed. The plugin makes no other network call.
