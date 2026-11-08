@@ -18,8 +18,9 @@ assert_contains "$P" '"title": "Hook messages language"'
 assert_contains "$P" '"description": "Language of the messages corecrew hooks show: en (English) or ru (Russian)."'
 assert_contains "$P" '"options": ["en", "ru"]'
 assert_contains "$P" '"default": "en"'
-assert_contains "$ROOT/README.md" '`ui_language`'
-assert_contains "$ROOT/README.md" 'claude plugin install corecrew@corekit --config ui_language=ru'
+CR="$PLUGIN/README.md"   # corecrew's own README; the root README is the marketplace overview
+assert_contains "$CR" '`ui_language`'
+assert_contains "$CR" 'claude plugin install corecrew@corekit --config ui_language=ru'
 assert_not_contains "$P" '"dependencies"'   # a hard dependency stops corecrew loading when feature-dev is synced from claude.ai
 assert_not_contains "$P" '"marketplace": "claude-plugins-official"'
 
@@ -41,8 +42,8 @@ assert_contains "$M" '"source": "./plugins/corecrew"'
 assert_contains "$M" '"source": "./plugins/coremodel"'
 
 # README and CHANGELOG
-assert_contains "$ROOT/README.md" '<Projects>/<name>'
-assert_not_contains "$ROOT/README.md" 'my-app/code/'
+assert_contains "$CR" '<Projects>/<name>'
+assert_not_contains "$CR" 'my-app/code/'
 assert_contains "$ROOT/README.md" '/plugin install corecrew@corekit'
 assert_not_contains "$ROOT/README.md" '/corekit:'
 assert_not_contains "$ROOT/README.md" 'corekit@corekit'
@@ -185,7 +186,7 @@ else
   echo "  note: python3 not found, JSON well-formedness of hooks.json not checked"
 fi
 assert_no_file "$ROOT/install.sh"; assert_no_file "$ROOT/tests/test_install.sh"
-assert_not_contains "$ROOT/README.md" 'install.sh'
+assert_not_contains "$ROOT/README.md" 'install.sh'; assert_not_contains "$CR" 'install.sh'
 assert_contains "$ROOT/README.md" '2.1.271'
 assert_contains "$ROOT/README.md" '/plugin install feature-dev@claude-plugins-official'
 T="$PLUGIN/skills/new-project/templates"
@@ -214,7 +215,7 @@ assert_contains "$M3" '/plugin install coremodel@corekit'
 assert_not_contains "$M3" '/coreeffort'
 assert_contains "$M3" 'install-hooks.sh'
 assert_contains "$M3" 'corecrew-corekit'
-assert_contains "$ROOT/README.md" 'docs/migration-0.3.md'
+assert_contains "$CR" 'docs/migration-0.3.md'
 
 # trigger evals (claude plugin eval): every case has a prompt and a grader; the frontmatter
 # description is quoted (a bare ": " breaks the YAML); results stay out of git

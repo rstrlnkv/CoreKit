@@ -78,8 +78,8 @@ for f in "$NP" "$ADO"; do
   grep 'CLAUDE.local.md' "$f" | grep -q 'AGENTS.md' && pass || fail "$f never names AGENTS.md next to CLAUDE.local.md"
 done
 
-# 7. README names no removed behaviour in its wiki lines.
-R="$ROOT/README.md"
+# 7. corecrew's README names no removed behaviour in its wiki lines.
+R="$ROOT/plugins/corecrew/README.md"   # the wiki is a corecrew feature
 w="$(grep -iE 'wiki|INDEX|docs/' "$R")"
 for bad in '§' 'map line' 'hand-written' 'by hand' 'title'; do
   printf '%s\n' "$w" | grep -qiF -- "$bad" && fail "README wiki line names removed behaviour: $bad" || pass
