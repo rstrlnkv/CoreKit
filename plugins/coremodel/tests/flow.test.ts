@@ -209,8 +209,9 @@ test('a pick that works clears the failures; two more raise the toast again', { 
   expect(w.toasts.length).toBe(2)
 })
 
-test('the failure toast speaks the language of the prompt', { options: { mode: 'auto' } }, async ($, on) => {
+test('the failure toast speaks the host language', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
+  w.hostLanguage = 'russian'
   await start($)
   await failOnce($, w, 'почини авторизацию')
   await failOnce($, w, 'почини авторизацию')

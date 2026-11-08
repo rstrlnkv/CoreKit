@@ -1,7 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { Level } from '../types'
-import { decide, decideModel, effortOptions, modelOptions, texts, uiLang } from '../hooks/policy'
+import * as policy from '../hooks/policy'
+import { decide, decideModel, effortOptions, hostLang, modelOptions, texts } from '../hooks/policy'
 
 const pick = (level: Level | 'keep') => ({ level, model: '' as const, why: '' })
 
@@ -34,11 +35,14 @@ test('auto asks before xhigh and max', () => {
   expect(decide('auto', 'xhigh', pick('max'))).toBe('ask')
 })
 
-test('uiLang is ru when most letters are Cyrillic', () => {
-  expect(uiLang('почини авторизацию')).toBe('ru')
-  expect(uiLang('почини loginController в auth.ts')).toBe('ru')
-  expect(uiLang('fix the login')).toBe('en')
-  expect(uiLang('123 ???')).toBe('en')
+test('hostLang is ru only when the host setting names Russian', () => {
+  for (const v of ['russian', 'Russian', 'RU', ' ru ', 'ru-RU', 'ru_RU.UTF-8', 'русский']) expect(hostLang(v)).toBe('ru')
+  for (const v of ['ukrainian', 'uk', 'українська', 'bulgarian', 'japanese', 'english', 'en', 'rust', '', undefined, null, 42]) expect(hostLang(v)).toBe('en')
+})
+
+// No function decides the language by the text of a prompt: Cyrillic is not Russian.
+test('policy has no language-by-text rule', () => {
+  expect('uiLang' in policy).toBe(false)
 })
 
 test('texts name the level in each language', () => {
@@ -62,7 +66,7 @@ test('back names what to go back to', () => {
   expect(texts('ru').backTo(texts('ru').pair('sonnet', 'low'))).toBe('Вернуть Sonnet · Низкое')
 })
 
-test('mark points up or down by level and says it in the prompt language', () => {
+test('mark points up or down by level and says it in its language', () => {
   expect(texts('en').markPair(null, '', 'high', 'low', 'x').startsWith('↑')).toBe(true)
   expect(texts('en').markPair(null, '', 'low', 'high', 'x').startsWith('↓')).toBe(true)
   expect(texts('en').markPair(null, '', 'medium', '', 'x').startsWith('↑')).toBe(true)

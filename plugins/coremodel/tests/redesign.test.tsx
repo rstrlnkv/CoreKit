@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
+import { texts } from '../hooks/policy'
 import { start, step, submit, world, type Eng, type World } from './world'
 
 // The quiet interface: Auto by default, Suggest without dialogs, the state in the footer, the pane
@@ -359,22 +360,84 @@ test('the language setting wins over the prompt', { options: { mode: 'auto', lan
   expect((await paneTexts($)).texts).toContain('Этот чат')
 })
 
-test('in auto the language of the last prompt survives a reload', { options: { mode: 'auto' } }, async ($, on) => {
+// The words follow the host, never the prompt: a Ukrainian or a Russian prompt on an English host stays English.
+test('in auto a Cyrillic prompt does not turn the words Russian', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.row = null
   await start($)
+  await pick($, w, '{"level":"keep","why":"x"}', 'виправ авторизацію')
   await pick($, w, '{"level":"keep","why":"x"}', 'почини авторизацию')
+  const p = await paneTexts($)
+  expect(p.texts[0]).toBe('CoreModel · ' + texts('en').mode.auto)
+  expect(p.buttons['mode-suggest']).toBe(texts('en').mode.suggest)
+  expect(p.texts).toContain(texts('en').thisChat)
+  expect(p.texts).not.toContain(texts('ru').thisChat)
+})
+
+test('in auto the host language setting picks Russian', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  w.hostLanguage = 'russian'
   await start($)
+  await pick($, w, '{"level":"keep","why":"x"}', 'fix the login')
   const p = await paneTexts($)
   expect(p.texts[0]).toBe('CoreModel · Автоматически')
   expect(p.buttons['mode-suggest']).toBe('Советовать')
   expect(p.texts).toContain('Этот чат')
 })
 
+test('the language setting wins over the host language', { options: { mode: 'auto', language: 'en' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  w.hostLanguage = 'russian'
+  await start($)
+  await pick($, w, '{"level":"keep","why":"x"}')
+  const p = await paneTexts($)
+  expect(p.texts[0]).toBe('CoreModel · ' + texts('en').mode.auto)
+  expect(p.texts).toContain(texts('en').thisChat)
+})
+
+test('the language setting ru wins over an English host', { options: { mode: 'auto', language: 'ru' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  await pick($, w, '{"level":"keep","why":"x"}')
+  const p = await paneTexts($)
+  expect(p.texts[0]).toBe('CoreModel · Автоматически')
+  expect(p.texts).toContain('Этот чат')
+})
+
+// 0.7.0 kept the last prompt's language under the store key `lang`. It stays in the store, untouched and unread.
+test('a language stored by 0.7.0 is ignored', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on, { lang: 'ru' })
+  w.row = null
+  await start($)
+  const p = await paneTexts($)
+  expect(p.texts[0]).toBe('CoreModel · ' + texts('en').mode.auto)
+  expect(p.texts).toContain(texts('en').thisChat)
+  expect(await $.store.get('lang')).toBe('ru')
+})
+
+// The failure path: a host whose settings cannot be read gets English, a debug line and no toast; the pick still runs.
+test('an unreadable host setting falls back to English and the pick still runs', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineParts(on)
+  w.row = null
+  w.settingsThrows = true
+  await start($)
+  await pick($, w, OPUS_HIGH)
+  expect((await band($)).texts.some(t => /^✓ CoreModel: Opus · High \(was Sonnet · Medium\)/.test(t))).toBe(true)
+  expect((await paneTexts($)).texts).toContain(texts('en').thisChat)
+  expect(w.logs.some(l => l.includes('language'))).toBe(true)
+  expect(w.logSinks.every(s => s === 'debug')).toBe(true)
+  expect(w.toasts).toEqual([])
+})
+
 test('the Russian pane and band', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   engineParts(on)
   w.row = null
+  w.hostLanguage = 'russian'
   await start($)
   await pick($, w, '{"level":"high","model":"opus","why":"ошибка входа"}', 'почини авторизацию')
   const p = await paneTexts($)

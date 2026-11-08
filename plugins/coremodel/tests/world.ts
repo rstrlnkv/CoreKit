@@ -32,6 +32,10 @@ export type World = {
   modelRow: string[] | null
   /** config.list rejects (the settings could not be read). */
   listThrows: boolean
+  /** Claude Code's own `language` setting as settings.read answers it; undefined when the settings hold none. */
+  hostLanguage: unknown
+  /** settings.read rejects (the settings could not be read). */
+  settingsThrows: boolean
   lastReply: string
   model: string[]
   prompts: string[]
@@ -78,6 +82,8 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     row: row(),
     modelRow: null,
     listThrows: false,
+    hostLanguage: undefined,
+    settingsThrows: false,
     lastReply: '',
     model: [],
     prompts: [],
@@ -136,6 +142,11 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     const rows: ConfigRow[] = w.row ? [w.row] : []
     if (w.modelRow) rows.push({ key: 'model', label: 'Model', kind: 'choice', value: 'claude-sonnet-5-5', options: w.modelRow, provider: { kind: 'user' } as never, isLocked: false })
     return { value: rows } as never
+  })
+  // A read of one key is the read of the whole object, projected: the answer is the settings object.
+  on('settings.read', () => {
+    if (w.settingsThrows) throw new Error('settings unreadable')
+    return { value: w.hostLanguage === undefined ? {} : { language: w.hostLanguage } } as never
   })
   on('config.set', (_, e) => {
     w.set.push(e)
