@@ -45,6 +45,59 @@ rm_bad claude "" engineer
 rm_bad claude balanced ""
 rm_bad Claude balanced engineer
 
+# --- role-model: the user's own Codex models from the settings file (Claude Code keeps its table)
+SF="$(bash "$LIB" setting-path)"; mkdir -p "$(dirname "$SF")"
+rmo() { bash "$LIB" role-model "$@" 2>"$SANDBOX/err"; }
+printf 'codex_model: my-model-1 high\n' > "$SF"
+for role in engineer tester security verifier localizer designer architect explorer; do
+  for p in economy balanced strong; do assert_eq "$(rmo codex "$p" "$role")" "my-model-1 high" "codex_model applies to codex $p $role"; done
+done
+assert_eq "$(rmo claude balanced engineer)" "sonnet" "codex_model leaves claude alone"
+printf 'codex_model: my-model-1 high\ncodex_model_tester: other.model-2\ncodex_model_verifier: inherit\n' > "$SF"
+assert_eq "$(rmo codex balanced tester)" "other.model-2" "a role key beats codex_model; a model alone has no effort"
+assert_eq "$(rmo codex balanced verifier)" "" "inherit: an empty line (spawn without model and effort)"
+assert_eq "$(rmo codex balanced verifier | wc -l | tr -d ' ')" "1" "inherit still prints one line"
+assert_eq "$(rmo codex balanced engineer)" "my-model-1 high" "other roles keep codex_model"
+printf 'codex_model_engineer:   spaced-model    low  \n' > "$SF"
+assert_eq "$(rmo codex balanced engineer)" "spaced-model low" "blanks are trimmed and collapsed"
+for bad in 'two words more' 'bad;model' '$(touch x)' 'model HIGH' '-flag low'; do
+  printf 'codex_model_engineer: %s\n' "$bad" > "$SF"
+  out="$(rmo codex balanced engineer)"; rc=$?
+  assert_eq "$rc:$out" "0:gpt-6.1-sol medium" "an invalid value ($bad) falls back to the table"
+  grep -q 'codex_model_engineer' "$SANDBOX/err" && pass || fail "an invalid value ($bad) is named on stderr"
+done
+printf 'codex_model: bad;x\ncodex_model_engineer: also bad;x\n' > "$SF"
+assert_eq "$(rmo codex strong security)" "gpt-6-astra high" "an invalid codex_model falls back to the table"
+rm -f "$SF"
+# the built-in Codex table names models (and efforts) the bundled catalog of the installed codex knows
+if command -v codex >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+  mkdir -p "$CODEX_HOME"
+  if codex debug models --bundled > "$SANDBOX/models.json" 2>/dev/null; then
+    for p in economy balanced strong; do for role in engineer security; do
+      bash "$LIB" role-model codex "$p" "$role"
+    done; done | sort -u > "$SANDBOX/table.txt"
+    miss="$(python3 -c '
+import json, sys
+cat = json.load(open(sys.argv[1]))
+models = cat.get("models", cat) if isinstance(cat, dict) else cat
+known = {}
+for m in models:
+    levels = m.get("supported_reasoning_levels") or []
+    known[m.get("slug")] = {l.get("effort") for l in levels if isinstance(l, dict)}
+for line in open(sys.argv[2]):
+    w = line.split()
+    if not w: continue
+    if w[0] not in known: print(w[0])
+    elif len(w) > 1 and known[w[0]] and w[1] not in known[w[0]]: print(" ".join(w))
+' "$SANDBOX/models.json" "$SANDBOX/table.txt" 2>&1)"
+    assert_eq "$miss" "" "every model and effort of the role-model codex table is in the bundled catalog"
+  else
+    echo "  note: codex debug models --bundled failed; the table is not compared"
+  fi
+else
+  echo "  note: codex or python3 missing; the role-model table is not compared with the catalog"
+fi
+
 # --- core-writable
 D="$SANDBOX/cw dir"; mkdir -p "$D"; : > "$D/keep.txt"
 before="$(ls -A "$D")"

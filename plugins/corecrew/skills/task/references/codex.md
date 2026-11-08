@@ -12,8 +12,11 @@ to `<Core>` and must be restarted with `codex --add-dir "<Core>"`, then stop. Th
 Each step is one `spawn_agent` call:
 - `task_name`: `<role>_<n>` (`engineer_1`, `tester_2`; n counts the calls of that role in this chain);
 - `fork_turns`: `"none"` (the agent starts clean; the brief is all it knows);
-- `model` and `reasoning_effort`: the two words of `bash "<scripts>/lib.sh" role-model codex <model_profile> <role>`
-  (`model_profile` as resolved at Start);
+- `model` and `reasoning_effort`: the words of `bash "<scripts>/lib.sh" role-model codex <model_profile> <role>`
+  (`model_profile` as resolved at Start): the first is `model`, a second one `reasoning_effort`. Pass only what it
+  prints; an empty line means pass neither (the subagent gets Codex's own default). The user picks their own models
+  with `codex_model: <model> [<effort>]` (every role) or `codex_model_<role>: <model> [<effort>] | inherit` in the
+  settings file (`lib.sh setting-path`); a line on stderr names a value that was skipped: tell the user;
 - the message starts with "Read <plugin>/agents/<role>.md and act as that role; ignore its front matter." and then the brief
   (`references/brief.md`), with `<plugin>` filled in as an absolute path.
 
