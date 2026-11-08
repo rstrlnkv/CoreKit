@@ -12,13 +12,17 @@
 T="$1"; effort="${2:-medium}"
 case "$T" in ''|/) echo "usage: ask-gpt.sh <temp folder> [medium|high]" >&2; exit 2 ;; esac
 [ -f "$T/prompt.md" ] && [ -f "$T/dir" ] || { echo "ask-gpt.sh: $T/prompt.md or $T/dir is missing" >&2; exit 2; }
-# The folder is removed at the end, so it must be a `mktemp -d` folder (tmp.*) right in the temp
-# folder ($TMPDIR, /tmp): a wrong path, the project say, is refused and left alone.
+# The folder is removed at the end, so it must be a mktemp folder (coreopinion.* as SKILL.md makes it, or tmp.* from a
+# bare `mktemp -d`) right in a temp folder: $TMPDIR, the system one (macOS: getconf DARWIN_USER_TEMP_DIR, where a bare
+# `mktemp -d` lands whatever TMPDIR says) or /tmp, all compared after resolving links (/tmp is /private/tmp on macOS).
+# A wrong path, the project say, is refused and left alone; a temp folder that resolves to / counts as none.
 t_dir="$(cd "$T" 2>/dev/null && pwd -P)" || exit 2
 t_ok=""
-for r in "${TMPDIR:-/tmp}" /tmp; do
+for r in "${TMPDIR:-}" "$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null)" /tmp; do
+  [ -n "$r" ] || continue
   r="$(cd "$r" 2>/dev/null && pwd -P)" || continue
-  case "$t_dir" in "$r"/tmp.*) case "${t_dir#"$r"/}" in */*) ;; *) t_ok=1 ;; esac ;; esac
+  [ "$r" != / ] || continue
+  case "${t_dir#"$r"/}" in "$t_dir"|*/*) ;; tmp.?*|coreopinion.?*) t_ok=1 ;; esac
 done
 [ -n "$t_ok" ] || { echo "ask-gpt.sh: $T is not a mktemp -d folder in the temp folder; nothing was run or removed" >&2; exit 2; }
 trap 'rm -rf "$T"' EXIT

@@ -111,7 +111,8 @@ path, redo the list and ask again.
 
 ## 3. Ask GPT
 
-Make a temp folder: `mktemp -d` (note the path; call it `$T` below). With your file tool write
+Make a temp folder: `mktemp -d "${TMPDIR:-/tmp}/coreopinion.XXXXXXXXXX"` (note the path; call it
+`$T` below; the run script accepts only such a folder). With your file tool write
 two files into it: `$T/prompt.md` and `$T/dir` (the project folder path and nothing else, no
 newline needed: the path is read from this file so it is never parsed by the shell). The prompt
 holds:
