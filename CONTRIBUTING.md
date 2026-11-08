@@ -33,7 +33,7 @@ Core. A test never touches your real `~/.claude`, `~/.codex`, Core or global git
 `gh` on `PATH` instead of calling GitHub.
 
 CI also runs [ShellCheck](https://www.shellcheck.net/) at `--severity=warning` on the shell files
-of the plugins and the tests. Run it on the files you changed before you push:
+of the plugins, the tests and `scripts/`. Run it on the files you changed before you push:
 `shellcheck --severity=warning <files>` (settings: `.shellcheckrc`, `tests/.shellcheckrc`).
 
 Trigger evals (does a skill start when it should) make real model calls and are not part of the
