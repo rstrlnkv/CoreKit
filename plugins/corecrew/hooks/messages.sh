@@ -128,8 +128,8 @@ _msg_text() {
     ru:fix_option) MSG_T='Исправьте значение в параметрах плагина в Claude Code.' ;;
     en:fix_file) MSG_T='Correct it in @1.' ;;
     ru:fix_file) MSG_T='Исправьте значение в файле @1.' ;;
-    en:stop_remind) MSG_T='Uncommitted changes in @1. If this working step is finished, run: bash "@2" "<short English message>"@3. If you are waiting for the user'"'"'s answer or approval, do not save; just end your turn.' ;;
-    ru:stop_remind) MSG_T='Есть несохранённые изменения: @1. Если этот рабочий шаг закончен, выполните: bash "@2" "<short English message>"@3. Если вы ждёте ответа или одобрения пользователя, не сохраняйте, просто закончите ответ.' ;;
+    en:stop_remind) MSG_T='Uncommitted changes in @1. If this working step is finished, run: bash "@2" "<short English subject>"@3 (at most 72 characters, details after a blank line; a commit standard of the project wins). If you are waiting for the user'"'"'s answer or approval, do not save; just end your turn.' ;;
+    ru:stop_remind) MSG_T='Есть несохранённые изменения: @1. Если этот рабочий шаг закончен, выполните: bash "@2" "<short English subject>"@3 (не длиннее 72 символов, подробности после пустой строки; стандарт коммитов проекта важнее). Если вы ждёте ответа или одобрения пользователя, не сохраняйте, просто закончите ответ.' ;;
   esac
 }
 

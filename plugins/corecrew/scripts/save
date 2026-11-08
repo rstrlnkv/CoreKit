@@ -4,6 +4,8 @@
 # "Project: <name>" trailer, so undo-step can tell this project's steps that changed only shared
 # Core files (knowledge/, standards/ ...) from other projects' steps.
 # Usage: save "<message>" [--push] [--no-attribution]
+# --push pushes the Core only; the code repo is published by /corecrew:ship (tests, version, merge). With
+# --push the message may be left out when there is nothing to save: then only the Core is pushed.
 # --no-attribution drops "Co-Authored-By:" lines and lines that start with "Generated with" (after
 # optional spaces and a robot emoji) from the message: the user's attribution=forbid setting. A
 # subject or body that only mentions "generated with" mid-line stays.
@@ -16,7 +18,7 @@ if [ "$NOATTR" = 1 ]; then
   MSG="$(printf '%s\n' "$MSG" | grep -viE '^[[:space:]]*co-authored-by:|^[[:space:]]*(🤖[[:space:]]*)?generated with' |
     awk '{ l[NR] = $0 } END { n = NR; while (n > 0 && l[n] ~ /^[[:space:]]*$/) n--; for (i = 1; i <= n; i++) print l[i] }')"
 fi
-[ -n "$MSG" ] || { echo 'Usage: save "<message>" [--push] [--no-attribution]' >&2; exit 2; }
+[ -n "$MSG" ] || [ $PUSH -eq 1 ] || { echo 'Usage: save "<message>" [--push] [--no-attribution]' >&2; exit 2; }
 locate || exit 1
 
 # Make sure protective hook shims are in place. With core.hooksPath set (husky, lefthook, a global
@@ -54,6 +56,10 @@ can_commit() {
 # check below says what is wrong).
 # shellcheck disable=SC2086
 CORE_DIRTY=$(git -C "$CORE" status --porcelain -- $CORE_PATHS 2>/dev/null) || CORE_DIRTY=unknown
+# --push with no message: allowed only when there is nothing to save (the Core is pushed, nothing is committed)
+if [ -z "$MSG" ] && { [ -n "$(git -C "$CODE" status --porcelain 2>/dev/null)" ] || [ -n "$CORE_DIRTY" ]; }; then
+  echo 'save: there are changes to save; give them a message: save "<message>" --push' >&2; exit 2
+fi
 can_commit "$CODE" || exit 1
 [ -z "$CORE_DIRTY" ] || can_commit "$CORE" || exit 1
 
@@ -97,12 +103,12 @@ Project: $NAME" -- $CORE_PATHS || docs_failed "Docs commit failed."
 fi
 [ $saved -eq 1 ] || echo "nothing to save"
 
+# Only the Core is pushed: the code repo leaves through ship, after its tests and version.
 if [ $PUSH -eq 1 ]; then
-  for r in "$CODE" "$CORE"; do
-    if git -C "$r" remote get-url origin >/dev/null 2>&1; then
-      git -C "$r" push -q -u origin HEAD && echo "pushed $(basename "$r")" || { echo "Push failed: $r" >&2; exit 1; }
-    else
-      echo "no remote for $(basename "$r") — skipped push"
-    fi
-  done
+  if git -C "$CORE" remote get-url origin >/dev/null 2>&1; then
+    git -C "$CORE" push -q -u origin HEAD && echo "pushed $(basename "$CORE")" || { echo "Push failed: $CORE" >&2; exit 1; }
+  else
+    echo "no remote for $(basename "$CORE") — skipped push"
+  fi
+  echo "code not pushed: the code leaves only through corecrew's ship (/corecrew:ship)"
 fi

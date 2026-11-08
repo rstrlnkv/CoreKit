@@ -73,14 +73,38 @@ assert_contains "$C/.git/hooks/pre-commit" "# corecrew hook shim"
 assert_no_file "$C/.git/hooks/blocked-patterns"
 assert_eq "$(git -C "$C" log -1 --format=%s)" "Restore pre-commit" "save failed after restoring the shim"
 
-# --push pushes both to their remotes
+# --push pushes the Core only: the code leaves through ship. The output says so.
 git init -q --bare "$SANDBOX/code.git"; git -C "$C" remote add origin "$SANDBOX/code.git"
 git init -q --bare "$SANDBOX/core.git"; git -C "$CORE_DIR" remote add origin "$SANDBOX/core.git"
 printf '#!/bin/sh\n# corecrew hook shim (test no-op)\nexit 0\n' > "$CORE_DIR/.git/hooks/pre-push"  # privacy hook needs GitHub; tested in test_hooks
 sleep 1; echo "v3" > "$C/app.txt"; echo y >> "$P/docs/brief.md"
 (cd "$C" && bash "$SAVE" "Publish" --push) > "$SANDBOX/out" 2>&1
-assert_eq "$(git -C "$SANDBOX/code.git" log -1 --format=%s main 2>/dev/null)" "Publish"
+assert_eq "$(git -C "$SANDBOX/code.git" rev-list --all --count)" "0" "save --push must not push the code"
 assert_eq "$(git -C "$SANDBOX/core.git" log -1 --format=%s main 2>/dev/null)" "Publish"
+assert_contains "$SANDBOX/out" "pushed Core"; assert_contains "$SANDBOX/out" "ship"
+assert_eq "$(git -C "$C" log -1 --format=%s)" "Publish" "save --push: the code commit"
+# --push alone (no message) with nothing to save: pushes the Core; with changes to save it is refused (2)
+sleep 1; echo z >> "$P/docs/brief.md"; (cd "$C" && bash "$SAVE" "Core only") >/dev/null 2>&1
+(cd "$C" && bash "$SAVE" --push) > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "0" "save --push with nothing to save: $(cat "$SANDBOX/out")"
+assert_contains "$SANDBOX/out" "nothing to save"; assert_contains "$SANDBOX/out" "pushed Core"
+assert_eq "$(git -C "$SANDBOX/core.git" log -1 --format=%s main 2>/dev/null)" "Core only" "save --push alone did not push the Core"
+echo "v4" > "$C/app.txt"; nc=$(cnt "$C")
+(cd "$C" && bash "$SAVE" --push) > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "2" "save --push with changes and no message must be refused"
+assert_eq "$(cnt "$C")" "$nc" "a refused save --push made a commit"; assert_contains "$SANDBOX/out" "message"
+git -C "$C" status --porcelain | grep -q app.txt && pass || fail "the refused save staged or lost app.txt"
+(cd "$C" && bash "$SAVE") > "$SANDBOX/out" 2>&1; assert_eq "$?" "2" "save with no message and no --push: usage"
+# failure path: a Core remote that is gone. The commits of both repos stay; the code remote is untouched.
+git -C "$CORE_DIR" remote set-url origin "$SANDBOX/missing.git"
+sleep 1; echo w >> "$P/docs/brief.md"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
+(cd "$C" && bash "$SAVE" "Push fails" --push) > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "1" "save --push with a missing Core remote"
+assert_contains "$SANDBOX/out" "Push failed"
+assert_eq "$(cnt "$C")" "$((nc+1))" "the code commit of a failed push"; assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "the Core commit of a failed push"
+assert_eq "$(cat "$C/app.txt")" "v4" "a failed push changed a file"
+assert_eq "$(git -C "$SANDBOX/code.git" rev-list --all --count)" "0" "a failed push touched the code remote"
+git -C "$CORE_DIR" remote set-url origin "$SANDBOX/core.git"
 # knowledge/standards/.coredev changes ride along with the step
 mkdir -p "$CORE_DIR/knowledge"; echo "symptom -> cause -> guard" > "$CORE_DIR/knowledge/engineer.md"
 echo "a note" >> "$CORE_DIR/standards/README.md"; printf 'x\n' > "$CORE_DIR/session-rules.md"

@@ -176,4 +176,4 @@ Every `…` below stands for `CORE_DIR="<Core>"`.
 | Create skeleton | `… bash "<skill>/scripts/scaffold.sh" --name <name> --purpose "<text>" [--dry-run]` |
 | Copy generated app | `… bash "<skill>/scripts/merge-generated.sh" <generated> <code>` |
 | Protective hooks | `… bash "<scripts>/install-hooks.sh" <project_dir>` |
-| Save / undo a step | `bash "<scripts>/save" "<msg>" [--push]` · `bash "<scripts>/undo-step"` |
+| Save / undo a step | `bash "<scripts>/save" "<msg>" [--push]` (`--push`: the Core only; the code is pushed by `/corecrew:ship`) · `bash "<scripts>/undo-step"` |

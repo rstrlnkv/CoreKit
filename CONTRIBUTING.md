@@ -8,9 +8,11 @@ a release is made. [ARCHITECTURE.md](ARCHITECTURE.md) explains how the repo is l
 - macOS or Linux with `bash`, `git` and the usual command-line tools. The tests run on macOS;
   Linux is expected to work.
 - Optional: the `claude` CLI and the `codex` CLI. Without them, the tests that need them print a
-  `SKIP` line and the run names them after `ALL TESTS PASSED`:
+  `SKIP` line and the run names them after `ALL TESTS PASSED`. CI installs `claude` (the version is
+  pinned in `.github/workflows/tests.yml`), so there those parts run, and a `SKIP` for lack of it
+  fails the suite:
   - without `claude`: the coremodel module tests (`tests/test_coremodel.sh`) and the
-    `claude plugin validate` checks of coreopinion;
+    `claude plugin validate` checks (`tests/test_plugin_validate.sh`, and coreopinion's own);
   - without `codex`: the checks against the real Codex CLI (patch parsing, the sandbox profiles,
     plugin install, parts of the boundary and plugin-root tests).
 - `python3` and `sips` (macOS) are used by a few checks when present (JSON syntax, icon size); the
@@ -62,7 +64,16 @@ run: `claude plugin eval plugins/corecrew --ablation none --no-publish`.
 - Work on a branch, never on `main`.
 - One commit per working step, in [Conventional Commits](https://www.conventionalcommits.org/)
   form with the plugin as scope: `fix(corecrew): ...`, `feat(coremodel): ...`, `docs: ...`. The
-  subject is at most 72 characters; details go in the body.
+  subject is at most 72 characters; details go in the body. CI checks the subjects of the new commits
+  with `scripts/commit-subjects.sh` (types: feat, fix, docs, style, refactor, perf, test, build, ci,
+  chore, revert, merge; a lowercase scope or none). To get the same check at every commit, install
+  it once as a `commit-msg` hook; this command leaves an existing hook alone:
+
+  ```bash
+  h="$(git rev-parse --git-path hooks)/commit-msg"; [ -e "$h" ] || { printf '#!/bin/sh\nexec bash "$(git rev-parse --show-toplevel)/scripts/commit-subjects.sh" --file "$1"\n' > "$h" && chmod +x "$h"; }
+  ```
+
+  Nothing installs it for you.
 - Add a line for your change under `## [Unreleased]` in the plugin's CHANGELOG (`CHANGELOG.md` for
   corecrew, `plugins/<name>/CHANGELOG.md` for the others), in the group that fits: Added, Changed,
   Deprecated, Removed, Fixed or Security.

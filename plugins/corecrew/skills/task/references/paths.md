@@ -77,7 +77,7 @@ place. A finding that engineer cannot repair goes to `Open`.
 Read `references/release.md` (listed in SKILL.md) and follow it in full: every postcondition,
 and postcondition 4 (version and changelog) applies on this path. Before postcondition 1 there
 is one engineer call: it writes `<version>` and the changelog entry per the versioning standard
-(ask the user first when there is none); more engineer calls only if a check fails. Nothing is
+(none: release.md says whom to ask); more engineer calls only if a check fails. Nothing is
 tagged or pushed.
 
 ## adopt

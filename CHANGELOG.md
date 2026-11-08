@@ -9,6 +9,17 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+### Changed
+
+- `ship` writes the version and the changelog entry first and runs `check:` on that tree, so the
+  release commit itself is what was tested; a red run stops ship with the edit left uncommitted and
+  no repair. Where the Core has no versioning standard, the version question is asked once, in ship.
+- The save reminder and release.md ask for a short English subject of at most 72 characters with the
+  details after a blank line; a commit standard in the Core wins. ship's release commit subject is
+  `chore(<part>): release <version>`, or `chore: release <version>` in a repo with one part.
+- `save --push` pushes only the Core; the code repo is published by `ship`, after its tests and
+  version. With `--push` the message may be left out when there is nothing to save.
+
 ## [0.9.1] - 2026-11-08
 
 ### Fixed

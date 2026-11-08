@@ -49,6 +49,7 @@ plugins/coreopinion/              second opinion from GPT (Claude Code only)
   skills/second-opinion/          SKILL.md; scripts/: ask-gpt.sh (the Codex run), allowed-files.sh and
                                   secret-patterns.txt (the one secret list)
   evals/                          trigger evals
+scripts/commit-subjects.sh        the check of this repo's own commit subjects (CI job and optional commit-msg hook)
 tests/                            bash tests, run by tests/run.sh; lib.sh gives each test a sandbox
 docs/                             upgrade guides (migration-*.md) and icon sources (icons/)
 ```
