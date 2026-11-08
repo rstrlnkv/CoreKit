@@ -6,7 +6,7 @@
 #
 # What the profile confines (checked with `codex sandbox`, codex 0.166; see SKILL.md step 3):
 # reads of the project folder, minimal system paths and temp folders only; every secret name the
-# skill's send filter drops is blocked inside the project too; no writes, no network for commands.
+# skill's send filter drops (secret-patterns.txt) is blocked inside the project too; no writes, no network for commands.
 # --ignore-user-config keeps ~/.codex/config.toml (MCP servers, plugins) out; web search is off.
 T="$1"; effort="${2:-medium}"
 case "$T" in ''|/) echo "usage: ask-gpt.sh <temp folder> [medium|high]" >&2; exit 2 ;; esac
@@ -29,7 +29,24 @@ extra=""
 if ! git -C "$dir" rev-parse --git-dir >/dev/null 2>&1; then
   mkdir -p "$T/empty"; dir="$T/empty"; extra="--skip-git-repo-check"
 fi
-profile='permissions.review.filesystem={":minimal"="read", ":project_roots"={"."="read", "**/.env*"="none", "**/*.env"="none", "**/*.env.*"="none", "**/*.pem"="none", "**/*.key"="none", "**/*.p12"="none", "**/*.pfx"="none", "**/id_rsa*"="none", "**/id_ed25519*"="none", "**/*[cC]redentials*"="none", "**/*CREDENTIALS*"="none", "**/.npmrc"="none", "**/.netrc"="none", "**/.pypirc"="none", "**/.git-credentials"="none", "**/*.tfvars"="none", "**/*.tfstate*"="none", "**/*.jks"="none", "**/*.keystore"="none", "**/*.p8"="none", "**/*[sS]ecret*"="none", "**/*SECRET*"="none", "**/*[tT]oken*"="none", "**/*TOKEN*"="none", "**/*[kK]ube[cC]onfig*"="none", "**/*KUBECONFIG*"="none", "**/*.kdbx"="none", "**/.aws/**"="none", "**/*[sS]ervice?[aA]ccount*.json"="none", "**/*[sS]ervice[aA]ccount*.json"="none", "**/*SERVICE?ACCOUNT*.json"="none"}}'
+# Every secret name in secret-patterns.txt (the list allowed-files.sh filters the material with) is denied
+# at any depth of the project, and so is everything under a folder of that name. Without a readable, non-empty list codex is not run.
+list_file="$(cd "$(dirname "$0")" 2>/dev/null && pwd)/secret-patterns.txt"
+deny=""
+if [ -r "$list_file" ]; then
+  while IFS= read -r g || [ -n "$g" ]; do
+    g="${g#"${g%%[![:space:]]*}"}"; g="${g%%[[:space:]]*}"   # trim; text after a space is a comment
+    case "$g" in
+      ''|'#'*) continue ;;
+      *[\"\'\\]*) echo "ask-gpt.sh: a pattern with a quote or backslash in $list_file: $g; nothing was run" >&2; exit 2 ;;
+    esac
+    deny="$deny, \"**/$g\"=\"deny\""
+    # a folder of that name: everything under it
+    [ "${g%/\*\*}" != "$g" ] || deny="$deny, \"**/$g/**\"=\"deny\""
+  done < "$list_file"
+fi
+[ -n "$deny" ] || { echo "ask-gpt.sh: no secret patterns in $list_file; nothing was run" >&2; exit 2; }
+profile='permissions.review.filesystem={":minimal"="read", ":project_roots"={"."="read"'"$deny"'}}'
 # shellcheck disable=SC2086
 codex exec --ignore-user-config -c 'default_permissions="review"' -c "$profile" -c web_search="disabled" \
   -C "$dir" -c model_reasoning_effort="$effort" --ephemeral $extra \

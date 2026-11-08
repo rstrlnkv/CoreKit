@@ -29,22 +29,29 @@ Do not try to install or sign in for them.
 
 ## 2. Build the material, then ask before anything is sent
 
-**Never send secrets, and never read them yourself.** Secret files are `.env` and `.env.*`, key
-and certificate files (`*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.p8`, `*.jks`, `*.keystore`,
-`id_rsa*`, `id_ed25519*`, `*.kdbx`), files with `credentials`, `secret` or `token` in the name,
-`.npmrc`, `.netrc`, `.pypirc`, `.git-credentials`, `*.tfvars`, `*.tfstate`, `kubeconfig`, `.aws/*`,
-service-account JSON files, and anything under `~/.ssh`. So **list paths first, then read only
-the allowed ones**, always through this exclusion pathspec (call it `<EXCLUDE>` below). It
-applies to the diff, to untracked files and to files the user names:
+**Never send secrets, and never read them yourself.** Secret files are the names listed in the
+skill's `scripts/secret-patterns.txt`: `.env` files, keys and certificates (SSH keys of every kind,
+`*.pem`, `*.key`, ...), files with `credentials`, `secret` or `token` in the name, tool and cloud
+credentials (`.npmrc`, `.pgpass`, `.docker/config.json`, `.aws/`, `.kube/`, ...), and anything
+under `.ssh/` or `~/.ssh` or under a folder with such a name (`secrets/`, `credentials/`). So **list paths first, then read only the allowed ones**, always
+through the exclusion pathspec built from that list. Get it once (it works outside a repository too):
 
 ```bash
-git diff HEAD --name-only -- . ':(exclude)*.env' ':(exclude)*.env.*' ':(exclude)*.pem' ':(exclude)*.key' ':(exclude)*.p12' ':(exclude)*.pfx' ':(exclude)*id_rsa*' ':(exclude)*id_ed25519*' ':(exclude,icase)*credentials*' ':(exclude)*.npmrc' ':(exclude)*.netrc' ':(exclude)*.pypirc' ':(exclude)*.git-credentials' ':(exclude)*.tfvars' ':(exclude)*.tfstate' ':(exclude)*.tfstate.*' ':(exclude)*.jks' ':(exclude)*.keystore' ':(exclude)*.p8' ':(exclude,icase)*secret*' ':(exclude,icase)*token*' ':(exclude,icase)*kubeconfig*' ':(exclude)*.kdbx' ':(exclude)*.aws/*' ':(exclude,icase)*service?account*.json' ':(exclude,icase)*serviceaccount*.json'
+bash "${CLAUDE_SKILL_DIR}/scripts/allowed-files.sh" --pathspec
+```
+
+It prints one line of single-quoted parts, each like `:(exclude,glob,icase)**/.env*`. Call that line
+`<EXCLUDE>` below and paste it as printed, after `-- .`, into every git command that lists or shows
+files: the diff, untracked files, the last commit. If the script fails, stop: nothing is sent.
+
+```bash
+git diff HEAD --name-only -- . <EXCLUDE>
 ```
 
 Untracked files go through the same pathspec:
 
 ```bash
-git ls-files --others --exclude-standard -- . ':(exclude)*.env' ':(exclude)*.env.*' ':(exclude)*.pem' ':(exclude)*.key' ':(exclude)*.p12' ':(exclude)*.pfx' ':(exclude)*id_rsa*' ':(exclude)*id_ed25519*' ':(exclude,icase)*credentials*' ':(exclude)*.npmrc' ':(exclude)*.netrc' ':(exclude)*.pypirc' ':(exclude)*.git-credentials' ':(exclude)*.tfvars' ':(exclude)*.tfstate' ':(exclude)*.tfstate.*' ':(exclude)*.jks' ':(exclude)*.keystore' ':(exclude)*.p8' ':(exclude,icase)*secret*' ':(exclude,icase)*token*' ':(exclude,icase)*kubeconfig*' ':(exclude)*.kdbx' ':(exclude)*.aws/*' ':(exclude,icase)*service?account*.json' ':(exclude,icase)*serviceaccount*.json'
+git ls-files --others --exclude-standard -- . <EXCLUDE>
 ```
 
 Files and folders the user names go through the skill's own script (it prints the ones that may be
@@ -132,7 +139,8 @@ temp folder (it holds the diff) however the run ends. Outside a git repository i
     prompt would stop it. So this skill does not use it.
   - The script's `review` permission profile gives read access to the project folder, minimal
     system paths and temp folders, and to nothing else in the user's home. Reads of the secret
-    patterns listed in it are blocked even inside the project (`.env*`, keys, `.npmrc`, ...).
+    names in `secret-patterns.txt` (the same list as the send filter) are blocked even inside
+    the project (`.env*`, keys, `.ssh/`, `.npmrc`, ...).
     It is read-only (no writes) and has no network for commands. A secret file with an
     unusual name inside the project is still readable, and so is anything in the temp folders.
   - `--ignore-user-config` leaves out the user's `~/.codex/config.toml`: their MCP servers,

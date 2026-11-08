@@ -36,10 +36,13 @@ name is neutral on purpose: other providers can be added as more skills.
 out as secrets) and waits for your yes. The default material is your uncommitted diff plus new
 untracked files; the diff text is pasted into the prompt and goes to OpenAI.
 
-Claude never sends `.env` files, keys, certificates, `.npmrc`, `.netrc`, `.pypirc`,
-`.git-credentials`, `*.tfvars`, `*.tfstate`, keystores, `kubeconfig`, `.aws/*`, service-account
-JSON, or files with `credentials`, `secret` or `token` in the name. The same filter covers
-untracked files and files you name.
+Claude never sends secret files: `.env` files, keys and certificates, SSH keys and anything under
+`.ssh/`, cloud and cluster credentials (`.aws/`, `.kube/`, `kubeconfig`, service-account JSON),
+package-manager and database credentials (`.npmrc`, `.netrc`, `.pypirc`, `.pgpass`, `.git-credentials`,
+Docker config), Terraform state and variables, keystores, and files or folders with `credentials`,
+`secret` or `token` in the name. The full list is one file,
+`skills/second-opinion/scripts/secret-patterns.txt`; it builds both the file filter and the Codex
+permission profile. The same filter covers untracked files and files you name.
 
 **What the Codex sandbox really confines** (checked with `codex sandbox`, codex 0.166, which runs a
 command under the same sandbox without contacting OpenAI):
