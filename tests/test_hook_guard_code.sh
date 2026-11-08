@@ -19,8 +19,10 @@ C="$CORE_DIR/p/code"
 # there are about 350 of them). The foreground uses OD="$SANDBOX".
 OD="$SANDBOX"
 
-# run_json <json> — stdout in OUT, stderr in ERR, exit code in RC
-run_json() { printf '%s' "$1" | bash "$H" >"$OD/out" 2>"$OD/err"; RC=$?; OUT="$(<"$OD/out")"; ERR="$(<"$OD/err")"; }
+# run_json <json> — stdout in OUT, stderr in ERR, exit code in RC. The hook runs with SIGPIPE ignored, as GitHub's
+# runners often start it: a writer in a pipeline whose reader stops early then gets EPIPE and may print
+# "write error: Broken pipe" instead of dying quietly, and that noise would reach the user.
+run_json() { ( trap '' PIPE; printf '%s' "$1" | bash "$H" ) >"$OD/out" 2>"$OD/err"; RC=$?; OUT="$(<"$OD/out")"; ERR="$(<"$OD/err")"; }
 # run_file <tool> <path> [cwd] — Write, Edit or NotebookEdit; the path is put in the JSON as is
 run_file() {
   local key=file_path; [ "$1" = NotebookEdit ] && key=notebook_path
@@ -281,7 +283,7 @@ sec_size() {
 # --- speed and size: a huge command is judged in time (the tokenizer is linear)
 timed_json() { # timed_json <file> — RC, OUT, ERR as run_json; T = seconds; a hook that spins is killed after 20 s (RC 143)
   local t0=$SECONDS
-  bash "$H" < "$1" >"$OD/out" 2>"$OD/err" & local hp=$!
+  ( trap '' PIPE; exec bash "$H" < "$1" ) >"$OD/out" 2>"$OD/err" & local hp=$!
   ( sleep 20; kill "$hp" 2>/dev/null ) >/dev/null 2>&1 & local wd=$!; disown "$wd" 2>/dev/null
   wait "$hp"; RC=$?; kill "$wd" 2>/dev/null
   T=$((SECONDS - t0)); OUT="$(<"$OD/out")"; ERR="$(<"$OD/err")"
@@ -435,6 +437,33 @@ assert_eq "$RC" "2" "no patch-paths.awk: apply_patch on docs/ is refused (fails 
 pj src/a.swift | bash "$PL/hooks/guard-code.sh" >"$OD/out" 2>"$OD/err"; RC=$?
 assert_eq "$RC" "2" "no patch-paths.awk: a harmless apply_patch is refused too (nothing can be judged)"
 assert_contains "$OD/err" "patch-paths.awk is missing or failed"
+
+# --- SIGPIPE ignored (as on GitHub's runners) and a reader that stops early: no "write error: Broken pipe" reaches the user
+sec_sigpipe() {
+  local pad lines; pad="$(head -c 200000 /dev/zero | tr '\0' 'a')"
+  # nopipe <label> — no pipe noise in ERR
+  nopipe() { case "$ERR" in *"Broken pipe"*|*"write error"*) fail "$1: pipe noise: $ERR" ;; *) pass ;; esac; }
+  # no awk files, a long command: the Bash path still passes in silence
+  printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"echo %s > docs/a.md"}}' "$C" "$pad" > "$OD/long.json"
+  ( trap '' PIPE; bash "$PL/hooks/guard-code.sh" < "$OD/long.json" ) >"$OD/out" 2>"$OD/err"; RC=$?
+  assert_eq "$RC" "0" "no awk files, long command: Bash passes"; assert_eq "$(<"$OD/out")$(<"$OD/err")" "" "no awk files, long command: silent"
+  # a read-only checker whose tokenizer is missing: refused, with only the refusal on stderr
+  printf '{"cwd":"%s","tool_name":"Bash","agent_type":"corecrew:verifier","tool_input":{"command":"echo %s > src/a"}}' "$C" "$pad" > "$OD/ro.json"
+  ( trap '' PIPE; bash "$PL/hooks/guard-code.sh" < "$OD/ro.json" ) >"$OD/out" 2>"$OD/err"; RC=$?; ERR="$(<"$OD/err")"
+  assert_eq "$RC" "2" "no awk files, read-only checker, long command: refused"; nopipe "no awk files, read-only checker"
+  case "$ERR" in corecrew:*) pass ;; *) fail "read-only checker: the message is not first: $ERR" ;; esac
+  # an unreadable patch (X) with many "***" lines naming docs: the raw check stops at the first hit
+  lines="$(yes '*** frob docs/a.md' | head -n 20000 | awk '{ printf "%s\\n", $0 }')"
+  run_json "$(printf '{"session_id":"s","turn_id":"turn-1","cwd":"%s","tool_name":"apply_patch","tool_input":{"command":"%s"}}' "$C" "$lines")"
+  assert_eq "$RC" "2" "unreadable patch, 20000 *** lines: refused"
+  assert_eq "$ERR" 'corecrew: the patch cannot be judged: its text cannot be read, and the line "*** frob docs/a.md" names an internal path. Use the apply_patch tool and lines like "*** Add File: <full path>".' "unreadable patch, 20000 *** lines: exactly the message"
+  # Codex: a long command that names apply_patch many times (the first match is taken)
+  lines="$(yes 'echo apply_patch;' | head -n 20000 | tr '\n' ' ')"
+  run_json "$(printf '{"session_id":"s","turn_id":"turn-1","cwd":"%s","tool_name":"Bash","tool_input":{"command":"%s"}}' "$C" "$lines")"
+  assert_eq "$RC" "2" "codex: 20000 apply_patch mentions: refused"; nopipe "codex: 20000 apply_patch mentions"
+  case "$ERR" in "corecrew: run patches with the apply_patch tool"*) pass ;; *) fail "codex: 20000 mentions: message: $ERR" ;; esac
+}
+bg sec_sigpipe
 
 
 # --- new layout: the code lives in <Projects>/<Name>, the private CLAUDE.md in the Core

@@ -211,8 +211,11 @@ if [ "$tool" = Bash ] && agent="$(ro_agent)"; then
   load_settings
   TAB="$(printf '\t')"
   # A checker that cannot run refuses: these agents should change nothing, so unknown is no.
-  found="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r' '\002 ' \
-    | LC_ALL=C awk -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-readonly.awk" 2>/dev/null)" \
+  # (tr's stderr is dropped: an awk that fails early would make it print "write error: Broken pipe", see internal_hit;
+  # spaces become \004 when the command has no \004 byte: the tokenizer then reads a plain word whole, bash-lex.awk Speed)
+  sp=' '; lexsp=0; eot="$(printf '\004')"; case "$cmd" in *"$eot"*) ;; *) sp="$eot"; lexsp=1 ;; esac
+  found="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r ' "$(printf '\002')$sp$sp" 2>/dev/null \
+    | LC_ALL=C awk -v lexsp="$lexsp" -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-readonly.awk" 2>/dev/null)" \
     || found="X${TAB}a command this check could not read"
   while IFS="$TAB" read -r kind a; do
     case "$kind" in
@@ -232,16 +235,21 @@ case "$tool" in Write|Edit|MultiEdit|NotebookEdit|apply_patch|Bash) ;; *) exit 0
 # is cut into components at / \ quotes, blanks and shell punctuation; a component docs, .claude, claude.md,
 # claude.local.md or agents.md (any letter case) is a hit. Used where a patch cannot be read as headers: no
 # public-docs entry or settings.local.json exception applies there, so this errs on the side of blocking.
+# Every reader in these pipelines takes all of its input (sed -n 1p, not grep -m1 or head): the host may run the hook
+# with SIGPIPE ignored, and then a writer whose reader stopped early prints "write error: Broken pipe" to the user.
 internal_hit() {
-  LC_ALL=C tr '\134\057\042[:space:]\054:;=()<>&|\173\175\140\047' '\n' | LC_ALL=C tr 'A-Z' 'a-z' \
-    | LC_ALL=C grep -xE -m1 'docs|\.claude|claude\.md|claude\.local\.md|agents\.md'
+  local hit
+  hit="$(LC_ALL=C tr '\134\057\042[:space:]\054:;=()<>&|\173\175\140\047' '\n' | LC_ALL=C tr 'A-Z' 'a-z' \
+    | LC_ALL=C grep -xE 'docs|\.claude|claude\.md|claude\.local\.md|agents\.md' | LC_ALL=C sed -n 1p)"
+  [ -n "$hit" ] || return 1
+  printf '%s\n' "$hit"
 }
 # refuse_raw <text with *** lines> — exit 2 when a *** line of an unreadable patch names an internal path
 refuse_raw() {
   local hit line
   hit="$(printf '%s\n' "$1" | LC_ALL=C grep -F '***' | internal_hit)" || return 0
   # the message quotes the first "***" line that holds the component (cut to 200 bytes), not the bare component
-  line="$(printf '%s\n' "$1" | LC_ALL=C grep -F '***' | LC_ALL=C grep -iFm1 -- "$hit" | LC_ALL=C cut -c1-200)"
+  line="$(printf '%s\n' "$1" | LC_ALL=C grep -F '***' | LC_ALL=C grep -iF -- "$hit" | LC_ALL=C sed -n 1p | LC_ALL=C cut -c1-200)"
   printf '%s\n' "$(msg patch_unjudgeable "${line:-$hit}")" >&2
   exit 2
 }
@@ -297,7 +305,9 @@ case "$cmd" in *">"*|*tee*|*touch*|*mkdir*|*cp*|*mv*|*ln*|*install*|*sed*|*perl*
 
 # The targets: "W <path>" a file written, "D <path>" a directory made, "J <dir> <source>" and "L <dest> <source>"
 # (see scripts/bashlex-guard-code.awk).
-targets="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r' '\002 ' | LC_ALL=C awk -f "$SELF/scripts/bashlex-guard-code.awk" 2>/dev/null)"
+# tr's stderr is dropped: the reader stops early when it is missing or has too many targets (C), and with SIGPIPE
+# ignored tr would then print "write error: Broken pipe" to the user.
+targets="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r' '\002 ' 2>/dev/null | LC_ALL=C awk -f "$SELF/scripts/bashlex-guard-code.awk" 2>/dev/null)"
 [ -n "$targets" ] || exit 0
 NL='
 '

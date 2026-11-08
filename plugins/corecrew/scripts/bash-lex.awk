@@ -4,6 +4,13 @@
 # (tr '\n\r' '\002 '). Quoted text is words, heredoc bodies and comments are skipped, wrapper words
 # (sudo, env, time, if, do, ...) and VAR=value prefixes are skipped. Run it as
 #   awk -f bash-lex.awk -f <hook program>.awk
+# Speed: when the command holds no \004 byte, the callers also turn spaces into \004 (tr '\n\r ' '\002\004\004')
+# and say so with -v lexsp=1. Then \004 is a blank here like a space, and the text is also split at it once (a fast
+# split on one literal byte), so a plain word (no quote, backslash, # first, operator or blank in it) that starts
+# right after a blank is taken whole instead of byte by byte, and the text is split into bytes only once the byte loop
+# is needed. Any other text (a command line queued by enqueue, or any text when lexsp is not 1: a command with a \004
+# byte of its own keeps it as a word byte, as the shell does) is read byte by byte. Every string made from the text
+# (seg) has its \004 turned back into spaces, so a hook program never sees one.
 # The hook program supplies (see bashlex-guard-secrets.awk, bashlex-readonly.awk):
 #   classify(b)  — b is the base name of a command word; returns the command to remember, or "?" to
 #                  ignore its arguments (it may also note state, e.g. cdseen for cd)
@@ -19,7 +26,7 @@
 # State this file owns: cmd, args, na, wrapped, shk/sargs/nsa (shell -c and eval), and the redirect/heredoc flags.
 
 BEGIN {
-  NL = "\002"; STOP = " \t\002;|" "&<>()`\047\"\\"
+  NL = "\002"; BL = (lexsp == 1) ? "\004" : ""; STOP = " \t\002;|" "&<>()`\047\"\\" BL
   WORDCH = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
   split("sudo command nohup time exec env builtin nice then do else elif if while until ! { } ( ) doas timeout gtimeout stdbuf setsid caffeinate ionice unbuffer", Wd, " "); for (k in Wd) WR[Wd[k]] = 1
   # Options of a wrapper that take a value (the next word): `timeout 5 cat .env` and `sudo -u root cat .env`
@@ -42,6 +49,7 @@ function seg(a, b,   r, x) {
   if (b - a > 4096) return "\001"
   r = ""
   for (x = a; x < b; x++) r = r C[x]
+  if (BL != "" && index(r, BL)) gsub(/\004/, " ", r)
   return r
 }
 # append text to the word being read; a word longer than 4096 bytes is dropped (it is not a path).
@@ -142,17 +150,35 @@ function stmt_end() {
 # enqueue(text) — a command line to lex after the main pass (at most 50)
 function enqueue(t) { if (nq < 50) Q[++nq] = t }
 { buf = (NR == 1 ? "" : buf) $0 }
-function lex(text) {
-  len = split(text, C, ""); i = 1
+function lex(text,   lxn, lxk, lxpos, lxw, lxl, lxc) {
+  len = length(text); i = 1; lxc = 0
   inword = 0; word = ""; wx = ""; hasq = 0; wl = 0; wbad = 0; hdn = 0; wsub = 0
+  # LXW[k]: the k-th run between \004 blanks; LXS[position] = k for the first byte of each run
+  split("", LXS); lxn = 0; lxpos = 1
+  if (BL != "") lxn = split(text, LXW, BL)
+  for (lxk = 1; lxk <= lxn; lxk++) { LXS[lxpos] = lxk; lxpos += length(LXW[lxk]) + 1 }
   while (i <= len && !full) {
+    # fast path: a run that starts here and is one plain word is what the byte loop below would read (the plain-run
+    # branch at the end), only whole: one app() of the run, or of "\001" when it is longer than 4096 bytes; then the
+    # \004 after it (if any) ends the word, as the blank branch below would
+    if (lxn > 1 && (i in LXS)) {
+      lxw = LXW[LXS[i]]
+      if (lxw != "" && (inword || substr(lxw, 1, 1) != "#") && lxw !~ /[ \t\002;|&<>()`'"\\]/) {
+        lxl = length(lxw)
+        app(lxl > 4096 ? "\001" : lxw); inword = 1; i += lxl
+        if (i <= len) { endword(); i++ }
+        continue
+      }
+    }
+    # the byte loop: the text is split into bytes the first time it is needed (C[] is read only from here on)
+    if (!lxc) { split(text, C, ""); lxc = 1 }
     c = C[i]
-    if (c == " " || c == "\t") { endword(); i++; continue }
+    if (c == " " || c == "\t" || c == BL) { endword(); i++; continue }
     if (c == NL) { endword(); stmt_end(); i++; if (hdn > 0) skip_heredocs(); continue }
     if (c == "#" && !inword) { while (i <= len && C[i] != NL) i++; continue }
     if (c == "\\") {
       if (i < len) {
-        d = C[i + 1]
+        d = C[i + 1]; if (d == BL) d = " "
         if (d != NL) { app(d, escx(d)); inword = 1; hasq = 1 }
         i += 2
       } else i++

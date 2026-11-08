@@ -22,8 +22,10 @@ ln -s "$HOME/.ssh" "$C/sshlink"                # a folder link into ~/.ssh
 # Sections that share nothing run at the same time (bg <function>, lib.sh). The foreground uses OD="$SANDBOX".
 OD="$SANDBOX"
 
-# run_json <json> — stdout in OUT, stderr in ERR, exit code in RC
-run_json() { printf '%s' "$1" | bash "$H" >"$OD/out" 2>"$OD/err"; RC=$?; OUT="$(<"$OD/out")"; ERR="$(<"$OD/err")"; }
+# run_json <json> — stdout in OUT, stderr in ERR, exit code in RC. The hook runs with SIGPIPE ignored, as GitHub's
+# runners often start it: a writer in a pipeline whose reader stops early then gets EPIPE and may print
+# "write error: Broken pipe" instead of dying quietly, and that noise would reach the user.
+run_json() { ( trap '' PIPE; printf '%s' "$1" | bash "$H" ) >"$OD/out" 2>"$OD/err"; RC=$?; OUT="$(<"$OD/out")"; ERR="$(<"$OD/err")"; }
 # jesc <text> — JSON string escaping
 jesc() { local s="$1"; s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; s="${s//$'\n'/\\n}"; printf '%s' "$s"; }
 # run_tool <tool> <key> <value> [cwd] — a tool call with one string key (the value is JSON-escaped)
@@ -594,8 +596,26 @@ sec_noawk() {
   PATH="$STUB:$PATH" run_bash 'cat ~/.ssh/id_rsa'; closed "awk fails, cat ~/.ssh/id_rsa"
   PATH="$STUB:$PATH" run_bash 'cat .envrc .env.example'; ok "awk fails, nothing secret-looking"
   PATH="$STUB:$PATH" run_bash 'ls';                ok "awk fails, plain command (never reaches awk)"
+  # the same with a long command (SIGPIPE ignored, run_json): the writer feeding the failed awk must stay quiet
+  local pad; pad="$(head -c 200000 /dev/zero | tr '\0' 'a')"
+  PATH="$STUB:$PATH" run_bash "cat .env $pad";       closed "awk fails, long cat .env"
+  case "$ERR" in *"Broken pipe"*|*"write error"*) fail "awk fails, long cat .env: pipe noise: $ERR" ;; *) pass ;; esac
+  PATH="$STUB:$PATH" run_bash "cat .envrc $pad.x";   ok "awk fails, long command with nothing secret-looking"
+  # no awk files, a long command, SIGPIPE ignored: still silent
+  printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"cat .env %s"}}' "$C" "$pad" > "$OD/long.json"
+  ( trap '' PIPE; bash "$PL/hooks/guard-secrets.sh" < "$OD/long.json" ) >"$OD/out" 2>"$OD/err"; RC=$?
+  assert_eq "$RC" "0" "no awk files, long command: Bash passes"; assert_eq "$(<"$OD/out")$(<"$OD/err")" "" "no awk files, long command: silent"
 }
 bg sec_noawk
+
+# --- the tokenizer reads plain words whole when spaces are mapped to \004 (bash-lex.awk, Speed): the words are the same
+sec_blanks() {
+  run_bash 'cat "my  dir/.env" x';               blocked "quoted name with two spaces is shown as typed" "my  dir/.env"
+  run_bash 'cat my\ \ dir/.env.local';          blocked "escaped spaces are shown as typed" "my  dir/.env.local"
+  run_bash "cat a$(printf '\004').env";          ok "a \\004 byte of the command stays in its word (a\\004.env is no .env)"
+  run_bash "cat x$(printf '\004')y .env";        blocked "a command with a \\004 byte is still judged" ".env"
+}
+bg sec_blanks
 
 # --- time: a 1 MB command, and many words
 timed_json() { local t0=$SECONDS; run_json "$(<"$1")"; T=$((SECONDS - t0)); }
@@ -621,6 +641,14 @@ printf '{"cwd":"%s","tool_name":"Write","tool_input":{"content":"%s","file_path"
 timed_json "$SANDBOX/big7.json"; blocked "Write .env with 1 MB content" "$C/.env"; [ "$T" -lt 10 ] && pass || fail "1 MB Write .env took ${T} s"
 printf '{"cwd":"%s","tool_name":"Write","tool_input":{"content":"%s","file_path":"%s/src/big.md' "$C" "$body" "$C" > "$SANDBOX/big8.json"
 timed_json "$SANDBOX/big8.json"; closed "truncated 1 MB Write with .env.local in the content"; [ "$T" -lt 10 ] && pass || fail "1 MB odd took ${T} s"
+assert_eq "$ERR" "$(msg .env.local)" "truncated 1 MB Write: exactly the message (no pipe noise)"
+# odd input whose only secret-looking string is a .ssh folder, after 1 MB of other text (raw_hit's .ssh scan)
+body="$(head -c 1000000 /dev/zero | tr '\0' 'y' | sed 's/yyyyyyyyyy/~\/.ssh\/k /g')"
+printf '{"cwd":"%s","tool_name":"Write","tool_input":{"content":"%s","file_path":"%s/src/big.md' "$C" "$body" "$C" > "$SANDBOX/big9.json"
+timed_json "$SANDBOX/big9.json"; blocked "truncated 1 MB Write with ~/.ssh in the content" ".ssh"
+# odd input: a Grep path that is a number, after 1 MB of .env.local mentions (the hint and key scans)
+printf '{"cwd":"%s","tool_name":"Grep","tool_input":{"pattern":"%s","path":1,"glob":"x"}}' "$C" "$body" > "$SANDBOX/big10.json"
+timed_json "$SANDBOX/big10.json"; blocked "Grep with an odd path and 1 MB of .ssh mentions" ".ssh"
 }
 bg sec_size
 

@@ -175,13 +175,17 @@ is_secret() {
 # The text is cut into components at / \ " whitespace , : ; = ( ) < > | & { } ` ' ; a component is
 # .env or .env.<x> (x not example|sample|template) or .env followed by * or ?; "/.ssh" ends a path
 # or is followed by a separator.
+# Pipe noise: the host may run the hook with SIGPIPE ignored, and then a writer whose reader stops early prints
+# "write error: Broken pipe" to the user. So a reader here takes all of its input (sed -n 1p, not head -n 1), and the
+# writer in front of an early reader (grep -q, an awk that may fail) is a printf or tr whose stderr is dropped: a
+# write is all either can fail at, and the guard reads the reader's status and output, never the writer's.
 raw_hit() {
   local t hit
   t="$(cat)"
   hit="$(printf '%s' "$t" | LC_ALL=C tr '\134\057\042[:space:]\054:;=()<>&|\173\175\140\047' '\n' \
-    | LC_ALL=C grep -iE '^\.env([*?]|\.|$)' | LC_ALL=C grep -viE '^\.env\.(example|sample|template)$' | head -n 1)"
+    | LC_ALL=C grep -iE '^\.env([*?]|\.|$)' | LC_ALL=C grep -viE '^\.env\.(example|sample|template)$' | LC_ALL=C sed -n 1p)"
   if [ -n "$hit" ]; then printf '%s' "$hit"; return 0; fi
-  if printf '%s' "$t" | LC_ALL=C grep -qiE '/\.ssh([/"\\]|$)'; then printf '.ssh'; return 0; fi
+  if printf '%s' "$t" 2>/dev/null | LC_ALL=C grep -qiE '/\.ssh([/"\\]|$)'; then printf '.ssh'; return 0; fi
   return 1
 }
 
@@ -225,7 +229,9 @@ if [ "$tool" = Bash ]; then
   # removed by the lexer, so the raw text is not searched for ".env"). Everything else is lexed.
   case "$cmd" in *.*) ;; *) exit 0 ;; esac
   [ -r "$SELF/scripts/bash-lex.awk" ] && [ -r "$SELF/scripts/bashlex-guard-secrets.awk" ] || exit 0
-  targets="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r' '\002 ' | LC_ALL=C awk -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-guard-secrets.awk" 2>/dev/null)"
+  # spaces become \004 when the command has no \004 byte: the tokenizer then reads a plain word whole (scripts/bash-lex.awk, Speed)
+  sp=' '; lexsp=0; eot="$(printf '\004')"; case "$cmd" in *"$eot"*) ;; *) sp="$eot"; lexsp=1 ;; esac
+  targets="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r ' "$(printf '\002')$sp$sp" 2>/dev/null | LC_ALL=C awk -v lexsp="$lexsp" -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-guard-secrets.awk" 2>/dev/null)"
   # awk itself failed: the command is unknown, so a secret-looking string in it is refused
   if [ "$?" -ne 0 ]; then hit="$(printf '%s' "$cmd" | raw_hit)" && die "$hit"; exit 0; fi
   [ -n "$targets" ] || exit 0
@@ -252,7 +258,7 @@ case "$tool" in
   Glob) req="pattern"; opt="path" ;;
 esac
 hint=""
-printf '%s' "$in" | LC_ALL=C grep -qiE '\.env|\.ssh' && hint=1
+printf '%s' "$in" 2>/dev/null | LC_ALL=C grep -qiE '\.env|\.ssh' && hint=1
 for key in $req $opt; do
   v="$(json_str "$in" "$key")"
   if [ -n "$v" ]; then
@@ -263,8 +269,8 @@ for key in $req $opt; do
   if [ -z "$v" ]; then
     odd=""
     case " $req " in *" $key "*) odd=1 ;; esac
-    if [ -z "$odd" ] && printf '%s' "$in" | LC_ALL=C grep -qE "\"$key\"[[:space:]]*:" \
-       && ! printf '%s' "$in" | LC_ALL=C grep -qE "\"$key\"[[:space:]]*:[[:space:]]*\"\""; then odd=1; fi
+    if [ -z "$odd" ] && printf '%s' "$in" 2>/dev/null | LC_ALL=C grep -qE "\"$key\"[[:space:]]*:" \
+       && ! printf '%s' "$in" 2>/dev/null | LC_ALL=C grep -qE "\"$key\"[[:space:]]*:[[:space:]]*\"\""; then odd=1; fi
     if [ -n "$odd" ]; then hit="$(printf '%s' "$in" | raw_hit)" && die "$hit"; fi
   fi
   # every "<key>": "<value>" in the raw text, in case the key occurs more than once

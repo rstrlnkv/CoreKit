@@ -71,9 +71,12 @@ shell_patch_refused() {
   plain="$(printf '%s' "$1" | LC_ALL=C tr -d '\047\042\134\012\015')"
   # s: the text with its quoted strings opaque (see above); newline and CR become \005
   s="$(printf '%s' "$1" | LC_ALL=C tr '\n\r' '\005\005' | LC_ALL=C sed -E "$quote_re")"
-  hit="$(printf '%s\n' "$plain" | LC_ALL=C grep -oiE 'apply_patch|applypatch|apply-patch' | head -n 1)"
-  [ -n "$hit" ] || { printf '%s\n' "$flat" | LC_ALL=C grep -qE '\*\*\* Begin Patch.*\*\*\* (Add File|Update File|Delete File|Move to):' && hit='*** Begin Patch'; }
-  [ -n "$hit" ] || { printf '%s\n' "$flat" | LC_ALL=C grep -qE "\\\$$q.*\\\\([xuU]|[0-7])" && hit="\$'\\...'"; }
+  # Pipe noise: the host may run the hook with SIGPIPE ignored; then a writer whose reader stops early prints "write
+  # error: Broken pipe" to the user. So readers take all their input (sed -n 1p, not head -n 1), and a printf in front of
+  # grep -q, or a filter in front of an awk that may fail, has its stderr dropped (a write is all it can fail at).
+  hit="$(printf '%s\n' "$plain" | LC_ALL=C grep -oiE 'apply_patch|applypatch|apply-patch' | LC_ALL=C sed -n 1p)"
+  [ -n "$hit" ] || { printf '%s\n' "$flat" 2>/dev/null | LC_ALL=C grep -qE '\*\*\* Begin Patch.*\*\*\* (Add File|Update File|Delete File|Move to):' && hit='*** Begin Patch'; }
+  [ -n "$hit" ] || { printf '%s\n' "$flat" 2>/dev/null | LC_ALL=C grep -qE "\\\$$q.*\\\\([xuU]|[0-7])" && hit="\$'\\...'"; }
   if [ -z "$hit" ]; then
     # Heredoc bodies and arithmetic first, on the raw text, by a quoting-state scan that carries across lines: a stack of
     # S '...', D "...", P $(...) or (...), B `...`, A $((...)) and a ( inside A. A << outside S and D starts a heredoc
@@ -81,7 +84,7 @@ shell_patch_refused() {
     # no command words) and loses its quotes, backslashes, $ and backticks, so an apostrophe there cannot pair with a quote
     # outside. In A, * ? [ are operators and become blanks, unless A turns out to be $( (...) ) (a ) not followed by )).
     # Linear: the line is split into characters once (substr on a long line is not O(1) in every awk).
-    out="$(printf '%s\n' "$1" | LC_ALL=C awk '
+    out="$(printf '%s\n' "$1" 2>/dev/null | LC_ALL=C awk '
       END { print "\001done" }
       BEGIN { nq = 0; qi = 1; sp = 0; q1 = sprintf("%c", 39) }
       {
@@ -141,7 +144,7 @@ shell_patch_refused() {
       }' 2>/dev/null)"
     # the last line is the \001done the reader prints at its end: without it the reader failed, so the text is unknown
     case "$out" in *"$one"done) out="${out%"$one"done}" ;; *) out="" ;; esac
-    [ -n "$out" ] && out="$(printf '%s' "$out" | LC_ALL=C tr '\n\r' '\005\005' | LC_ALL=C sed -E "$quote_re" | LC_ALL=C awk '
+    [ -n "$out" ] && out="$(printf '%s' "$out" | LC_ALL=C tr '\n\r' '\005\005' 2>/dev/null | LC_ALL=C sed -E "$quote_re" 2>/dev/null | LC_ALL=C awk '
       # glob_re: the regex of a glob word; LIT counts its literal characters
       function glob_re(w,   re, i, j, c, L, cls) {
         re = "^"; L = length(w); LIT = 0
@@ -236,8 +239,8 @@ shell_patch_refused() {
   # at most 80 bytes; a UTF-8 character the cut would split is dropped
   SHELL_PATCH_HIT="$(printf '%s\n' "$hit" | LC_ALL=C awk '{ s = substr($0, 1, 80); if (length($0) > 80) sub(/[\300-\367][\200-\277]*$/, "", s); print s; exit }')"
   # the simple form: no construct that runs or hides a command (quoted text is already opaque in $s)
-  printf '%s\n' "$s" | LC_ALL=C grep -q '[;&<>(){}!`$"\'"$q$(printf '\005')"']' && return 0
-  out="$(printf '%s\n' "$s" | LC_ALL=C awk '
+  printf '%s\n' "$s" 2>/dev/null | LC_ALL=C grep -q '[;&<>(){}!`$"\'"$q$(printf '\005')"']' && return 0
+  out="$(printf '%s\n' "$s" 2>/dev/null | LC_ALL=C awk '
     BEGIN { ok = 1 }
     {
       n = split($0, E, "|")
