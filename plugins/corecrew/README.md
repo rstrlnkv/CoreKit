@@ -34,6 +34,10 @@ Inside a running Claude Code session the same steps are:
 Start `claude` again, then run `/corecrew:new-project`. On the first run it shows what it will
 create and sets up your Core after your "ok".
 
+Recommended: add the deny rules from [SECURITY.md](../../SECURITY.md#recommended-host-settings) to
+your Claude Code settings. They keep `.env` files and `~/.ssh` away from Claude's file tools. That
+is the boundary; corecrew's secrets guard only backs it up.
+
 A command-line install does not ask for the [settings](#settings); the defaults apply until you
 set them. Give a value at install time, for example
 `claude plugin install corecrew@corekit --config ui_language=ru` for Russian hook messages, or

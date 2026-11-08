@@ -29,6 +29,10 @@ Inside a running session the same steps are `/plugin marketplace add rstrlnkv/Co
 architect and explorer agents: `/plugin install feature-dev@claude-plugins-official`. Restart
 Claude Code after an install.
 
+Recommended: add the deny rules from [SECURITY.md](SECURITY.md#recommended-host-settings) to your
+Claude Code settings. They keep `.env` files and `~/.ssh` away from Claude's file tools. That is
+the boundary; the plugins' hooks only back it up.
+
 ### Codex
 
 corecrew and coremodel also run in the Codex CLI; coreopinion does not.

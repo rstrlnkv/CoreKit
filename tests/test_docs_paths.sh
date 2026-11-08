@@ -106,6 +106,40 @@ for f in "$PLUGIN"/scripts/*; do
   named_in_tree "$n" "$ROOT/ARCHITECTURE.md" && pass || fail "ARCHITECTURE.md tree does not name scripts/$n"
 done
 
+# anchors_of <file> — the anchors of its headings outside ``` fences, as GitHub makes them: lowercased,
+# everything but letters, digits, spaces, - and _ dropped, spaces turned into dashes
+anchors_of() {
+  LC_ALL=C awk '
+    /^```/ { inb = !inb; next }
+    inb { next }
+    /^#+ / { h = $0; sub(/^#+ /, "", h); h = tolower(h); gsub(/[^a-z0-9 _-]/, "", h); gsub(/ /, "-", h); print h }
+  ' "$1"
+}
+# check_anchors <doc> — every ](path.md#anchor) and ](#anchor) link in <doc> names a heading of its target;
+# a web link is not checked
+check_anchors() {
+  local l target anchor file
+  while IFS= read -r l; do
+    l="${l#](}"; l="${l%)}"
+    target="${l%%#*}"; anchor="${l#*#}"
+    case "$target" in
+      http://*|https://*) continue ;;
+      '') file="$1" ;;
+      *) file="$(dirname "$1")/$target" ;;
+    esac
+    if [ ! -f "$file" ]; then fail "${1#"$ROOT"/} links $l: no such file"
+    elif anchors_of "$file" | grep -qxF -- "$anchor"; then pass
+    else fail "${1#"$ROOT"/} links $l, but ${target:-it} has no heading for #$anchor"
+    fi
+  done < <(LC_ALL=C grep -oE '\]\([^)[:space:]]*#[^)[:space:]]+\)' "$1")
+}
+for doc in $docs; do check_anchors "$ROOT/$doc"; done
+# the README's Claude Code install section points at the deny rules: the host is the boundary, the hooks
+# only back it up (SECURITY.md, Recommended host settings)
+section() { awk -v h="$2" '$0 == h { s = 1; next } s && /^#{1,3} / { exit } s' "$1"; }
+section "$ROOT/README.md" '### Claude Code' | grep -qF 'SECURITY.md#recommended-host-settings' && pass \
+  || fail "README's Claude Code install section does not link SECURITY.md#recommended-host-settings"
+
 # the self-check: a made-up path is caught, a real one is not, placeholders are skipped
 new_sandbox
 # a moved heading leaves no tree to read: that must fail, not pass with nothing checked
@@ -126,4 +160,12 @@ assert_eq "$got" "docs/migration-0.3.md evals/gone/evals.json " "path extraction
 printf 'Run `scripts/ask-gpt.sh` (see skills/x/SKILL.md).\n' > "$SANDBOX/y.md"
 assert_eq "$(paths_in "$SANDBOX/y.md" "$PLUGIN_DIRS" | tr '\n' ' ')" "scripts/ask-gpt.sh skills/x/SKILL.md " "plugin-relative paths"
 assert_eq "$(paths_in "$SANDBOX/y.md" "$ROOT_DIRS")" "" "root docs ignore plugin-relative paths"
+# anchors: a heading inside a fence is none; a link to a missing anchor, or a missing file, fails
+printf '%s\n' '# Doc' '## Host settings' '### `new-project` and `task`' '```' '## Not a heading' '```' \
+  '[a](#host-settings) [b](#new-project-and-task) [c](other.md#there) [d](https://example.com/x.md#web)' > "$SANDBOX/a.md"
+printf '%s\n' '# Other' '## There' > "$SANDBOX/other.md"
+assert_eq "$(anchors_of "$SANDBOX/a.md" | tr '\n' ' ')" "doc host-settings new-project-and-task " "anchors of headings"
+( FAILS=0; check_anchors "$SANDBOX/a.md" >/dev/null; [ "$FAILS" -eq 0 ] ) && pass || fail "good anchor links fail"
+printf '%s\n' '[x](#host-setting) [y](other.md#here) [z](gone.md#there)' > "$SANDBOX/b.md"
+( FAILS=0; check_anchors "$SANDBOX/b.md" >/dev/null; [ "$FAILS" -eq 3 ] ) && pass || fail "a missing anchor or file passes the anchor check"
 finish
