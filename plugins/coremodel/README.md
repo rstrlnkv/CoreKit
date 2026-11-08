@@ -30,7 +30,7 @@ Update: `claude plugin marketplace update corekit`, `claude plugin update coremo
 | The pane | The footer button opens a pane with the mode, what the chat runs at, Model and Effort buttons and the session in one line |
 | Your menus stay put | The pick is put on the requests of this chat only; your model and effort settings are never written |
 | Account-aware | Reads the models your account can use and never picks one it lacks |
-| Languages | English and Russian, by the language of your prompt or by a setting |
+| Languages | English and Russian, by Claude Code's `language` setting or by coremodel's own |
 
 The two picks are independent: a polite email is Haiku at Low, a contract risk review is Opus at
 High, a whole app built alone is Fable at Extra high. Approvals such as "yes", "go on" or "да,
@@ -143,7 +143,7 @@ stops using that model for the session and says so in the pane (`/coremodel rech
 | Setting | Values | What it does |
 |---|---|---|
 | `mode` | `auto` (default), `suggest`, `off` | The mode; `/coremodel` wins over it |
-| `language` | `auto` (default), `en`, `ru` | The language of coremodel's words; `auto` follows your last prompt and keeps it across a reload |
+| `language` | `auto` (default), `en`, `ru` | The language of coremodel's words; `auto` follows Claude Code's `language` setting (`"language": "russian"` in settings.json gives Russian), anything else is English |
 | `classifier` | `sonnet` (default), `haiku` | The model that reads each prompt: Sonnet is more accurate, Haiku faster and cheaper |
 | `useHaiku`, `useSonnet`, `useOpus`, `useFable` | on (default) or off | **Allow …**: the models coremodel may pick; they narrow what your account lists, never add one. All off: the effort only |
 | `pickModel` | `on` (default), `off` | `off`: pick the effort only, never the model |

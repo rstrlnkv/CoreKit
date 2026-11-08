@@ -47,6 +47,7 @@ test('the applied line shows level, from and why, then goes after 15 s', { optio
 test('a Russian prompt gives the line in Russian', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   engineFooter(on)
+  w.hostLanguage = 'russian'
   await start($)
   await switchTo($, w, 'high', 'medium', 'почини авторизацию')
   const ui = await $.ui.mount({ ...ABOVE, surface: 'desktop' })
@@ -333,6 +334,7 @@ test('/coremodel panel with no surface says so in plain words', async ($, on) =>
   expect(text).not.toContain('no-surface')
   expect(text).not.toContain('$.')
   w.answer = '{"level":"keep","why":"x"}'
+  w.hostLanguage = 'russian'
   await submit($, 'почини авторизацию')
   expect(await run($, 'panel')).toBe(texts('ru').paneNoSurface)
 })
@@ -379,6 +381,7 @@ test('the pane shows the mode, what the chat runs at, and the session', { option
 test('the pane speaks Russian after a Russian prompt', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.row = null
+  w.hostLanguage = 'russian'
   await start($)
   await switchTo($, w, 'high', 'medium', 'почини авторизацию')
   expect(await has($, /^Этот чат$/)).toBe(true)
@@ -413,6 +416,7 @@ test('the pane captions are as wide as the longest English caption, plus one', {
 test('the pane captions are as wide as the longest Russian caption, plus one', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.row = null
+  w.hostLanguage = 'russian'
   await start($)
   await switchTo($, w, 'high', 'medium', 'почини авторизацию')
   const ui = await pane($)
@@ -500,7 +504,8 @@ test('off from the pane clears the band and its undo', { options: { mode: 'auto'
 })
 
 test('a fresh pane says when the chat shows what it runs at', async ($, on) => {
-  world(on)
+  const w = world(on)
+  w.hostLanguage = 'russian'
   await start($)
   await submit($, 'почини авторизацию')
   expect(await has($, /^появится после первого сообщения$/)).toBe(true)
@@ -660,7 +665,7 @@ test('/coremodel probe says so when the rows cannot be read', async ($, on) => {
   expect(w.logs.some(l => l.includes('no rows'))).toBe(true)
 })
 
-test('/coremodel names the model and the level, in the prompt language', { options: { mode: 'auto' } }, async ($, on) => {
+test('/coremodel names the model and the level, in the host language', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   engineFooter(on)
   w.row = null
@@ -671,6 +676,7 @@ test('/coremodel names the model and the level, in the prompt language', { optio
   expect(en).toContain('Opus · High')
   expect(en).toContain('set by CoreModel; your default: Sonnet · Medium')
   w.answer = '{"level":"high","model":"opus","why":"x"}'
+  w.hostLanguage = 'russian'
   await submit($, 'почини авторизацию')
   await step($, 'high', 1, undefined, 'claude-opus-5-5')
   const ru = await run($, '')
@@ -706,6 +712,7 @@ test('the switch line says when a stand-in replaced an unavailable model', { opt
   expect((await ui.find({ type: 'Text', text: /Opus · High \(was Sonnet · Medium\) · Fable is not available, Opus instead; whole app/ })) !== undefined).toBe(true)
   await ui.unmount()
   w.answer = '{"level":"high","model":"fable","why":"всё приложение"}'
+  w.hostLanguage = 'russian'
   await start($)
   await submit($, 'собери всё приложение')
   await step($, 'medium')
@@ -890,13 +897,14 @@ test('the unavailable note is the same when the model is switched on in the sett
   expect(await has($, /remove it from/)).toBe(false)
 })
 
-test('/coremodel recheck says what CoreModel may pick, in the prompt language', { options: { mode: 'auto' } }, async ($, on) => {
+test('/coremodel recheck says what CoreModel may pick, in the host language', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.row = null
   w.modelRow = ['default', 'sonnet', 'opus', 'haiku']
   await start($)
   expect(await run($, 'recheck')).toBe('Models CoreModel may pick: Haiku, Sonnet, Opus.')
   w.answer = '{"level":"keep","why":"x"}'
+  w.hostLanguage = 'russian'
   await submit($, 'почини авторизацию')
   await step($, 'medium')
   expect(await run($, 'recheck')).toBe('Модели, которые может выбрать CoreModel: Haiku, Sonnet, Opus.')
@@ -978,6 +986,7 @@ test('a pick the person kept is marked not applied in the pane', { options: { mo
 test('a not applied pick reads in Russian too', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.reply = 'Оставить «Среднее»'
+  w.hostLanguage = 'russian'
   await start($)
   await switchTo($, w, 'xhigh', 'medium', 'почини авторизацию')
   expect(await has($, /^Очень высокое · auth bug · не применён$/)).toBe(true)
@@ -1124,6 +1133,7 @@ test('the mode question and the kept count read in Russian', async ($, on) => {
   const w = world(on)
   w.row = null
   w.reply = 'Автоматически'
+  w.hostLanguage = 'russian'
   await start($)
   await switchTo($, w, 'keep', 'medium', 'почини авторизацию')
   const text = await run($, '')

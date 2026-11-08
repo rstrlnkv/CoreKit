@@ -28,11 +28,13 @@ export function decide(mode: Mode, now: Level | '', pick: Pick | null): Action {
 }
 
 /**
- * Russian when the text holds a Cyrillic word of three letters or more: a Russian prompt is often
- * mostly Latin code names, while an English one carries no Cyrillic at all.
+ * Claude Code's own `language` setting (free text: "russian", "Russian", "ru", "ru-RU", "русский")
+ * as a language of ours: Russian when it names Russian, English for any other or none. The text
+ * of a prompt never decides: Cyrillic letters are also Ukrainian, Bulgarian, Serbian or Kazakh.
  */
-export function uiLang(text: string): Lang {
-  return /[Ѐ-ӿ]{3,}/.test(text) ? 'ru' : 'en'
+export function hostLang(v: unknown): Lang {
+  if (typeof v !== 'string') return 'en'
+  return /^(ru|rus|russian|русский)([-_ .].*)?$/.test(v.trim().toLowerCase()) ? 'ru' : 'en'
 }
 
 /** What to do with the model part of a pick. */
@@ -81,7 +83,7 @@ export function effortOptions(pick: Level, now: Level | ''): Level[] {
 
 const LOCALES: Record<Lang, Strings> = { en, ru }
 
-/** The language of the words: the setting when it names one, else the language of the last prompt. */
+/** The plugin's own `language` setting when it names a language of ours; null for `auto` or anything else. */
 export function settingLang(v: unknown): Lang | null {
   return v === 'en' || v === 'ru' ? v : null
 }

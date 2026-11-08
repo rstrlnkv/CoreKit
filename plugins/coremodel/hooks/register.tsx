@@ -4,7 +4,7 @@ import type { EngineInterface, ModelCompleteResult, Register, RenderChildren } f
 import type { Band, Level, Mark, Stats } from '../types'
 import { buildPrompt, LEVELS, parseAnswer, type Pick, toLevel } from './classifier'
 import { detectModels, enabledModels, LADDER, MODELS, type ModelKey, requestModel, standIn, toModel } from './models'
-import { decide, decideModel, effortOptions, type Lang, type Mode, MODES, modelOptions, settingLang, texts, uiLang } from './policy'
+import { decide, decideModel, effortOptions, hostLang, type Lang, type Mode, MODES, modelOptions, settingLang, texts } from './policy'
 
 const PLUGIN = 'coremodel'
 const band = atom({ plugin: 'coremodel', key: 'band' } as const, null)
@@ -37,7 +37,7 @@ let held: { text: string; gen: number; lang: Lang; turn?: string } | null = null
 let hold: { level: Level; base: string } | null = null
 // The chosen model, held the same way; `base` is the request's own model when the hold began.
 let modelHold: { key: ModelKey; base: string } | null = null
-// The level the last main-chat request ran at, and the language of the last prompt.
+// The level the last main-chat request ran at.
 let seen: Level | '' = ''
 // The model the last main-chat request named (the person's own unless held).
 let seenModel = ''
@@ -48,6 +48,7 @@ const unavailable = new Set<ModelKey>()
 let listed: ModelKey[] | null = null
 // The menu's own effort as the last main-chat request carried it.
 let asked = ''
+// The language of the words, read at the session start and again on every prompt (see currentLang).
 let lastLang: Lang = 'en'
 // Where the session draws: VS Code draws neither the band nor the footer, so a switch is told in a toast.
 let surface = ''
@@ -582,13 +583,20 @@ const RULE = '─'.repeat(40)
 const captionWidth = (t: ReturnType<typeof texts>) =>
   Math.max(...[t.thisChat, t.model, t.effort, t.thisSession, t.lastPick].map(c => c.length)) + 1
 
-/** The language of a prompt: the setting when it names one, else the prompt's own, kept for a reload. */
-async function promptLang($: EngineInterface, options: { language?: unknown }, text: string): Promise<Lang> {
+/**
+ * The language of the words: the plugin's own setting when it names one, else Claude Code's
+ * `language` setting, else English. Never the text of a prompt. A host that cannot answer (an
+ * older Claude Code, unreadable settings) gets English and a debug line; the prompt goes on.
+ */
+async function currentLang($: EngineInterface, options: { language?: unknown }): Promise<Lang> {
   const fixed = settingLang(options.language)
   if (fixed) return fixed
-  const lang = uiLang(text)
-  if (lang !== lastLang) await $.store.set('lang', lang)
-  return lang
+  try {
+    return hostLang(await $.settings.read({ key: 'language' }))
+  } catch (err) {
+    await log($, 'language', err)
+    return 'en'
+  }
 }
 
 export const register: Register = (on, options) => {
@@ -606,7 +614,7 @@ export const register: Register = (on, options) => {
       return next(e)
     }
     gen += 1
-    lastLang = await promptLang($, options, text)
+    lastLang = await currentLang($, options)
     const mine = { text, gen, lang: lastLang, ...(e.turnId ? { turn: e.turnId } : {}) }
     held = mine
     const r = await next(e)
@@ -680,9 +688,8 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     surface = e.surface ?? ''
-    // The language: the setting, else the last prompt's, kept across a reload.
-    const stored = await $.store.get('lang')
-    lastLang = settingLang(options.language) ?? settingLang(stored) ?? 'en'
+    // The language: the plugin's setting, else the host's. A `lang` that 0.7.0 stored is left alone and unread.
+    lastLang = await currentLang($, options)
     unavailable.clear()
     await refreshListed($)
     // A new session, or a reload of this module, starts with no held level: drop what $.state kept.

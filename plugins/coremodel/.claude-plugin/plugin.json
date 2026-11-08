@@ -25,7 +25,7 @@
     "language": {
       "type": "string",
       "title": "Language",
-      "description": "The language of CoreModel's words: auto follows your last prompt (English or Russian), or pick one.",
+      "description": "The language of CoreModel's words: auto follows Claude Code's language setting (Russian for russian or ru, else English), or pick one.",
       "options": [
         "auto",
         "en",
