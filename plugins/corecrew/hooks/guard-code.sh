@@ -14,7 +14,9 @@
 #   Core and so passes), or <Core>/<p>/code/ in the old layout, or a worktree root <code root>/.claude/worktrees/<w>/ or any other linked git worktree of the code folder (worktree_of);
 #   inside a worktree the path relative to the worktree root is what counts.
 # - Blocked: docs and docs/** and .claude/** at the root, and CLAUDE.md / CLAUDE.local.md / AGENTS.md at
-#   ANY depth (the same as scripts/git-hooks/blocked-patterns, so the hook and the commit check agree).
+#   ANY depth. The pre-commit hook (scripts/git-hooks/blocked-patterns) is narrower: it blocks only docs/superpowers/,
+#   CLAUDE*.md, AGENTS.md, .claude/, .env* and key files, so a docs/x.md that got past this hook (a Bash form it does
+#   not read) can still be committed by hand; tests/test_hooks.sh lets docs/README.md through on purpose.
 # - Allowed: .claude/settings.local.json, .claude/worktrees/** (the worktree dirs themselves: mkdir, an
 #   existing directory or a trailing slash; a file written directly under .claude/worktrees/ is blocked), and the
 #   paths on a "public-docs: <paths>" line of <Core>/<p>/CLAUDE.md (space or comma separated, relative
