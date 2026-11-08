@@ -479,7 +479,12 @@ sec_new_layout() {
   run_file Write "$N/.claude/settings.local.json" "$N"; ok "new: settings.local.json"
   run_file Write "$N/src/a.sh" "$N"; ok "new: src/a.sh"
   run_file Edit "$N/CLAUDE.local.md" "$N"; ok "new: Edit through the CLAUDE.local.md symlink"
-  run_file Write "$(printf '%s' "$N" | tr 'F' 'f')/docs/x.md" "$N"; assert_eq "$RC" "2" "new: other letter case"
+  # the code folder in another letter case is the same folder only on a case-insensitive volume (macOS)
+  if [ -d "$(printf '%s' "$N" | tr 'F' 'f')" ]; then
+    run_file Write "$(printf '%s' "$N" | tr 'F' 'f')/docs/x.md" "$N"; assert_eq "$RC" "2" "new: other letter case"
+  else
+    skip "new layout letter case" "case-sensitive volume"; pass
+  fi
   run_file Write "$PR/Brain/CLAUDE.md" "$PR/Brain"; ok "new: a folder that is not a project"
   run_bash 'echo x > docs/a.md' "$N"; assert_eq "$RC" "2" "new: Bash echo x > docs/a.md"
   run_bash 'echo x > src/a.md' "$N"; ok "new: Bash src/a.md"
