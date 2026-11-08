@@ -9,6 +9,15 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+### Changed
+
+- The code guard follows a Bash command that starts with `cd <absolute folder> &&` (or `;`): the
+  relative targets after it are judged against that folder, so `cd /…/code && printf x > docs/y.md`
+  is refused. Any other `cd`, `pushd` or `popd` stays a documented limit.
+- The plugin's data folder (the tools copy and the state markers) follows the marketplace the plugin
+  was installed from, `corecrew-<marketplace>`, when the host names no data folder; before, it was
+  always `corecrew-corekit`.
+
 ## [0.10.0] - 2026-11-09
 
 ### Changed
