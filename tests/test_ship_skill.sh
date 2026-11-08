@@ -75,9 +75,9 @@ case "$rp" in *ship*) pass ;; *) fail "release.md Release path defers the versio
 # checks on that commit; only green goes on to the fast-forward merge and the push of <main>, then the tag.
 # A red or cancelled run stops ship with the failed jobs and merges nothing; without gh, or not on GitHub,
 # ship asks the user to confirm the merge. The remote branch is never deleted by ship.
-ln() { printf '%s\n' "$steps" | grep -n -- "$1" | head -1 | cut -d: -f1; }
-ng="$(ln 'Wait for the user')"; nb="$(ln 'git push origin <branch>')"; nw="$(ln 'gh run ')"
-nm="$(ln 'ff-only')"; np="$(ln 'git push origin <main>')"; nt="$(ln 'git tag -a')"
+line_of() { printf '%s\n' "$steps" | grep -n -- "$1" | head -1 | cut -d: -f1; }
+ng="$(line_of 'Wait for the user')"; nb="$(line_of 'git push origin <branch>')"; nw="$(line_of 'gh run ')"
+nm="$(line_of 'ff-only')"; np="$(line_of 'git push origin <main>')"; nt="$(line_of 'git tag -a')"
 [ -n "$ng" ] && [ -n "$nb" ] && [ -n "$nw" ] && [ -n "$nm" ] && [ -n "$np" ] && [ -n "$nt" ] &&
   [ "$ne" -lt "$ng" ] && [ "$ng" -lt "$nb" ] && [ "$nb" -lt "$nw" ] && [ "$nw" -lt "$nm" ] && [ "$nm" -lt "$np" ] && [ "$np" -lt "$nt" ] && pass ||
   fail "release commit, go-ahead, git push origin <branch>, gh run wait, ff-only merge, git push origin <main>, tag (lines $ne $ng $nb $nw $nm $np $nt)"
