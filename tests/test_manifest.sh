@@ -48,7 +48,7 @@ assert_contains "$ROOT/README.md" '/plugin install corecrew@corekit'
 assert_not_contains "$ROOT/README.md" '/corekit:'
 assert_not_contains "$ROOT/README.md" 'corekit@corekit'
 assert_eq "$(grep -m1 '^## ' "$ROOT/CHANGELOG.md" | cut -c1-9)" '## 0.8.0 ' "CHANGELOG first entry"
-assert_contains "$ROOT/CHANGELOG.md" '## 0.8.0 — 2026-11-06'
+assert_contains "$ROOT/CHANGELOG.md" '## 0.8.0 — 2026-11-08'
 assert_contains "$ROOT/CHANGELOG.md" '## 0.7.0 — 2026-11-06'
 assert_contains "$ROOT/CHANGELOG.md" '## 0.6.5 — 2026-11-05'
 assert_contains "$ROOT/CHANGELOG.md" '## 0.5.0 — 2026-11-04'

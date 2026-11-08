@@ -2,7 +2,13 @@
 
 Every entry starts with a badge: **NEW** is a new capability, **FIX** is a defect fixed, **UPD** is a change to existing behaviour, documentation or internal work.
 
-## 0.8.0 — 2026-11-06
+## 0.8.0 — 2026-11-08
+Codex support. `corecrew` and `coremodel` (0.6.0) install and run in the Codex CLI (`codex plugin marketplace add rstrlnkv/CoreKit`,
+`codex plugin add corecrew@corekit`; steps in the README, section Codex): a Codex manifest, skills that find their own folder,
+guards for `apply_patch`, a settings file instead of the options screen, the task chain with Codex subagents, an optional
+secrets sandbox profile. `coreopinion` stays Claude Code only. Upgrading in Claude Code: nothing to do; your plugin options still win
+over the new settings file. Behaviour changes to know: the guards now also refuse a Bash command that runs `apply_patch` (see below); a wrong `attribution` or `model_profile`, or a relative `core_dir` (such as `Core`, which used to become `<current folder>/Core`), is now ignored with a warning at session start; and with an empty or relative `HOME` there is no default Core.
+In Codex, re-trust the hooks in `/hooks` after an update.
 - **NEW** Git worktrees are found wherever they live (Codex keeps them outside `<Projects>`): `lib.sh worktree_of` reads the
   `.git` file of the worktree (`gitdir: <main>/.git/worktrees/<name>`, the main `.git` folder must exist; no git process), and
   `project_of` falls back to it, so `guard-code`, `guard-secrets`, `one-suite` and `stop-remind` are active in such a worktree.

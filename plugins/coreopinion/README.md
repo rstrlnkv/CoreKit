@@ -1,6 +1,6 @@
 # coreopinion
 
-A Claude Code plugin that asks OpenAI's GPT, through the Codex CLI, for a second opinion or a review, and shows it next to Claude's own assessment.
+A Claude Code plugin (Claude Code only: it is not supported in Codex) that asks OpenAI's GPT, through the Codex CLI, for a second opinion or a review, and shows it next to Claude's own assessment.
 
 ![platform](https://img.shields.io/badge/platform-Claude%20Code%202.1.271%2B-lightgrey) ![release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcoreopinion%2F.claude-plugin%2Fplugin.json&query=%24.version&label=release) ![licence](https://img.shields.io/github/license/rstrlnkv/CoreKit)
 
@@ -11,7 +11,9 @@ A Claude Code plugin that asks OpenAI's GPT, through the Codex CLI, for a second
 /plugin install coreopinion@corekit
 ```
 
-It is in the `corekit` marketplace and does not depend on `corecrew` or `coremodel`. Update:
+It is in the `corekit` marketplace and does not depend on `corecrew` or `coremodel`. Codex: not supported. The plugin calls the Codex CLI from Claude Code; it has no Codex manifest, and `codex plugin add coreopinion@corekit` would install it, but its skill is not meant to run inside Codex.
+
+Update:
 `claude plugin marketplace update corekit`, `claude plugin update coreopinion@corekit`, then restart Claude Code.
 
 ## Features

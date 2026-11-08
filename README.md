@@ -1,6 +1,6 @@
 # CoreKit
 
-A marketplace of Claude Code plugins: `corecrew` runs every project the same way, `coremodel` picks the model and effort per prompt, `coreopinion` asks GPT for a second opinion.
+A marketplace of plugins for Claude Code (and, for `corecrew` and `coremodel`, Codex): `corecrew` runs every project the same way, `coremodel` picks the model and effort per prompt, `coreopinion` asks GPT for a second opinion.
 
 ![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows%20Git%20Bash-lightgrey) ![corecrew](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcorecrew%2F.claude-plugin%2Fplugin.json&query=%24.version&label=corecrew) ![coremodel](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcoremodel%2F.claude-plugin%2Fplugin.json&query=%24.version&label=coremodel) ![coreopinion](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcoreopinion%2F.claude-plugin%2Fplugin.json&query=%24.version&label=coreopinion) ![licence](https://img.shields.io/github/license/rstrlnkv/CoreKit)
 
@@ -76,13 +76,34 @@ The two smaller plugins install on their own and do not need `corecrew`:
 ```
 Run them after `/plugin marketplace add rstrlnkv/CoreKit` (above). Details are in [plugins/coremodel/README.md](plugins/coremodel/README.md) and [plugins/coreopinion/README.md](plugins/coreopinion/README.md).
 
+## Codex
+
+`corecrew` and `coremodel` also run in the Codex CLI (checked with codex 0.166). You need Codex, git and `gh` (logged in); `feature-dev` is not used there.
+```
+codex plugin marketplace add rstrlnkv/CoreKit
+codex plugin add corecrew@corekit
+codex plugin add coremodel@corekit
+```
+Then:
+- **Trust the hooks.** Start `codex`, open `/hooks`, review and enable the `corecrew` (and `coremodel`) hooks. Until you do, the guards do not run.
+- **Settings are a file.** Codex has no options screen: write `key: value` lines (`core_dir`, `attribution`, `model_profile`, `ui_language`, `coremodel_mode`) into `~/.config/corecrew/settings`, or into the file named by `CORECREW_CONFIG`.
+- **Give Codex your Core.** Codex writes only in the working folder and `--add-dir` folders, so start it as `codex --add-dir "<Core>"` (`~/Projects/Core` by default). `/corecrew:task` checks this and tells you if it is missing.
+- **Run the skills by name.** `new-project` can be picked by Codex itself. `task`, `ship` and `new-standard` are never picked implicitly (`allow_implicit_invocation: false`): name them in your prompt (`$corecrew:task <task>`, `$corecrew:ship`, `$corecrew:new-standard`) or pick them from the skill list. The `$corecrew:task` spelling is still to be confirmed in a live Codex session. `/corecrew:...` is the Claude Code spelling.
+- **Optional, secrets profile.** The guards for `.env` and `~/.ssh` are a seat belt. For a sandbox that also denies reading them, run `bash <plugin folder>/scripts/lib.sh codex-profile` and paste what it prints into `~/.codex/config.toml` (corecrew never writes that file). It is a default, not a hard boundary: `--sandbox`, `--full-auto` or `-c sandbox_mode=...` switch it off.
+
+What differs from Claude Code:
+- The crew roles (engineer, tester, ...) are plain role files that `/corecrew:task` hands to Codex subagents as text, with the model and effort from the `model_profile` setting.
+- Codex subagents cannot be made read-only, so the read-only steps (security, verifier, localizer, designer) are checked, not enforced: the chain compares `git status` before and after and stops on a change.
+- `coremodel` gives a hint only: it tells you which model to switch to with `/model`; Codex hooks cannot switch it. Each prompt is sent a second time to OpenAI (`gpt-6-luna`) for this; set `coremodel_mode: off` to stop it.
+- `coreopinion` is Claude Code only (below).
+
 ## Features
 
 | Feature | What it does |
 |---|---|
 | `corecrew` | Starts a project from an interview, runs tasks with a crew of agents, releases, and keeps your standards and lessons in one private repo of your own (the Core) |
 | `coremodel` | Before Claude starts on a prompt, picks the model (Haiku, Sonnet, Opus, Fable) and the effort level the work needs; asks before Fable, Extra high and Max. In Codex it only hints which model to switch to with `/model`. Details: [plugins/coremodel/README.md](plugins/coremodel/README.md) |
-| `coreopinion` | Asks OpenAI's GPT, through the Codex CLI with a narrow read-only permission profile, for a second opinion or a review (`/coreopinion:second-opinion`). Only Claude edits, after your yes. Details: [plugins/coreopinion/README.md](plugins/coreopinion/README.md) |
+| `coreopinion` | Claude Code only (not supported in Codex). Asks OpenAI's GPT, through the Codex CLI with a narrow read-only permission profile, for a second opinion or a review (`/coreopinion:second-opinion`). Only Claude edits, after your yes. Details: [plugins/coreopinion/README.md](plugins/coreopinion/README.md) |
 
 ### Commands (corecrew)
 
@@ -184,7 +205,7 @@ Outside a Core project there are two exceptions: the session-start hook refreshe
 - **OS:** macOS (Apple silicon and Intel) and Linux. Windows needs [Git for Windows](https://git-scm.com/download/win) (the hooks run in Git Bash) and is not fully supported yet. The scripts are portable bash (macOS bash 3.2).
 - **Claude Code** 2.1.271 or later for `corecrew` and `coreopinion` (the plugin settings with a list of choices, `userConfig` with `options`, need it; an older client cannot load them). `coremodel` needs 2.1.287 or later (its hooks run as a module).
 - **git** and the **GitHub CLI** (`gh auth login`) for `corecrew`. `feature-dev@claude-plugins-official` is used by `/corecrew:task` but is not a hard dependency.
-- **The Codex CLI**, signed in with a ChatGPT plan (Plus or higher), for `coreopinion` only; see [plugins/coreopinion/README.md](plugins/coreopinion/README.md#requirements).
+- **The Codex CLI**, to run `corecrew` and `coremodel` in Codex (see [Codex](#codex)); for `coreopinion` (Claude Code) it must also be signed in with a ChatGPT plan (Plus or higher); see [plugins/coreopinion/README.md](plugins/coreopinion/README.md#requirements).
 
 ### Network
 
