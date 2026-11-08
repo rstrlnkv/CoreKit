@@ -11,9 +11,11 @@ const band = atom({ plugin: 'coremodel', key: 'band' } as const, null)
 const override = atom({ plugin: 'coremodel', key: 'override' } as const, null)
 const marks = atom({ plugin: 'coremodel', key: 'marks' } as const, {})
 const stats = atom({ plugin: 'coremodel', key: 'stats' } as const, null)
+const failure = atom({ plugin: 'coremodel', key: 'failure' } as const, null)
 const NO_STATS: Stats = { picks: { low: 0, medium: 0, high: 0, xhigh: 0, max: 0 }, kept: 0, last: null, marks: 0, models: { haiku: 0, sonnet: 0, opus: 0, fable: 0 } }
 const MODES: readonly Mode[] = ['suggest', 'auto', 'off']
-const LOG_KEEP = 20_000
+// Classifier failures in a row before the person is told: one is often a passing API hiccup.
+const FAIL_SHOW = 2
 const BAND_MS = 15_000
 // The classifier answers in about 2 s; the whole pick waits CLASSIFY_MS at most, and a second
 // call starts when the first has not answered in HEDGE_MS.
@@ -64,14 +66,31 @@ function allowedModels(options: Readonly<Record<string, unknown>>): ModelKey[] {
   return enabledModels(options).filter(k => (listed === null || listed.includes(k)) && !unavailable.has(k))
 }
 
+/** A line in Claude Code's debug log (`claude --debug`); never in the transcript, never a file. */
 async function log($: EngineInterface, what: string, err: unknown) {
   try {
-    const path = `${(await $.env.get('HOME')) ?? ''}/.claude/mods-logs/${PLUGIN}.log`
-    const old = (await $.fs.exists(path)) ? String(await $.fs.read(path)) : ''
-    const msg = err instanceof Error ? err.message : String(err)
-    await $.fs.write(path, `${old.slice(-LOG_KEEP)}${new Date(await $.clock.now()).toISOString()} ${what}: ${msg}\n`)
+    $.ui.log(`${PLUGIN}: ${what}: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
   } catch {
     // Nowhere left to report it.
+  }
+}
+
+/** An Esc on the turn cut the classifier: the person stopped it, nothing is broken. */
+class Cut extends Error {}
+
+/** One more classifier failure in a row; the second one is told once, in a toast. */
+async function failed($: EngineInterface, lang: Lang, reason: string): Promise<void> {
+  let inRow = 0
+  await update($, failure, cur => {
+    inRow = (cur?.count ?? 0) + 1
+    return { count: inRow, reason }
+  })
+  if (inRow === FAIL_SHOW) {
+    try {
+      $.ui.toast(texts(lang).classifierDown(reason))
+    } catch {
+      // The pane still says it.
+    }
   }
 }
 
@@ -236,7 +255,9 @@ async function classify($: EngineInterface, text: string, now: Level | '', model
     // An Esc on the turn cuts both calls too, sooner: only the full wait is a timeout.
     const waited = (await $.clock.now()) - began
     if (tried && r.reason === 'aborted' && waited >= CLASSIFY_MS) throw new Error(`classifier timed out after ${CLASSIFY_MS / 1000} s (two tries)`)
-    throw new Error(`classifier gave no answer: ${r.reason}`)
+    if (r.reason === 'aborted') throw new Cut('classifier gave no answer: aborted')
+    const status = 'status' in r && r.status ? ` ${r.status}` : ''
+    throw new Error(`classifier gave no answer: ${r.reason}${status}`)
   }
   const pick = parseAnswer(r.text)
   if (!pick) throw new Error(`classifier answer not readable: ${r.text.slice(0, 200)}`)
@@ -274,6 +295,7 @@ async function runPick(
     pick = await classify($, h.text, now, options.classifier === 'haiku' ? 'haiku' : 'sonnet')
   } catch (err) {
     await log($, 'classify', err)
+    if (!(err instanceof Cut)) await failed($, h.lang, err instanceof Error ? err.message : String(err))
     return
   } finally {
     try {
@@ -282,6 +304,7 @@ async function runPick(
       // Nothing to clear.
     }
   }
+  if (await read($, failure)) await update($, failure, () => null)
   // The person may have turned the plugin off while the classifier ran.
   const stale = async () => h.gen !== gen || touched !== began || (await currentMode($, options)) === 'off'
   if (await stale()) return
@@ -672,6 +695,7 @@ export const register: Register = (on, options) => {
     const held = pair?.level ?? null
     const heldModel = pair?.model ?? null
     const s = await read($, stats)
+    const fault = await read($, failure)
     const allowed = allowedModels(options)
     // pickModel off: effort only (spec §6).
     const pickOn = options.pickModel !== 'off'
@@ -697,6 +721,7 @@ export const register: Register = (on, options) => {
           <Text bold>{t.nowPair(pickOn ? nowModel : '', nowLevel)}</Text>
           {held || heldModel ? <Text dimColor>{menu ? `${t.heldBy} · ${menu}` : t.heldBy}</Text> : null}
 
+          {fault && fault.count >= FAIL_SHOW ? <Text key="fault" color="warning">{t.classifierDown(fault.reason)}</Text> : null}
           {[...unavailable].map(m => (
             <Text key={`unavailable-${m}`} color="warning">{t.unavailable(m)}</Text>
           ))}

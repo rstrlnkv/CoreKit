@@ -49,6 +49,8 @@ declare module 'claude-code' {
       marks: Record<string, Mark>
       /** Null until something is counted. */
       stats: Stats | null
+      /** Classifier calls that failed in a row, and the last reason; null once a pick works. */
+      failure: { count: number; reason: string } | null
     }
   }
 }

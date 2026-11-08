@@ -2,6 +2,8 @@ import { expect, test } from 'claude-code/testing'
 
 import { type Eng, row, start, step, submit, world, type World } from './world'
 
+const HIGH = '{"level":"high","why":"auth bug"}'
+
 test('skips slash commands, empty prompts and non-composer origins', async ($, on) => {
   const w = world(on)
   await start($)
@@ -174,14 +176,72 @@ test('classifier error and timeout leave the level and write a log line', async 
   expect(w.asked.length).toBe(0)
   // A test hook that throws is skipped by the engine, so the plugin sees a failed call, not 'boom'.
   expect(w.logs.length).toBe(3)
-  expect(w.logs.every(l => l.startsWith('/fake-home/.claude/mods-logs/coremodel.log\n'))).toBe(true)
+  // The debug log only (claude --debug): no file is written, nothing reaches the transcript.
+  expect(w.logSinks).toEqual(['debug', 'debug', 'debug'])
+  expect(w.logs.every(l => l.startsWith('coremodel: classify: '))).toBe(true)
+  expect(w.written).toEqual([])
   expect(w.logs[1]!.includes('api-error')).toBe(true)
   expect(w.logs[2]!.includes('not readable')).toBe(true)
 })
 
+// A classifier that keeps failing is said once, not left to look like a quiet plugin.
+async function failOnce($: Eng, w: World, text = 'fix the login') {
+  w.answers = [{ fail: true }, { fail: true }]
+  await submit($, text)
+  await step($, 'medium')
+}
+
+test('one failure says nothing; the second in a row raises one toast', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await failOnce($, w)
+  expect(w.toasts).toEqual([])
+  await failOnce($, w)
+  expect(w.toasts.length).toBe(1)
+  expect(w.toasts[0]).toContain('api-error')
+  expect(w.toasts[0]).toContain('unchanged')
+  await failOnce($, w)
+  expect(w.toasts.length).toBe(1)
+})
+
+test('a pick that works clears the failures; two more raise the toast again', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await failOnce($, w)
+  await failOnce($, w)
+  w.answers = [HIGH]
+  await submit($, 'fix the login')
+  await step($, 'medium')
+  await failOnce($, w)
+  expect(w.toasts.length).toBe(1)
+  await failOnce($, w)
+  expect(w.toasts.length).toBe(2)
+})
+
+test('the failure toast speaks the language of the prompt', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await failOnce($, w, 'почини авторизацию')
+  await failOnce($, w, 'почини авторизацию')
+  expect(w.toasts[0]).toContain('CoreModel')
+  expect(w.toasts[0]).toContain('без изменений')
+})
+
+test('an Esc on the turn is not a classifier failure', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  for (let i = 0; i < 3; i += 1) {
+    w.answers = [{ after: 1_000, cut: true }]
+    await submit($, 'fix the login')
+    const s = step($, 'medium')
+    await w.clock.advance(1_000)
+    await s
+  }
+  expect(w.toasts).toEqual([])
+})
+
 // A classifier call sometimes hangs (seen live on a chat's first prompt, beside the title request):
 // a second call starts after 3 s, the first answer of the two is used, and the wait is 8 s at most.
-const HIGH = '{"level":"high","why":"auth bug"}'
 
 test('a quick classifier answer makes one call only', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)

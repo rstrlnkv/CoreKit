@@ -37,7 +37,12 @@ export type World = {
   prompts: string[]
   asked: string[][]
   set: unknown[]
+  /** Lines given to $.ui.log, and where each went (`debug` or `transcript`). */
   logs: string[]
+  logSinks: string[]
+  toasts: string[]
+  /** Paths written with $.fs.write: the plugin writes no files. */
+  written: string[]
   efforts: (string | number | undefined)[]
   placed: string[]
   opened: unknown[]
@@ -79,6 +84,9 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     asked: [],
     set: [],
     logs: [],
+    logSinks: [],
+    toasts: [],
+    written: [],
     efforts: [],
     placed: [],
     opened: [],
@@ -89,9 +97,17 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('prompt.submit', (_, e) => (w.drop ? { drop: w.drop } : { text: e.text, origin: e.origin }))
   on('turn.complete', () => ({ text: '' }))
-  mock.env(on, { HOME: '/fake-home' })
   on('command.register', (_, e) => ({ value: { command: e.name } }) as never)
   on('ui.status', () => ({ value: undefined }) as never)
+  on('ui.log', (_, e) => {
+    w.logs.push(e.text)
+    w.logSinks.push(e.to)
+    return { value: undefined } as never
+  })
+  on('ui.toast', (_, e) => {
+    w.toasts.push(e.text)
+    return { value: undefined } as never
+  })
   on('ui.place', (_, e) => {
     w.placed.push((e as { id: string }).id)
     return { value: { isPlaced: true } } as never
@@ -108,10 +124,8 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
   })
   on('ui.invalidate', () => ({ value: undefined }) as never)
   on('session.messages', () => ({ value: w.lastReply ? [{ role: 'assistant', text: w.lastReply, toolUses: [] }] : [] }) as never)
-  on('fs.exists', () => ({ value: false }) as never)
-  on('fs.read', () => ({ value: '' }) as never)
   on('fs.write', (_, e) => {
-    w.logs.push(`${e.path}\n${e.text}`)
+    w.written.push(e.path)
     return { value: undefined } as never
   })
   on('classic.StopFailure', () => ({}) as never)

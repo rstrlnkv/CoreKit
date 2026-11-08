@@ -213,6 +213,10 @@ export function texts(lang: Lang) {
       if (usable) return head
       return head + (ru ? ' Список моделей аккаунта прочитать не удалось, поэтому ничего не отфильтровано.' : " The account's model list could not be used, so nothing was filtered.")
     },
+    classifierDown: (reason: string) =>
+      ru
+        ? `CoreModel не может получить ответ классификатора (${reason}). Запросы идут без изменений. Подробности: claude --debug.`
+        : `CoreModel cannot get an answer from its classifier (${reason}). Your prompts run unchanged. Details: claude --debug.`,
     checking: ru ? 'подбираю модель и усилие…' : 'checking model and effort…',
     checkingEffort: ru ? 'подбираю усилие…' : 'checking effort…',
   }

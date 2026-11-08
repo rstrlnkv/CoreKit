@@ -1161,3 +1161,19 @@ test('/coremodel recheck says when every model is switched off in the settings',
   await start($)
   expect(await run($, 'recheck')).toContain('switched off in the settings')
 })
+
+test('the pane names a classifier that keeps failing, and drops the line once a pick works', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.row = null
+  await start($)
+  for (let i = 0; i < 2; i += 1) {
+    w.answers = [{ fail: true }, { fail: true }]
+    await submit($, 'fix the login')
+    await step($, 'medium')
+  }
+  expect(await has($, /classifier.*api-error.*unchanged/)).toBe(true)
+  w.answers = ['{"level":"high","why":"auth bug"}']
+  await submit($, 'fix the login')
+  await step($, 'medium')
+  expect(await has($, /classifier/)).toBe(false)
+})
