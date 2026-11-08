@@ -23,8 +23,15 @@ jobs:
         os: [macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    env:
+      CLAUDE_VERSION: 2.1.319   # the claude CLI the suite runs with; bump on purpose
+      DISABLE_AUTOUPDATER: 1
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 1
     steps:
       - uses: actions/checkout@v4
+      # before the macOS bash 3.2 step: the installer runs under the runner's own shell. Node is on both runners.
+      - name: Install the claude CLI
+        run: npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}"
       # macOS: the system bash 3.2 at /bin/bash, not a newer one from Homebrew, runs the suite and every script it starts
       - name: Use the system bash 3.2 (macOS)
         if: runner.os == 'macOS'
@@ -36,9 +43,16 @@ jobs:
         run: |
           bash --version | head -n 1
           git --version
-          command -v claude codex || echo "no claude or codex: those parts are skipped"
+          command -v claude
+          command -v codex || echo "no codex: those parts are skipped"
       - name: Run the suite
-        run: bash tests/run.sh
+        # a SKIP for lack of claude is a failure here: the step above installed it
+        shell: bash
+        run: |
+          bash tests/run.sh 2>&1 | tee "$RUNNER_TEMP/suite.out"
+          if grep -F 'claude not on PATH' "$RUNNER_TEMP/suite.out"; then
+            echo '::error::the claude CLI is installed, yet tests skipped for lack of it'; exit 1
+          fi
 
   shellcheck:
     runs-on: ubuntu-latest

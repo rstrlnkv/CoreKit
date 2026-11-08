@@ -22,4 +22,19 @@ case "$cc" in *'cancel-in-progress:'*"!= 'refs/heads/main'"*) pass ;; *) fail "c
 # The matrix line stays on one line: a docs check parses it.
 grep -qF 'os: [macos-latest, ubuntu-latest]' "$WF" && pass || fail "the os matrix on one line"
 
+# The suite job installs the claude CLI (pinned, through npm: node is on both runners) before the macOS step
+# that puts bash 3.2 first, so the tests that need claude run in CI instead of skipping. Its suite step fails
+# when the log still says the tests skipped for lack of claude.
+suite="$(job "$WF" suite)"
+ni="$(printf '%s\n' "$suite" | grep -nE 'npm install -g "?@anthropic-ai/claude-code@' | head -1 | cut -d: -f1)"
+nb="$(printf '%s\n' "$suite" | grep -nF 'Use the system bash 3.2' | head -1 | cut -d: -f1)"
+nr="$(printf '%s\n' "$suite" | grep -nF 'Run the suite' | head -1 | cut -d: -f1)"
+[ -n "$ni" ] && pass || fail "the suite job installs @anthropic-ai/claude-code with npm"
+[ -n "$ni" ] && [ -n "$nb" ] && [ "$ni" -lt "$nb" ] && pass || fail "the install step comes before the bash 3.2 step (lines $ni $nb)"
+[ -n "$ni" ] && [ -n "$nr" ] && [ "$ni" -lt "$nr" ] && pass || fail "the install step comes before the suite run (lines $ni $nr)"
+case "$suite" in *'CLAUDE_VERSION:'*) pass ;; *) fail "the claude version is pinned in env (CLAUDE_VERSION)" ;; esac
+for v in DISABLE_AUTOUPDATER CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC; do case "$suite" in *"$v: 1"*) pass ;; *) fail "$v: 1 in the suite env" ;; esac; done
+run="$(printf '%s\n' "$suite" | awk '/Run the suite/{f=1} f')"
+case "$run" in *'claude not on PATH'*) pass ;; *) fail "the suite step fails on a claude skip (grep for: claude not on PATH)" ;; esac
+
 finish

@@ -8,9 +8,11 @@ a release is made. [ARCHITECTURE.md](ARCHITECTURE.md) explains how the repo is l
 - macOS or Linux with `bash`, `git` and the usual command-line tools. The tests run on macOS;
   Linux is expected to work.
 - Optional: the `claude` CLI and the `codex` CLI. Without them, the tests that need them print a
-  `SKIP` line and the run names them after `ALL TESTS PASSED`:
+  `SKIP` line and the run names them after `ALL TESTS PASSED`. CI installs `claude` (the version is
+  pinned in `.github/workflows/tests.yml`), so there those parts run, and a `SKIP` for lack of it
+  fails the suite:
   - without `claude`: the coremodel module tests (`tests/test_coremodel.sh`) and the
-    `claude plugin validate` checks of coreopinion;
+    `claude plugin validate` checks (`tests/test_plugin_validate.sh`, and coreopinion's own);
   - without `codex`: the checks against the real Codex CLI (patch parsing, the sandbox profiles,
     plugin install, parts of the boundary and plugin-root tests).
 - `python3` and `sips` (macOS) are used by a few checks when present (JSON syntax, icon size); the
