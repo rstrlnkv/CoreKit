@@ -18,7 +18,11 @@ this chain's work. `<files>` for the wiki check, run in the code root (code-rela
 **Release path, before postcondition 1:** engineer writes the version (`<version>` from
 `/corecrew:task release <version>`) and the changelog entry, following
 a versioning standard in `<Core>/standards/` (any standard whose `applies-to` names `release`). None
-found → ask the user first, then brief engineer with the answer.
+found → ask the user first, then brief engineer with the answer. Offer Keep a Changelog 1.1.0 as
+the default form when the project has none: the lines under `## [Unreleased]` move under a new
+`## [<version>] - YYYY-MM-DD` heading, grouped as Added, Changed, Deprecated, Removed, Fixed and
+Security (only the groups that have lines), and an empty `## [Unreleased]` stays on top. An empty
+`[Unreleased]`: engineer writes the lines from `git log` since the last release.
 
 1. **Tests.** Chains with a tester: show the result of the final tester `check:` run (rule 7
    in SKILL.md); do not run the suite again. Release path (no tester): run the `check:`
@@ -31,7 +35,7 @@ found → ask the user first, then brief engineer with the answer.
 3. **Wiki.** `bash "<scripts>/wiki-index.sh" "<Core>/<project>"` (regenerates `docs/INDEX.md`; its
    result is committed with the chain), then `bash "<scripts>/wiki-check.sh" "<Core>/<project>" --changed <files> <pages>`.
    Silent exit 0 → ✓. A wiki the plugin still refuses (`no page has a type`: the 0.6 format) is ✗
-   with "migrate at Start" (Start step 6 offers `wiki-migrate.sh`). A wiki-check line that is also
+   with "migrate at Start" (Start, **Wiki** offers `wiki-migrate.sh`). A wiki-check line that is also
    in the Start baseline is a pre-existing problem: list it under `Open` as a warning; the release
    goes on. Only new lines are ✗. For them decide by the Core's schema:
    `CORE_DIR="<Core>" bash "<scripts>/lib.sh" get schema` against

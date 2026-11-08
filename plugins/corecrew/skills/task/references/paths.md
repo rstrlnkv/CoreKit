@@ -11,7 +11,7 @@ so the next chain does not ask.
 ## fix
 A defect in a known place.
 1. `feature-dev:code-architect` only if more than one module is affected (needs feature-dev;
-   see SKILL.md Start step 3). Otherwise skip.
+   see SKILL.md Start, **feature-dev**). Otherwise skip.
 2. tester: write a test that reproduces the defect and show it red (the failing output). Where
    no test can catch it (a screen, a recording), a screenshot or recording of the defect.
    A test that does not fail on the defect goes back.

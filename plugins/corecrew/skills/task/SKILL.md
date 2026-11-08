@@ -107,7 +107,7 @@ attribution value resolved at Start" instead of placeholders:
    command `/plugin install feature-dev@claude-plugins-official`. Paths that need them stop
    until it is installed: `full`, `fix` when more than one module is affected, and `question`
    via code-explorer. Other paths go on.
-4. **Read** `<Core>/<project>/CLAUDE.md` and its `check: <command>` line. A line that still reads
+4. **Read.** Read `<Core>/<project>/CLAUDE.md` and its `check: <command>` line. A line that still reads
    `check: <set after scaffolding>`, or no line at all, means unset. Do not ask yet: ask the user
    once for the command, before the first tester call that needs it (on `release`, before
    postcondition 1; every path except `question`), and write the confirmed command into the `check:` line of that `CLAUDE.md`
@@ -128,15 +128,15 @@ attribution value resolved at Start" instead of placeholders:
    run `bash "<scripts>/wiki-migrate.sh" "<Core>/<project>" --dry-run`, show its output to the user
    and ask for an "ok". On "ok" run it again without `--dry-run` and commit it as its own step from
    the code root: `bash "<scripts>/save" "wiki: migrate to the 0.7 format"` (with
-   attribution=forbid add `--no-attribution`). This needs the clean tree of step 5 (on `question`
+   attribution=forbid add `--no-attribution`). This needs the clean tree of **Clean tree** (on `question`
    check it now). Without that "ok", stop the chain. Then, in any case, run
    `bash "<scripts>/wiki-check.sh" "<Core>/<project>"` once and note its lines as the **baseline**,
    like the base commits: the wiki problems that were there before this chain. The verifier brief
    and release postcondition 3 use it.
 7. **Base commits.** Record `git rev-parse HEAD` in the code root and in `<Core>`: these are the
    chain's base commits; release attribution ranges and `--changed` start from them.
-8. **Choose the path** (`fix`, `full`, `question`, `batch`, `release`, `adopt`; see
-   `references/paths.md`) and name it in the first line you say to the user.
+8. **Choose the path.** One of `fix`, `full`, `question`, `batch`, `release`, `adopt`; see
+   `references/paths.md`. Name it in the first line you say to the user.
 
 ## Running the chain
 Briefs follow `references/brief.md`. In Codex there is no Agent tool: see `references/codex.md`. A corecrew agent's `subagent_type` is `corecrew:<role>`:

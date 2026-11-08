@@ -226,7 +226,36 @@ for n in 1 2 3 4 5 6 7 8; do
 done
 section "$SK" Start | grep -E '^6\. ' | grep -qF '**Wiki.**' && pass || fail "SKILL.md Start step 6 is not the wiki step"
 section "$SK" Start | grep -E '^7\. ' | grep -qF '**Base commits.**' && pass || fail "SKILL.md Start step 7 is not Base commits"
-assert_contains "$REL" 'Start step 6'
+assert_contains "$REL" 'Start, **Wiki**'
 # 0.7 wiki: the release wiki step regenerates INDEX.md before the check (more in test_wiki_texts.sh)
 assert_contains "$REL" 'wiki-index.sh'
+# Cross-file references name steps, never their numbers (numbers move when a step is added):
+# "Start, **<Name>**" must name a bold step of Start in task/SKILL.md; "postcondition N" a numbered postcondition of
+# release.md; "rule N" a numbered rule of task/SKILL.md. Checked in every corecrew prompt.
+start_names="$(section "$SK" Start | sed -nE 's/^[0-9]+\. \*\*([^*]+)\.\*\*.*/\1/p')"
+[ "$(printf '%s\n' "$start_names" | grep -c .)" -ge 7 ] && pass || fail "Start steps have bold names: $start_names"
+npost="$(grep -cE '^[1-9]\. \*\*' "$REL")"
+nrule="$(section "$SK" Rules | grep -cE '^[0-9]+\. ')"
+bad=""
+for f in "$PLUGIN"/skills/*/SKILL.md "$PLUGIN"/skills/*/references/*.md "$PLUGIN"/reference/*.md "$PLUGIN"/agents/*.md; do
+  nm="${f#"$PLUGIN"/}"
+  hit="$(grep -noE '[Ss]tart step [0-9]|steps? [0-9][0-9, –-]*(and [0-9–-]+ )?of Start|Start, step [0-9]' "$f")"
+  [ -n "$hit" ] && bad="$bad $nm:$hit"
+  for n in $(grep -oE 'Start, \*\*[^*]+\*\*' "$f" | sed -E 's/^Start, \*\*//; s/\*\*$//; s/\.$//' | tr ' ' '_'); do
+    printf '%s\n' "$start_names" | tr ' ' '_' | grep -qxF "$n" || bad="$bad $nm:Start,$n"
+  done
+  for n in $(grep -oE 'postconditions? [0-9]+([–-][0-9]+)?' "$f" | grep -oE '[0-9]+'); do
+    [ "$n" -ge 1 ] && [ "$n" -le "$npost" ] || bad="$bad $nm:postcondition$n"
+  done
+  for n in $(grep -oE '(^|[^a-z])rules? [0-9]+' "$f" | grep -oE '[0-9]+'); do
+    [ "$n" -ge 1 ] && [ "$n" -le "$nrule" ] || bad="$bad $nm:rule$n"
+  done
+done
+assert_eq "$bad" "" "cross-file step, postcondition and rule references resolve (no Start step numbers)"
+# the check catches a stale name
+T="$(mktemp -d)"; printf 'See Start, **Gone** and Start step 3.\n' > "$T/x.md"
+case "$(grep -oE 'Start, \*\*[^*]+\*\*|[Ss]tart step [0-9]' "$T/x.md" | tr '\n' ' ')" in *Gone*'Start step 3'*) pass ;; *) fail "the reference check reads both forms" ;; esac
+rm -rf "$T"
+# Release writes the changelog in Keep a Changelog 1.1.0 when the project's own standard does not say otherwise
+for w in '[Unreleased]' Added Changed Deprecated Removed Fixed Security 'Keep a Changelog'; do assert_contains "$REL" "$w"; done
 finish
