@@ -20,13 +20,14 @@ echo "$OUT" | grep -q '^OK git' && pass || fail "no git line"
 
 assert_exit 0 bash "$PF" --name free-app
 
-# gh not logged in
-GH_AUTH=1 assert_exit 1 bash "$PF"
-echo "$OUT" | grep -q 'gh auth login' && pass || fail "no login hint"
-
-# gh missing
-PATH="/usr/bin:/bin" assert_exit 1 bash "$PF"
-echo "$OUT" | grep -q '^FAIL gh' && pass || fail "no gh FAIL line"
+# gh is needed only at the GitHub stage: not logged in or missing is a warning, with an OS-neutral hint
+GH_AUTH=1 assert_exit 0 bash "$PF"
+echo "$OUT" | grep -q '^WARN gh-auth .*gh auth login' && pass || fail "no gh-auth WARN with the login hint: $OUT"
+PATH="/usr/bin:/bin" assert_exit 0 bash "$PF"
+echo "$OUT" | grep -q '^WARN gh .*https://cli.github.com' && pass || fail "no gh WARN with the install page: $OUT"
+echo "$OUT" | grep -q '^FAIL' && fail "a missing gh must not FAIL: $OUT" || pass
+# the hints name no single system's package manager
+assert_not_contains "$PF" 'brew '
 
 # non-ASCII home -> WARN only
 HOME="$SANDBOX/Роман" assert_exit 0 bash "$PF"
@@ -48,7 +49,7 @@ echo "$OUT" | grep -qF "$SANDBOX/Projects/plain-app already exists" && pass || f
 GH_REPO_EXISTS=1 assert_exit 1 bash "$PF" --name gh-taken
 echo "$OUT" | grep -q 'GitHub' && pass || fail "no GitHub reason"
 # not logged in -> GitHub name check is not trusted
-GH_AUTH=1 assert_exit 1 bash "$PF" --name some-app
+GH_AUTH=1 assert_exit 0 bash "$PF" --name some-app   # a warning, not a stop: the name is checked again at the GitHub stage
 echo "$OUT" | grep -q '^OK name-github' && fail "name-github OK without login" || pass
 echo "$OUT" | grep -q '^WARN name-github' && pass || fail "no name-github WARN"
 finish

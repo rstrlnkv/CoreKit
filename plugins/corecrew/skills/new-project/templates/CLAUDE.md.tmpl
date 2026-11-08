@@ -23,7 +23,8 @@ check: <set after scaffolding>
 ## Rules
 - Write all code, comments and Markdown in English. Talk to the user in their language
   (from their Claude settings or instructions; otherwise the language they write in).
-- After each working step run corecrew's `save "<message>"` (commits code and docs together;
+- Outside `/corecrew:task`, run corecrew's `save "<message>"` after each working step (commits code and
+  docs together; inside a task the release step saves;
   Claude runs it; its path is printed at session start, or `<plugin>/scripts/save`).
   To publish: `save "<message>" --push`. `undo-step` reverts the last step in both repos,
   including knowledge and standards edits made in that step.

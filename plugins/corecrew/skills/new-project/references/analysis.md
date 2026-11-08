@@ -1,7 +1,7 @@
 # Analysis: platforms, stack, architecture
 
-Run this yourself. Do not invoke `superpowers:brainstorming` here — its hard gate ends in
-`writing-plans` and would skip recording decisions and scaffolding.
+Run this yourself. Do not hand off to another planning or brainstorming skill here: it would skip
+recording the decisions and the scaffold.
 
 ## Order (each part approved by the user before the next)
 1. **Constraints** — list what the chosen platforms require (see table). Flag blockers.
@@ -13,7 +13,7 @@ Run this yourself. Do not invoke `superpowers:brainstorming` here — its hard g
 4. **Architecture** — components, data storage and sync, external services, risks.
 5. **Record** — write `docs/architecture.md` and `docs/decisions/001-stack-and-architecture.md`
    (English), set `Stage: decided` under `## Progress` in `docs/brief.md`, show a short summary in the user's
-   language, run `save "Decide stack and architecture"`.
+   language, and from `<Projects>/<name>` run `bash "<scripts>/save" "Decide stack and architecture"`.
 
 ## Platform constraints
 | Platform | Needs |
@@ -32,7 +32,7 @@ Prices and programs change — say "check current price" instead of quoting numb
 - How well AI coding agents write this stack (popularity, docs, stable APIs)
 - Community and libraries for the v1 features
 - Cost (accounts, licenses, services)
-- Build complexity on the user's machines (Mac/Windows)
+- Build complexity on the user's machines (macOS, Windows, Linux)
 
 ## Option card (show in the user's language)
 **<Stack>** — one-line pitch

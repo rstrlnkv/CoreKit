@@ -1,6 +1,6 @@
 ---
 name: new-project
-description: Use when the user wants to start a new app, program, bot, website or other software project from scratch — phrases like "новый проект", "new project", "давай сделаем приложение", "start a new app", "хочу сделать бота" — before any project folder or code exists. Not for adding features to an existing project, and not for creating projects in Jira, Notion or other tools.
+description: Use when the user wants to start a new app, program, bot, website or other software project from scratch — phrases like "new project", "start a new app", "let's build a bot", "make me a website", in any language — before any project folder or code exists. Not for adding features to an existing project, and not for creating projects in Jira, Notion or other tools.
 ---
 
 # New project
@@ -8,7 +8,7 @@ description: Use when the user wants to start a new app, program, bot, website o
 ## Overview
 Turns an idea into a project that follows one standard: interview → analysis → recorded
 decisions → scaffold → GitHub → build check. **Core principle:** internal files (CLAUDE.md,
-docs/, .claude/) live in a private docs repo and physically never sit inside the code repo,
+docs/, .claude/) live in the Core, a private docs repo, and physically never sit inside the code repo,
 so a public code repo cannot leak them.
 
 Scripts live in this skill's `scripts/` and in the plugin's `scripts/`. Run them with `bash` and
@@ -32,7 +32,7 @@ stop, tell the user the corecrew folder was not found, and do not guess a path.
 
 ## Settings
 Claude Code asks for the plugin options when the plugin is enabled (in Codex the settings file
-`~/.config/corecrew/settings` holds them). The Core setting is
+holds them: `bash "<scripts>/lib.sh" setting-path` prints its path). The Core setting is
 `${user_config.core_dir}`. A value that still reads literally `${user_config.` means the plugin is
 unconfigured: treat it as unset; the scripts then use the settings file, else the default
 `~/Projects/Core`. If the core-dir command in stage 0 prints a line on stderr, tell the user in plain
@@ -43,7 +43,7 @@ stored in `<Core>/.coredev`:
 `CORE_DIR="<Core>" bash "<scripts>/lib.sh" get app-id-prefix`
 (empty until the user has given one).
 
-## Layout (do not improvise another one)
+## Layout (a deliberate requirement: do not improvise another one)
 ```
 <Core>/                          private GitHub repo <CoreName> (default ~/Projects/Core)
   .coredev, PROJECTS.md, README.md, standards/, knowledge/
@@ -56,8 +56,8 @@ stored in `<Core>/.coredev`:
 Progress lives in the last section `## Progress` of `<Core>/<name>/docs/brief.md`, one line
 `Stage: <stage>`; never add a front-matter field (the wiki allows exactly six). If the user mentions a
 project that already has a brief, read it and resume at the next stage instead of starting over.
-An older brief with `stage: <v>` in its front matter: write `## Progress` / `Stage: <v>` as the last
-section and delete the field in the same edit, then run wiki-check (if `## Progress` exists, only delete the field).
+An older brief with `stage: <v>` in its front matter: see `<plugin>/reference/older-formats.md`,
+section Brief with a stage field.
 
 | Stage | next step |
 |-------|-----------|
@@ -90,7 +90,8 @@ files are never overwritten. Wait for their "ok", then run
 Then `CORE_DIR="<Core>" bash "<scripts>/prepare.sh"` (it brings the tools copy up to date, which
 `install-hooks.sh` below needs; relay any lines it prints in plain words). Then preflight: `CORE_DIR="<Core>" bash "<skill>/scripts/preflight.sh"`.
 Explain any FAIL in plain words with the fix; WARN about
-non-Latin paths means Android/Flutter builds may break — say so. Stop on FAIL.
+non-Latin paths means Android/Flutter builds may break — say so. A WARN for `gh` or `gh-auth`:
+say stage 5 (GitHub) needs it, with the hint it prints, and go on. Stop on FAIL.
 
 **1. Interview.** Follow `references/interview.md`: 2–3 questions per AskUserQuestion call (in Codex,
 plain chat questions: codex-host.md, section Questions).
@@ -121,8 +122,10 @@ generator with `--force`/`--overwrite` in the code folder. Fill the Build/Test/R
 `CLAUDE.md` (leave the `check:` line for stage 6). `CORE_DIR="<Core>" bash "<scripts>/install-hooks.sh" "<Core>/<name>"`. Then from `<Projects>/<name>`:
 `bash "<scripts>/save" "Scaffold <stack> project"`. Set `Stage: scaffolded`.
 
-**5. GitHub.** Ask separately before each repo is created, naming it and its visibility:
-- docs repo (once): `gh repo create <CoreName> --private --source "<Core>" --push`
+**5. GitHub.** This stage needs `gh`, logged in (`gh auth status`); without it, stop here with
+the install hint (https://cli.github.com, then `gh auth login`). Ask separately before each repo
+is created, naming it and its visibility:
+- the Core repo (once): `gh repo create <CoreName> --private --source "<Core>" --push`
 - code: `gh repo create <name> --private --source "<Projects>/<name>" --push`; use `--public`
   only if the user said "public" in the interview.
 
@@ -131,11 +134,14 @@ first build and that command succeed, replace the placeholder line `check: <set 
 in `<Core>/<name>/CLAUDE.md` with the real single command, e.g. `check: flutter test` (the one
 test/check command, run in `<Projects>/<name>`; hooks and the verifier read it). Then run
 `bash "<scripts>/wiki-check.sh" "<Core>/<name>"` and fix every
-`wiki-check:` line it prints (silent = green). Set `Stage: ready` and `save "Ready"`. Report in the user's language: what was created and where; how to open it
+`wiki-check:` line it prints (silent = green). Set `Stage: ready` and, from `<Projects>/<name>`,
+run `bash "<scripts>/save" "Ready"`. Report in the user's language: what was created and where; how to open it
 (`cd <Projects>/<name> && claude`); how to check it themselves; what may break.
 
-**7. Offer a plan.** Offer a v1 plan with `superpowers:writing-plans`, saved to
-`<Core>/<name>/docs/plans/`. Do not write app features in this skill.
+**7. Offer a plan.** Offer a v1 plan, saved to `<Core>/<name>/docs/plans/`: if a planning skill
+is available (for example `superpowers:writing-plans`), use it; otherwise write a short plan
+yourself (the v1 features in order, each with how to check it). Do not write app features in this
+skill.
 
 ## Wiki
 The docs are a wiki; the rules are in `<plugin>/reference/wiki.md` (read it before
@@ -143,7 +149,7 @@ writing pages). In short: `docs/INDEX.md` is generated by `wiki-index.sh` (never
 front-matter fields (`type` first), and `wiki-check.sh` must stay green. Whenever a page is added (a feature page
 under `docs/features/`, any other page), run `wiki-index.sh` in the same step. A new
 decision is a new file `docs/decisions/NNN-<slug>.md`. `docs/knowledge/`,
-`docs/standards/` are outside the wiki checks; `docs/superpowers/` is only the 0.6 location of specs and plans, which `wiki-migrate.sh` moves to `docs/specs/` and `docs/plans/`. The format of
+`docs/standards/` are outside the wiki checks; specs and plans are pages in `docs/specs/` and `docs/plans/`. The format of
 `docs/knowledge/` is in `<plugin>/reference/knowledge.md`.
 
 ## Red flags — stop
