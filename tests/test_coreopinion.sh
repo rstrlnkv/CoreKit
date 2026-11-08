@@ -85,6 +85,7 @@ missing="$(printf '%s\n' "$patterns" | while IFS= read -r g; do
 done)"
 assert_eq "${missing:-none}" "none" "every secret pattern is in the --pathspec output"
 new_sandbox
+unset CODEX_THREAD_ID   # a shell that Codex runs carries it; ask-gpt.sh refuses there (checked below)
 R="$SANDBOX/secrets-repo"; mkdir -p "$R/sub" "$R/keys"
 git -C "$R" init -q
 printf 'x\n' > "$R/ok.txt"; git -C "$R" add ok.txt; git -C "$R" commit -qm init
@@ -199,7 +200,9 @@ A="$P/skills/second-opinion/scripts/ask-gpt.sh"
 assert_contains "$A" 'default_permissions='
 assert_contains "$A" '--ignore-user-config'
 assert_contains "$A" 'web_search="disabled"'
-assert_contains "$A" '":project_roots"'
+# the documented root name of codex 0.166 (":project_roots" is a legacy alias)
+assert_contains "$A" '":workspace_roots"'
+assert_not_contains "$A" 'project_roots'
 # the run needs one yes (the skill's own): the script is pre-approved for the skill's turn only
 assert_contains "$S" 'allowed-tools: Bash(bash ${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh *)'
 assert_contains "$S" 'bash "${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh" "'
@@ -249,6 +252,8 @@ if command -v codex >/dev/null 2>&1 && codex sandbox --help >/dev/null 2>&1; the
       ( cd "$R5" && codex sandbox -c 'default_permissions="review"' -c "$profile" cat "$f" >/dev/null 2>&1 ) && open="$open $f"
     done
     assert_eq "${open:-none}" "none" "the codex profile blocks every secret the filter drops"
+  elif ( cd "$R5" && codex sandbox cat ok.txt >/dev/null 2>&1 ); then
+    fail "codex sandbox reads ok.txt without the review profile but not with it: the profile is broken"
   else
     echo "  note: codex sandbox cannot read an ordinary file here (nested sandbox?), the profile is not run"
   fi
@@ -293,6 +298,35 @@ assert_file "$PRJ/code.sh"
 TD="$(mktemp -d)"; mkdir -p "$TD/inner"; printf '%s' "$BAD" > "$TD/inner/dir"; printf 'p\n' > "$TD/inner/prompt.md"
 ( PATH="$SANDBOX/stub:$PATH" bash "$A" "$TD/inner" >/dev/null 2>&1 ); assert_eq "$?" "2" "a folder inside a temp folder: refused"
 assert_dir "$TD/inner"; rm -rf "$TD"
+# Claude Code only: Codex does not offer the skill on its own (its equivalent of disable-model-invocation), and
+# ask-gpt.sh refuses inside a Codex session (Codex 0.166 sets CODEX_THREAD_ID in every shell it runs). The temp
+# folder (it holds the diff) is still removed, and codex is never run.
+OY="$P/skills/second-opinion/agents/openai.yaml"
+assert_file "$OY"
+assert_eq "$(sed -n 's/^[[:space:]]*allow_implicit_invocation:[[:space:]]*//p' "$OY")" "false" "openai.yaml: allow_implicit_invocation is false"
+assert_eq "$(grep -c '^policy:' "$OY")" "1" "openai.yaml: one policy table"
+rm -f "$SANDBOX/args.txt"
+T6="$(mktemp -d)"; printf '%s' "$GR" > "$T6/dir"; printf 'p\n' > "$T6/prompt.md"
+OUT="$(CODEX_THREAD_ID=019a-test STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$T6" 2>&1)"; rc=$?
+assert_eq "$rc" "3" "inside Codex: ask-gpt.sh exits 3"
+case "$OUT" in *"Claude Code"*) pass ;; *) fail "inside Codex: the refusal names Claude Code: $OUT" ;; esac
+assert_no_file "$SANDBOX/args.txt"
+assert_no_file "$T6"
+OUT="$(CODEX_THREAD_ID= STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$(T7="$(mktemp -d)"; printf '%s' "$GR" > "$T7/dir"; printf 'p\n' > "$T7/prompt.md"; printf '%s' "$T7")" 2>&1)"
+case "$OUT" in *"exit=0"*) pass ;; *) fail "an empty CODEX_THREAD_ID is not a Codex session: $OUT" ;; esac
+# the log tail: 20 lines after a good run, more after a failed one (the skill reads stdout only: the folder is gone)
+mkdir -p "$SANDBOX/stubfail"; printf '#!/bin/sh\ni=1; while [ $i -le 100 ]; do echo "log line $i" >&2; i=$((i+1)); done\nexit 1\n' > "$SANDBOX/stubfail/codex"; chmod +x "$SANDBOX/stubfail/codex"
+T8="$(mktemp -d)"; printf '%s' "$GR" > "$T8/dir"; printf 'p\n' > "$T8/prompt.md"
+OUT="$(PATH="$SANDBOX/stubfail:$PATH" bash "$A" "$T8" 2>/dev/null)"
+case "$OUT" in exit=1*) pass ;; *) fail "a failed run prints exit=1 first: $OUT" ;; esac
+n="$(printf '%s\n' "$OUT" | sed -n '/^--- log tail$/,$p' | grep -c '^log line')"
+[ "$n" -gt 20 ] && pass || fail "a failed run prints more than 20 log lines (got $n)"
+case "$OUT" in *"log line 100"*) pass ;; *) fail "the log tail ends with the last line" ;; esac
+assert_no_file "$T8"
+# SKILL.md works from the script's stdout: it names no file in $T but the two it writes before the run
+others="$(grep -oE '\$T/[A-Za-z0-9_.-]+' "$S" | sort -u | grep -vxE '\$T/(prompt\.md|dir)' | tr '\n' ' ')"
+assert_eq "$others" "" "SKILL.md reads no file of the removed temp folder"
+for w in 'exit=' '--- answer' '--- log tail'; do assert_contains "$S" "$w"; done
 # a 429 is not always the plan's limit: the skill quotes the error instead of guessing
 assert_contains "$S" 'quote the error line'
 assert_not_contains "$S" '`429`, `quota`): the ChatGPT plan'"'"'s Codex limit'

@@ -11,6 +11,9 @@ echo "  note: $(codex --version)"
 
 assert_exit 0 cx plugin marketplace add "$ROOT"
 assert_exit 0 cx plugin add corecrew@corekit
+# coreopinion is Claude Code only, but the marketplace offers it to Codex too: once installed, its skill must not be
+# offered to the model (skills/second-opinion/agents/openai.yaml)
+assert_exit 0 cx plugin add coreopinion@corekit
 ver="$(sed -n 's/^ *"version": *"\(.*\)",\{0,1\}$/\1/p' "$PLUGIN/.codex-plugin/plugin.json" | head -1)"
 inst="$CODEX_HOME/plugins/cache/corekit/corecrew/$ver"
 assert_file "$inst/.codex-plugin/plugin.json"
@@ -27,6 +30,7 @@ listed() { printf '%s\n' "$text" | grep -c "^- corecrew:$1: "; }
 assert_eq "$(listed new-project)" "1" "new-project is listed"
 # allow_implicit_invocation: false keeps these out of the model's skills list (observed, codex 0.166.0)
 for s in task ship new-standard; do assert_eq "$(listed $s)" "0" "$s is not listed (implicit invocation off)"; done
+assert_eq "$(printf '%s\n' "$text" | grep -c '^- coreopinion:second-opinion: ')" "0" "coreopinion's skill is not listed in Codex"
 # (file: rN/<rest>/SKILL.md): rN is a root alias, defined under "Skill roots" (its value varies with
 # what else is listed, so look it up)
 f="$(printf '%s\n' "$text" | sed -n 's/^- corecrew:new-project: .*(file: \([^)]*\))$/\1/p' | head -1)"

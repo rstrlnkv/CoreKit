@@ -12,6 +12,9 @@ reads and answers. **You are the only one that edits files**, and only after the
 Talk to the user in the user's language (the language of their messages), in plain words. Ask GPT
 to answer in that language too.
 
+This skill works only in Claude Code. In Codex (or when `ask-gpt.sh` exits 3 and says it runs inside
+a Codex session), tell the user that the second opinion has to be asked from Claude Code, and stop.
+
 ## 1. Check that Codex is there
 
 ```bash
@@ -128,11 +131,12 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh" "<the mktemp path>" medium
 ```
 
 The script is pre-approved for this skill, so the user's yes in step 2 is the only question. It
-prints `exit=<code>`, then `--- answer` with GPT's final answer and `--- log tail`, and removes the
-temp folder (it holds the diff) however the run ends. Outside a git repository it adds
+prints `exit=<code>`, then `--- answer` with GPT's final answer and `--- log tail` (the last 20
+lines of the Codex log, 80 after a failed run), and removes the temp folder (it holds the diff)
+however the run ends. That output is all there is to read afterwards: the folder is gone. Outside a git repository it adds
 `--skip-git-repo-check` and gives Codex an empty folder instead of the project.
 
-- **What this confines** (the profile is in the script). I checked it with `codex sandbox` (it
+- **What this confines** (the profile is in the script), as checked with `codex sandbox` (it
   runs a command under the same sandbox, nothing goes to OpenAI), codex 0.166:
   - `--sandbox read-only` alone blocks writes and network, but does **not** limit reading: GPT
     could read the whole disk, including `~/.ssh` and any `.env`. Only the sentence in the
@@ -161,7 +165,7 @@ Tell the user it is running and may take 10–60 seconds, sometimes more.
 
 ## 4. Show the answer
 
-If the exit code is 0 and `$T/answer.md` is not empty:
+If the output says `exit=0` and the `--- answer` block is not empty:
 
 1. A heading such as **"GPT's opinion (via Codex)"**, then GPT's answer as it is (trim only
    noise). Make clear this text is GPT's, not yours.
@@ -178,8 +182,8 @@ Codex is never asked to edit, and never run with a writable sandbox.
 
 ## 6. When it fails
 
-Never pretend a review happened. Read `$T/log.txt`, say plainly what failed and what the user can
-do:
+Never pretend a review happened. Read the `--- log tail` block of the script's output, say plainly
+what failed and what the user can do:
 
 - **Not signed in** (`login`, `401`, `unauthorized`, `not logged in`): run `codex login` in a
   normal terminal, then ask again.
@@ -205,8 +209,9 @@ do:
   Do not change the user's settings yourself without their yes. If they ran Claude Code from
   inside Codex's app, start Claude Code from a normal terminal instead.
 - **Timeout** (no answer in 5 minutes): remove `$T` as above, say so; offer a smaller material or `medium` effort.
-- **Exit 0 but empty answer**: say GPT returned nothing; show the last lines of the log.
-- **Anything else**: quote the last few lines of the log and say you do not know the cause.
+- **Exit 0 but empty answer**: say GPT returned nothing; show the last lines of the log tail.
+- **Exit 3** (the script runs inside a Codex session): this skill works only in Claude Code; nothing was sent.
+- **Anything else**: quote the last few lines of the log tail and say you do not know the cause.
 
 The script already removed `$T`. If the Bash call timed out or was killed, run `rm -rf "$T"` first thing
 (the path you noted), whatever else you do.

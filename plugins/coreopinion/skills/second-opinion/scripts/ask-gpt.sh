@@ -2,9 +2,10 @@
 # ask-gpt.sh <temp folder> [medium|high] — one read-only Codex run for the second-opinion skill.
 # The temp folder holds prompt.md (what GPT reads) and dir (the project folder path, nothing else:
 # it is read from the file, so the path never goes through shell parsing). Prints the exit code,
-# GPT's answer and the log tail, then removes the temp folder however the run ends (it holds the diff).
+# GPT's answer and the log tail (20 lines, 80 after a failed run), then removes the temp folder however the run
+# ends (it holds the diff). Exit 2: bad arguments; exit 3: run inside a Codex session (refused, nothing sent).
 #
-# What the profile confines (checked with `codex sandbox`, codex 0.166; see SKILL.md step 3):
+# What the profile confines (checked with `codex sandbox`, codex 0.166; see SKILL.md, section Ask GPT):
 # reads of the project folder, minimal system paths and temp folders only; every secret name the
 # skill's send filter drops (secret-patterns.txt) is blocked inside the project too; no writes, no network for commands.
 # --ignore-user-config keeps ~/.codex/config.toml (MCP servers, plugins) out; web search is off.
@@ -22,6 +23,12 @@ done
 [ -n "$t_ok" ] || { echo "ask-gpt.sh: $T is not a mktemp -d folder in the temp folder; nothing was run or removed" >&2; exit 2; }
 trap 'rm -rf "$T"' EXIT
 trap 'exit 130' HUP INT TERM   # a signal ends the run; the EXIT trap then cleans up
+# Claude Code only: inside a Codex session (Codex sets CODEX_THREAD_ID in every shell it runs, 0.166) GPT would
+# review its own session's work. Refused after the trap, so the temp folder is still removed.
+if [ -n "${CODEX_THREAD_ID:-}" ]; then
+  echo "ask-gpt.sh: coreopinion works only in Claude Code, and this runs inside a Codex session; nothing was sent. Ask for the second opinion in Claude Code." >&2
+  exit 3
+fi
 case "$effort" in medium|high) ;; *) effort=medium ;; esac
 dir="$(cat "$T/dir")"
 # Outside a git repository Codex refuses to start without the flag; GPT then gets an empty folder.
@@ -46,11 +53,14 @@ if [ -r "$list_file" ]; then
   done < "$list_file"
 fi
 [ -n "$deny" ] || { echo "ask-gpt.sh: no secret patterns in $list_file; nothing was run" >&2; exit 2; }
-profile='permissions.review.filesystem={":minimal"="read", ":project_roots"={"."="read"'"$deny"'}}'
+profile='permissions.review.filesystem={":minimal"="read", ":workspace_roots"={"."="read"'"$deny"'}}'
 # shellcheck disable=SC2086
 codex exec --ignore-user-config -c 'default_permissions="review"' -c "$profile" -c web_search="disabled" \
   -C "$dir" -c model_reasoning_effort="$effort" --ephemeral $extra \
   --output-last-message "$T/answer.md" - < "$T/prompt.md" > "$T/log.txt" 2>&1
-echo "exit=$?"
+rc=$?
+echo "exit=$rc"
 echo "--- answer"; cat "$T/answer.md" 2>/dev/null
-echo "--- log tail"; tail -n 20 "$T/log.txt" 2>/dev/null
+# the folder is removed on exit, so stdout is all the skill can read: more of the log when the run failed
+n=20; [ "$rc" -eq 0 ] || n=80
+echo "--- log tail"; tail -n "$n" "$T/log.txt" 2>/dev/null
