@@ -64,7 +64,12 @@ while [ "$tries" -lt 10 ]; do
   # (no pid yet is a fresh lock for the first seconds, after that an owner that died before writing it)
   if { [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; } || { [ -z "$holder" ] && [ "$tries" -ge 3 ]; }; then
     # (an atomic rename: of several waiters that saw the same dead lock only one wins; the others find it gone)
-    if mv "$LOCK" "$LOCK.dead.$$" 2>/dev/null; then rm -rf "$LOCK.dead.$$"; fi
+    # (the lock may have changed hands between the read and the rename: another waiter took the dead one over and
+    # made its own. Then the folder moved here holds another pid, or none yet, and goes back untouched.)
+    if mv "$LOCK" "$LOCK.dead.$$" 2>/dev/null; then
+      if [ "$(cat "$LOCK.dead.$$/pid" 2>/dev/null)" = "$holder" ]; then rm -rf "$LOCK.dead.$$"
+      else mv "$LOCK.dead.$$" "$LOCK" 2>/dev/null || rm -rf "$LOCK.dead.$$"; fi
+    fi
     tries=$((tries + 1)); continue
   fi
   tries=$((tries + 1)); sleep 1

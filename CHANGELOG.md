@@ -20,6 +20,8 @@ commit log has the full detail.
 - In Codex, a `config.toml` that starts with a UTF-8 BOM and sets `default_permissions =
   "corecrew"` is read correctly under a UTF-8 locale; the "profile is not the default" note no
   longer shows by mistake.
+- Two tools refreshes that start together no longer both copy: a waiter that read a dead lock no
+  longer moves away the live lock another waiter made in the meantime.
 
 ## [0.9.0] - 2026-11-08
 
