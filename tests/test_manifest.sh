@@ -82,6 +82,28 @@ market_desc() {
   ' "$M"
 }
 
+# section_of <changelog> <version> — the lines of the section "## [<version>]" (Unreleased or X.Y.Z)
+section_of() { awk -v v="$2" 'index($0, "## [" v "]") == 1 { s = 1; next } s && /^## / { exit } s' "$1"; }
+# codex_hooks_file <plugin> — the hooks file Codex reads: the manifest's "hooks" key, else hooks/hooks.json
+codex_hooks_file() {
+  local h; h="$(jf "$ROOT/plugins/$1/.codex-plugin/plugin.json" hooks)"
+  echo "$ROOT/plugins/$1/${h:-hooks/hooks.json}" | sed 's|/\./|/|'
+}
+# check_retrust <plugin> <changelog> <hooks file> <fixture> — Codex drops its trust in a changed hooks file, so
+# the CHANGELOG section that released the change must say so. The fixture holds the released cksum and the
+# section's version; a changed file fails until the fixture names the new cksum and the section that tells
+# Codex users to trust the hooks "again in `/hooks`".
+check_retrust() {
+  local want_sum want_ver sum
+  read -r want_sum want_ver <<< "$(awk -v p="$1" '$1 == p { print $2, $3; exit }' "$4")"
+  [ -n "$want_ver" ] || { fail "$4 has no line for $1"; return; }
+  sum="$(cksum < "$3" | cut -d' ' -f1)"
+  [ "$sum" = "$want_sum" ] && pass \
+    || fail "Codex hooks of $1 changed (cksum $sum, fixture $want_sum): tell Codex users to trust the hooks again in /hooks under ## [Unreleased] and put the new cksum into $4 with the version Unreleased"
+  section_of "$2" "$want_ver" | grep -qF 'again in `/hooks`' && pass \
+    || fail "$2, section [$want_ver]: the Codex hooks changed in it, but it does not say \"again in \`/hooks\`\""
+}
+
 plugins=""
 for d in "$ROOT"/plugins/*/; do plugins="$plugins $(basename "$d")"; done
 for pl in $plugins; do
@@ -92,6 +114,7 @@ for pl in $plugins; do
   top="$(top_version "$CL")"
   assert_eq "$(jf "$CJ" version)" "$top" "$pl .claude-plugin version vs CHANGELOG"
   [ -f "$XJ" ] && assert_eq "$(jf "$XJ" version)" "$top" "$pl .codex-plugin version vs CHANGELOG"
+  [ -f "$XJ" ] && check_retrust "$pl" "$CL" "$(codex_hooks_file "$pl")" "$ROOT/tests/fixtures/codex-hooks.txt"
   # every plugin is listed, with the same one-sentence description as its manifests
   desc="$(jf "$CJ" description)"
   assert_contains "$M" "\"source\": \"./plugins/$pl\""
@@ -135,6 +158,19 @@ printf '## [Unreleased]\n## [1.0.0] - 2026-11-01\n### New\n- **NEW** x\n' > "$T/
 case "$(check_changelog "$T/group.md")" in *"bad group"*"old badge"*) pass ;; *) fail "bad group or badge not caught" ;; esac
 printf '## [Unreleased]\n## [1.0.1] - 2026-10-01\n## [1.0.0] - 2026-11-01\n## [0.9.0] - 2026-13-01\n' > "$T/date.md"
 case "$(check_changelog "$T/date.md")" in *"date rises"*"bad date"*) pass ;; *) fail "rising or bad date not caught" ;; esac
+# the re-trust rule: a section that says "again in `/hooks`" passes; the weaker "trust the hooks in `/hooks`",
+# a changed file, a missing fixture line or an empty section is caught, each with its own message
+printf '# a\n' > "$T/hooks.json"; hs="$(cksum < "$T/hooks.json" | cut -d' ' -f1)"
+printf 'p %s 1.0.0\nq %s Unreleased\nr 1 1.0.0\n' "$hs" "$hs" > "$T/fixture.txt"
+printf '## [Unreleased]\n\nCodex: trust the hooks again in `/hooks`.\n\n## [1.0.0] - 2026-11-01\n\nCodex: trust the hooks again in `/hooks` after this update.\n\n### Fixed\n\n- y\n' > "$T/ok.md"
+printf '## [Unreleased]\n\n## [1.0.0] - 2026-11-01\n\nCodex: guards stay off until you trust the hooks in `/hooks`.\n\n## [0.9.0] - 2026-10-01\n\nagain in `/hooks`\n' > "$T/weak.md"
+assert_eq "$(section_of "$T/ok.md" 1.0.0 | grep -c .)" "3" "section_of ends at the next heading"
+( FAILS=0; check_retrust p "$T/ok.md" "$T/hooks.json" "$T/fixture.txt" >/dev/null; [ "$FAILS" -eq 0 ] ) && pass || fail "a released re-trust note fails"
+( FAILS=0; check_retrust q "$T/ok.md" "$T/hooks.json" "$T/fixture.txt" >/dev/null; [ "$FAILS" -eq 0 ] ) && pass || fail "an Unreleased re-trust note fails"
+case "$(FAILS=0; check_retrust p "$T/weak.md" "$T/hooks.json" "$T/fixture.txt")" in *'does not say "again in'*) pass ;; *) fail "the weaker /hooks phrase passes as a re-trust note" ;; esac
+case "$(FAILS=0; check_retrust r "$T/ok.md" "$T/hooks.json" "$T/fixture.txt")" in *'changed (cksum'*) pass ;; *) fail "a changed hooks file is not caught" ;; esac
+case "$(FAILS=0; check_retrust s "$T/ok.md" "$T/hooks.json" "$T/fixture.txt")" in *'no line for s'*) pass ;; *) fail "a plugin missing from the fixture is not caught" ;; esac
+( FAILS=0; check_retrust q "$T/weak.md" "$T/hooks.json" "$T/fixture.txt" >/dev/null; [ "$FAILS" -eq 1 ] ) && pass || fail "an empty [Unreleased] section passes as a re-trust note"
 rm -rf "$T"
 
 # hooks.json: plugin Stop hook; no install.sh any more

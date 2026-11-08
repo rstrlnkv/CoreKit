@@ -17,6 +17,7 @@ in the `corekit` marketplace and does not depend on `corecrew`.
 ```
 
 Update: `claude plugin marketplace update corekit`, `claude plugin update coremodel@corekit`, then restart Claude Code.
+In Codex: `codex plugin marketplace upgrade corekit`, then trust the hook again in `/hooks` (see [Codex](#codex)).
 
 ## Features
 
@@ -177,7 +178,8 @@ switch with /model if the current one differs". You switch yourself with `/model
   runs with `--ignore-user-config` and low reasoning effort, so it does not load your config, MCP
   servers or other plugins' hooks (your login still works). It waits at most 20 seconds
   (`COREMODEL_HINT_TIMEOUT`); any failure is silent and the prompt goes on.
-- Codex asks you to trust the hook the first time: review and enable it in `/hooks`.
+- Codex asks you to trust the hook the first time, and again after each update: review and enable
+  it in `/hooks`.
 
 ## Requirements
 
