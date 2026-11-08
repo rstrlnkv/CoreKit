@@ -137,6 +137,7 @@ while IFS='|' read -r set levels models prompt reply; do
 done < "$tmp/cases"
 
 for s in tune hold; do
+  t=0 l=0 m=0 b=0 bl=0 bm=0   # set by the eval below; the defaults keep ShellCheck and set -u calm
   eval "t=\$T_$s l=\$L_$s m=\$M_$s b=\$B_$s bl=\$BL_$s bm=\$BM_$s"
   [ "$t" -eq 0 ] && continue
   printf '%s: level %d/%d, model %d/%d, both %d/%d; big misses: level %d, model %d (%s, %s runs)\n' \

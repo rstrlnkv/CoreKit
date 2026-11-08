@@ -43,13 +43,13 @@ jobs:
       - name: ShellCheck
         run: |
           shellcheck --version | head -n 2
-          # every *.sh file, and every file without an extension whose first line is a shell shebang
-          find plugins/*/scripts plugins/*/hooks tests -path tests/fixtures -prune -o -type f -print \
+          # every shell file under plugins/ and tests/ (not tests/fixtures, not node_modules): each *.sh file, and
+          # each other file whose first line is a sh or bash shebang
+          find plugins tests \( -path tests/fixtures -o -name node_modules \) -prune -o -type f -print \
             | while IFS= read -r f; do
                 case "$f" in
                   *.sh) echo "$f" ;;
-                  */*.*) ;;
-                  *) head -n 1 "$f" | grep -q '^#!.*sh' && echo "$f" ;;
+                  *) head -n 1 "$f" | grep -qE '^#!.*[/ ](ba)?sh( |$)' && echo "$f" ;;
                 esac
               done | sort > "$RUNNER_TEMP/shell-files"
           cat "$RUNNER_TEMP/shell-files"
@@ -63,4 +63,5 @@ jobs:
       - name: actionlint
         run: |
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+          # no file arguments: actionlint finds every workflow in .github/workflows itself (*.yml and *.yaml)
           ./actionlint -color

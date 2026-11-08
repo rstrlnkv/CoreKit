@@ -92,10 +92,10 @@ for line in open(sys.argv[2]):
 ' "$SANDBOX/models.json" "$SANDBOX/table.txt" 2>&1)"
     assert_eq "$miss" "" "every model and effort of the role-model codex table is in the bundled catalog"
   else
-    echo "  note: codex debug models --bundled failed; the table is not compared"
+    skip codex-catalog "codex debug models --bundled failed; the role-model table is not compared with the catalog"
   fi
 else
-  echo "  note: codex or python3 missing; the role-model table is not compared with the catalog"
+  skip codex-catalog "codex or python3 not on PATH; the role-model table is not compared with the catalog"
 fi
 
 # --- core-writable
@@ -114,7 +114,7 @@ if [ "$(id -u)" != "0" ]; then
   assert_eq "$(ls -A "$RO")" "f" "read-only dir untouched"
   chmod u+w "$RO"
 else
-  echo "SKIP core-writable read-only case: running as root"
+  skip core-writable-read-only "running as root"
 fi
 MISSING="$SANDBOX/no such dir"
 err="$(bash "$LIB" core-writable "$MISSING" 2>&1 >/dev/null)"; rc=$?

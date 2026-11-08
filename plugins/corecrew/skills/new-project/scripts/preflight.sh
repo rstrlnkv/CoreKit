@@ -14,9 +14,9 @@ bad()  { echo "FAIL $*"; rc=1; }
 
 command -v git >/dev/null 2>&1 && ok "git" || bad "git — install Git: https://git-scm.com/downloads (macOS: xcode-select --install)"
 
-HAVE_GH=0; GH_AUTH_OK=0
+GH_AUTH_OK=0
 if command -v gh >/dev/null 2>&1; then
-  HAVE_GH=1; ok "gh"
+  ok "gh"
   if gh auth status >/dev/null 2>&1; then ok "gh-auth"; GH_AUTH_OK=1
   else warn "gh-auth — needed to create the GitHub repos; run: gh auth login"; fi
 else

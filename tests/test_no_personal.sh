@@ -15,10 +15,11 @@
 #   name <term>       anywhere (full-name variants, user names)
 #   standard <term>   in plugins/*/skills, agents and reference (the owner's own standard files)
 #   archive <term>    outside docs/specs and docs/plans (names of old projects)
-# Without the file these checks are skipped with a note.
+# Without the file these checks are skipped (a SKIP line).
 source "$(dirname "$0")/lib.sh"
-# The real Core must be found before new_sandbox swaps HOME and CORE_DIR. It is only read.
-REAL_CORE="${CORE_DIR:-$HOME/Projects/Core}"
+# The real Core must be found before new_sandbox swaps HOME and CORE_DIR. It is only read. Under run.sh, HOME is
+# already a throwaway one: run.sh passes the real place as REAL_CORE_DIR, to this file alone.
+REAL_CORE="${REAL_CORE_DIR:-${CORE_DIR:-$HOME/Projects/Core}}"
 TERMS="${PERSONAL_TERMS:-$ROOT/tests/personal-terms.local}"
 if [ -z "${PERSONAL_TERMS:-}" ] && [ ! -f "$TERMS" ]; then
   common="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
@@ -30,7 +31,7 @@ SELF="tests/test_no_personal.sh"
 # Words that are also part of this repo's own vocabulary: never a "personal" project name.
 GENERIC='core corekit corecrew coremodel coreopinion test-coredev demo test tests example examples sample project projects code docs todo hello world'
 # Files that still cite the private spec; their streams remove the references (refactor plan, PUB-9).
-# Listed here they are skipped with a note; delete an entry once its file is clean.
+# Listed here they are skipped (a SKIP line); delete an entry once its file is clean.
 SPEC_PENDING=''
 
 # project_names <PROJECTS.md> — one name per line, from list items "- <name> — <purpose> — <path>".
@@ -220,17 +221,17 @@ if [ -f "$REAL_CORE/PROJECTS.md" ]; then
     && pass || fail "could not read project names from the Core's PROJECTS.md"
 else
   : > "$SANDBOX/real-names"
-  echo "  note: no PROJECTS.md in the Core; project-name check skipped"
+  skip project-names "no PROJECTS.md in the Core"
 fi
 if [ -f "$TERMS" ]; then
   [ -n "$(terms_of "$TERMS" name)$(terms_of "$TERMS" standard)$(terms_of "$TERMS" archive)" ] \
     && pass || fail "the personal terms list has no usable line: $TERMS"
 else
-  echo "  note: no tests/personal-terms.local; personal-terms check skipped"
+  skip personal-terms "no tests/personal-terms.local"
 fi
 for f in $SPEC_PENDING; do
   if [ -f "$ROOT/$f" ] && grep -qE 'spec section|spec §|spec D[0-9]' "$ROOT/$f"; then
-    echo "  note: $f still cites the private spec (pending, PUB-9)"
+    skip "private-spec $f" "it still cites the private spec (pending, PUB-9)"
   fi
 done
 scan_repo "$ROOT" "$SANDBOX/real-names" "$HANDLE" "$TERMS" > "$SANDBOX/real-hits"

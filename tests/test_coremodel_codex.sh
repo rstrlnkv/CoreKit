@@ -10,7 +10,23 @@
 # HINT_SH=<path> runs the behaviour checks against another copy of hint.sh (used to mutate copies).
 source "$(dirname "$0")/lib.sh"
 new_sandbox
-trap 'pkill -f "sleep 10.37" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
+# Processes are found by the pids the stub writes, never by name: another suite running at the same time has
+# stubs with the same command line. OURS holds the pids of a check in progress; the EXIT trap stops them, then
+# removes the sandboxes as lib.sh's own trap does.
+OURS=""
+# shellcheck disable=SC2086  # a list of pids
+stop_ours() { [ -z "$OURS" ] || kill $OURS 2>/dev/null; OURS=""; }
+trap 'stop_ours; remove_sandboxes' EXIT
+# poll <tenths> <cmd...> — runs cmd every 0.1 s until it succeeds, at most <tenths> more times; 1 when it never did
+poll() { local n="$1"; shift; while ! "$@"; do [ "$n" -gt 0 ] || return 1; n=$((n - 1)); sleep 0.1; done; }
+# gone <pid> — the process is not running (not a child of this shell: a child stays a zombie until waited for)
+gone() { ! kill -0 "$1" 2>/dev/null; }
+# DECOY is another suite's stub sleep: the same command line, started by this file. decoy_kept <label> — it was not
+# killed here: it is still running (ended now with USR1, which nothing else sends) or ended by itself (exit 0).
+decoy_kept() {
+  local rc; kill -USR1 "$DECOY" 2>/dev/null; wait "$DECOY" 2>/dev/null; rc=$?; OURS=""
+  { [ "$rc" = 0 ] || [ "$(kill -l "$rc" 2>/dev/null)" = USR1 ]; } && pass || fail "$1: another run's sleep was killed (exit $rc)"
+}
 CM="$ROOT/plugins/coremodel"
 HINT="${HINT_SH:-$CM/codex/hint.sh}"
 CX_MAN="$CM/.codex-plugin/plugin.json"; CL_MAN="$CM/.claude-plugin/plugin.json"
@@ -74,7 +90,9 @@ if command -v codex >/dev/null 2>&1; then
   req="$SANDBOX/req.jsonl"
   printf '%s\n' '{"id":1,"method":"initialize","params":{"clientInfo":{"name":"t","version":"1"}}}' '{"method":"initialized"}' \
     "{\"id\":2,\"method\":\"hooks/list\",\"params\":{\"cwds\":[\"$SANDBOX/work\"]}}" > "$req"
-  (cat "$req"; sleep 4) | codex --disable remote_plugin app-server --listen stdio:// > "$SANDBOX/hooks-list.out" 2> "$SANDBOX/hooks-list.err"
+  # stdin stays open until the answer to request 2 is written (polled, up to 10 s)
+  answered() { grep -q '"id":2' "$SANDBOX/hooks-list.out" 2>/dev/null; }
+  (cat "$req"; poll 100 answered) | codex --disable remote_plugin app-server --listen stdio:// > "$SANDBOX/hooks-list.out" 2> "$SANDBOX/hooks-list.err"
   grep '"id":2' "$SANDBOX/hooks-list.out" | sed 's/{"key":/\
 &/g' | grep '^{"key":"coremodel@' > "$SANDBOX/hooks.lines"
   assert_eq "$(wc -l < "$SANDBOX/hooks.lines" | tr -d ' ')" "1" "Codex lists exactly one coremodel hook"
@@ -85,7 +103,7 @@ if command -v codex >/dev/null 2>&1; then
   assert_not_contains "$SANDBOX/hooks.lines" 'hooks/hooks.json'
   assert_not_contains "$SANDBOX/hooks.lines" 'CLAUDE_PLUGIN_ROOT'
 else
-  echo "  note: codex not on PATH: the offline install and hooks/list checks are skipped"
+  skip codex-install "codex not on PATH; the offline install and hooks/list checks are not run"
 fi
 
 # ---- C. hint.sh against a fake codex ----
@@ -104,7 +122,7 @@ echo $$ > "$STUB_DIR/pid"
 case "${STUB_MODE:-ok}" in
   fail) echo "boom" >&2; exit 1 ;;
   empty) exit 0 ;;
-  sleep) sleep 10.37; exit 0 ;;
+  sleep) sleep 10.37 & echo $! > "$STUB_DIR/sleep.pid"; wait $!; exit 0 ;;
 esac
 # an answer file given as -o / --output-last-message is written too
 prev=""; for a in "$@"; do
@@ -124,7 +142,7 @@ ON_SF="$SANDBOX/coremodel-on"; printf 'codex_hint: on\n' > "$ON_SF"
 # The hint is on (COREMODEL_CONFIG=$ON_SF) unless a VAR=value names COREMODEL_CONFIG itself.
 run_hint() {
   local p="$1" in="$2"; shift 2
-  rm -f "$CALLS" "$ARGV" "$STDIN" "$ENVREC" "$SANDBOX/pid"
+  rm -f "$CALLS" "$ARGV" "$STDIN" "$ENVREC" "$SANDBOX/pid" "$SANDBOX/sleep.pid"
   { printf "%s" "$in"; } 2>/dev/null | env PATH="$p" COREMODEL_CONFIG="$ON_SF" "$@" /bin/bash "$HINT" > "$SANDBOX/out" 2> "$SANDBOX/err"; RC=$?
 }
 ncalls() { [ -f "$CALLS" ] && wc -l < "$CALLS" | tr -d ' ' || echo 0; }
@@ -308,10 +326,14 @@ t1="$(date +%s)"
 silent "timeout"
 if [ $((t1 - t0)) -lt 6 ]; then pass; else fail "timeout: hint.sh took $((t1 - t0)) s with COREMODEL_HINT_TIMEOUT=2"; fi
 assert_eq "$(ncalls)" "1" "timeout: stub was started"
-sleep 1
-spid="$(cat "$SANDBOX/pid" 2>/dev/null)"
-if [ -n "$spid" ] && kill -0 "$spid" 2>/dev/null; then fail "timeout: the stub (pid $spid) is still running"; else pass; fi
-if pgrep -f 'sleep 10.37' >/dev/null 2>&1; then fail "timeout: the stub's sleep child is still running"; pkill -f 'sleep 10.37'; else pass; fi
+sleep 10.37 & DECOY=$!
+spid="$(cat "$SANDBOX/pid" 2>/dev/null)"; slp="$(cat "$SANDBOX/sleep.pid" 2>/dev/null)"
+OURS="$spid $slp $DECOY"
+assert_eq "${spid:+y}${slp:+y}" "yy" "timeout: the stub wrote its pid and its sleep's"
+# hint.sh has returned; its stub and the stub's sleep are gone within 5 s (polled)
+if [ -n "$spid" ] && ! poll 50 gone "$spid"; then fail "timeout: the stub (pid $spid) is still running"; kill "$spid" 2>/dev/null; else pass; fi
+if [ -n "$slp" ] && ! poll 50 gone "$slp"; then fail "timeout: the stub's sleep (pid $slp) is still running"; kill "$slp" 2>/dev/null; else pass; fi
+decoy_kept timeout   # the others are gone or were killed above
 # a bad limit value does not break the hook
 answer '{"why":"x","level":"high","model":"opus"}'
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_HINT_TIMEOUT=abc
@@ -358,16 +380,20 @@ t1="$(date +%s)"
 assert_eq "$RC" "0" "1 MB prompt: exit 0"
 if [ $((t1 - t0)) -lt 5 ]; then pass; else fail "1 MB prompt took $((t1 - t0)) s"; fi
 assert_eq "$(ncalls)" "0" "1 MB prompt: cut at 256 KB, so it ends unterminated and gets no call"
-# SIGTERM to hint.sh while the stub sleeps: nothing is left running
-rm -f "$SANDBOX/pid"
-( printf '%s' "$(event 'fix the flaky login test')" | env PATH="$PATHSTUB" COREMODEL_CONFIG="$ON_SF" STUB_MODE=sleep /bin/bash "$HINT" > /dev/null 2>&1 ) &
-sleep 2
-hp="$(pgrep -f "bash $HINT" | head -1)"
-[ -n "$hp" ] && kill -TERM "$hp" 2>/dev/null
-sleep 1.5
-spid="$(cat "$SANDBOX/pid" 2>/dev/null)"
-if [ -n "$spid" ] && kill -0 "$spid" 2>/dev/null; then fail "SIGTERM: the stub is still running"; else pass; fi
-if pgrep -f 'sleep 10.37' >/dev/null 2>&1; then fail "SIGTERM: the stub's sleep is still running"; pkill -f 'sleep 10.37'; else pass; fi
+# SIGTERM to hint.sh while the stub sleeps: nothing is left running. hint.sh is this shell's child ($! is its
+# pid: env execs bash); it is stopped once the stub has started its sleep (polled, up to 10 s).
+rm -f "$SANDBOX/pid" "$SANDBOX/sleep.pid"
+event 'fix the flaky login test' > "$SANDBOX/ev.json"
+env PATH="$PATHSTUB" COREMODEL_CONFIG="$ON_SF" STUB_MODE=sleep /bin/bash "$HINT" < "$SANDBOX/ev.json" > /dev/null 2>&1 &
+hp=$!; OURS="$hp"
+poll 100 test -s "$SANDBOX/sleep.pid" && pass || fail "SIGTERM: the stub did not start its sleep in 10 s"
+spid="$(cat "$SANDBOX/pid" 2>/dev/null)"; slp="$(cat "$SANDBOX/sleep.pid" 2>/dev/null)"
+sleep 10.37 & DECOY=$!
+OURS="$hp $spid $slp $DECOY"
+kill -TERM "$hp" 2>/dev/null; wait "$hp" 2>/dev/null
+if [ -n "$spid" ] && ! poll 50 gone "$spid"; then fail "SIGTERM: the stub (pid $spid) is still running"; kill "$spid" 2>/dev/null; else pass; fi
+if [ -n "$slp" ] && ! poll 50 gone "$slp"; then fail "SIGTERM: the stub's sleep (pid $slp) is still running"; kill "$slp" 2>/dev/null; else pass; fi
+decoy_kept SIGTERM   # the others are gone or were killed above
 # the limit is clamped to 20 s
 if grep -qE 'to=20' "$HINT" && grep -q -- '-gt 20' "$HINT"; then pass; else fail "COREMODEL_HINT_TIMEOUT is not clamped to 20"; fi
 

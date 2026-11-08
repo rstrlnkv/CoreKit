@@ -8,11 +8,13 @@
 # Prints one line per file with its time, then ALL TESTS PASSED or SOME TESTS FAILED, then every skip.
 # Every file runs with HOME, XDG_CONFIG_HOME, CODEX_HOME, GIT_CONFIG_GLOBAL and TMPDIR in its own folder
 # under one throwaway root, so a file that forgets new_sandbox still cannot touch the developer's files.
+# REAL_CORE_DIR names the developer's real Core; only test_no_personal.sh gets it (and only reads it).
 cd "$(dirname "$0")" || exit 1
 HERE="$(pwd)"
 
 # run.sh --one <n> <file> — runs one file in $RUN_ROOT/<n>; writes out, rc and secs there (xargs calls this)
 if [ "${1:-}" = "--one" ]; then
+  case "$3" in test_no_personal.sh) ;; *) unset REAL_CORE_DIR ;; esac
   d="$RUN_ROOT/$2"; mkdir -p "$d/home" "$d/xdg" "$d/codex" "$d/tmp"; : > "$d/gitconfig"
   start=$(date +%s)
   HOME="$d/home" XDG_CONFIG_HOME="$d/xdg" CODEX_HOME="$d/codex" GIT_CONFIG_GLOBAL="$d/gitconfig" \
@@ -20,6 +22,12 @@ if [ "${1:-}" = "--one" ]; then
   echo $? > "$d/rc"; echo $(( $(date +%s) - start )) > "$d/secs"
   exit 0
 fi
+
+# The real Core, found before the files get a throwaway HOME: test_no_personal.sh reads its PROJECTS.md (and only
+# reads it). CORE_DIR when set, else ~/Projects/Core; a value already set (a nested run) is kept. It is exported
+# for the --one runs, and each run but test_no_personal.sh's drops it (above).
+REAL_CORE_DIR="${REAL_CORE_DIR:-${CORE_DIR:-$HOME/Projects/Core}}"
+readonly REAL_CORE_DIR; export REAL_CORE_DIR
 
 jobs=1
 if [ "${1:-}" = "-j" ]; then

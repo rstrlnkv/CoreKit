@@ -23,7 +23,7 @@ if command -v python3 >/dev/null 2>&1; then
   assert_exit 0 python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$PJ"
   assert_exit 0 python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$M"
 else
-  echo "  note: python3 not found, JSON well-formedness not checked"
+  skip json "python3 not on PATH; JSON well-formedness not checked"
 fi
 
 # marketplace: a separate entry with its own source; the description names every plugin
@@ -256,10 +256,10 @@ if command -v codex >/dev/null 2>&1 && codex sandbox --help >/dev/null 2>&1; the
   elif ( cd "$R5" && codex sandbox cat ok.txt >/dev/null 2>&1 ); then
     fail "codex sandbox reads ok.txt without the review profile but not with it: the profile is broken"
   else
-    echo "  note: codex sandbox cannot read an ordinary file here (nested sandbox?), the profile is not run"
+    skip codex-profile "codex sandbox cannot read an ordinary file here (nested sandbox?); the profile is not run"
   fi
 else
-  echo "  note: codex not installed, the profile is not run"
+  skip codex-profile "codex not on PATH; the profile is not run"
 fi
 assert_not_contains "$S" 'GPT can read the project but'
 assert_not_contains "$P/README.md" 'GPT can read the project but'
@@ -307,8 +307,15 @@ okrun() { # <folder> <label>: accepted, run, and removed
   case "$out" in exit=0*) pass ;; *) fail "$2: refused: $out" ;; esac
   assert_no_file "$1"
 }
+# A bare `mktemp -d` while TMPDIR points elsewhere: macOS puts the folder in the system temp folder, which is
+# accepted. GNU mktemp honours TMPDIR, so there the case does not exist (the unused folder is removed).
 mkdir -p "$SANDBOX/elsewhere"
-okrun "$(TMPDIR="$SANDBOX/elsewhere" mktemp -d)" "a bare mktemp -d folder while TMPDIR points elsewhere"
+BARE="$(TMPDIR="$SANDBOX/elsewhere" mktemp -d)"
+case "$BARE" in
+  "$SANDBOX/elsewhere"/*) rmdir "$BARE"
+    skip bare-mktemp "mktemp -d honours TMPDIR here (GNU), so a bare mktemp -d folder outside it cannot be made" ;;
+  *) okrun "$BARE" "a bare mktemp -d folder while TMPDIR points elsewhere" ;;
+esac
 okrun "$(mktemp -d /tmp/coreopinion.XXXXXXXXXX)" "a folder right in /tmp (a link on macOS)"
 okrun "$(mktemp -d /tmp/tmp.XXXXXXXXXX)" "a tmp.* folder right in /tmp"
 SYS="$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null)"
@@ -380,6 +387,6 @@ assert_contains "$ROOT/README.md" 'plugins/coreopinion/README.md'
 if command -v claude >/dev/null 2>&1; then
   assert_exit 0 claude plugin validate "$P"
 else
-  echo "  note: claude not on PATH, plugin validate skipped"
+  skip plugin-validate "claude not on PATH"
 fi
 finish

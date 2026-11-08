@@ -1,4 +1,4 @@
-# ShellCheck settings. CI (.github/workflows/tests.yml) runs it over plugins/*/scripts, plugins/*/hooks and tests.
+# ShellCheck settings. CI (.github/workflows/tests.yml) runs it over every bash script under plugins/ and tests/.
 shell=bash
 # Files are sourced by paths known only at run time ("$SCRIPTS/lib.sh", "$(dirname "$0")/lib.sh").
 disable=SC1090,SC1091

@@ -5,9 +5,8 @@
 # "paths are verbatim"), so `do<TAB>cs/a.md` really writes docs/a.md while the guards saw `do<TAB>cs/a.md`.
 # Skipped when `codex` is not installed. CODEX_HOME and HOME are the sandbox (new_sandbox).
 source "$(dirname "$0")/lib.sh"
-if ! command -v codex >/dev/null 2>&1; then echo "SKIP codex-patch-parity: codex not on PATH"; exit 0; fi
+if ! command -v codex >/dev/null 2>&1; then skip codex-patch-parity "codex not on PATH"; finish; fi
 new_sandbox
-trap 'rm -rf "$SANDBOX"' EXIT
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
 mkdir -p "$CODEX_HOME" "$CORE_DIR/p/docs" "$HOME/.ssh"
 : > "$CORE_DIR/p/CLAUDE.md"
@@ -26,7 +25,7 @@ hook() {
 #   the real parser writes that file, and the guard refuses the patch (exit 2 and a message)
 parity() {
   reset; real "$4"
-  if [ "$RC_REAL" = 0 ] && [ -f "$C/$3" -o -f "$3" ]; then pass; else fail "$2: the real Codex did not write $3 (rc $RC_REAL: $(head -c 200 "$SANDBOX/real.out"))"; fi
+  if [ "$RC_REAL" = 0 ] && { [ -f "$C/$3" ] || [ -f "$3" ]; }; then pass; else fail "$2: the real Codex did not write $3 (rc $RC_REAL: $(head -c 200 "$SANDBOX/real.out"))"; fi
   reset; hook "$1" "$4"; local rc=$?
   assert_eq "$rc" "2" "$2: $1 must refuse a patch whose real target is $3"
   [ -s "$SANDBOX/hook.err" ] && pass || fail "$2: exit 2 without a message"

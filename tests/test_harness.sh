@@ -97,7 +97,31 @@ for f in test_env.sh test_env2.sh; do
 done
 [ "$(sed -n 1p "$ENVOUT.test_env.sh")" != "$(sed -n 1p "$ENVOUT.test_env2.sh")" ] && pass || fail "two files share one HOME"
 assert_eq "$(left)" "0" "run.sh left its root"
+
+# the real Core: run.sh gives every file a throwaway HOME, so it passes the Core's real place, found before the swap,
+# as REAL_CORE_DIR to test_no_personal.sh alone (it only reads it): CORE_DIR when set, else <HOME>/Projects/Core;
+# a REAL_CORE_DIR already set (a nested run) is kept. Every other file runs without REAL_CORE_DIR.
+fake test_no_personal.sh 'printf "%s\n" "${REAL_CORE_DIR:-unset}" "$HOME" > "$ENVOUT.core"; pass; finish'
+fake test_other.sh 'printf "%s\n" "${REAL_CORE_DIR:-unset}" > "$ENVOUT.other"; pass; finish'
+core_run() { rm -f "$ENVOUT.core" "$ENVOUT.other"; (cd "$T" && env -u REAL_CORE_DIR -u CORE_DIR TMPDIR="$RT" "$@" bash run.sh no_personal other > /dev/null 2>&1); }
+RH="$SANDBOX/real home"; mkdir -p "$RH"
+core_run HOME="$RH"
+assert_eq "$(sed -n 1p "$ENVOUT.core" 2>/dev/null)" "$RH/Projects/Core" "REAL_CORE_DIR: the Core under the HOME run.sh was started with"
+assert_eq "$(cat "$ENVOUT.other" 2>/dev/null)" "unset" "REAL_CORE_DIR: another file does not get it"
+case "$(sed -n 2p "$ENVOUT.core" 2>/dev/null)" in "$RH"|"") fail "the file's HOME is not a throwaway one" ;; *) pass ;; esac
+core_run HOME="$RH" CORE_DIR="$SANDBOX/my core"
+assert_eq "$(sed -n 1p "$ENVOUT.core" 2>/dev/null)" "$SANDBOX/my core" "REAL_CORE_DIR: CORE_DIR when it is set"
+core_run HOME="$RH" CORE_DIR="$SANDBOX/my core" REAL_CORE_DIR="$SANDBOX/outer"
+assert_eq "$(sed -n 1p "$ENVOUT.core" 2>/dev/null)" "$SANDBOX/outer" "REAL_CORE_DIR: a value already set is kept"
+rm -f "$T/test_no_personal.sh" "$T/test_other.sh"
 OUT="$(cd "$T" && KEEP_SANDBOX=1 TMPDIR="$RT" bash run.sh env 2>&1)"; has "kept:" "run.sh KEEP_SANDBOX=1"
 assert_eq "$(left)" "1" "run.sh KEEP_SANDBOX=1 keeps its root"
 chmod -R u+rwx "$RT"; rm -rf "$RT"
+
+# --- skips go through skip (SKIP-1): a converted file has no old-style `echo "SKIP ..."` or `echo "  note: ..."`
+# line, which run.sh lists only when its words happen to match. Add a file here once it is converted.
+for f in test_codex_chain.sh test_coreopinion.sh test_no_personal.sh test_coremodel_codex.sh test_codex_patch_parity.sh; do
+  old="$(grep -nE 'echo "[[:space:]]*(note:|SKIP )' "$ROOT/tests/$f" | cut -d: -f1 | tr '\n' ' ')"
+  assert_eq "${old:-none}" "none" "$f: old-style skip or note lines (use skip)"
+done
 finish
