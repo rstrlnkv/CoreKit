@@ -1,0 +1,7 @@
+# The Codex hooks file of each plugin that has a Codex manifest, as last released: <plugin> <cksum> <version>.
+# Codex drops its trust when this file changes, so tests/test_manifest.sh asks the CHANGELOG section named
+# here to say "again in `/hooks`". When you change a hooks file: put its new cksum here with the version
+# Unreleased and add the note under ## [Unreleased]. The release commit then replaces Unreleased with the
+# version it releases (the [Unreleased] section is empty after a release, so a stale line fails).
+corecrew 2867131335 0.9.0
+coremodel 590029789 0.7.0

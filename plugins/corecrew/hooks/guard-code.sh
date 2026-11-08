@@ -230,8 +230,8 @@ if [ "$tool" = Bash ] && agent="$(ro_agent)"; then
   done <<< "$found"
 fi
 
-# --- Write, Edit, MultiEdit, NotebookEdit: one path in the tool input. Any other tool passes.
-case "$tool" in Write|Edit|MultiEdit|NotebookEdit|apply_patch|Bash) ;; *) exit 0 ;; esac
+# --- Write, Edit, NotebookEdit: one path in the tool input. Any other tool passes.
+case "$tool" in Write|Edit|NotebookEdit|apply_patch|Bash) ;; *) exit 0 ;; esac
 
 # internal_hit — stdin: raw text. Prints what looks like an internal path in it and exits 0, or exits 1. The text
 # is cut into components at / \ quotes, blanks and shell punctuation; a component docs, .claude, claude.md,

@@ -48,6 +48,7 @@ plugins/coremodel/                model and effort picker
 plugins/coreopinion/              second opinion from GPT (Claude Code only)
   skills/second-opinion/          SKILL.md; scripts/: ask-gpt.sh (the Codex run), allowed-files.sh and
                                   secret-patterns.txt (the one secret list)
+    agents/openai.yaml            Codex: keeps the skill out of Codex (coreopinion is Claude Code only)
   evals/                          trigger evals
 scripts/commit-subjects.sh        the check of this repo's own commit subjects (CI job and optional commit-msg hook)
 tests/                            bash tests, run by tests/run.sh; lib.sh gives each test a sandbox

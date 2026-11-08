@@ -53,9 +53,10 @@ closed() {
 sec_files() {
 mkdir -p "$CORE_DIR/foo" "$(dirname "$CORE_DIR")/Foo"; : > "$CORE_DIR/foo/CLAUDE.md"; echo "FAKE=1" > "$(dirname "$CORE_DIR")/Foo/.env"
 run_file Read "$(dirname "$CORE_DIR")/Foo/.env" "$(dirname "$CORE_DIR")/Foo"; blocked "new layout: Read Projects/Foo/.env" "$(dirname "$CORE_DIR")/Foo/.env"
-for t in Read Edit MultiEdit Write NotebookEdit; do
+for t in Read Edit Write NotebookEdit; do
   run_file "$t" "$C/.env";             blocked "$t .env" "$C/.env"
 done
+run_file MultiEdit "$C/.env";                 ok "MultiEdit is gone from hooks.json: not judged"
 run_file Read "$C/.env.local";                blocked "Read .env.local" "$C/.env.local"
 run_file Read "$C/.env.production";           blocked "Read .env.production" "$C/.env.production"
 run_file Read "$C/.env.";                     blocked "Read .env." "$C/.env."
@@ -281,8 +282,6 @@ run_json '{"cwd":"'"$C"'","tool_name":"Write","tool_input":{"content":"'"$body"'
 run_json '{"cwd":"'"$C"'","tool_name":"Write","tool_input":{"file_path":"'"$C"'/.env","content":"A=1"}}'; blocked "Write .env" "$C/.env"
 run_json '{"cwd":"'"$C"'","tool_name":"Write","tool_input":{"content":"'"$body"'","file_path":"'"$C"'/.env.local"}}'; blocked "Write .env.local, content first" "$C/.env.local"
 run_json '{"cwd":"'"$C"'","tool_name":"Edit","tool_input":{"file_path":"'"$C"'/src/a.ts","old_string":".env","new_string":".env.example"}}'; ok "Edit that rewrites the text .env"
-run_json '{"cwd":"'"$C"'","tool_name":"MultiEdit","tool_input":{"file_path":"'"$C"'/src/a.ts","edits":[{"old_string":"~/.ssh/","new_string":".env"}]}}'; ok "MultiEdit with .env in edits"
-run_json '{"cwd":"'"$C"'","tool_name":"MultiEdit","tool_input":{"file_path":"'"$C"'/.env","edits":[{"old_string":"a","new_string":"b"}]}}'; blocked "MultiEdit .env" "$C/.env"
 run_json '{"cwd":"'"$C"'","tool_name":"Read","tool_input":{"file_path":"'"$C"'/src/a.ts","note":"/.env and /.ssh/ here"}}'; ok "Read with a note key"
 }
 bg sec_content

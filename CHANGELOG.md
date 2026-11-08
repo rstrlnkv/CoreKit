@@ -41,6 +41,9 @@ commit log has the full detail.
 
 ## [0.9.0] - 2026-11-08
 
+Codex: `hooks/hooks.json` changed (the one-suite timeout, a status message, `MultiEdit` dropped from
+the matchers), so Codex keeps the hooks off until you trust them again in `/hooks`.
+
 ### Added
 
 - `reference/codex-host.md`: one Codex reference for all four skills (skill folder, settings,

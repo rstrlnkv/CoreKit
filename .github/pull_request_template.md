@@ -8,7 +8,7 @@
 - [ ] `claude plugin validate .` and `claude plugin validate plugins/<plugin>` pass for every plugin I changed.
 - [ ] Scripts run on macOS bash 3.2 with BSD tools (no `sed -i`, `mapfile`, `grep -P`, `jq`; see tests/test_portability.sh).
 - [ ] `shellcheck --severity=warning` reports nothing for the shell files I changed (CI runs it on every shell file of
-      the plugins and tests/; settings in .shellcheckrc and tests/.shellcheckrc).
+      the plugins, tests/ and scripts/; settings in .shellcheckrc and tests/.shellcheckrc).
 
 ## Release rule
 

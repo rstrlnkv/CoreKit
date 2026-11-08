@@ -44,7 +44,7 @@ blocked() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_e
 blocked_any() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; [ -n "$ERR" ] && pass || fail "$1: empty stderr"; }
 
 
-# Write, Edit, NotebookEdit, MultiEdit: paths, worktrees, public-docs, symlinks
+# Write, Edit, NotebookEdit: paths, worktrees, public-docs, symlinks
 sec_write() {
 # --- Write: the three internal kinds are refused, with the right target in the message
 run_file Write "$C/CLAUDE.md";               blocked "Write code/CLAUDE.md" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
@@ -404,13 +404,11 @@ for in in '' 'not json at all' '{}' '[]' 'null' '{"cwd":"'"$C"'"}' '{"cwd":"'"$C
 done
 OUT="$(bash "$H" </dev/null 2>&1)"; assert_eq "$?" "0" "closed stdin"
 # a tool the hook does not know and no path in it
-# only Write, Edit, MultiEdit and NotebookEdit are file tools; any other tool passes
-for tl in Read Grep Glob WebFetch Task ''; do
+# only Write, Edit and NotebookEdit are file tools; any other tool passes (MultiEdit is gone from hooks.json)
+for tl in Read Grep Glob WebFetch Task MultiEdit ''; do
   run_json '{"cwd":"'"$C"'","tool_name":"'"$tl"'","tool_input":{"file_path":"'"$C"'/CLAUDE.md","notebook_path":"'"$C"'/CLAUDE.md","command":"echo x > CLAUDE.md"}}'; ok "tool '$tl' is not judged"
 done
 run_json '{"cwd":"'"$C"'","tool_input":{"file_path":"'"$C"'/CLAUDE.md"}}'; ok "no tool_name"
-run_file MultiEdit "$C/docs/a.md";           blocked "MultiEdit docs/a.md" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
-run_file MultiEdit "$C/src/a.sh";            ok "MultiEdit src/a.sh"
 
 
 # --- <> opens a file for reading AND writing and creates it: it is a write target (it used to pass)

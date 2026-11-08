@@ -1,6 +1,6 @@
 # coremodel
 
-A Claude Code plugin that picks the model and the effort level each prompt needs, before Claude starts on it.
+A Claude Code plugin that picks the model and the effort level each prompt needs, before Claude starts on it; in Codex it gives an opt-in hint (see [Codex](#codex)).
 
 ![platform](https://img.shields.io/badge/platform-Claude%20Code%202.1.309%2B-lightgrey) ![release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcoremodel%2F.claude-plugin%2Fplugin.json&query=%24.version&label=release) ![licence](https://img.shields.io/github/license/rstrlnkv/CoreKit)
 
@@ -17,6 +17,7 @@ in the `corekit` marketplace and does not depend on `corecrew`.
 ```
 
 Update: `claude plugin marketplace update corekit`, `claude plugin update coremodel@corekit`, then restart Claude Code.
+In Codex: `codex plugin marketplace upgrade corekit`, then trust the hook again in `/hooks` (see [Codex](#codex)).
 
 ## Features
 
@@ -177,7 +178,8 @@ switch with /model if the current one differs". You switch yourself with `/model
   runs with `--ignore-user-config` and low reasoning effort, so it does not load your config, MCP
   servers or other plugins' hooks (your login still works). It waits at most 20 seconds
   (`COREMODEL_HINT_TIMEOUT`); any failure is silent and the prompt goes on.
-- Codex asks you to trust the hook the first time: review and enable it in `/hooks`.
+- Codex asks you to trust the hook the first time, and again after each update: review and enable
+  it in `/hooks`.
 
 ## Requirements
 

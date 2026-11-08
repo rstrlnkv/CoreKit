@@ -16,7 +16,9 @@ full detail.
 
 ## [0.7.0] - 2026-11-08
 
-Needs Claude Code 2.1.309 or newer (models are named by alias).
+Needs Claude Code 2.1.309 or newer (models are named by alias). Codex: the hook changed, so Codex
+keeps it off until you trust it again in `/hooks`. The hint is also off until you set
+`codex_hint: on` (see the README).
 
 ### Added
 

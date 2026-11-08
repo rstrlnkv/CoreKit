@@ -8,7 +8,7 @@ Three independent plugins for Claude Code and the Codex CLI. Install one, two or
 | [**coremodel**](plugins/coremodel/README.md) | Each prompt runs on the model and effort level it needs; you are asked before the costly ones. | Claude Code; a hint in Codex |
 | [**coreopinion**](plugins/coreopinion/README.md) | A second opinion from GPT on your code or plan; Claude stays the only one that edits. | Claude Code |
 
-![corecrew](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcorecrew%2F.claude-plugin%2Fplugin.json&query=%24.version&label=corecrew) ![coremodel](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcoremodel%2F.claude-plugin%2Fplugin.json&query=%24.version&label=coremodel) ![coreopinion](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcoreopinion%2F.claude-plugin%2Fplugin.json&query=%24.version&label=coreopinion) ![platform](https://img.shields.io/badge/tested%20on-macOS-lightgrey) ![licence](https://img.shields.io/github/license/rstrlnkv/CoreKit)
+![corecrew](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcorecrew%2F.claude-plugin%2Fplugin.json&query=%24.version&label=corecrew) ![coremodel](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcoremodel%2F.claude-plugin%2Fplugin.json&query=%24.version&label=coremodel) ![coreopinion](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcoreopinion%2F.claude-plugin%2Fplugin.json&query=%24.version&label=coreopinion) ![platform](https://img.shields.io/badge/tested%20on-macOS%20%7C%20Linux-lightgrey) ![licence](https://img.shields.io/github/license/rstrlnkv/CoreKit)
 
 ## Install
 
@@ -29,6 +29,10 @@ Inside a running session the same steps are `/plugin marketplace add rstrlnkv/Co
 architect and explorer agents: `/plugin install feature-dev@claude-plugins-official`. Restart
 Claude Code after an install.
 
+Recommended: add the deny rules from [SECURITY.md](SECURITY.md#recommended-host-settings) to your
+Claude Code settings. They keep `.env` files and `~/.ssh` away from Claude's file tools. That is
+the boundary; the plugins' hooks only back it up.
+
 ### Codex
 
 corecrew and coremodel also run in the Codex CLI; coreopinion does not.
@@ -40,7 +44,7 @@ codex plugin add coremodel@corekit
 ```
 
 Then start `codex`, open `/hooks` and trust the plugins' hooks; until you do, they do not run, and
-Codex does not tell you so (corecrew's skills remind you).
+Codex does not tell you so (corecrew's `new-project`, `task` and `ship` remind you when they run).
 The plugin READMEs list the remaining steps.
 
 ### Update
@@ -67,8 +71,8 @@ Each plugin's README has the full description, its commands and its settings:
 ## Requirements
 
 - **Hosts:** Claude Code 2.1.271 or newer (coremodel needs 2.1.309), or the Codex CLI.
-- **OS:** macOS is tested. Linux is expected to work (portable bash, no macOS-only tools), but no
-  test run covers it yet. Windows needs Git for Windows and is untested.
+- **OS:** macOS and Linux: CI runs the full suite on both, on macOS with its system bash 3.2.
+  Windows needs Git for Windows and is untested.
 - **Per plugin:** corecrew needs git and the GitHub CLI (`gh`); coreopinion needs the Codex CLI
   signed in with a ChatGPT plan. Details, network use and the files each plugin writes are in its README.
 

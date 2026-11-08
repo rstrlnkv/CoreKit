@@ -5,8 +5,8 @@ a release is made. [ARCHITECTURE.md](ARCHITECTURE.md) explains how the repo is l
 
 ## Requirements
 
-- macOS or Linux with `bash`, `git` and the usual command-line tools. The tests run on macOS;
-  Linux is expected to work.
+- macOS or Linux with `bash`, `git` and the usual command-line tools. CI runs the suite on both
+  (macOS with the system bash 3.2, and Ubuntu).
 - Optional: the `claude` CLI and the `codex` CLI. Without them, the tests that need them print a
   `SKIP` line and the run names them after `ALL TESTS PASSED`. CI installs `claude` (the version is
   pinned in `.github/workflows/tests.yml`), so there those parts run, and a `SKIP` for lack of it
@@ -15,8 +15,8 @@ a release is made. [ARCHITECTURE.md](ARCHITECTURE.md) explains how the repo is l
     `claude plugin validate` checks (`tests/test_plugin_validate.sh`, and coreopinion's own);
   - without `codex`: the checks against the real Codex CLI (patch parsing, the sandbox profiles,
     plugin install, parts of the boundary and plugin-root tests).
-- `python3` and `sips` (macOS) are used by a few checks when present (JSON syntax, icon size); the
-  plugins never need them.
+- `python3`, `node` and `sips` (macOS) are used by a few checks when present (JSON syntax, icon
+  size); the plugins never need them.
 
 ## Running the tests
 
@@ -33,7 +33,7 @@ Core. A test never touches your real `~/.claude`, `~/.codex`, Core or global git
 `gh` on `PATH` instead of calling GitHub.
 
 CI also runs [ShellCheck](https://www.shellcheck.net/) at `--severity=warning` on the shell files
-of the plugins and the tests. Run it on the files you changed before you push:
+of the plugins, the tests and `scripts/`. Run it on the files you changed before you push:
 `shellcheck --severity=warning <files>` (settings: `.shellcheckrc`, `tests/.shellcheckrc`).
 
 Trigger evals (does a skill start when it should) make real model calls and are not part of the
