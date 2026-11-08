@@ -132,6 +132,8 @@ for pl in $plugins; do
   fi
   assert_file "$ic"
   assert_no_file "$ROOT/plugins/$pl/.claude-plugin/icon.png"
+  # no top-level bin/ in a plugin: claude.ai and Cowork refuse a plugin that has one
+  assert_no_file "$ROOT/plugins/$pl/bin"
   assert_file "$ROOT/docs/icons/$pl.svg"
   if command -v sips >/dev/null 2>&1; then
     w="$(sips -g pixelWidth "$ic" 2>/dev/null | sed -n 's/.*pixelWidth: //p')"; h="$(sips -g pixelHeight "$ic" 2>/dev/null | sed -n 's/.*pixelHeight: //p')"

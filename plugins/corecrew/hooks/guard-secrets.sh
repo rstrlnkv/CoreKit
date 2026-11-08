@@ -15,7 +15,7 @@
 #   (.envrc: direnv files often hold secrets, but the spec lists only .env and .env.*.)
 # - $HOME/.ssh itself and anything under it, after ".." and symlinks are resolved (a folder link into
 #   ~/.ssh counts). "~", "$HOME" and "${HOME}" at the start of a path are expanded.
-# Tools and keys: Read, Edit, MultiEdit, Write -> file_path; NotebookEdit -> notebook_path; Grep -> path and
+# Tools and keys: Read, Edit, Write -> file_path; NotebookEdit -> notebook_path; Grep -> path and
 #   glob (the pattern is a regex, not a path); Glob -> pattern and path; Bash -> command. Any other tool
 #   passes. A glob names a secret when its last component does (**/.env, .env*, .env.*, not **/*), or
 #   when its literal part before the first * ? [ { is ~/.ssh or under it (~/.ssh/**). **/* passes. A glob
@@ -24,7 +24,7 @@
 #   exclusion is not joined.
 #   Grep and Glob only list or search, but the spec lists them, so they are judged like a read.
 # Codex: its shell is "Bash" and its file edits are "apply_patch" (tool_input.command is the patch text);
-#   Read, Grep, Glob, MultiEdit and NotebookEdit never fire there, so a read goes through Bash only. apply_patch:
+#   Read, Grep, Glob and NotebookEdit never fire there, so a read goes through Bash only. apply_patch:
 #   the paths of Add File, Update File and Move to (the file written) and the source of a move are judged like
 #   a file tool; Delete File passes (like `rm .env`). The patch body is never scanned (it may mention .env).
 #   A text this hook cannot read as a patch (an X line, or no path at all) fails closed on a secret-looking string
@@ -104,7 +104,7 @@ in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 
 tool="$(json_str "$in" tool_name)"
-case "$tool" in Read|Edit|MultiEdit|Write|NotebookEdit|Grep|Glob|apply_patch|Bash) ;; *) exit 0 ;; esac
+case "$tool" in Read|Edit|Write|NotebookEdit|Grep|Glob|apply_patch|Bash) ;; *) exit 0 ;; esac
 cwd="$(json_str "$in" cwd)"
 [ -n "$cwd" ] || exit 0
 load_settings
@@ -254,7 +254,7 @@ fi
 # --- File tools, Grep, Glob: the path keys of the tool input.
 req=""; opt=""
 case "$tool" in
-  Read|Edit|MultiEdit|Write) req="file_path" ;;
+  Read|Edit|Write) req="file_path" ;;
   NotebookEdit) req="notebook_path" ;;
   Grep) opt="path glob" ;;
   Glob) req="pattern"; opt="path" ;;
