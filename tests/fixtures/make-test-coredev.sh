@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the end-to-end fixture test-coredev (spec section 16): a tiny project with a planted bug,
+# Builds the end-to-end fixture test-coredev: a tiny project with a planted bug,
 # to try "/corecrew:task fix: ..." on. New layout: the code lives beside the Core.
 #   Core side: <core_dir>/test-coredev/ with CLAUDE.md ("check: bash tests/run.sh"), a wiki that
 #              passes wiki-check.sh (made from the new-project templates, INDEX.md

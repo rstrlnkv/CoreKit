@@ -6,7 +6,7 @@
 # with exit 2 and a message naming the right place:
 #   corecrew: <path> is an internal file and must not live in the code folder. Write it to <Core>/<project>/<relative path> instead.
 #   Docs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in <Core>/<project>/CLAUDE.md.
-# (spec section 14, item 3). Nothing is ever printed to stdout.
+# Nothing is ever printed to stdout.
 #
 # Rules, all compared on the canonical path (".." and symlinks resolved, letter case as on disk
 # for the part that exists, then folded to lower case for the comparison, ASCII only):
@@ -59,7 +59,7 @@
 #   "$(...)" (the commit-message idiom) has its body skipped; <<"WORD" there stops the judging.
 #   Wrapper options with a value are skipped (timeout 5 tee, sudo -u x touch, nice -n 5). Documented limits:
 #   relative targets after cd, xargs, find -exec, bash -c "...", and the file-target judging being inert outside a project
-#   cwd (spec D17). That is about file-target judging only: the shell-patch refusal (Codex) runs before it, in every folder.
+#   cwd. That is about file-target judging only: the shell-patch refusal (Codex) runs before it, in every folder.
 #   Not followed: variables, globs, `sh -c "..."`, ln, install, in-place sed, rsync, scripts. A target
 #   that has $ ` * ? [ { is not judged. Quoted text is not a command, heredoc bodies and comments are
 #   skipped. At most 100 targets are looked at. The tokenizer is one linear pass in awk. A command this

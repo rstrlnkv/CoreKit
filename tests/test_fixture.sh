@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fixtures/make-test-coredev.sh: the hand-made end-to-end project (spec section 16).
+# tests/fixtures/make-test-coredev.sh: the hand-made end-to-end project.
 source "$(dirname "$0")/lib.sh"
 B="$ROOT/tests/fixtures/make-test-coredev.sh"
 WC="$SCRIPTS/wiki-check.sh"

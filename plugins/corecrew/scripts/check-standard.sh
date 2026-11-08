@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check-standard.sh — deterministic checks of one standard file (spec section 7.1).
+# check-standard.sh — deterministic checks of one standard file.
 #
 # Usage: check-standard.sh <file>
 #

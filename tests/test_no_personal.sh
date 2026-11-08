@@ -31,7 +31,7 @@ SELF="tests/test_no_personal.sh"
 GENERIC='core corekit corecrew coremodel coreopinion test-coredev demo test tests example examples sample project projects code docs todo hello world'
 # Files that still cite the private spec; their streams remove the references (refactor plan, PUB-9).
 # Listed here they are skipped with a note; delete an entry once its file is clean.
-SPEC_PENDING='plugins/corecrew/hooks/guard-code.sh plugins/corecrew/hooks/guard-secrets.sh plugins/corecrew/scripts/check-standard.sh plugins/corecrew/skills/new-project/scripts/preflight.sh plugins/coremodel/hooks/models.ts plugins/coremodel/hooks/policy.ts plugins/coremodel/hooks/register.tsx plugins/coremodel/tests/flow.test.ts plugins/coremodel/tests/ui.test.tsx tests/fixtures/make-test-coredev.sh tests/test_agents.sh tests/test_fixture.sh tests/test_task_skill.sh'
+SPEC_PENDING=''
 
 # project_names <PROJECTS.md> — one name per line, from list items "- <name> — <purpose> — <path>".
 # Drops names under 4 characters and generic words. Names are only ever written to a file.

@@ -3,7 +3,7 @@
 # secrets are not read. Inside a Core project it blocks .env, .env.* and ~/.ssh/**, with exit 2 and the message
 #   corecrew: reading secrets is blocked (<path>)
 #   Ask the user to check the value themselves, or use .env.example.
-# (spec section 14, item 4). <path> is the path as the tool was given it (a "~" stays a "~", a relative
+# <path> is the path as the tool was given it (a "~" stays a "~", a relative
 # path stays relative); nothing is ever printed to stdout.
 #
 # What is a secret (letter case does not matter, ASCII only):
@@ -68,7 +68,7 @@
 #   and passes, and so do .* and .??* (no letter in them). Wrapper options that take a value are skipped
 #   (timeout 5, nice -n 5, sudo -u root, env -u X, stdbuf -o0). zip -x/-i patterns are not files.
 #   Documented limits, not redesigned: a relative target after cd, xargs, find -exec, bash -c "...", and the
-#   guard being inert outside a project cwd (spec D17).
+#   guard being inert outside a project cwd.
 #   The tokenizer is the one linear awk pass of guard-code (scripts/bash-lex.awk). After a cd the name
 #   rule still applies (cd .. && cat .env is blocked) but a relative ~/.ssh is unknown. Not caught: git
 #   (git add .env is not a read; git show HEAD:.env is), output redirects, ls, a recursive grep over a
@@ -80,7 +80,7 @@
 #   hook fails closed when the command has a secret-looking string.
 # - Inert outside a project (<Core>/<project>/
 #   or its code folder beside the Core): cwd missing or not in a project -> exit 0 at once (so ~/.ssh is
-#   open when Claude works outside a project, spec D17). No network, no git.
+#   open when Claude works outside a project). No network, no git.
 #
 # Fail closed (the one hook that does): the input is odd when a path key the tool needs cannot be read
 # as a clean string (truncated JSON, a number, an array, an object, null, a key spelled with an escape);
