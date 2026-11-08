@@ -104,7 +104,19 @@ assert_contains "$SANDBOX/out" "Push failed"
 assert_eq "$(cnt "$C")" "$((nc+1))" "the code commit of a failed push"; assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "the Core commit of a failed push"
 assert_eq "$(cat "$C/app.txt")" "v4" "a failed push changed a file"
 assert_eq "$(git -C "$SANDBOX/code.git" rev-list --all --count)" "0" "a failed push touched the code remote"
+assert_contains "$SANDBOX/out" "code not pushed"   # the user learns where the code goes even when the Core push fails
 git -C "$CORE_DIR" remote set-url origin "$SANDBOX/core.git"
+# failure path: the Core pre-push hook refuses the push (pre-push-core on a non-GitHub remote). The line that
+# says the code leaves through ship is printed anyway; the exit is non-zero; both commits stay.
+printf '#!/bin/sh\n# corecrew hook shim (test: refuse)\necho "Push blocked: test" >&2\nexit 1\n' > "$CORE_DIR/.git/hooks/pre-push"
+sleep 1; echo "v5" > "$C/app.txt"; echo w >> "$P/docs/brief.md"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
+(cd "$C" && bash "$SAVE" "Hook refuses" --push) > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "1" "save --push with a Core pre-push hook that refuses"
+assert_contains "$SANDBOX/out" "Push failed"; assert_contains "$SANDBOX/out" "code not pushed"
+assert_eq "$(cnt "$C")" "$((nc+1))" "the code commit when the hook refuses"; assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "the Core commit when the hook refuses"
+assert_eq "$(cat "$C/app.txt")" "v5" "a refused push changed a file"
+assert_eq "$(git -C "$SANDBOX/core.git" log -1 --format=%s main 2>/dev/null)" "Core only" "a refused push reached the Core remote"
+printf '#!/bin/sh\n# corecrew hook shim (test no-op)\nexit 0\n' > "$CORE_DIR/.git/hooks/pre-push"
 # knowledge/standards/.coredev changes ride along with the step
 mkdir -p "$CORE_DIR/knowledge"; echo "symptom -> cause -> guard" > "$CORE_DIR/knowledge/engineer.md"
 echo "a note" >> "$CORE_DIR/standards/README.md"; printf 'x\n' > "$CORE_DIR/session-rules.md"
