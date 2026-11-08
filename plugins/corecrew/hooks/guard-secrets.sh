@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code and Codex PreToolUse hook on Read|Edit|MultiEdit|Write|NotebookEdit|Grep|Glob|apply_patch|Bash:
+# Claude Code and Codex PreToolUse hook on Read|Grep|Glob|Edit|Write|NotebookEdit|apply_patch|Bash:
 # secrets are not read. Inside a Core project it blocks .env, .env.* and ~/.ssh/**, with exit 2 and the message
 #   corecrew: reading secrets is blocked (<path>)
 #   Ask the user to check the value themselves, or use .env.example.
@@ -29,18 +29,20 @@
 #   a file tool; Delete File passes (like `rm .env`). The patch body is never scanned (it may mention .env).
 #   A text this hook cannot read as a patch (an X line, or no path at all) fails closed on a secret-looking string
 #   in any line that holds "***"; with no such line it passes. More than 100 paths (a C line) are refused. Header
-#   lines and paths are trimmed like Codex does (Unicode spaces too). In Codex only (lib.sh shell_patch_host: the plugin under
+#   lines and paths are trimmed like Codex does (Unicode spaces too). In Codex only (scripts/shell-patch.sh shell_patch_host: the plugin under
 #   CODEX_HOME, or turn_id in the input; Claude Code has no apply_patch tool) a patch handed to the shell is refused, not judged,
 #   with the match named in the message
 #   (a substring hit on apply_patch, applypatch or apply-patch once quotes, backslashes and newlines are deleted, or a
 #   "*** Begin Patch" with a file marker, or a $' with an escape, or an unquoted glob word that can match the name as a command
-#   word or with 4 or more literal characters, a wildcard argument and a heredoc body's * being no hit, unless the
+#   word or with 4 or more literal characters, a wildcard argument being no hit and a heredoc body's glob word counting only
+#   when it has a /, or is Markdown emphasis holding apply_ apply- or applyp (**Patch**, *apply* pass), or else holds
+#   "apply", a ? or [, or an inner * (a leading-star *ply_patch is a limit), unless the
 #   command is in the simple form: one read-only reader piped only through sort, uniq, cut, tr, nl, wc, head, tail, grep, rg,
 #   with no $ outside single quotes, substitution, list, redirect or program-running option (quoted text is opaque);
 #   BEST EFFORT, NOT A SECURITY BOUNDARY (the apply_patch tool form is the checked path; the real boundary for secrets in
 #   Codex is a sandbox profile, see the plan 3c); limits: a name built at run time (variable, ${...}, $(...) or backticks,
 #   brace expansion, $'apply'$'_patch', 'apply_pat'?h, extglob, IFS changes), a glob that expands to a file named like an
-#   option, a script or interpreter, write_stdin; see lib.sh shell_patch_refused and guard-code.sh): a path built
+#   option, a script or interpreter, write_stdin; see scripts/shell-patch.sh shell_patch_refused and guard-code.sh): a path built
 #   by cd, quoting or $(...) cannot be checked from the command text. Plain mentions in a reader (grep, git commit -m) pass.
 #   This refusal keeps the project gate of the hook (secrets are judged only in a project; guard-code refuses in every folder);
 #   load_settings runs before project_of, so a core_dir that lives only in the settings file counts.
@@ -69,7 +71,8 @@
 #   (timeout 5, nice -n 5, sudo -u root, env -u X, stdbuf -o0). zip -x/-i patterns are not files.
 #   Documented limits, not redesigned: a relative target after cd, xargs, find -exec, bash -c "...", and the
 #   guard being inert outside a project cwd.
-#   The tokenizer is the one linear awk pass of guard-code (scripts/bash-lex.awk). After a cd the name
+#   The tokenizer is one linear awk pass (scripts/bash-lex.awk, shared with the read-only rule of guard-code;
+#   guard-code's own write check has a reader of its own). After a cd the name
 #   rule still applies (cd .. && cat .env is blocked) but a relative ~/.ssh is unknown. Not caught: git
 #   (git add .env is not a read; git show HEAD:.env is), output redirects, ls, a recursive grep over a
 #   folder, variables other than a leading $HOME, sh -c "...", scripts, a link with an innocent name.
@@ -95,6 +98,7 @@
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
+. "$SELF/scripts/shell-patch.sh" 2>/dev/null || exit 0   # shell_patch_host, shell_patch_refused (Codex)
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 
 tool="$(json_str "$in" tool_name)"
@@ -112,6 +116,7 @@ die() {
 # is_secret_name <name> — exit 0 for .env, .env.<x> (x not example, sample, template) and a name that
 # is .env followed by a glob character. No process is started.
 is_secret_name() {
+  # shellcheck disable=SC1083  # the { in [*?[{] is a glob character to match (brace expansion in a name), not syntax
   case "$1" in
     [.][eE][nN][vV]) return 0 ;;
     [.][eE][nN][vV][.][eE][xX][aA][mM][pP][lL][eE]|[.][eE][nN][vV][.][sS][aA][mM][pP][lL][eE]|[.][eE][nN][vV][.][tT][eE][mM][pP][lL][aA][tT][eE]) return 1 ;;
@@ -149,9 +154,11 @@ is_secret() {
   while [ "${#p}" -gt 1 ] && [ "${p%/}" != "$p" ]; do p="${p%/}"; done
   last="${p##*/}"
   is_secret_name "$last" && return 0
+  # shellcheck disable=SC2088  # a literal ~ as typed in the tool input is matched here; resolve_abs expands it later
   if [ -n "$unk" ]; then case "$p" in /*|"~"|"~/"*) ;; *) return 1 ;; esac; fi
   # the literal part before the first glob character (the whole path when there is none)
   pre="$p"
+  # shellcheck disable=SC1083  # the { in [*?[{] is a glob character to match, not syntax
   case "$p" in *[*?[{]*) pre="${p%%[*?[{]*}"; globby=1 ;; esac
   [ -n "$pre" ] || return 1
   resolve_abs "$pre"

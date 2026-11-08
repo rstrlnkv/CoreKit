@@ -164,6 +164,16 @@ Docs meant to stay public in the code folder: list them on a \"public-docs: <pat
 "corecrew: $C/docs/plan.md — внутренний файл, ему не место в папке кода. Запишите его в $CORE_DIR/$PN2/docs/plan.md.
 Документы, которые должны остаться публичными в папке кода, перечислите в строке \"public-docs: <paths>\" в $CORE_DIR/$PN2/CLAUDE.md."
 done
+# too many internal-looking targets in one Bash command: the whole command is refused
+many=""; i=1; while [ $i -le 210 ]; do many="$many docs/x$i"; i=$((i + 1)); done
+for v in "${VARIANTS[@]}"; do
+  printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"touch%s"}}' "$C" "$many" \
+    | vrun "$v" bash "$H" >"$SANDBOX/out" 2>"$SANDBOX/err"; RC=$?
+  assert_eq "$RC" "2" "guard_code_too_many exit [$v]"; assert_eq "$(cat "$SANDBOX/out")" "" "guard_code_too_many: stdout empty [$v]"
+  check "$v" "guard_code_too_many" "$(cat "$SANDBOX/err")" \
+"corecrew: this command writes too many files to check. Split it into smaller commands." \
+"corecrew: команда записывает слишком много файлов, проверить её нельзя. Разбейте её на команды поменьше."
+done
 
 # --- the shell-patch refusal (Codex input: turn_id), in both guards: the text names what matched
 for H in "$HOOKS/guard-code.sh" "$HOOKS/guard-secrets.sh"; do
@@ -197,10 +207,9 @@ done
 H="$HOOKS/one-suite.sh"
 FAKE="onesuite-fake-run-$$"
 export ONE_SUITE_PROCS="$FAKE" ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0 ONE_SUITE_TURN="$SANDBOX/turn"
-dummy=""; trap '[ -z "$dummy" ] || kill "$dummy" 2>/dev/null; chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
+trap 'stop_fakes; chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
 # the fake run works inside the project: one-suite holds only runs of the same project
-(cd "$C" && exec bash -c "exec -a $FAKE sleep 120") >/dev/null 2>&1 & dummy=$!; disown "$dummy" 2>/dev/null
-sleep 1
+fake "$C" "$FAKE"; dummy=$FAKE_PID
 for v in "${VARIANTS[@]}"; do
   printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"swift test","description":"run"}}' "$C" \
     | vrun "$v" bash "$H" >"$SANDBOX/out" 2>"$SANDBOX/err"; RC=$?
@@ -212,7 +221,7 @@ for v in "${VARIANTS[@]}"; do
   case "$v" in ru) check "$v" "one-suite tail" "$(cat "$SANDBOX/err")" "" "запустите ту же команду ещё раз: хук дождётся. Если это процесс, который сам перезапускает тесты при изменении файлов, сначала остановите его." ;;
     *) check "$v" "one-suite tail" "$(cat "$SANDBOX/err")" "run the same command again: this hook waits for it." "" ;; esac
 done
-kill "$dummy" 2>/dev/null; dummy=""
+stop "$dummy"
 # nothing is running but another call holds a fresh turn: the refusal names "a run that is starting"
 mkdir -p "$SANDBOX/turn2"; date +%s > "$SANDBOX/turn2/at"
 for v in en ru; do

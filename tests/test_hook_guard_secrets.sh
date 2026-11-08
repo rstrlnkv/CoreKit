@@ -583,7 +583,7 @@ bg sec_bash_pass
 sec_noawk() {
   local PL="$SANDBOX/plugin-noawk"
   mkdir -p "$PL/hooks" "$PL/scripts"
-  cp "$HOOKS/guard-secrets.sh" "$PL/hooks/"; cp "$SCRIPTS/lib.sh" "$PL/scripts/"; cp "$HOOKS/messages.sh" "$PL/hooks/"
+  cp "$HOOKS/guard-secrets.sh" "$HOOKS/messages.sh" "$PL/hooks/"; cp "$SCRIPTS"/lib*.sh "$SCRIPTS/shell-patch.sh" "$PL/scripts/"
   printf '%s' '{"cwd":"'"$C"'","tool_name":"Bash","tool_input":{"command":"cat .env"}}' | bash "$PL/hooks/guard-secrets.sh" >"$OD/out" 2>"$OD/err"; RC=$?
   assert_eq "$RC" "0" "no awk files: Bash passes"; assert_eq "$(<"$OD/out")$(<"$OD/err")" "" "no awk files: silent"
   printf '%s' '{"cwd":"'"$C"'","tool_name":"Read","tool_input":{"file_path":"'"$C"'/.env"}}' | bash "$PL/hooks/guard-secrets.sh" >"$OD/out" 2>"$OD/err"; RC=$?

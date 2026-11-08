@@ -2,7 +2,8 @@
 # hooks/guard-code.sh: a project's internal files (CLAUDE.md, docs/**, .claude/**) must not be
 # written under the project's code folder: <Projects>/<Name>/** (new layout, beside the Core) or
 # <Core>/<project>/code/** (old layout). Write|Edit|NotebookEdit read the path from the tool input;
-# Bash is judged best effort (redirects, tee, touch, cp, mv, mkdir). Inert outside the Core project.
+# Bash is judged best effort for honest mistakes (ADR 009): redirects, tee, touch, mkdir, cp, mv, install, ln,
+# in-place sed and perl, git mv. Deliberate evasion is a documented limit (the LIMIT cases below). Inert outside the Core project.
 source "$(dirname "$0")/lib.sh"
 new_sandbox
 H="$HOOKS/guard-code.sh"
@@ -191,7 +192,9 @@ run_bash 'git commit -m \"$(cat <<'"'"'EOF'"'"'\nfeat: guard for 5\" screens\n\n
 run_bash 'git commit -m \"$(cat <<EOF\nsay \"hi\nx > docs/a.md\nEOF\n)\" && echo y > docs/b.md'
 blocked "Bash command after a commit heredoc is judged again" "$C/docs/b.md" "$CORE_DIR/p/docs/b.md"
 run_bash 'git commit -m \"$(cat <<-EOF\n\tit\"s > docs/a.md\n\tEOF\n)\"'; ok "Bash commit heredoc <<- in \"\$(...)\""
-run_bash 'git commit -m \"$(cat <<\"EOF\"\nx\" > docs/a.md\nEOF\n)\"'; ok "Bash commit heredoc with a double-quoted delimiter fails open"
+run_bash 'git commit -m \"$(cat <<\"EOF\"\nx\" > docs/a.md\nEOF\n)\"'; ok "Bash commit heredoc with a double-quoted delimiter: its body is skipped"
+run_bash 'git commit -m \"$(cat <<\"EOF\"\nx\nEOF\n)\" && echo y > docs/b.md'
+blocked "Bash command after a commit heredoc with a double-quoted delimiter is judged" "$C/docs/b.md" "$CORE_DIR/p/docs/b.md"
 # a heredoc body that is not closed, and one closed on the last line, are not parsed as commands
 run_bash 'grep -n \"<<'"'"'\" f.sh && echo '"'"'ok'"'"' \"> docs/y\"'; ok "Bash a <<' inside a double-quoted grep pattern does not flip the quoting"
 run_bash 'cat <<EOF\necho x > docs/a.md'; ok "Bash unterminated heredoc body"
@@ -419,7 +422,7 @@ run_bash 'grep -n \"<<\" f.sh'; ok "Bash \"<<\" as a string"
 
 # --- if scripts/*.awk is missing, the Bash path fails open (silently); file tools are still judged
 PL="$SANDBOX/plugin-noawk"; mkdir -p "$PL/hooks" "$PL/scripts"
-cp "$HOOKS/guard-code.sh" "$PL/hooks/"; cp "$SCRIPTS/lib.sh" "$PL/scripts/"; cp "$HOOKS/messages.sh" "$PL/hooks/"
+cp "$HOOKS/guard-code.sh" "$HOOKS/messages.sh" "$PL/hooks/"; cp "$SCRIPTS"/lib*.sh "$SCRIPTS/shell-patch.sh" "$PL/scripts/"
 printf '%s' '{"cwd":"'"$C"'","tool_name":"Bash","tool_input":{"command":"echo x > docs/a.md"}}' | bash "$PL/hooks/guard-code.sh" >"$OD/out" 2>"$OD/err"; RC=$?
 assert_eq "$RC" "0" "no awk files: Bash passes"; assert_eq "$(<"$OD/out")$(<"$OD/err")" "" "no awk files: silent"
 printf '%s' '{"cwd":"'"$C"'","tool_name":"Write","tool_input":{"file_path":"'"$C"'/docs/a.md"}}' | bash "$PL/hooks/guard-code.sh" >"$OD/out" 2>"$OD/err"; RC=$?
@@ -451,6 +454,11 @@ sec_new_layout() {
   run_file Write "$PR/Brain/CLAUDE.md" "$PR/Brain"; ok "new: a folder that is not a project"
   run_bash 'echo x > docs/a.md' "$N"; assert_eq "$RC" "2" "new: Bash echo x > docs/a.md"
   run_bash 'echo x > src/a.md' "$N"; ok "new: Bash src/a.md"
+  # the link session start asks for (agents_link_wrong, local_link_failed): ln -s "<Core>/foo/CLAUDE.md" "<code>/AGENTS.md"
+  run_bash 'ln -s \"'"$CORE_DIR"'/foo/CLAUDE.md\" \"'"$N"'/AGENTS.md\"' "$N"; ok "new: ln -s of the Core CLAUDE.md as AGENTS.md"
+  run_bash 'ln -s ~/notes.md AGENTS.md' "$N"; assert_eq "$RC" "2" "new: ln -s of a file outside the Core as AGENTS.md"
+  run_bash 'ln -s \"'"$CORE_DIR"'/foo/CLAUDE.md\" src/AGENTS.md' "$N"; assert_eq "$RC" "2" "new: a Core link below the code root is refused"
+  run_bash 'ln -s \"'"$CORE_DIR"'/foo/docs\" .claude/x' "$N"; assert_eq "$RC" "2" "new: a Core link into .claude/ is refused"
   printf 'public-docs: docs/\n' >> "$CORE_DIR/foo/CLAUDE.md"
   run_file Write "$N/docs/x.md" "$N"; ok "new: public-docs"
   run_file Write "$N/CLAUDE.md" "$N"; assert_eq "$RC" "2" "new: public-docs does not free CLAUDE.md"
@@ -700,10 +708,10 @@ sec_wrappers() {
   mkdir -p "$B/.claude/worktrees/w"
   run_file Write "$B/.claude/worktrees/w" "$B"; assert_eq "$RC" "0" "an existing worktree dir passes"
   run_file Write "$B/.claude/worktrees/w/src/a.sh" "$B"; assert_eq "$RC" "0" "code inside a worktree passes"
-  # a command line handed to another shell is judged too: bash -c, sh -c, eval
-  code 'bash -c "echo hi > CLAUDE.md"'; assert_eq "$RC" "2" "bash -c writes CLAUDE.md"
-  code "sh -c 'touch docs/a.md'"; assert_eq "$RC" "2" "sh -c touches docs/a.md"
-  code 'eval "tee AGENTS.md"'; assert_eq "$RC" "2" "eval tee AGENTS.md"
+  # LIMIT (ADR 009, documented in the guard-code.sh header): a command line handed to another shell is not read
+  code 'bash -c "echo hi > CLAUDE.md"'; assert_eq "$RC" "0" "LIMIT: bash -c is not read"
+  code "sh -c 'touch docs/a.md'"; assert_eq "$RC" "0" "LIMIT: sh -c is not read"
+  code 'eval "tee AGENTS.md"'; assert_eq "$RC" "0" "LIMIT: eval is not read"
   code 'bash -c "echo hi > src/a.ts"'; assert_eq "$RC" "0" "bash -c writes src/a.ts passes"
   code 'bash -c "ls docs"'; assert_eq "$RC" "0" "bash -c ls docs passes"
   # a core_dir that is a symlink: the code folder beside the link's own path is still seen
@@ -718,6 +726,109 @@ sec_wrappers() {
     | env -u CORE_DIR HOME=/ XDG_CONFIG_HOME= bash "$H" >/dev/null 2>"$OD/e"; assert_eq "$?" "0" "HOME=/: guard-code passes a plain write"
 }
 bg sec_wrappers
+
+# Bash: the plain write commands (install, ln, in-place sed and perl, git mv) and the accidental writes of everyday work
+sec_writers() {
+  sh() { run_bash "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" "${2-$C}"; }
+  local c SED=sed   # spelled through a variable: tests/test_portability.sh flags the literal in-place form
+  # accidental writes: refused with the exact message
+  sh 'echo x > docs/plan.md';            blocked "echo x > docs/plan.md" "$C/docs/plan.md" "$CORE_DIR/p/docs/plan.md"
+  sh 'cp notes.md CLAUDE.md';            blocked "cp notes.md CLAUDE.md" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
+  sh 'echo x | tee .claude/x';           blocked "tee .claude/x" "$C/.claude/x" "$CORE_DIR/p/.claude/x"
+  sh 'ln -s notes.md CLAUDE.md';         blocked "ln -s notes.md CLAUDE.md" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
+  sh 'ln notes.md AGENTS.md';            blocked "ln (hard link) AGENTS.md" "$C/AGENTS.md" "$CORE_DIR/p/AGENTS.md"
+  sh 'ln -sf ../notes.md docs/';         blocked "ln -sf into docs/" "$C/docs" "$CORE_DIR/p/docs"
+  sh "$SED -i '' 's/a/b/' CLAUDE.md";     blocked "$SED -i '' (BSD) on CLAUDE.md" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
+  sh "$SED -i.bak -e s/a/b/ docs/a.md";   blocked "$SED -i.bak -e on docs/a.md" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  sh 'sed --in-place s/a/b/ src/x.c AGENTS.md'; blocked "sed --in-place, second file" "$C/AGENTS.md" "$CORE_DIR/p/AGENTS.md"
+  sh "$SED -Ei 's/a/b/' CLAUDE.md";       blocked "$SED -Ei on CLAUDE.md" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
+  sh "perl -pi -e 's/a/b/' AGENTS.md";   blocked "perl -pi -e on AGENTS.md" "$C/AGENTS.md" "$CORE_DIR/p/AGENTS.md"
+  sh 'perl -i -pe s/a/b/ docs/a.md';     blocked "perl -i -pe on docs/a.md" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  sh 'git mv notes.md docs/notes.md';    blocked "git mv into docs/" "$C/docs/notes.md" "$CORE_DIR/p/docs/notes.md"
+  sh 'git mv -f a b .claude/';           blocked "git mv -f into .claude/" "$C/.claude" "$CORE_DIR/p/.claude"
+  sh 'install -m 644 a docs/a';          blocked "install -m into docs/" "$C/docs/a" "$CORE_DIR/p/docs/a"
+  sh 'install -d docs/x';                blocked "install -d docs/x" "$C/docs/x" "$CORE_DIR/p/docs/x"
+  sh 'install -t docs/ a b';             blocked "install -t docs/" "$C/docs/a" "$CORE_DIR/p/docs/a"
+  sh 'cp -p a src/b && mv src/b CLAUDE.local.md'; blocked "mv after cp, CLAUDE.local.md" "$C/CLAUDE.local.md" "$CORE_DIR/p/CLAUDE.local.md"
+  # a link source spelled with a variable is unknown: the link itself is still judged where it lands
+  sh 'ln -s "$HOME/notes.md" src/CLAUDE.md'; blocked "ln -s \$HOME/... src/CLAUDE.md" "$C/src/CLAUDE.md" "$CORE_DIR/p/src/CLAUDE.md"
+  sh 'ln -sf "$CORE_DIR/p/docs" docs';   blocked "ln -sf \$CORE_DIR/... docs" "$C/docs" "$CORE_DIR/p/docs"
+  sh 'ln -s "$X" .claude/x';             blocked "ln -s \$X .claude/x" "$C/.claude/x" "$CORE_DIR/p/.claude/x"
+  # BSD in-place sed with the suffix as its own word: the suffix is skipped, the script is no file
+  sh "$SED -i .bak 's/a/b/' CLAUDE.md";   blocked "$SED -i .bak (BSD) on CLAUDE.md" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
+  sh "$SED -e s/a/b/ -i .claude/x";       blocked "$SED -e ... -i .claude/x (GNU: a path is a file, not a suffix)" "$C/.claude/x" "$CORE_DIR/p/.claude/x"
+  # a link named inside .claude/worktrees/<name> is a worktree folder; one below it is judged as usual
+  sh 'ln -s /tmp/x .claude/worktrees/w/CLAUDE.md'; blocked "ln -s into a worktree's CLAUDE.md" "$C/.claude/worktrees/w/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
+  # legitimate twins pass
+  for c in "ln -s \"$CORE_DIR/p/CLAUDE.md\" \"$C/CLAUDE.local.md\"" "ln -s \"$CORE_DIR/p/CLAUDE.md\" AGENTS.md" \
+           'ln -s "$HOME/Projects/Core/p/CLAUDE.md" CLAUDE.local.md' 'ln -sf "$CORE_DIR/p/CLAUDE.md" AGENTS.md' \
+           "$SED -i .bak 's/x/CLAUDE.md/' src/a.py" "$SED -i '' 's/x/CLAUDE.md/' src/a.py" \
+           'ln -s /tmp/x .claude/worktrees/w' \
+           "ln -sf $CORE_DIR/p/docs docs-link" 'ln -s ../lib src/lib' 'ln -s a b' \
+           'sed -n 1p CLAUDE.md' "sed 's/a/b/' CLAUDE.md > src/out" "$SED -i '' 's/docs/x/' src/a.c" "$SED -i -e 's|CLAUDE.md|x|' src/a.c" \
+           "perl -pe 's/a/b/' AGENTS.md" "perl -pi -e 's/a/b/' src/a.c" "perl -ne 'print if /docs/' CLAUDE.md" \
+           'git mv docs/a.md src/a.md' 'git mv a b' 'git log -- docs CLAUDE.md' 'git rm docs/a.md' 'git commit -m "mv notes to docs/"' \
+           'install -m 755 build/app bin/app' 'install -d .claude' 'npm install' 'brew install docs' 'pip install -r docs/req.txt' \
+           'make install DESTDIR=docs' 'echo cp a CLAUDE.md' 'grep -rn "tee docs" .' 'ls -la > src/listing.txt'; do
+    sh "$c"; ok "Bash passes: $c"
+  done
+  # LIMIT (ADR 009): what the plain reading does not follow; each passes and is listed in the guard-code.sh header
+  for c in 'f=CLAUDE.md; echo x > $f' 'echo x > doc?/a.md' 'echo x > {docs,src}/a.md' 'cd .. && echo x > code/CLAUDE.md' \
+           'echo docs/a.md | xargs touch' 'find . -name a -exec cp {} docs/ \;' 'python3 -c "open(\"CLAUDE.md\",\"w\")"' \
+           'bash -c "echo x > docs/a.md"' 'eval "touch CLAUDE.md"' 'sh write-docs.sh' 'rsync a docs/' 'dd of=docs/a.md' \
+           'git -C . mv a docs/a' 'tar -xf a.tar -C docs' 'curl -o docs/a.md http://x' 'echo x > "$(echo docs)/a.md"' \
+           'stdbuf -o L tee docs/a.md'; do
+    sh "$c"; ok "LIMIT, passes: $c"
+  done
+}
+bg sec_writers
+
+# More than 100 targets. The first 100 distinct targets are judged; past that, every target whose text names an
+# internal component (docs, .claude, CLAUDE.md, CLAUDE.local.md, AGENTS.md) is still judged; the rest passes. More
+# than 100 such targets past the first 100 refuse the whole command, so the hook stays well within its 15 s timeout.
+# And many deep new paths are judged well within that timeout too.
+sec_cap() {
+  local i O links n150="" n100="" deep="" deepd="" t0 X="$CORE_DIR/cap/code" pub100="" pub101="" pub1000="" plain1000=""
+  i=1; while [ $i -le 1000 ]; do
+    pub1000="$pub1000 docs/pub/x$i"; plain1000="$plain1000 src/x$i"
+    [ $i -le 100 ] && pub100="$pub1000"; [ $i -le 101 ] && pub101="$pub1000"; i=$((i + 1))
+  done
+  # the project exists, with a public docs/, before any run: the passing runs below judge inside a project
+  mkdir -p "$X/src"; printf '# cap\npublic-docs: docs/\n' > "$CORE_DIR/cap/CLAUDE.md"
+  t0=$SECONDS; run_bash "touch$pub1000" "$X"; blocked_any "1000 internal-looking targets are refused"
+  grep -q 'too many files to check' "$OD/err" && pass || fail "the too-many message: $ERR"
+  [ $((SECONDS - t0)) -lt 5 ] && pass || fail "1000 internal-looking targets took $((SECONDS - t0)) s (hook timeout 15 s)"
+  t0=$SECONDS; run_bash "touch$plain1000" "$X"; ok "1000 ordinary targets pass"
+  [ $((SECONDS - t0)) -lt 5 ] && pass || fail "1000 ordinary targets took $((SECONDS - t0)) s (hook timeout 15 s)"
+  run_bash "touch$plain1000; touch$pub100" "$X"; ok "100 targets, then 100 public internal-looking ones pass"
+  run_bash "touch$plain1000; touch$pub101" "$X"; blocked_any "100 targets, then 101 internal-looking ones are refused"
+  grep -q 'too many files to check' "$OD/err" && pass || fail "the too-many message after 101: $ERR"
+  # outside a project the guard is inert, even for a command too long to judge
+  O="$(mktemp -d)"
+  run_bash "touch$pub1000" "$O"; ok "1000 internal-looking targets outside a project pass"
+  # a link costs more to judge than a plain target: 200 links into a public docs/ end in time
+  links=""; i=1; while [ $i -le 200 ]; do links="$links s$i"; i=$((i + 1)); done
+  t0=$SECONDS; run_bash "ln -s$links docs/pub/" "$X"
+  [ $((SECONDS - t0)) -lt 5 ] && pass || fail "200 links into docs/pub/ took $((SECONDS - t0)) s (hook timeout 15 s)"
+  i=1; while [ $i -le 150 ]; do n150="${n150}touch x$i; "; [ $i -le 100 ] && n100="$n150"; i=$((i + 1)); done
+  i=1; while [ $i -le 100 ]; do deep="${deep}touch d$i/a/b/c/d/e/f/g/h/i/j/x.txt; "; deepd="${deepd}mkdir -p docs/d$i/a/b/c/d/e/f/g/h/i/j; "; i=$((i + 1)); done
+  run_bash "${n100}echo x > docs/late.md";   blocked "100 targets, then docs/late.md" "$C/docs/late.md" "$CORE_DIR/p/docs/late.md"
+  run_bash "${n150}cp a CLAUDE.md";          blocked "150 targets, then cp a CLAUDE.md" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
+  run_bash "${n150}cp CLAUDE.md.tmpl .";     ok "150 targets, then a harmless cp into the code root"
+  run_bash "${n150}cp /tmp/CLAUDE.md src/";  blocked "150 targets, then cp CLAUDE.md into src/" "$C/src/CLAUDE.md" "$CORE_DIR/p/src/CLAUDE.md"
+  run_bash "${n150}echo x > src/late.md";    ok "150 targets, then src/late.md"
+  run_bash "${n150}echo x > /tmp/docs/a.md"; ok "150 targets, then docs/ outside a project"
+  run_bash "${n150}echo x > docs/a.md" "$X"; ok "150 targets, then a public docs/ path"
+  run_bash "${n150}echo x > CLAUDE.md" "$X"; blocked "150 targets, then CLAUDE.md beside a public docs/" "$X/CLAUDE.md" "$CORE_DIR/cap/CLAUDE.md"
+  mkdir -p "$C/docs" "$C/src"; ln -s "$C/docs" "$C/src/capdocs"
+  run_bash "echo x > src/capdocs/a.md";      blocked "a link into docs/ is followed" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  run_bash "${n150}echo x > src/capdocs/a.md"; ok "LIMIT: past 100 targets, a link into docs/ is not followed"
+  t0=$SECONDS; run_bash "$deep"
+  ok "100 deep new paths"; [ $((SECONDS - t0)) -lt 5 ] && pass || fail "100 deep new paths took $((SECONDS - t0)) s (hook timeout 15 s)"
+  t0=$SECONDS; run_bash "$deepd" "$X"
+  ok "100 deep new public docs/ dirs"; [ $((SECONDS - t0)) -lt 8 ] && pass || fail "100 deep docs/ dirs took $((SECONDS - t0)) s (hook timeout 15 s)"
+}
+bg sec_cap
 
 bg_wait
 

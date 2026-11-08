@@ -28,18 +28,22 @@
 #   W lines judged; besides, its "***" lines are checked raw (internal_hit: a component docs, .claude, claude.md,
 #   claude.local.md or agents.md in any case, no public-docs exception) and a hit is refused; no hit passes. Header lines and
 #   paths are trimmed like Codex does (Unicode spaces too). A text with no string to read passes.
-#   In Codex only (lib.sh shell_patch_host: the plugin lies under CODEX_HOME, or the input carries Codex's turn_id; Claude
+#   In Codex only (scripts/shell-patch.sh shell_patch_host: the plugin lies under CODEX_HOME, or the input carries Codex's turn_id; Claude
 #   Code has no apply_patch tool, so nothing is refused there) a patch handed to the shell is refused, not judged, in every
 #   folder, and the message names what matched. This is BEST EFFORT, NOT A SECURITY BOUNDARY: it
 #   catches plain and accidental shell patches and many disguised ones, cannot see names the shell builds at run time, and the
 #   apply_patch tool form is the checked path (known ways past it: the Limits below, plus $'apply'$'_patch', 'apply_pat'?h,
 #   extglob, IFS changes, write_stdin) (a scope gate by cwd or by wrapper was bypassed
-#   twice; paths built by cd, quoting, $(...) or a variable cannot be checked from the command text). Rule, in lib.sh
-#   shell_patch_refused (no shell parsing): a hit is apply_patch, applypatch or apply-patch (any letter case) in the text
+#   twice; paths built by cd, quoting, $(...) or a variable cannot be checked from the command text). Rule, in
+#   scripts/shell-patch.sh shell_patch_refused (no shell parsing; a missing file lets every call pass, like a missing
+#   lib.sh): a hit is apply_patch, applypatch or apply-patch (any letter case) in the text
 #   once ' " \ and newlines are deleted (also --codex-run-as-apply-patch), or "*** Begin Patch" followed by an Add File,
 #   Update File, Delete File or Move to marker, or a $' with an escape, or an unquoted glob word that can match the name
-#   and is a command word or keeps 4 or more literal characters (../bin/apply_pat?h, ls; * x; not rm -rf dist/*, and not a
-#   * in a heredoc body). A hit passes only in the simple form: one read-only
+#   and is a command word or keeps 4 or more literal characters (../bin/apply_pat?h, ls; * x; not rm -rf dist/*); in a
+#   heredoc body it is never a command word and counts when it has a / (../bin/*pply_patch*), or is Markdown emphasis whose
+#   text holds apply_ apply- or applyp (*apply_pat*; **Patch**, *apply* pass), or is no emphasis and its literal part holds
+#   "apply" or it has a ? or [ or an inner * (apply_pa*, ap?ly_patch, appl*_patch; a leading-star *ply_patch is a limit).
+#   A hit passes only in the simple form: one read-only
 #   command (grep egrep fgrep rg, git log|show|diff|grep|status|blame|commit -m, cat head tail ls wc find) piped only through
 #   sort uniq cut tr nl wc head tail grep rg; quoted text is opaque there, outside quotes no $ ` \ ; & < > ( ) { } ! or newline;
 #   no assignment first, and no program-running option (git -c -p -O --pag* --ext* --output* --open-files-in-pager* and their
@@ -51,21 +55,29 @@
 #   Limit: Codex does send agent_type for subagents, but ro_agent never fires there: Codex agent names are neither
 #   corecrew:* nor the bare checker names (a Codex crew is started by text; task 4 adds a git status check).
 #   Limit: write_stdin into an open exec session: no evidence that it runs the hook (to be checked live).
-# - Bash is best effort. Targets of > >> 2> &> >| >&file, tee, touch, cp, mv (the destination; a
-#   destination directory also gets the sources' names), mkdir. mkdir follows the same rules as a
-#   write (docs, .claude/rules, ...) except the bare ".claude" dir, which holds settings.local.json.
-#   After a cd, pushd or popd only absolute (and ~) targets are judged: the new directory is unknown, so
-#   a relative target of a redirect or file command fails open (`cd .. && echo x >> docs/INDEX.md` is the Core wiki). A heredoc inside
-#   "$(...)" (the commit-message idiom) has its body skipped; <<"WORD" there stops the judging.
-#   Wrapper options with a value are skipped (timeout 5 tee, sudo -u x touch, nice -n 5). Documented limits:
-#   relative targets after cd, xargs, find -exec, bash -c "...", and the file-target judging being inert outside a project
-#   cwd. That is about file-target judging only: the shell-patch refusal (Codex) runs before it, in every folder.
-#   Not followed: variables, globs, `sh -c "..."`, ln, install, in-place sed, rsync, scripts. A target
-#   that has $ ` * ? [ { is not judged. Quoted text is not a command, heredoc bodies and comments are
-#   skipped. At most 100 targets are looked at. The tokenizer is one linear pass in awk. A command this
-#   hook cannot parse passes (exit 0). The git pre-commit hook stays the last layer.
-#   The tokenizer lives in scripts/bash-lex.awk and scripts/bashlex-guard-code.awk: if they are missing the
-#   Bash path fails open (silently); the file tools are still judged.
+# - Bash: a plain reading for honest mistakes (ADR 009: the host's permissions and the git pre-commit and pre-push hooks
+#   are the boundary; deliberate evasion is out of scope). scripts/bashlex-guard-code.awk reads words, quotes, comments,
+#   heredoc bodies and separators, and prints the write targets: > >> >| &> >&file <>, tee, touch, mkdir, install
+#   (-d makes dirs), cp, mv and git mv (the destination; a destination directory also gets the sources' names), ln (a
+#   CLAUDE.local.md or AGENTS.md at the code root that links a file in the Core, not in a code folder, passes: session
+#   start asks for that link; a relative source is read from the cwd; a source made at run time, such as
+#   "$HOME/Projects/Core/<p>/CLAUDE.md", is unknown and gets the same pass; a link named .claude/worktrees/<name> passes
+#   like a worktree folder), and the files that sed and perl edit in place (-i; BSD sed's suffix as its own word,
+#   -i .bak or -i '', is no file). mkdir follows the same rules as a write except the bare ".claude" dir, which holds
+#   settings.local.json.
+#   A target is judged by check_path below, like a file tool's path. Wrappers (sudo -u x, timeout 5, nice -n 5,
+#   env, if, do, ...) and VAR=value prefixes are skipped. A heredoc inside "$(...)" (the commit-message idiom) has its
+#   body skipped. The first 100 distinct targets are judged; past that only the targets whose text names docs, .claude,
+#   CLAUDE.md, CLAUDE.local.md or AGENTS.md. More than 100 such targets past the first 100 refuse the whole command
+#   (guard_code_too_many) when the cwd or a target is in scope: judging them all would outlast the hook timeout. A link
+#   or a copy into a folder counts as three targets. A missing reader lets the Bash call pass;
+#   the file tools are still judged. The shell-patch refusal (Codex) runs before all this, in every folder.
+#   LIMIT (not followed, each pinned as a passing case in tests/test_hook_guard_code.sh): a relative target after cd,
+#   pushd or popd (`cd .. && echo x >> docs/INDEX.md` is the Core wiki); a target with $ ` * ? [ { (variables,
+#   $(...), globs, braces); a command line handed to another shell (bash -c, sh -c, eval) or a script file; xargs,
+#   find -exec, interpreters (python -c, node -e); git -C <dir> mv; other writers (rsync, dd of=, tar -C, curl -o);
+#   a wrapper option whose value is not skipped (only -u -g -n -s -k -C -c take one: stdbuf -o L tee); past 100
+#   targets, a target that reaches docs/ only through a link; the file-target judging outside a project.
 # - Inert outside a project (<Core>/<project>/
 #   or its code folder beside the Core): a target and a cwd that are not in a project pass (exit 0).
 #   No network, no git; only canon_dir, project_of and one grep of the CLAUDE.md public-docs line.
@@ -73,6 +85,7 @@
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
+. "$SELF/scripts/shell-patch.sh" 2>/dev/null || exit 0   # shell_patch_host, shell_patch_refused (Codex)
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 
 tool="$(json_str "$in" tool_name)"
@@ -96,11 +109,17 @@ is_public() {
   return 1
 }
 
-# check_path <path> [dir] — exits 2 with the message when the path is an internal file under a
-# project's code root; returns 0 otherwise. Mode "dir" (mkdir) lets the bare .claude through.
+# check_path <path> [dir|link|corelink] — exits 2 with the message when the path is an internal file under a
+# project's code root; returns 0 otherwise. Mode "dir" (mkdir) lets the bare .claude through; modes "link" and
+# "corelink" (ln) let a link named .claude/worktrees/<name> through, like a worktree folder; mode "corelink" (ln to
+# a file in the Core, or to a source made at run time) also lets CLAUDE.local.md and AGENTS.md at the code root
+# through: the layout links them so.
 check_path() {
   local mode="${2:-write}" proj root abs_l root_l sub sub_l shown w n tgt first
   resolve_abs "$1"
+  abs_l="$(lc "$ABS")"
+  # no internal component anywhere in the path: nothing to judge (most targets stop here, without project_of)
+  case "/$abs_l/" in */docs/*|*/.claude/*|*/claude.md/*|*/claude.local.md/*|*/agents.md/*) ;; *) return 0 ;; esac
   proj="$(project_of "$ABS")" || return 0
   # the code root: the project folder in <Projects> taken from the path itself (new layout; so no case
   # clash between folders can switch the guard off), or <Core>/<p>/code for a path inside the Core (old)
@@ -118,7 +137,7 @@ check_path() {
       *) return 0 ;;
     esac
   fi
-  abs_l="$(lc "$ABS")"; root_l="$(lc "$root")"
+  root_l="$(lc "$root")"
   case "$abs_l" in "$root_l"/?*) ;; *) return 0 ;; esac
   sub="${ABS:$((${#root} + 1))}"; sub_l="${abs_l:$((${#root} + 1))}"
   shown="$root/$sub"
@@ -129,14 +148,16 @@ check_path() {
         w="${sub_l#.claude/worktrees/}"; w="${w%%/*}"
         n=$((18 + ${#w} + 1))   # ".claude/worktrees/" is 18 bytes
         sub="${sub:$n}"; sub_l="${sub_l:$n}" ;;
-      # the worktrees folder and a worktree folder themselves (mkdir, an existing dir, a trailing slash);
-      # a file written directly there is not one and falls through to the .claude/* rule
+      # the worktrees folder and a worktree folder themselves (mkdir, an existing dir, a trailing slash, or a
+      # link named .claude/worktrees/<name>); a file written directly there is not one and falls through to the .claude/* rule
       .claude/worktrees|.claude/worktrees/?*)
         if [ "$mode" = dir ] || [ -d "$ABS" ] || [ "${1%/}" != "$1" ]; then return 0; fi
+        case "$mode:$sub_l" in link:.claude/worktrees/?*|corelink:.claude/worktrees/?*) return 0 ;; esac
         break ;;
       *) break ;;
     esac
   done
+  if [ "$mode" = corelink ]; then case "$sub_l" in claude.local.md|agents.md) return 0 ;; esac; fi
   case "$sub_l" in
     .claude/settings.local.json) return 0 ;;
     .claude) [ "$mode" = dir ] && return 0 ;;
@@ -272,26 +293,43 @@ cmd="$(json_str "$in" command)"
 # A Codex patch applied through the shell is refused, in Codex only (see the header).
 if shell_patch_host "$in" && shell_patch_refused "$cmd"; then printf '%s\n' "$(msg patch_shell "$SHELL_PATCH_HIT")" >&2; exit 2; fi
 # Cheap exit: nothing in the command can write a file.
-case "$cmd" in *">"*|*tee*|*touch*|*cp*|*mv*|*mkdir*) ;; *) exit 0 ;; esac
+case "$cmd" in *">"*|*tee*|*touch*|*mkdir*|*cp*|*mv*|*ln*|*install*|*sed*|*perl*) ;; *) exit 0 ;; esac
 
-# bash_targets — stdin: the command (newlines turned into \002 by the caller). Prints "<kind>\t<path>[\t<name>]":
-# W a file written, D a directory made (mkdir), J a destination (cp/mv) that may be a directory: <name> is a source's name.
-bash_targets() {
-  LC_ALL=C awk -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-guard-code.awk" 2>/dev/null
-}
-
-targets="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r' '\002 ' | bash_targets)"
+# The targets: "W <path>" a file written, "D <path>" a directory made, "J <dir> <source>" and "L <dest> <source>"
+# (see scripts/bashlex-guard-code.awk).
+targets="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r' '\002 ' | LC_ALL=C awk -f "$SELF/scripts/bashlex-guard-code.awk" 2>/dev/null)"
 [ -n "$targets" ] || exit 0
+NL='
+'
 load_settings
+# A last line C: too many internal-looking targets to judge within the hook timeout. Refuse the whole command, but only
+# in scope: the cwd is in a project, or a target names the folder that holds the Core (the code folders sit beside it).
+if [ "${targets##*"$NL"}" = C ]; then
+  case "$targets" in *"$(dirname "$CORE_DIR")"/*) printf '%s\n' "$(msg guard_code_too_many)" >&2; exit 2 ;; esac
+  project_of "$(canon_dir "$cwd")" >/dev/null 2>&1 || exit 0
+  printf '%s\n' "$(msg guard_code_too_many)" >&2; exit 2
+fi
 TAB="$(printf '\t')"
+# into_dir <dest> <source> [mode] — cp, mv, ln into a directory: <dest>/<base name of source> is judged when <dest> is one
+into_dir() {
+  local s="$2"
+  while [ "${s%/}" != "$s" ]; do s="${s%/}"; done
+  s="${s##*/}"
+  case "$s" in ""|.|..) return 0 ;; esac
+  resolve_abs "$1"
+  if [ -d "$ABS" ] || [ "${1%/}" != "$1" ]; then check_path "${1%/}/$s" "$3"; fi
+}
 while IFS="$TAB" read -r kind a b; do
   case "$kind" in
     W) check_path "$a" ;;
     D) check_path "$a" dir ;;
-    J)
-      case "$b" in ""|.|..) continue ;; esac
-      resolve_abs "$a"
-      if [ -d "$ABS" ] || [ "${a%/}" != "$a" ]; then check_path "${a%/}/$b"; fi ;;
+    J) into_dir "$a" "$b" ;;
+    L) # ln -s "<Core>/<p>/CLAUDE.md" CLAUDE.local.md (session start asks for it) links the private copy: mode corelink.
+      # A source made at run time ("$HOME/...", empty here) is unknown: given the same pass, and no name to put in a dir.
+      if [ -z "$b" ]; then check_path "$a" corelink; continue; fi
+      m="link"; resolve_abs "$b"
+      case "$ABS/" in "$CORE_DIR"/*/code/*) ;; "$CORE_DIR"/*) m=corelink ;; esac
+      check_path "$a" "$m"; into_dir "$a" "$b" "$m" ;;
   esac
 done <<< "$targets"
 exit 0

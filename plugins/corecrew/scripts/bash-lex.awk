@@ -1,16 +1,17 @@
-# scripts/bash-lex.awk — the shared Bash tokenizer of the corecrew hooks (guard-code.sh, guard-secrets.sh).
+# scripts/bash-lex.awk — the shared Bash tokenizer of guard-secrets.sh and of the read-only checkers' rule in
+# guard-code.sh. guard-code's write check does not use it: it has its own reader, bashlex-guard-code.awk.
 # One linear pass over a command whose newlines were turned into \002 and carriage returns into spaces
 # (tr '\n\r' '\002 '). Quoted text is words, heredoc bodies and comments are skipped, wrapper words
 # (sudo, env, time, if, do, ...) and VAR=value prefixes are skipped. Run it as
 #   awk -f bash-lex.awk -f <hook program>.awk
-# The hook program supplies (see bashlex-guard-code.awk, bashlex-guard-secrets.awk):
+# The hook program supplies (see bashlex-guard-secrets.awk, bashlex-readonly.awk):
 #   classify(b)  — b is the base name of a command word; returns the command to remember, or "?" to
 #                  ignore its arguments (it may also note state, e.g. cdseen for cd)
 #   on_out(w)    — w is the target of an output redirect (> >> >| &> >&file)
 #   on_in(w)     — w is the word after an input redirect (< file)
 #   on_subst(w)  — w is a word with a command substitution inside double quotes ("$(...)" or backticks);
 #                  it may call enqueue(text) to have the text lexed as a command line after the main pass
-#                  (guard-secrets does; guard-code does not look into substitutions)
+#                  (both programs do)
 #   finalize()   — one command is complete: cmd (its name) and args[1..na] (its words) are set
 #   globals it may set: full (stop reading); nomore is set here by <<"WORD" inside "$(...)" (reading stops:
 #   a hook that must not fail open there can look at it in its END block)
