@@ -86,6 +86,8 @@ SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/scripts/shell-patch.sh" 2>/dev/null || exit 0   # shell_patch_host, shell_patch_refused (Codex)
+# A writer into a pipe whose reader may stop early has its stderr dropped: with SIGPIPE ignored, bash 5's printf
+# builtin and tr report "Broken pipe" to the user (seen on Linux CI).
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 
 tool="$(json_str "$in" tool_name)"
@@ -214,7 +216,7 @@ if [ "$tool" = Bash ] && agent="$(ro_agent)"; then
   # (tr's stderr is dropped: an awk that fails early would make it print "write error: Broken pipe", see internal_hit;
   # spaces become \004 when the command has no \004 byte: the tokenizer then reads a plain word whole, bash-lex.awk Speed)
   sp=' '; lexsp=0; eot="$(printf '\004')"; case "$cmd" in *"$eot"*) ;; *) sp="$eot"; lexsp=1 ;; esac
-  found="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r ' "$(printf '\002')$sp$sp" 2>/dev/null \
+  found="$({ printf '%s' "$cmd"; } 2>/dev/null | LC_ALL=C tr '\n\r ' "$(printf '\002')$sp$sp" 2>/dev/null \
     | LC_ALL=C awk -v lexsp="$lexsp" -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-readonly.awk" 2>/dev/null)" \
     || found="X${TAB}a command this check could not read"
   while IFS="$TAB" read -r kind a; do
@@ -307,7 +309,7 @@ case "$cmd" in *">"*|*tee*|*touch*|*mkdir*|*cp*|*mv*|*ln*|*install*|*sed*|*perl*
 # (see scripts/bashlex-guard-code.awk).
 # tr's stderr is dropped: the reader stops early when it is missing or has too many targets (C), and with SIGPIPE
 # ignored tr would then print "write error: Broken pipe" to the user.
-targets="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r' '\002 ' 2>/dev/null | LC_ALL=C awk -f "$SELF/scripts/bashlex-guard-code.awk" 2>/dev/null)"
+targets="$({ printf '%s' "$cmd"; } 2>/dev/null | LC_ALL=C tr '\n\r' '\002 ' 2>/dev/null | LC_ALL=C awk -f "$SELF/scripts/bashlex-guard-code.awk" 2>/dev/null)"
 [ -n "$targets" ] || exit 0
 NL='
 '

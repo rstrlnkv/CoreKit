@@ -650,7 +650,7 @@ timed_json "$SANDBOX/big9.json"; blocked "truncated 1 MB Write with ~/.ssh in th
 printf '{"cwd":"%s","tool_name":"Grep","tool_input":{"pattern":"%s","path":1,"glob":"x"}}' "$C" "$body" > "$SANDBOX/big10.json"
 timed_json "$SANDBOX/big10.json"; blocked "Grep with an odd path and 1 MB of .ssh mentions" ".ssh"
 }
-bg sec_size
+# run alone after the parallel sections: a timing check must not share the runner with 12 others
 
 # Codex: apply_patch and a patch handed to Bash (fixtures built from the rust-v0.166.0 structs)
 FX="$ROOT/tests/fixtures/codex"
@@ -904,5 +904,6 @@ sec_bypass() {
 bg sec_bypass
 
 bg_wait
+sec_size
 
 finish

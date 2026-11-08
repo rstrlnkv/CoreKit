@@ -99,6 +99,8 @@ SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/scripts/shell-patch.sh" 2>/dev/null || exit 0   # shell_patch_host, shell_patch_refused (Codex)
+# A writer into a pipe whose reader may stop early has its stderr dropped: with SIGPIPE ignored, bash 5's printf
+# builtin and tr report "Broken pipe" to the user (seen on Linux CI).
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 
 tool="$(json_str "$in" tool_name)"
@@ -182,7 +184,7 @@ is_secret() {
 raw_hit() {
   local t hit
   t="$(cat)"
-  hit="$(printf '%s' "$t" | LC_ALL=C tr '\134\057\042[:space:]\054:;=()<>&|\173\175\140\047' '\n' \
+  hit="$({ printf '%s' "$t"; } 2>/dev/null | LC_ALL=C tr '\134\057\042[:space:]\054:;=()<>&|\173\175\140\047' '\n' \
     | LC_ALL=C grep -iE '^\.env([*?]|\.|$)' | LC_ALL=C grep -viE '^\.env\.(example|sample|template)$' | LC_ALL=C sed -n 1p)"
   if [ -n "$hit" ]; then printf '%s' "$hit"; return 0; fi
   if printf '%s' "$t" 2>/dev/null | LC_ALL=C grep -qiE '/\.ssh([/"\\]|$)'; then printf '.ssh'; return 0; fi
@@ -195,7 +197,7 @@ if [ "$tool" = apply_patch ]; then
   TAB="$(printf '\t')"
   if [ -z "$patch" ]; then
     # no string to read (missing, empty, not a string): only the "***" header lines of the raw text count
-    hit="$(printf '%s' "$in" | sed 's/\\n/\
+    hit="$({ printf '%s' "$in"; } 2>/dev/null | sed 's/\\n/\
 /g' | LC_ALL=C grep -F '***' | raw_hit)" && die "$hit"
     exit 0
   fi
@@ -220,7 +222,7 @@ fi
 if [ "$tool" = Bash ]; then
   cmd="$(json_str "$in" command)"
   if [ -z "$cmd" ]; then
-    hit="$(printf '%s' "$in" | raw_hit)" && die "$hit"
+    hit="$({ printf '%s' "$in"; } 2>/dev/null | raw_hit)" && die "$hit"
     exit 0
   fi
   # A Codex patch handed to the shell is refused, in Codex only (see the header).
@@ -231,9 +233,9 @@ if [ "$tool" = Bash ]; then
   [ -r "$SELF/scripts/bash-lex.awk" ] && [ -r "$SELF/scripts/bashlex-guard-secrets.awk" ] || exit 0
   # spaces become \004 when the command has no \004 byte: the tokenizer then reads a plain word whole (scripts/bash-lex.awk, Speed)
   sp=' '; lexsp=0; eot="$(printf '\004')"; case "$cmd" in *"$eot"*) ;; *) sp="$eot"; lexsp=1 ;; esac
-  targets="$(printf '%s' "$cmd" | LC_ALL=C tr '\n\r ' "$(printf '\002')$sp$sp" 2>/dev/null | LC_ALL=C awk -v lexsp="$lexsp" -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-guard-secrets.awk" 2>/dev/null)"
+  targets="$({ printf '%s' "$cmd"; } 2>/dev/null | LC_ALL=C tr '\n\r ' "$(printf '\002')$sp$sp" 2>/dev/null | LC_ALL=C awk -v lexsp="$lexsp" -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-guard-secrets.awk" 2>/dev/null)"
   # awk itself failed: the command is unknown, so a secret-looking string in it is refused
-  if [ "$?" -ne 0 ]; then hit="$(printf '%s' "$cmd" | raw_hit)" && die "$hit"; exit 0; fi
+  if [ "$?" -ne 0 ]; then hit="$({ printf '%s' "$cmd"; } 2>/dev/null | raw_hit)" && die "$hit"; exit 0; fi
   [ -n "$targets" ] || exit 0
   TAB="$(printf '\t')"
   stopped=""
@@ -245,7 +247,7 @@ if [ "$tool" = Bash ]; then
     if is_secret "${judged:-$a}" "$u"; then die "$a"; fi
   done <<< "$targets"
   # the lexer stopped early: what is left of the command is unknown
-  if [ -n "$stopped" ]; then hit="$(printf '%s' "$cmd" | raw_hit)" && die "$hit"; fi
+  if [ -n "$stopped" ]; then hit="$({ printf '%s' "$cmd"; } 2>/dev/null | raw_hit)" && die "$hit"; fi
   exit 0
 fi
 
@@ -271,10 +273,10 @@ for key in $req $opt; do
     case " $req " in *" $key "*) odd=1 ;; esac
     if [ -z "$odd" ] && printf '%s' "$in" 2>/dev/null | LC_ALL=C grep -qE "\"$key\"[[:space:]]*:" \
        && ! printf '%s' "$in" 2>/dev/null | LC_ALL=C grep -qE "\"$key\"[[:space:]]*:[[:space:]]*\"\""; then odd=1; fi
-    if [ -n "$odd" ]; then hit="$(printf '%s' "$in" | raw_hit)" && die "$hit"; fi
+    if [ -n "$odd" ]; then hit="$({ printf '%s' "$in"; } 2>/dev/null | raw_hit)" && die "$hit"; fi
   fi
   # every "<key>": "<value>" in the raw text, in case the key occurs more than once
-  vals="$(printf '%s' "$in" | LC_ALL=C grep -oE "\"$key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"")"
+  vals="$({ printf '%s' "$in"; } 2>/dev/null | LC_ALL=C grep -oE "\"$key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"")"
   if [ -n "$vals" ]; then
     while IFS= read -r line; do
       line="${line#*:}"; line="${line#*\"}"; line="${line%\"}"; line="${line//\\/}"

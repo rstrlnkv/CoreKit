@@ -144,7 +144,7 @@ shell_patch_refused() {
       }' 2>/dev/null)"
     # the last line is the \001done the reader prints at its end: without it the reader failed, so the text is unknown
     case "$out" in *"$one"done) out="${out%"$one"done}" ;; *) out="" ;; esac
-    [ -n "$out" ] && out="$(printf '%s' "$out" | LC_ALL=C tr '\n\r' '\005\005' 2>/dev/null | LC_ALL=C sed -E "$quote_re" 2>/dev/null | LC_ALL=C awk '
+    [ -n "$out" ] && out="$({ printf '%s' "$out"; } 2>/dev/null | LC_ALL=C tr '\n\r' '\005\005' 2>/dev/null | LC_ALL=C sed -E "$quote_re" 2>/dev/null | LC_ALL=C awk '
       # glob_re: the regex of a glob word; LIT counts its literal characters
       function glob_re(w,   re, i, j, c, L, cls) {
         re = "^"; L = length(w); LIT = 0
