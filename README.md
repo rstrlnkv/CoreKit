@@ -44,7 +44,7 @@ codex plugin add coremodel@corekit
 ```
 
 Then start `codex`, open `/hooks` and trust the plugins' hooks; until you do, they do not run, and
-Codex does not tell you so (corecrew's skills remind you).
+Codex does not tell you so (corecrew's `new-project`, `task` and `ship` remind you when they run).
 The plugin READMEs list the remaining steps.
 
 ### Update

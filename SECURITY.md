@@ -4,7 +4,7 @@
 
 Only the latest release of each plugin gets security fixes. Each plugin's version is in its
 manifests (`plugins/<name>/.claude-plugin/plugin.json`, and `.codex-plugin/plugin.json` where the
-plugin has one) and at the top of its CHANGELOG.
+plugin has one) and in the first `## [X.Y.Z]` heading of its CHANGELOG, below `## [Unreleased]`.
 
 To see the version you run:
 

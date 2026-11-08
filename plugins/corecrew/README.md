@@ -10,26 +10,26 @@ publishes your internal notes. It works in Claude Code and in the Codex CLI.
 
 ### Claude Code
 
-Run these three commands in a terminal:
+Run these two commands in a terminal:
 
 ```bash
 claude plugin marketplace add rstrlnkv/CoreKit
 claude plugin install corecrew@corekit
-claude plugin install feature-dev@claude-plugins-official
 ```
 
-The first adds the `corekit` marketplace, the second installs `corecrew`, and the third installs
-`feature-dev`, whose `code-architect` and `code-explorer` agents `/corecrew:task` uses. Skip the
-third if you already have `feature-dev`. It is not a hard dependency: `corecrew` loads without it,
-and `/corecrew:task` tells you at start when it is missing.
+The first adds the `corekit` marketplace, the second installs `corecrew`. Optional:
+`claude plugin install feature-dev@claude-plugins-official` gives `/corecrew:task` deeper architect
+and explorer agents (`code-architect`, `code-explorer`); without it, `task` uses Claude Code's
+built-in Plan and Explore agents and says so once at the start.
 
 Inside a running Claude Code session the same steps are:
 
 ```
 /plugin marketplace add rstrlnkv/CoreKit
 /plugin install corecrew@corekit
-/plugin install feature-dev@claude-plugins-official
 ```
+
+and, optionally, `/plugin install feature-dev@claude-plugins-official`.
 
 Start `claude` again, then run `/corecrew:new-project`. On the first run it shows what it will
 create and sets up your Core after your "ok".
@@ -54,8 +54,8 @@ Then:
 
 1. **Trust the hooks.** Start `codex`, open `/hooks`, review and enable the `corecrew` hooks. Until
    you do, corecrew's guards (project docs in code, secrets) stay off, and a plain Codex start does
-   not warn you: only `new-project` and `task` remind you when they run. Do it again after each
-   update.
+   not warn you: only `new-project`, `task` and `ship` remind you when they run. Do it again after
+   each update.
 2. **Write the settings file.** Codex has no options screen; see [Settings](#settings).
 3. **Give Codex your Core.** Codex writes only in the working folder and `--add-dir` folders, so
    start it as `codex --add-dir "<Core>"` (`~/Projects/Core` by default). For new-project, start it
@@ -157,9 +157,9 @@ Inside a Core project (the Core folder, or a code folder beside it):
 
 - **Session start** refreshes the plugin's tools, links `CLAUDE.local.md` and `AGENTS.md`, and
   prints the project, the docs index, the save and undo commands and your `session-rules.md`.
-- **Secrets guard** refuses to read `.env`, `.env.*` (not `.env.example`) and `~/.ssh`. For Bash it
-  is a best-effort check, not a sandbox; [SECURITY.md](../../SECURITY.md#known-limits-of-the-hooks)
-  lists what it does not see.
+- **Secrets guard** refuses to read `.env`, `.env.*` (not `.env.example`, `.env.sample` or
+  `.env.template`) and `~/.ssh`. For Bash it is a best-effort check, not a sandbox;
+  [SECURITY.md](../../SECURITY.md#known-limits-of-the-hooks) lists what it does not see.
 - **Code guard** refuses to write `CLAUDE.md`, `AGENTS.md`, `docs/` and `.claude/` into the code
   folder; they belong in the Core. List docs that should stay public in the code folder on a
   `public-docs: <paths>` line of the project's `CLAUDE.md`. It judges the paths of the file tools,

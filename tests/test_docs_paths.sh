@@ -105,6 +105,11 @@ for f in "$PLUGIN"/scripts/*; do
   n="${f##*/}"
   named_in_tree "$n" "$ROOT/ARCHITECTURE.md" && pass || fail "ARCHITECTURE.md tree does not name scripts/$n"
 done
+# coreopinion's agents/openai.yaml keeps its skill out of Codex (coreopinion is Claude Code only): the tree names it
+for f in "$ROOT"/plugins/coreopinion/skills/*/agents/openai.yaml; do
+  [ -f "$f" ] || continue
+  tree_paths "$ROOT/ARCHITECTURE.md" | grep -qxF "${f#"$ROOT"/}" && pass || fail "ARCHITECTURE.md tree does not name ${f#"$ROOT"/}"
+done
 
 # anchors_of <file> — the anchors of its headings outside ``` fences, as GitHub makes them: lowercased,
 # everything but letters, digits, spaces, - and _ dropped, spaces turned into dashes

@@ -15,8 +15,8 @@ a release is made. [ARCHITECTURE.md](ARCHITECTURE.md) explains how the repo is l
     `claude plugin validate` checks (`tests/test_plugin_validate.sh`, and coreopinion's own);
   - without `codex`: the checks against the real Codex CLI (patch parsing, the sandbox profiles,
     plugin install, parts of the boundary and plugin-root tests).
-- `python3` and `sips` (macOS) are used by a few checks when present (JSON syntax, icon size); the
-  plugins never need them.
+- `python3`, `node` and `sips` (macOS) are used by a few checks when present (JSON syntax, icon
+  size); the plugins never need them.
 
 ## Running the tests
 

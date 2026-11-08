@@ -1,6 +1,6 @@
 # coremodel
 
-A Claude Code plugin that picks the model and the effort level each prompt needs, before Claude starts on it.
+A Claude Code plugin that picks the model and the effort level each prompt needs, before Claude starts on it; in Codex it gives an opt-in hint (see [Codex](#codex)).
 
 ![platform](https://img.shields.io/badge/platform-Claude%20Code%202.1.309%2B-lightgrey) ![release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcoremodel%2F.claude-plugin%2Fplugin.json&query=%24.version&label=release) ![licence](https://img.shields.io/github/license/rstrlnkv/CoreKit)
 
