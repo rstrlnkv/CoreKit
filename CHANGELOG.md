@@ -19,6 +19,11 @@ commit log has the full detail.
   `chore(<part>): release <version>`, or `chore: release <version>` in a repo with one part.
 - `save --push` pushes only the Core; the code repo is published by `ship`, after its tests and
   version. With `--push` the message may be left out when there is nothing to save.
+- The engineer agent reads `<Core>/session-rules.md` and follows its rules for code; before,
+  only the main session saw them. The brief and the project's `CLAUDE.md` win where they differ.
+- Knowledge files are one list of `symptom → cause → guard` lines: no sections, no 80-line
+  limit, no family files. A new line goes to the project; it goes to all projects when it recurs,
+  and a lesson that keeps recurring is offered as a standard. Older files keep working as they are.
 
 ## [0.9.1] - 2026-11-08
 

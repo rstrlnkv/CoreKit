@@ -44,7 +44,7 @@ Then check that the Core is set up:
 (exit 0 = set up). If it fails, say in plain words that the Core does not exist yet and that
 `/corecrew:new-project` sets it up (one time); stop. Do not set it up from here.
 
-The argument is a topic ("versioning"), a knowledge line (contains `→`: `symptom → cause →
+The argument is a topic ("versioning"), a knowledge line (contains `→` or `->`: `symptom → cause →
 guard`, see `<plugin>/reference/knowledge.md`), or empty (ask what the standard
 is about, in one question). Pick `<name>`: Latin, lowercase, hyphens, 3–40 chars. If
 `<Core>/standards/<name>.md` exists, read it: this is an update, and the draft starts from it.

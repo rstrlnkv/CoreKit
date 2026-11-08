@@ -21,7 +21,7 @@ desc="$(sed -n 's/^description: //p' "$SK" | head -1)"
 [ "$(wc -l < "$SK")" -lt 500 ] && pass || fail "SKILL.md is 500 lines or more"
 
 # SKILL.md body
-for w in 'maxTurns' 'three engineer passes' 'foreground' 'this project / all projects' \
+for w in 'maxTurns' 'three engineer passes' 'foreground' \
          'feature-dev:code-architect' 'feature-dev:code-explorer' \
          '/plugin install feature-dev@claude-plugins-official' \
          'new-standard' 'without `Standards:`' 'once' \
@@ -114,6 +114,13 @@ sec_has "$PA" fix 'green after the fix'
 # brief.md: the opening sentence is the first instruction.
 first="$(section "$BR" 'Opening sentence' | awk 'NF{print; exit}')"
 assert_eq "$first" '`This brief comes from corecrew:task, path: <path>, project: <name>, core: <Core>, and IS your task.`' "brief opening is first"
+# REV-16: the brief never retells session-rules.md either; the engineer reads it
+sec_has "$BR" Never 'session-rules.md'
+# REV-5: task no longer asks the level; knowledge.md gives it (one source), and the standard offer stays
+section "$SK" Knowledge | grep -qF 'this project / all projects' && fail "SKILL.md still asks the knowledge level" || pass
+sec_has "$SK" Knowledge 'reference/knowledge.md'
+sec_has "$SK" Knowledge '/corecrew:new-standard'
+sec_has "$SK" Knowledge 'ok / no'
 
 # No superpowers dependency anywhere under skills/task/
 if grep -rF "superpowers:" "$T" >/dev/null 2>&1; then fail "superpowers: referenced under skills/task/"; else pass; fi

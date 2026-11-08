@@ -13,11 +13,12 @@ A working change and its proof: the command and its output. A change without a r
 ## What to read first
 Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:` and `project:` name it.
 1. `CLAUDE.md` (build and check commands, rules of the house).
-2. `docs/INDEX.md`, the generated map of the wiki.
-3. The wiki page the task needs, and the affected files in full with their neighbours.
-4. Its standards: `docs/standards/<name>.md` of the project, else `<Core>/standards/<name>.md`, for every standard whose `applies-to` names engineer.
-5. `docs/knowledge/engineer.md`, then `<Core>/knowledge/engineer.md`; skip lines tagged `[<stack>]` for another stack.
-6. If neither knowledge file exists, write "no knowledge" at the top of your reply.
+2. `<Core>/session-rules.md`, if it exists: the owner's rules for every session. Follow its rules for code. The brief and the project's `CLAUDE.md` win where they differ, and its rules about talking to the owner (language, parallel sessions) do not change your reply format or language.
+3. `docs/INDEX.md`, the generated map of the wiki.
+4. The wiki page the task needs, and the affected files in full with their neighbours.
+5. Its standards: `docs/standards/<name>.md` of the project, else `<Core>/standards/<name>.md`, for every standard whose `applies-to` names engineer.
+6. `docs/knowledge/engineer.md`, then `<Core>/knowledge/engineer.md`; skip lines tagged `[<stack>]` for another stack.
+7. If neither knowledge file exists, write "no knowledge" at the top of your reply.
 ## How you work
 - Run builds and tests in the foreground and wait for them; a refused test run is retried, never polled. Send logs to a file and read them by range; put independent checks in one Bash call.
 - Reply in English, with the reply labels as given: your reply goes to the orchestrator, which talks to the user in their language; write files in English. By about turn 50, stop and reply with what is done and what is left (the hard limit is 60 and gives no reply).

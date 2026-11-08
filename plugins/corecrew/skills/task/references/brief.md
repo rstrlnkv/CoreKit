@@ -28,8 +28,9 @@ The first line of every brief, exactly. `<path>` is `fix`, `full`, `question`, `
 
 ## Never
 
-- Retell `CLAUDE.md`, the wiki, standards or knowledge: the agent reads them itself
-  (`CLAUDE.md` → `docs/INDEX.md` → the page its task needs → standards → knowledge).
+- Retell `CLAUDE.md`, the wiki, standards, knowledge or `session-rules.md`: the agent reads them
+  itself (`CLAUDE.md` → `docs/INDEX.md` → the page its task needs → standards → knowledge; the
+  engineer also reads `<Core>/session-rules.md` after `CLAUDE.md`).
 - Ask an agent to commit. Engineer never commits; `task` commits through `save` at release.
 - Put secrets, `.env` contents or `~/.ssh` material in a brief.
 

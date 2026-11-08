@@ -176,18 +176,16 @@ full name of the agent chosen in Start, **Architect and explorer** (`feature-dev
 ## Knowledge
 Every agent reply ends with `Knowledge line: <symptom → cause → guard | none>`. Collect them.
 - None: go to release (a `question` chain that changed no files has no release; see Finish).
-- Some: show them in plain words, one by one. For each the user answers ok / no, and, if ok,
-  "this project / all projects". Write accepted lines as the format in
-  `<plugin>/reference/knowledge.md` says: into
-  `<Core>/<project>/docs/knowledge/<role>.md` (this project) or `<Core>/knowledge/<role>.md`
-  (all projects). They go into the same commit as the chain (release.md postcondition 5). On the `question`
+- Some: show them in plain words, one by one, each with the level
+  `<plugin>/reference/knowledge.md` (section Who writes it) gives it and why; the user answers
+  ok / no (or names all projects for a lesson that is plainly general). Write accepted lines as
+  that section says, or, when it says so, offer the line as a standard with
+  `/corecrew:new-standard` (pass the line); do not write the standard yourself. Accepted lines go
+  into the same commit as the chain (release.md postcondition 5). On the `question`
   path nothing else changed: with accepted lines, write them and commit
   them through `save`: the tree was clean at Start, so `save` commits only the chain's files
   (release.md postconditions 5–7: `save`, the attribution check with `forbid`, clean `git status`),
   and `Commit:` is the hash; with no accepted lines there is no commit.
-- A line whose cause already appears in another project's knowledge or in
-  `<Core>/knowledge/` is a recurring lesson: offer to turn it into a standard with
-  `/corecrew:new-standard` (pass the line). Do not write the standard yourself.
 
 ## Finish
 Run `references/release.md` for every chain that changed files, including a `question` that saved

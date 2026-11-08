@@ -27,6 +27,14 @@ allows exactly six front-matter fields, so the stage lives in the last section `
 line `Stage: <v>`. Write that section as the last one and delete the field in the same edit, then run
 `bash "<scripts>/wiki-check.sh" "<Core>/<name>"`. If `## Progress` already exists, only delete the field.
 
+## Knowledge with sections
+A knowledge file from corecrew 0.9 and older has four sections (`## How proof is made here`,
+`## Where things are`, `## What has broken here`, `## What you must not do here`) and may link
+family files `<role>/<Family>.md`. Agents read it as it is and follow its family links. `task`
+never restructures it: a new line goes at the end of `## What has broken here` of the role file.
+The user may move the lines into one list by hand; the current form is
+`<plugin>/reference/knowledge.md`.
+
 ## Old layout
 An older project keeps its code repo inside the Core, at `<Core>/<name>/code`. `lib.sh layout <name>`
 prints `old` for it. `/corecrew:task adopt <path>` moves it beside the Core, to `<Projects>/<name>`
