@@ -46,7 +46,7 @@ assert_contains "$P/skills/second-opinion/scripts/ask-gpt.sh" 'model_reasoning_e
 assert_contains "$S" 'pass `high` only when the user asks'
 assert_contains "$P/skills/second-opinion/scripts/ask-gpt.sh" '--output-last-message'
 assert_contains "$S" 'git diff HEAD'
-assert_contains "$S" 'command -v codex'
+assert_contains "$S" 'ask-gpt.sh" --check'   # codex is checked by the pre-approved script, not by a bare command
 assert_contains "$S" 'Operation not permitted'
 assert_contains "$S" 'excludedCommands'
 assert_contains "$S" '.env'
@@ -204,15 +204,38 @@ assert_contains "$A" 'web_search="disabled"'
 # the documented root name of codex 0.166 (":project_roots" is a legacy alias)
 assert_contains "$A" '":workspace_roots"'
 assert_not_contains "$A" 'project_roots'
-# the run needs one yes (the skill's own): the script is pre-approved for the skill's turn only
-assert_contains "$S" 'allowed-tools: Bash(bash ${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh *)'
+# The skill's scripts are pre-approved for its turn (allowed-tools). A rule matches the command text as the model
+# writes it, quotes included, so every `bash ...` command in SKILL.md (in a code block or inline) must start with
+# a rule's text before its " *", and every rule is used.
 assert_contains "$S" 'bash "${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh" "'
+at_line="$(sed -n '2,/^---$/{s/^allowed-tools:[[:space:]]*//p;}' "$S")"
+assert_eq "${at_line:+found}" "found" "SKILL.md has an allowed-tools line"
+rules="$(printf '%s\n' "$at_line" | awk '{ n = split($0, a, /\), /); for (i = 1; i <= n; i++) { r = a[i]; sub(/^Bash\(/, "", r); sub(/\)$/, "", r); print r } }')"
+nonbash="$(printf '%s\n' "$at_line" | awk '{ n = split($0, a, /\), /); for (i = 1; i <= n; i++) if (a[i] !~ /^Bash\(/) print a[i] }')"
+assert_eq "$nonbash" "" "allowed-tools holds Bash rules only"
+cmds="$( { sed -n '/^```bash$/,/^```$/p' "$S" | grep '^bash '; grep -oE '`bash [^`]+`' "$S" | sed -e 's/^`//' -e 's/`$//'; } )"
+assert_eq "$(printf '%s\n' "$cmds" | grep -c 'CLAUDE_SKILL_DIR')" "$(printf '%s\n' "$cmds" | grep -c .)" "every bash command in SKILL.md runs a skill script"
+allowed_by() { # <command> <rules>: some rule's text before its " *" starts the command
+  printf '%s\n' "$2" | while IFS= read -r r; do
+    pre="${r% \*}"; [ "$pre" != "$r" ] || continue
+    case "$1" in "$pre "*) echo yes; break ;; esac
+  done
+}
+unmatched="$(printf '%s\n' "$cmds" | while IFS= read -r c; do
+  [ -n "$c" ] || continue
+  [ -n "$(allowed_by "$c" "$rules")" ] || printf '%s; ' "$c"
+done)"
+assert_eq "${unmatched:-none}" "none" "every bash command in SKILL.md matches an allowed-tools rule"
+unused="$(printf '%s\n' "$rules" | while IFS= read -r r; do
+  pre="${r% \*}"; printf '%s\n' "$cmds" | grep -qF -- "$pre " || printf '%s; ' "$r"
+done)"
+assert_eq "${unused:-none}" "none" "every allowed-tools rule is used by a command in SKILL.md"
 # the profile blocks, inside the project, every secret the send filter drops (README promises it).
 # Checked for real with `codex sandbox` (local, nothing goes to OpenAI) where codex is installed.
 A="$P/skills/second-opinion/scripts/ask-gpt.sh"
 assert_file "$A"
 # the profile is built from secret-patterns.txt: take it from a run with a stub codex that records its arguments
-mkdir -p "$SANDBOX/stub"; printf '#!/bin/sh\nprintf "%%s\\n" "$@" > "$STUB_ARGS"\necho "GPT says hi" > "$(dirname "$STUB_ARGS")/last"\nfor a; do case "$p" in --output-last-message) echo "GPT says hi" > "$a" ;; esac; p="$a"; done\n' > "$SANDBOX/stub/codex"; chmod +x "$SANDBOX/stub/codex"
+mkdir -p "$SANDBOX/stub"; printf '#!/bin/sh\nprintf "%%s\\n" "$@" > "$STUB_ARGS"\necho "GPT says hi" > "$(dirname "$STUB_ARGS")/last"\nfor a; do case "$p" in --output-last-message) echo "GPT says hi" > "$a" ;; esac; p="$a"; done\ncat > "$(dirname "$STUB_ARGS")/stdin.txt"\n' > "$SANDBOX/stub/codex"; chmod +x "$SANDBOX/stub/codex"
 GR="$SANDBOX/gitrepo"; git init -q "$GR"
 TP="$(tmpf)"; printf '%s' "$GR" > "$TP/dir"; printf 'p\n' > "$TP/prompt.md"
 ( STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$TP" >/dev/null 2>&1 )
@@ -289,7 +312,7 @@ assert_contains "$SANDBOX/args.txt" '--skip-git-repo-check'
 assert_eq "$(grep -A1 -x -- '-C' "$SANDBOX/args.txt" | tail -1)" "$T4/empty" "no repo: Codex gets an empty folder"
 # a missing prompt is refused, and the folder is not removed then
 T5="$(tmpf)"
-( PATH="$SANDBOX/stub:$PATH" bash "$A" "$T5" >/dev/null 2>&1 ); assert_eq "$?" "2" "missing prompt: refused"
+( PATH="$SANDBOX/stub:$PATH" bash "$A" "$T5" </dev/null >/dev/null 2>&1 ); assert_eq "$?" "2" "missing prompt: refused"
 assert_dir "$T5"; rm -rf "$T5"
 # the folder the script removes must be a mktemp folder right in the temp folder: a wrong path (the
 # project, say) that happens to hold prompt.md and dir is refused and left alone
@@ -336,9 +359,33 @@ mkdir -p "$GR/coreopinion.repo"; refuse "$GR/coreopinion.repo" "a coreopinion.* 
 TP0="$(mktemp -d "${TMPDIR:-/tmp}/proj.XXXXXX")"; refuse "$TP0" "a folder in the temp folder without the mktemp name"; rm -rf "$TP0"
 TR="$(mktemp -d "$SANDBOX/root.XXXXXX")"; refuse "$TR" "the temp root itself" TMPDIR="$TR"
 refuse "$HOME/coreopinion.home1" "TMPDIR=/ makes no folder a temp folder" TMPDIR=/
-# SKILL.md makes the folder with the same explicit template
-assert_contains "$S" 'mktemp -d "${TMPDIR:-/tmp}/coreopinion.XXXXXXXXXX"'
-grep -n 'mktemp -d`' "$S" >/dev/null && fail "SKILL.md still names a bare mktemp -d" || pass
+# The model runs no mktemp and writes no file outside the project (Claude Code would ask about both):
+# `ask-gpt.sh --new` makes the folder with the explicit template and records the folder it ran from, and the
+# run takes the prompt on stdin.
+assert_not_contains "$S" 'mktemp'
+assert_contains "$S" 'ask-gpt.sh" --new'
+mkdir -p "$SANDBOX/from here"
+NEWT="$(cd "$SANDBOX/from here" && bash "$A" --new </dev/null 2>/dev/null)"; rc=$?
+assert_eq "$rc" "0" "--new: exit 0"
+case "$NEWT" in "${TMPDIR:-/tmp}"*/coreopinion.??????????) pass ;; *) fail "--new prints a coreopinion.* folder in the temp folder: $NEWT" ;; esac
+assert_dir "$NEWT"
+assert_eq "$(cat "$NEWT/dir" 2>/dev/null)" "$(cd "$SANDBOX/from here" && pwd -P)" "--new records the folder it ran from"
+assert_no_file "$NEWT/prompt.md"
+# the prompt comes on stdin, taken as it is; the folder is removed after the run as before
+rm -f "$SANDBOX/stdin.txt"
+OUT="$(STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$NEWT" medium 2>&1 <<'COREOPINION_PROMPT'
+Review this, $HOME and `x` stay as they are.
+COREOPINION_PROMPT
+)"
+case "$OUT" in exit=0*) pass ;; *) fail "a prompt on stdin runs: $OUT" ;; esac
+assert_eq "$(cat "$SANDBOX/stdin.txt" 2>/dev/null)" 'Review this, $HOME and `x` stay as they are.' "codex reads the prompt given on stdin"
+assert_no_file "$NEWT"
+# --check: codex there, exit 0; without codex, exit 4 and nothing on stdout
+OUT="$(STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" --check </dev/null 2>&1)"; rc=$?
+assert_eq "$rc" "0" "--check with codex: exit 0 ($OUT)"
+mkdir -p "$SANDBOX/nocodex"; for b in bash cat dirname; do ln -sf "$(command -v "$b")" "$SANDBOX/nocodex/$b"; done
+OUT="$(PATH="$SANDBOX/nocodex" "$SANDBOX/nocodex/bash" "$A" --check </dev/null 2>/dev/null)"; rc=$?
+assert_eq "$rc:$OUT" "4:" "--check without codex: exit 4, nothing on stdout"
 # Claude Code only: Codex does not offer the skill on its own (its equivalent of disable-model-invocation), and
 # ask-gpt.sh refuses inside a Codex session (Codex 0.166 sets CODEX_THREAD_ID in every shell it runs). The temp
 # folder (it holds the diff) is still removed, and codex is never run.
@@ -346,13 +393,30 @@ OY="$P/skills/second-opinion/agents/openai.yaml"
 assert_file "$OY"
 assert_eq "$(sed -n 's/^[[:space:]]*allow_implicit_invocation:[[:space:]]*//p' "$OY")" "false" "openai.yaml: allow_implicit_invocation is false"
 assert_eq "$(grep -c '^policy:' "$OY")" "1" "openai.yaml: one policy table"
+# The refusal comes first, before the cleanup trap: Codex's read-only sandbox cannot remove anything, and its
+# rm error must not be printed (a stub rm stands in for it). Every mode refuses; nothing is made or removed.
 rm -f "$SANDBOX/args.txt"
+mkdir -p "$SANDBOX/rofs"; printf '#!/bin/sh\necho "rm: $2: Operation not permitted" >&2\nexit 1\n' > "$SANDBOX/rofs/rm"; chmod +x "$SANDBOX/rofs/rm"
 T6="$(tmpf)"; printf '%s' "$GR" > "$T6/dir"; printf 'p\n' > "$T6/prompt.md"
-OUT="$(CODEX_THREAD_ID=019a-test STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$T6" 2>&1)"; rc=$?
+OUT="$(CODEX_THREAD_ID=019a-test STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/rofs:$SANDBOX/stub:$PATH" bash "$A" "$T6" </dev/null 2>&1)"; rc=$?
 assert_eq "$rc" "3" "inside Codex: ask-gpt.sh exits 3"
 case "$OUT" in *"Claude Code"*) pass ;; *) fail "inside Codex: the refusal names Claude Code: $OUT" ;; esac
+assert_eq "$(printf '%s\n' "$OUT" | grep -c .)" "1" "inside Codex: one line, no cleanup noise"
 assert_no_file "$SANDBOX/args.txt"
-assert_no_file "$T6"
+assert_file "$T6/prompt.md"; rm -rf "$T6"   # left alone: nothing was run or removed
+for m in --check --new; do
+  OUT="$(cd "$GR" && CODEX_THREAD_ID=019a-test STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$m" </dev/null 2>/dev/null)"; rc=$?
+  assert_eq "$rc:$OUT" "3:" "inside Codex: $m exits 3 and prints nothing on stdout"
+done
+assert_no_file "$SANDBOX/args.txt"
+# SKILL.md stops in Codex at its first step, before any command: CODEX_THREAD_ID is named in section 1,
+# above the first code block
+first_sec="$(grep -n '^## ' "$S" | head -1 | cut -d: -f1)"
+next_sec="$(grep -n '^## ' "$S" | sed -n 2p | cut -d: -f1)"
+first_code="$(grep -n '^```' "$S" | head -1 | cut -d: -f1)"
+tid="$(grep -n 'CODEX_THREAD_ID' "$S" | head -1 | cut -d: -f1)"
+if [ -n "$tid" ] && [ "$tid" -gt "$first_sec" ] && [ "$tid" -lt "$next_sec" ] && [ "$tid" -lt "$first_code" ]; then pass
+else fail "SKILL.md: the Codex stop (CODEX_THREAD_ID) is in section 1, before the first command (line ${tid:-none})"; fi
 OUT="$(CODEX_THREAD_ID= STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$(T7="$(tmpf)"; printf '%s' "$GR" > "$T7/dir"; printf 'p\n' > "$T7/prompt.md"; printf '%s' "$T7")" 2>&1)"
 case "$OUT" in *"exit=0"*) pass ;; *) fail "an empty CODEX_THREAD_ID is not a Codex session: $OUT" ;; esac
 # the log tail: 20 lines after a good run, more after a failed one (the skill reads stdout only: the folder is gone)
@@ -364,9 +428,9 @@ n="$(printf '%s\n' "$OUT" | sed -n '/^--- log tail$/,$p' | grep -c '^log line')"
 [ "$n" -gt 20 ] && pass || fail "a failed run prints more than 20 log lines (got $n)"
 case "$OUT" in *"log line 100"*) pass ;; *) fail "the log tail ends with the last line" ;; esac
 assert_no_file "$T8"
-# SKILL.md works from the script's stdout: it names no file in $T but the two it writes before the run
-others="$(grep -oE '\$T/[A-Za-z0-9_.-]+' "$S" | sort -u | grep -vxE '\$T/(prompt\.md|dir)' | tr '\n' ' ')"
-assert_eq "$others" "" "SKILL.md reads no file of the removed temp folder"
+# SKILL.md works from the script's stdout and writes nothing into $T: it names no file in it
+others="$(grep -oE '\$T/[A-Za-z0-9_.-]+' "$S" | sort -u | tr '\n' ' ')"
+assert_eq "$others" "" "SKILL.md names no file of the temp folder"
 for w in 'exit=' '--- answer' '--- log tail'; do assert_contains "$S" "$w"; done
 # a 429 is not always the plan's limit: the skill quotes the error instead of guessing
 assert_contains "$S" 'quote the error line'

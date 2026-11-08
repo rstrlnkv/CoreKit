@@ -1,7 +1,7 @@
 ---
 name: second-opinion
 description: Use when the user wants a second opinion or an outside review from OpenAI's GPT through the Codex CLI — phrases like "second opinion", "ask ChatGPT", "ask GPT", "ask Codex", "review with GPT", "what would GPT say", in any language. GPT only reads and answers; Claude shows its answer with Claude's own assessment and makes any change itself, only after the user approves.
-allowed-tools: Bash(bash ${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh *), Bash(bash ${CLAUDE_SKILL_DIR}/scripts/allowed-files.sh *)
+allowed-tools: Bash(bash "${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh" *), Bash(bash "${CLAUDE_SKILL_DIR}/scripts/allowed-files.sh" *)
 ---
 
 # Second opinion from GPT
@@ -12,16 +12,20 @@ reads and answers. **You are the only one that edits files**, and only after the
 Talk to the user in the user's language (the language of their messages), in plain words. Ask GPT
 to answer in that language too.
 
-This skill works only in Claude Code. In Codex (or when `ask-gpt.sh` exits 3 and says it runs inside
-a Codex session), tell the user that the second opinion has to be asked from Claude Code, and stop.
+## 1. Claude Code only; check that Codex is there
 
-## 1. Check that Codex is there
+First: if you are Codex, or the environment variable `CODEX_THREAD_ID` is set, stop here. Tell the
+user that coreopinion works only in Claude Code and the second opinion has to be asked there. Run
+nothing below.
+
+Otherwise check the Codex CLI:
 
 ```bash
-command -v codex && codex --version
+bash "${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh" --check
 ```
 
-If `codex` is not found, stop and tell the user:
+Exit 3 means it runs inside a Codex session: stop as above. Exit 4 means `codex` is not found:
+stop and tell the user:
 
 - install the Codex CLI: `npm install -g @openai/codex` on any system (it needs Node.js), or one of
   the other ways on https://developers.openai.com/codex/cli (on macOS also `brew install codex`);
@@ -111,11 +115,15 @@ path, redo the list and ask again.
 
 ## 3. Ask GPT
 
-Make a temp folder: `mktemp -d "${TMPDIR:-/tmp}/coreopinion.XXXXXXXXXX"` (note the path; call it
-`$T` below; the run script accepts only such a folder). With your file tool write
-two files into it: `$T/prompt.md` and `$T/dir` (the project folder path and nothing else, no
-newline needed: the path is read from this file so it is never parsed by the shell). The prompt
-holds:
+Make the temp folder. Run this in the project folder (where the shell normally is):
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh" --new
+```
+
+It prints the folder's path (note it; call it `$T` below) and records the project folder in it, so
+the path is never parsed by the shell. Write no file yourself for this run: the run script writes
+the prompt into `$T` from what you give it. The prompt holds:
 
 - the role: "You are a senior reviewer giving a second opinion. You are in a read-only sandbox:
   do not try to change files or run commands that change anything. Do not open `.env` files,
@@ -126,14 +134,21 @@ holds:
   and a concrete fix; then a one-line overall verdict; say plainly when there is nothing
   serious; answer in <the user's language>.
 
-Run it in **one** Bash call with a timeout of 300000 ms (5 minutes), with the real `$T` path:
+Run it in **one** Bash call with a timeout of 300000 ms (5 minutes), with the real `$T` path and the
+prompt between the two marker lines. The marker is quoted, so nothing in the prompt is expanded; no
+line of the prompt may be the marker itself.
 
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh" "<the mktemp path>" medium
+bash "${CLAUDE_SKILL_DIR}/scripts/ask-gpt.sh" "<the path --new printed>" medium <<'COREOPINION_PROMPT'
+<the prompt>
+COREOPINION_PROMPT
 ```
 
-The script is pre-approved for this skill, so the user's yes in step 2 is the only question. It
-prints `exit=<code>`, then `--- answer` with GPT's final answer and `--- log tail` (the last 20
+The skill's two scripts are pre-approved only in the turn that loaded the skill. The run comes after
+the user's yes, a new turn, so Claude Code may ask once to run `ask-gpt.sh`; if it does, say that
+this is the run they just agreed to (they can allow it for good). If the run is refused, stop and say
+nothing was sent; never call Codex another way. The
+run prints `exit=<code>`, then `--- answer` with GPT's final answer and `--- log tail` (the last 20
 lines of the Codex log, 80 after a failed run), and removes the temp folder (it holds the diff)
 however the run ends. That output is all there is to read afterwards: the folder is gone. Outside a git repository it adds
 `--skip-git-repo-check` and gives Codex an empty folder instead of the project.
@@ -161,7 +176,7 @@ however the run ends. That output is all there is to read afterwards: the folder
   only after a new yes.
 - Effort: `medium` by default; pass `high` only when the user asks for a deep, detailed or
   thorough review. (Codex's own default is `xhigh`, which is slow and spends the plan's usage fast.)
-- The script runs `--ephemeral` (no Codex session kept on disk) and reads the prompt from stdin.
+- The script runs `--ephemeral` (no Codex session kept on disk) and passes the prompt to Codex on stdin.
 
 Tell the user it is running and may take 10–60 seconds, sometimes more.
 
@@ -201,7 +216,7 @@ what failed and what the user can do:
 
   ```json
   {
-    "sandbox": { "excludedCommands": ["bash */second-opinion/scripts/ask-gpt.sh *"] }
+    "sandbox": { "excludedCommands": ["bash \"*/second-opinion/scripts/ask-gpt.sh\" *"] }
   }
   ```
 
@@ -213,6 +228,8 @@ what failed and what the user can do:
 - **Timeout** (no answer in 5 minutes): remove `$T` as above, say so; offer a smaller material or `medium` effort.
 - **Exit 0 but empty answer**: say GPT returned nothing; show the last lines of the log tail.
 - **Exit 3** (the script runs inside a Codex session): this skill works only in Claude Code; nothing was sent.
+- **Exit 2** with `no prompt`: the prompt did not reach the script; run it again with the prompt
+  between the marker lines.
 - **Anything else**: quote the last few lines of the log tail and say you do not know the cause.
 
 The script already removed `$T`. If the Bash call timed out or was killed, run `rm -rf "$T"` first thing

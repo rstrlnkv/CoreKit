@@ -74,13 +74,14 @@ Claude says what failed and never pretends a review happened:
 
   ```json
   {
-    "sandbox": { "excludedCommands": ["bash */second-opinion/scripts/ask-gpt.sh *"] }
+    "sandbox": { "excludedCommands": ["bash \"*/second-opinion/scripts/ask-gpt.sh\" *"] }
   }
   ```
 
   `sandbox.excludedCommands` runs matching commands outside Claude Code's sandbox (Codex's own
-  permission profile still applies). No allow rule is needed: the skill pre-approves its own run
-  script, so your yes to the file list is the only question. See
+  permission profile still applies). The skill pre-approves its own scripts only in the
+  turn that loads it; the run after your yes may ask once to run `ask-gpt.sh` (allow it for good with
+  `Bash(bash "<plugin>/skills/second-opinion/scripts/ask-gpt.sh" *)`). See
   [Run commands outside the sandbox](https://code.claude.com/docs/en/sandbox-environments.md#run-commands-outside-the-sandbox-with-excludedcommands).
   Also do not start Claude Code from inside Codex's own app.
 - **No answer in 5 minutes**: ask about a smaller piece.
@@ -96,7 +97,7 @@ Claude says what failed and never pretends a review happened:
   `codex login status` shows it. **Each review counts against that plan's Codex usage.**
 - **Network:** OpenAI, through the Codex CLI only, with the files you confirmed. The plugin makes no other network call.
 - **Permissions:** Codex runs with a narrow read-only profile (see "What is sent" above). If you turned on Claude Code's Bash sandbox, the skill's run script has to be allowed outside it (see "If it fails").
-- **Changes outside its own folder:** none that stay. The run script creates a temp folder with the prompt and removes it however the run ends. Your `~/.codex/config.toml` is not read and not changed.
+- **Changes outside its own folder:** none that stay. The run script creates a temp folder for the prompt and removes it however the run ends. Your `~/.codex/config.toml` is not read and not changed.
 
 ## Uninstall
 

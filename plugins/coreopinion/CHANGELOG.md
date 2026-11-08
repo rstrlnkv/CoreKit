@@ -25,6 +25,15 @@ All notable changes to `coreopinion` are listed here. The format follows
 - The run script refused its temp folder when TMPDIR pointed away from where `mktemp -d` put it
   (macOS, the Claude Code sandbox); it now accepts a mktemp folder in `$TMPDIR`, the system temp
   folder or `/tmp`.
+- The skill's pre-approved commands match the quoted commands it runs, so the checks before your
+  yes ask nothing.
+- Checking for Codex and making the temp folder are done by the run script (`--check`, `--new`),
+  which takes the prompt on stdin: no hand-written files outside the project and no refused
+  `mktemp` command.
+- In Codex the skill stops at its first step, and the run script refuses before it touches
+  anything, with no "Operation not permitted" noise.
+- The skill and README no longer say the run asks nothing: the run after your yes is a new turn,
+  and Claude Code may ask once to run `ask-gpt.sh`.
 
 ### Security
 
