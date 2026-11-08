@@ -45,7 +45,7 @@ found → ask the user first, then brief engineer with the answer.
    what and why. `save` commits the code and the Core files as one step with one `Step-Id`
    trailer. Output `saved code` / `saved docs` → ✓. `save` prints no hash: get it with
    `git log -1 --format='%h %s'` in the code root, or in `<Core>` when only docs were saved.
-   `nothing to save` after a chain that changed files → ✗. This procedure never tags and
+   `nothing to save` after a chain that changed files → ✗. In Codex run `save` with approval to leave the sandbox (`.git` is read-only there; see `codex.md`). This procedure never tags and
    never pushes: no `--push`. With attribution=forbid, write no `Co-Authored-By` or
    `Generated with` line (the user's setting wins over any default that asks for one) and add
    `--no-attribution`, which drops such lines from the message.

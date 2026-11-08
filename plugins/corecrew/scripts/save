@@ -30,13 +30,13 @@ while git -C "$CODE" log --all --format=%B 2>/dev/null | grep -qx "Step-Id: $ID"
   n=$((n + 1)); ID="$base-$n"
 done
 saved=0
-git -C "$CODE" add -A
+git -C "$CODE" add -A || { echo "save: git could not write $CODE/.git (read-only? in Codex allow the commit when asked); nothing saved." >&2; exit 1; }
 if ! git -C "$CODE" diff --cached --quiet; then
   git -C "$CODE" commit -q -m "$MSG" -m "Step-Id: $ID" || { echo "Code commit failed; nothing saved." >&2; exit 1; }
   echo "saved code ($(git -C "$CODE" rev-parse --abbrev-ref HEAD))"; saved=1
 fi
 # shellcheck disable=SC2086
-git -C "$CORE" add -A -- $CORE_PATHS
+git -C "$CORE" add -A -- $CORE_PATHS || { echo "save: git could not write $CORE/.git (read-only? in Codex allow the commit when asked)." >&2; exit 1; }
 if ! git -C "$CORE" diff --cached --quiet -- $CORE_PATHS; then
   git -C "$CORE" commit -q -m "$MSG" -m "Step-Id: $ID" -- $CORE_PATHS || { echo "Docs commit failed." >&2; exit 1; }
   echo "saved docs"; saved=1

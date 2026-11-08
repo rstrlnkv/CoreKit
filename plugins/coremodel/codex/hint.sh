@@ -126,7 +126,7 @@ to="${COREMODEL_HINT_TIMEOUT:-20}"
 case "$to" in ''|*[!0-9]*) to=20 ;; esac
 [ "$to" -gt 20 ] && to=20
 export COREMODEL_NESTED=1
-codex exec --model gpt-6-luna --sandbox read-only --skip-git-repo-check --ephemeral - < "$tmp/full" > "$tmp/ans" 2>/dev/null &
+codex exec --model gpt-6-luna --sandbox read-only --skip-git-repo-check --ephemeral --ignore-user-config -c 'model_reasoning_effort="low"' - < "$tmp/full" > "$tmp/ans" 2>/dev/null &
 cp=$!
 ( sleep "$to"; kill_tree "$cp" ) > /dev/null 2>&1 &
 wd=$!
@@ -146,5 +146,7 @@ case "$md" in
   opus|fable) cm=gpt-6-astra ;;
   *) exit 0 ;;
 esac
-printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"coremodel: this prompt needs %s at %s effort; switch with /model if the current one differs."}}\n' "$cm" "$lv"
+# additionalContext reaches only the model; systemMessage shows the same line to the user
+msg="coremodel: this prompt needs $cm at $lv effort; switch with /model if the current one differs."
+printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"%s"},"systemMessage":"%s"}\n' "$msg" "$msg"
 exit 0

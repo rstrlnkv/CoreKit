@@ -152,11 +152,12 @@ fi
 assert_contains "$ENVREC" 'NESTED=1'
 out="$(cat "$SANDBOX/out")"
 case "$out" in
-  '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"'*'"}}') pass ;;
+  '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"'*'"},"systemMessage":"'*'"}') pass ;;
   *) fail "main: stdout is not the hookSpecificOutput object: $out" ;;
 esac
 assert_eq "$(printf '%s' "$out" | wc -l | tr -d ' ')" "0" "main: stdout is one line"
 json_ok "$SANDBOX/out" && pass || fail "main: stdout is not valid JSON"
+case "$out" in *'"systemMessage":"coremodel: this prompt needs gpt-6-astra'*) pass ;; *) fail "main: no systemMessage: $out" ;; esac
 case "$out" in *gpt-6-astra*) pass ;; *) fail "main: context lacks gpt-6-astra: $out" ;; esac
 case "$out" in *high*) pass ;; *) fail "main: context lacks the effort 'high'" ;; esac
 case "$out" in *xhigh*) fail "main: effort high reported as xhigh" ;; *) pass ;; esac
@@ -285,6 +286,8 @@ answer '{"why":"x","level":"high","model":"opus"}'
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
 tr '\0' '\n' < "$ARGV" > "$SANDBOX/argv.txt"
 assert_contains "$SANDBOX/argv.txt" '--ephemeral'
+assert_contains "$SANDBOX/argv.txt" '--ignore-user-config'
+assert_contains "$SANDBOX/argv.txt" 'model_reasoning_effort="low"'
 assert_not_contains "$SANDBOX/argv.txt" 'fix the flaky login test'
 assert_contains "$STDIN" 'fix the flaky login test'
 assert_eq "$(tail -1 "$SANDBOX/argv.txt")" "-" "prompt read from stdin (last argument -)"

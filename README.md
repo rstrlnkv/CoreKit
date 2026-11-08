@@ -93,6 +93,7 @@ Then:
 
 What differs from Claude Code:
 - The crew roles (engineer, tester, ...) are plain role files that `/corecrew:task` hands to Codex subagents as text, with the model and effort from the `model_profile` setting.
+- Commits ask for your approval: the Codex sandbox keeps `.git` read-only, so `save` runs outside it after you approve. In non-interactive `codex exec` there is no approval; the task stops with `Commit: stopped — Codex sandbox keeps .git read-only` and the files stay uncommitted.
 - Codex subagents cannot be made read-only, so the read-only steps (security, verifier, localizer, designer) are checked, not enforced: the chain compares `git status` before and after and stops on a change.
 - `coremodel` gives a hint only: it tells you which model to switch to with `/model`; Codex hooks cannot switch it. Each prompt is sent a second time to OpenAI (`gpt-6-luna`) for this; set `coremodel_mode: off` to stop it.
 - `coreopinion` is Claude Code only (below).

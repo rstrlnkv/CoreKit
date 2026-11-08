@@ -219,4 +219,19 @@ mkdir -p "$SANDBOX/plain"
 (cd "$SANDBOX/plain" && bash "$SAVE" "x") > "$SANDBOX/out" 2>&1
 assert_contains "$SANDBOX/out" "Run this inside a project's code folder."
 
+# git cannot write .git (Codex sandbox keeps it read-only): save fails loudly, never "nothing to save"
+if [ "$(id -u)" != 0 ]; then
+  echo "ro" > "$C/ro.txt"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
+  chmod a-w "$C/.git"
+  (cd "$C" && bash "$SAVE" "Read-only git") > "$SANDBOX/out" 2>&1; rc=$?
+  chmod u+w "$C/.git"
+  [ "$rc" != 0 ] && pass || fail "save exited 0 with a read-only .git"
+  assert_not_contains "$SANDBOX/out" "nothing to save"
+  assert_contains "$SANDBOX/out" "save: git could not write"
+  assert_eq "$(cat "$C/ro.txt")" "ro" "file changed by a failed save"
+  assert_eq "$(cnt "$C")" "$nc"; assert_eq "$(cnt "$CORE_DIR")" "$nd"
+  git -C "$C" status --porcelain | grep -q 'ro.txt' && pass || fail "ro.txt not left uncommitted"
+  rm -f "$C/ro.txt"
+fi
+
 finish

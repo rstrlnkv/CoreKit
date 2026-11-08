@@ -9,6 +9,8 @@ guards for `apply_patch`, a settings file instead of the options screen, the tas
 secrets sandbox profile. `coreopinion` stays Claude Code only. Upgrading in Claude Code: nothing to do; your plugin options still win
 over the new settings file. Behaviour changes to know: the guards now also refuse a Bash command that runs `apply_patch` (see below); a wrong `attribution` or `model_profile`, or a relative `core_dir` (such as `Core`, which used to become `<current folder>/Core`), is now ignored with a warning at session start; and with an empty or relative `HOME` there is no default Core.
 In Codex, re-trust the hooks in `/hooks` after an update.
+- **FIX** `save` stops with a clear line and a non-zero exit when git cannot write `.git` (the Codex sandbox keeps it read-only), instead of printing `nothing to save`; no file is touched.
+- **UPD** In Codex the task chain runs `save` with approval to leave the sandbox; without approval (`codex exec`) it reports `Commit: stopped — Codex sandbox keeps .git read-only`. README, `codex.md`, `release.md`.
 - **NEW** Git worktrees are found wherever they live (Codex keeps them outside `<Projects>`): `lib.sh worktree_of` reads the
   `.git` file of the worktree (`gitdir: <main>/.git/worktrees/<name>`, the main `.git` folder must exist; no git process), and
   `project_of` falls back to it, so `guard-code`, `guard-secrets`, `one-suite` and `stop-remind` are active in such a worktree.

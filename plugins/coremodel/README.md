@@ -150,6 +150,7 @@ In Codex the plugin gives a **hint only**: Codex hooks cannot switch the model o
 from "keep", adds one line to the context, for example "this prompt needs gpt-6-astra at high effort; switch with /model if the
 current one differs". You switch yourself with `/model`. Mapping: Haiku to `gpt-6-luna`, Sonnet to `gpt-6.1-sol`, Opus and Fable to `gpt-6-astra`.
 
+- The hint shows as a system message (and reaches the model as context). The nested call takes about 8 seconds; it runs with `--ignore-user-config` and low reasoning effort, so it does not load your config, MCP servers or other plugins' hooks (your login still works).
 - It costs about one `gpt-6-luna` call per prompt and waits at most 20 seconds (`COREMODEL_HINT_TIMEOUT`); any failure is silent and the prompt goes on.
 - Turn it off with `coremodel_mode: off` in `~/.config/corecrew/settings`.
 - Codex asks you to trust the hook the first time: review and enable it in `/hooks`.

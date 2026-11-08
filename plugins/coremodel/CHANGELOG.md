@@ -5,6 +5,8 @@ Every entry starts with a badge: **NEW** is a new capability, **FIX** is a defec
 ## 0.6.0 — 2026-11-08
 
 - **NEW** **A hint in Codex.** Codex hooks cannot switch the model, so a `UserPromptSubmit` hook asks `gpt-6-luna` which model and effort the prompt needs and adds one line of context ("switch with /model"). About one small call per prompt, at most 20 seconds, silent on any failure; `coremodel_mode: off` in the corecrew settings file turns it off. The Claude Code module is unchanged.
+- **FIX** The Codex hint no longer runs out of the 20 s limit: the nested `codex exec` runs with `--ignore-user-config` and `model_reasoning_effort="low"` (about 8 s instead of 13 s). It therefore no longer loads your config, MCP servers or other plugins' hooks.
+- **UPD** The hint is also shown to you as a `systemMessage`; `additionalContext` reaches only the model.
 
 ## 0.5.2 — 2026-11-06
 

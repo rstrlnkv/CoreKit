@@ -40,3 +40,9 @@ A Codex subagent cannot be made read-only. Around each read-only step (security,
 Read-only steps keep the parent session's permissions, so the check is all there is; start Codex with the profile that
 `bash "<scripts>/lib.sh" codex-profile` prints to keep secret files closed.
 In a wave, compare once after all have answered.
+
+## Commit in Codex
+The Codex sandbox keeps `.git` read-only, so `save` cannot write there. Run `bash "<scripts>/save" ...` as a command that asks for
+approval to leave the sandbox (escalated permissions) and let the user approve. If approval is not possible (non-interactive
+`codex exec`), or `save` prints `save: git could not write ...`, report `Commit: stopped — Codex sandbox keeps .git read-only`
+with the files left uncommitted.
