@@ -384,7 +384,7 @@ if [ -d "$SANDBOX/projects/case-app/.git" ]; then
     || fail "PROJECTS.md entry lacks the on-disk case: $(cat "$CORE_DIR/PROJECTS.md")"
   assert_eq "$(readlink "$F/CLAUDE.local.md")" "$CORE_DIR/case-app/CLAUDE.md" "link (--from in another case)"
 else
-  echo "  note: case-sensitive disk, --from letter-case check skipped"
+  skip "--from letter case" "case-sensitive disk"
 fi
 # a Cyrillic folder name: refused (it is not a project name, and --name cannot rename the folder)
 F="$SANDBOX/Projects/Мой проект"; mkrepo "$F"

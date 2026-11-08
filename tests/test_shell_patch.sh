@@ -8,7 +8,6 @@ source "$(dirname "$0")/lib.sh"
 new_sandbox
 . "$SCRIPTS/lib.sh"
 SELF="$PLUGIN"
-trap 'rm -rf "$SANDBOX"' EXIT
 nl="
 "
 refused() { shell_patch_refused "$1" && pass || fail "$2: not refused: ${1:0:160}"; }

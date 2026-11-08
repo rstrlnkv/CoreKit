@@ -18,7 +18,7 @@ export ONE_SUITE_PROCS="$FAKE"
 export ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0 ONE_SUITE_TURN="$SANDBOX/turn"
 dummy=""; FAKES=""
 PTMP="$(cd -P /tmp && pwd)"; NOTOWNED="$PTMP/onesuite-turn-$$"   # see "a state folder not owned by this user"
-trap '[ -z "$dummy" ] || kill "$dummy" 2>/dev/null; [ -z "$FAKES" ] || kill $FAKES 2>/dev/null; rm -rf "$NOTOWNED"; chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
+trap '[ -z "$dummy" ] || kill "$dummy" 2>/dev/null; [ -z "$FAKES" ] || kill $FAKES 2>/dev/null; rm -rf "$NOTOWNED"' EXIT
 # fake <cwd> <argv0> — starts a fake test run (a renamed sleep) whose working folder is <cwd>; its pid in FAKE_PID.
 # The hook holds a call only for a run whose working folder is in the same place as the call.
 fake() {

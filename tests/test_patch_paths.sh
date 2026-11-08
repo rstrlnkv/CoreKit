@@ -7,7 +7,6 @@ new_sandbox
 . "$SCRIPTS/lib.sh"
 SELF="$PLUGIN"
 T="$(printf '\t')"
-trap 'rm -rf "$SANDBOX"' EXIT
 
 # pp <text> — the adapter output with the TAB shown as '>'
 pp() { patch_paths "$1" | tr '\t' '>'; }

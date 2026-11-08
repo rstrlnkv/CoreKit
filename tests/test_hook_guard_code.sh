@@ -8,7 +8,6 @@ new_sandbox
 H="$HOOKS/guard-code.sh"
 assert_file "$H"
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
-trap 'chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
 
 mkdir -p "$CORE_DIR/p/code/src" "$CORE_DIR/p/docs" "$CORE_DIR/q/code" "$SANDBOX/elsewhere"
 : > "$CORE_DIR/p/CLAUDE.md"; : > "$CORE_DIR/q/CLAUDE.md"
@@ -273,7 +272,7 @@ if [ -d "$SANDBOX/cs/A" ]; then
   run_bash 'echo x > DOCS/a.md' "$SANDBOX/casecore/ядро/myapp/code"; blocked "Bash, cwd in other case" "$CP/code/DOCS/a.md" "$CP/docs/a.md"
   run_file Write "$SANDBOX/CASECORE/ЯДРО/myapp/docs/a.md" "$CP/code"; ok "other case, the Core's own docs"
 else
-  echo "  note: case-sensitive volume, letter-case test skipped"; pass
+  skip "core_dir letter case" "case-sensitive volume"; pass
 fi
 export CORE_DIR="$SANDBOX/Projects/Core"
 

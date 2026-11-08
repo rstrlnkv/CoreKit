@@ -47,7 +47,7 @@ assert_eq "$(git -C "$C" status --porcelain)" "" "code left dirty"
 assert_eq "$(git -C "$CORE_DIR" status --porcelain -- cf-app)" "" "docs left dirty"
 
 # I4: paths with spaces
-SANDBOX="$(mktemp -d)"; export CORE_DIR="$SANDBOX/my projects/Core"
+SANDBOX="$(mktemp -d "$TEST_TMP/sb.XXXXXX")"; export CORE_DIR="$SANDBOX/my projects/Core"
 export CLAUDE_PLUGIN_DATA="$SANDBOX/plugin data"; export COREDEV_TOOLS="$CLAUDE_PLUGIN_DATA/tools"; sync_tools; setup_core
 scaffold_old sp-app; C="$CORE_DIR/sp-app/code"
 (cd "$C" && bash "$SCRIPTS/save" init) >/dev/null 2>&1

@@ -6,7 +6,6 @@
 # fake is reachable that way, so the refusal is not guarding an empty danger.
 source "$(dirname "$0")/lib.sh"
 new_sandbox
-trap 'rm -rf "$SANDBOX"' EXIT
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
 W="$SANDBOX/work"; BIN="$SANDBOX/fakebin"; LOG="$SANDBOX/fake.log"
 mkdir -p "$W" "$BIN" "$CORE_DIR/p/code"
@@ -126,7 +125,7 @@ for c in "${bypass[@]}"; do
     [ "$rc" = 2 ] && pass || fail "$h rc=$rc (want 2) for: ${c:0:120}"
   done
   # Sanity of the danger: where the command can start the fake at all, record it (not asserted: a tool may be absent).
-  if ran_fake "$c"; then echo "  note: really starts the fake: ${c:0:70}"; fi
+  if ran_fake "$c"; then note "really starts the fake: ${c:0:70}"; fi
 done
 for c in "${twins[@]}"; do
   for h in guard-code.sh guard-secrets.sh; do

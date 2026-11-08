@@ -29,7 +29,7 @@ for g in guard-code guard-secrets; do
 done
 
 # 3. patch paths with TAB/CR at an edge, and CR-only line endings, against the real parser
-if ! command -v codex >/dev/null 2>&1; then echo "SKIP boundary-inputs part 3: codex not on PATH"; finish; fi
+if ! command -v codex >/dev/null 2>&1; then skip "part 3 (patch paths against the real parser)" "codex not on PATH"; finish; fi
 CORE_DIR="$SBX_CORE"; export CORE_DIR; mkdir -p "$CODEX_HOME" "$CORE_DIR/p/docs"; : > "$CORE_DIR/p/CLAUDE.md"
 C="$CORE_DIR/p/code"; nl=$'\n'; B='*** Begin Patch'; En='*** End Patch'; TAB=$'\t'; CR=$'\r'
 reset() { rm -rf "$C"; mkdir -p "$C/src" "$C/docs" "$C/.claude"; printf 'one\n' > "$C/src/m.txt"; printf 'one\n' > "$C/docs/e.md"; printf 'K=1\n' > "$C/.env"; printf 'one\n' > "$C/CLAUDE.md"; }

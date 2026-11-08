@@ -9,7 +9,6 @@ new_sandbox
 H="$HOOKS/guard-secrets.sh"
 assert_file "$H"
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
-trap 'chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
 
 mkdir -p "$CORE_DIR/p/code/src" "$SANDBOX/elsewhere" "$HOME/.ssh"
 : > "$CORE_DIR/p/CLAUDE.md"
