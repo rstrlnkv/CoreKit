@@ -15,8 +15,8 @@ on with the skill's Paths section (`lib.sh plugin-root`). This file is
 `<skill>/../../reference/codex-host.md`.
 
 ## Settings and skill names
-Codex has no options screen. The settings live in the settings file: `bash "<scripts>/lib.sh"
-setting-path` prints its path (`~/.config/corecrew/settings` by default; lines `key: value`, keys
+Codex has no options screen. The settings live in the settings file, whose path
+`bash "<scripts>/lib.sh" setting-path` prints (`~/.config/corecrew/settings` by default; lines `key: value`, keys
 `core_dir`, `attribution`, `model_profile`, `ui_language`, and for the crew `codex_model` and
 `codex_model_<role>`). Run the skill's commands as written: a `user_config` placeholder in them
 stays literal in Codex, and the scripts treat it as unset and read the settings file.
