@@ -37,4 +37,17 @@ for v in DISABLE_AUTOUPDATER CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC; do case "
 run="$(printf '%s\n' "$suite" | awk '/Run the suite/{f=1} f')"
 case "$run" in *'claude not on PATH'*) pass ;; *) fail "the suite step fails on a claude skip (grep for: claude not on PATH)" ;; esac
 
+# The commit-subjects job: the whole history is fetched, the range is passed through env (never ${{ }} inside run:),
+# and only the new commits are checked.
+cs="$(job "$WF" commit-subjects)"
+[ -n "$cs" ] && pass || fail "a commit-subjects job"
+case "$cs" in *'fetch-depth: 0'*) pass ;; *) fail "commit-subjects: fetch-depth: 0" ;; esac
+case "$cs" in *'scripts/commit-subjects.sh --range'*) pass ;; *) fail "commit-subjects: runs scripts/commit-subjects.sh --range" ;; esac
+runs="$(printf '%s\n' "$cs" | awk '/^        run: \|/{f=1; next} f && /^        [a-z-]+:/{f=0} f')"
+[ -n "$runs" ] && pass || fail "commit-subjects: a run block"
+case "$runs" in *'${{'*) fail "commit-subjects: an expression inside run: (pass inputs through env:)" ;; *) pass ;; esac
+for v in EVENT BEFORE PR_BASE PR_HEAD DEFAULT_BRANCH; do case "$cs" in *"$v: "*) pass ;; *) fail "commit-subjects: env $v" ;; esac; done
+# The ShellCheck job also covers the repo-level scripts/
+grep -qE '^ *find plugins tests scripts |^ *find .*\bscripts\b.*-prune' "$WF" && pass || fail "the shellcheck find roots name scripts"
+
 finish

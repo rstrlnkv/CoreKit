@@ -63,9 +63,9 @@ jobs:
       - name: ShellCheck
         run: |
           shellcheck --version | head -n 2
-          # every shell file under plugins/ and tests/ (not tests/fixtures, not node_modules): each *.sh file, and
+          # every shell file under plugins/, tests/ and scripts/ (not tests/fixtures, not node_modules): each *.sh file, and
           # each other file whose first line is a sh or bash shebang
-          find plugins tests \( -path tests/fixtures -o -name node_modules \) -prune -o -type f -print \
+          find plugins tests scripts \( -path tests/fixtures -o -name node_modules \) -prune -o -type f -print \
             | while IFS= read -r f; do
                 case "$f" in
                   *.sh) echo "$f" ;;
@@ -74,6 +74,35 @@ jobs:
               done | sort > "$RUNNER_TEMP/shell-files"
           cat "$RUNNER_TEMP/shell-files"
           tr '\n' '\0' < "$RUNNER_TEMP/shell-files" | xargs -0 shellcheck --severity=warning
+
+  # the subjects of the new commits only (CONTRIBUTING.md, Commits), never the old history: a PR checks
+  # base..head; a push checks before..sha, or origin/<default>..sha when before is unknown (a new branch,
+  # a force-push). Inputs reach the script through env, never as an expression inside run.
+  commit-subjects:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check the new commit subjects
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            range="$PR_BASE..$PR_HEAD"
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ] \
+               && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            range="$BEFORE..$GITHUB_SHA"
+          else
+            range="origin/$DEFAULT_BRANCH..$GITHUB_SHA"
+          fi
+          echo "checking $range"; git log --oneline --no-merges "$range"
+          bash scripts/commit-subjects.sh --range "$range"
 
   actionlint:
     runs-on: ubuntu-latest

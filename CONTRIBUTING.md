@@ -64,7 +64,16 @@ run: `claude plugin eval plugins/corecrew --ablation none --no-publish`.
 - Work on a branch, never on `main`.
 - One commit per working step, in [Conventional Commits](https://www.conventionalcommits.org/)
   form with the plugin as scope: `fix(corecrew): ...`, `feat(coremodel): ...`, `docs: ...`. The
-  subject is at most 72 characters; details go in the body.
+  subject is at most 72 characters; details go in the body. CI checks the subjects of the new commits
+  with `scripts/commit-subjects.sh` (types: feat, fix, docs, style, refactor, perf, test, build, ci,
+  chore, revert, merge; a lowercase scope or none). To get the same check at every commit, install
+  it once as a `commit-msg` hook; this command leaves an existing hook alone:
+
+  ```bash
+  h="$(git rev-parse --git-path hooks)/commit-msg"; [ -e "$h" ] || { printf '#!/bin/sh\nexec bash "$(git rev-parse --show-toplevel)/scripts/commit-subjects.sh" --file "$1"\n' > "$h" && chmod +x "$h"; }
+  ```
+
+  Nothing installs it for you.
 - Add a line for your change under `## [Unreleased]` in the plugin's CHANGELOG (`CHANGELOG.md` for
   corecrew, `plugins/<name>/CHANGELOG.md` for the others), in the group that fits: Added, Changed,
   Deprecated, Removed, Fixed or Security.
