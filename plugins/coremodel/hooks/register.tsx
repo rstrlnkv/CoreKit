@@ -701,7 +701,10 @@ export const register: Register = (on, options) => {
     if (arg === 'auto' || arg === 'suggest' || arg === 'off' || arg === 'on') return { text: await setMode($, options, arg) }
     if (arg === 'panel') {
       const r = await $.ui.open({ id: PLUGIN, title: 'CoreModel' })
-      return { text: r.isPlaced ? t.paneOpen : t.paneWaiting(r.reason) }
+      if (r.isPlaced) return { text: t.paneOpen }
+      // The engine's reason is for the debug log; the person gets a plain sentence.
+      await log($, 'pane not shown', r.reason)
+      return { text: r.reason.startsWith('no-surface') ? t.paneNoSurface : t.paneWaiting }
     }
     if (arg === 'undo') {
       const b = lastUndo

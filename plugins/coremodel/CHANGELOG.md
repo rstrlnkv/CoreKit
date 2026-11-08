@@ -51,6 +51,8 @@ Needs Claude Code 2.1.309 or newer (models are named by alias).
 - The pane's captions take the width of the longest caption in the active language, so the
   Russian rows line up.
 - `/coremodel recheck` names the "Pick the model" setting instead of the raw key `pickModel`.
+- `/coremodel panel` where no app can show the pane says so in a plain sentence instead of an
+  internal reason; the reason goes to the debug log.
 
 ## [0.6.0] - 2026-11-08
 

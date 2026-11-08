@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
+import { texts } from '../hooks/policy'
 import { start, step, submit, world, type Eng, type World } from './world'
 
 const SURFACES = ['terminal', 'desktop'] as const
@@ -315,6 +316,34 @@ test('/coremodel panel opens the pane', async ($, on) => {
   await start($)
   await run($, 'panel')
   expect(w.opened).toEqual([{ id: 'coremodel', title: 'CoreModel' }])
+})
+
+// The world without its own ui.open answer, so a test can answer it (a hook registers once per event).
+function withoutOpen(on: On): On {
+  return ((name: string, ...rest: unknown[]) => (name === 'ui.open' ? undefined : (on as (...a: unknown[]) => unknown)(name, ...rest))) as On
+}
+
+// With no surface attached (a -p run, say) the engine answers with an internal reason; the reply is plain words.
+test('/coremodel panel with no surface says so in plain words', async ($, on) => {
+  const w = world(withoutOpen(on))
+  on('ui.open', () => ({ value: { isPlaced: false, reason: 'no-surface: no surface is attached ($.session.surfaces() is empty)' } }) as never)
+  await start($)
+  const text = await run($, 'panel')
+  expect(text).toBe(texts('en').paneNoSurface)
+  expect(text).not.toContain('no-surface')
+  expect(text).not.toContain('$.')
+  w.answer = '{"level":"keep","why":"x"}'
+  await submit($, 'почини авторизацию')
+  expect(await run($, 'panel')).toBe(texts('ru').paneNoSurface)
+})
+
+test('/coremodel panel that waits for another reason shows no internal reason', async ($, on) => {
+  world(withoutOpen(on))
+  on('ui.open', () => ({ value: { isPlaced: false, reason: 'attached surfaces place no panes: web' } }) as never)
+  await start($)
+  const text = await run($, 'panel')
+  expect(text).toBe(texts('en').paneWaiting)
+  expect(text).not.toContain('surfaces')
 })
 
 test('the pane shows the mode, what the chat runs at, and the session', { options: { mode: 'auto' } }, async ($, on) => {
