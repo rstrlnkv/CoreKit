@@ -15,19 +15,14 @@ Scripts live in this skill's `scripts/` and in the plugin's `scripts/`. Run them
 pass the Core location: `CORE_DIR="<Core>" bash "<skill>/scripts/<script>"`.
 
 ## Paths
-This skill's folder is `${CLAUDE_SKILL_DIR}`. Claude Code replaces that text with the absolute
-path before you read it. Codex does not: there the text stays as written, and the folder is the
-directory of the SKILL.md path Codex gave for this skill (`(file: …/SKILL.md)` in the skills
-list, or the path of the skill block it loaded; a path that starts with a root alias such as
-`r1/` starts with the folder listed under "Skill roots"). Call that folder `<skill>`. Check it
-before you run anything: in Codex, `<skill>` must lie inside a
-`plugins/cache/<marketplace>/corecrew/<version>/skills/` folder, its text must have no `..` component, and it must contain no `"`,
-`$` or backtick; if it fails that, ask the user and run nothing. Then run this first, with
-`<skill>` filled in: `bash "<skill>/../../scripts/lib.sh" plugin-root`. It prints `<plugin>`, the
-absolute plugin folder; `<scripts>` is `<plugin>/scripts`. Write every later command and every
-Read path with these filled in as absolute paths. If the command fails, or you cannot give
-`<skill>` as an absolute path, stop, tell the user the corecrew folder was not found, and do not
-guess a path.
+This skill's folder is `${CLAUDE_SKILL_DIR}`; call it `<skill>`. Claude Code fills in that absolute
+path before you read it. Codex leaves the text as written: then read `reference/codex-host.md` in the
+plugin folder (two folders above the folder of the SKILL.md path Codex gave for this skill), find and
+check `<skill>` as its section Skill folder says, and follow that file for the rest of this skill.
+Then run `bash "<skill>/../../scripts/lib.sh" plugin-root`. It prints `<plugin>`, the absolute plugin
+folder; `<scripts>` is `<plugin>/scripts`. Write every later command and every Read path with these
+filled in as absolute paths. If the command fails, or you cannot give `<skill>` as an absolute path,
+stop, tell the user the corecrew folder was not found, and do not guess a path.
 
 ## Language
 - Talk to the user in their language (from their Claude settings or instructions; otherwise the
@@ -82,6 +77,8 @@ install or fix, and give the exact command; do not mark the stage done.
 **0. Core and preflight.** First resolve `<Core>` once, to an absolute path (the setting may
 start with `~`), and use that path in every command below:
 `CORE_DIR='${user_config.core_dir}' bash "<scripts>/lib.sh" core-dir`.
+In Codex, check next that `<Projects>` is writable, as `<plugin>/reference/codex-host.md`, section Writable
+folders, says; nothing is written before that check passes.
 Then check that the Core is set up:
 `CORE_DIR="<Core>" bash "<scripts>/lib.sh" ready`
 (exit 0 = set up; it means `<Core>/.coredev` has a `schema:` line). If it fails, tell the user in
@@ -95,7 +92,8 @@ Then `CORE_DIR="<Core>" bash "<scripts>/prepare.sh"` (it brings the tools copy u
 Explain any FAIL in plain words with the fix; WARN about
 non-Latin paths means Android/Flutter builds may break — say so. Stop on FAIL.
 
-**1. Interview.** Follow `references/interview.md`: 2–3 questions per AskUserQuestion call.
+**1. Interview.** Follow `references/interview.md`: 2–3 questions per AskUserQuestion call (in Codex,
+plain chat questions: codex-host.md, section Questions).
 Never ask the user to pick a stack.
 
 **2. Name.** Propose a name (Latin, lowercase, hyphens, 3–40 chars) and a one-sentence purpose

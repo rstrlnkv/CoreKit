@@ -40,4 +40,6 @@ assert_eq "$base/${f#*/}" "$inst/skills/new-project/SKILL.md" "alias $alias + pa
 # the Paths section of every skill works from that folder
 skill_dir="$(dirname "$base/${f#*/}")"
 assert_eq "$(bash "$skill_dir/../../scripts/lib.sh" plugin-root 2>&1)" "$inst" "plugin-root from the installed copy"
+# the Paths section sends Codex to the shared host reference, two folders above the skill folder
+assert_file "$skill_dir/../../reference/codex-host.md"
 finish

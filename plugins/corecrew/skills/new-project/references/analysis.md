@@ -6,7 +6,10 @@ Run this yourself. Do not invoke `superpowers:brainstorming` here — its hard g
 ## Order (each part approved by the user before the next)
 1. **Constraints** — list what the chosen platforms require (see table). Flag blockers.
 2. **Stack options** — 2–3 options from `stacks.md`, scored (below), one recommendation.
-3. **Verification** — one research subagent checks the options (prompt below). Update scores.
+3. **Verification** — one research subagent checks the options (prompt below): in Claude Code the
+   Agent tool, `subagent_type: general-purpose`; in Codex as `<plugin>/reference/codex-host.md`,
+   section Subagents, says. If no subagent can run, or it returns nothing, check the options
+   yourself against the official docs and say so. Update scores.
 4. **Architecture** — components, data storage and sync, external services, risks.
 5. **Record** — write `docs/architecture.md` and `docs/decisions/001-stack-and-architecture.md`
    (English), set `Stage: decided` under `## Progress` in `docs/brief.md`, show a short summary in the user's

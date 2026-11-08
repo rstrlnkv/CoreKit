@@ -26,19 +26,14 @@ Shared files: `<plugin>/reference/wiki.md` (wiki rules),
 `<scripts>/save`.
 
 ## Paths
-This skill's folder is `${CLAUDE_SKILL_DIR}`. Claude Code replaces that text with the absolute
-path before you read it. Codex does not: there the text stays as written, and the folder is the
-directory of the SKILL.md path Codex gave for this skill (`(file: …/SKILL.md)` in the skills
-list, or the path of the skill block it loaded; a path that starts with a root alias such as
-`r1/` starts with the folder listed under "Skill roots"). Call that folder `<skill>`. Check it
-before you run anything: in Codex, `<skill>` must lie inside a
-`plugins/cache/<marketplace>/corecrew/<version>/skills/` folder, its text must have no `..` component, and it must contain no `"`,
-`$` or backtick; if it fails that, ask the user and run nothing. Then run this first, with
-`<skill>` filled in: `bash "<skill>/../../scripts/lib.sh" plugin-root`. It prints `<plugin>`, the
-absolute plugin folder; `<scripts>` is `<plugin>/scripts`. Write every later command and every
-Read path with these filled in as absolute paths. If the command fails, or you cannot give
-`<skill>` as an absolute path, stop, tell the user the corecrew folder was not found, and do not
-guess a path.
+This skill's folder is `${CLAUDE_SKILL_DIR}`; call it `<skill>`. Claude Code fills in that absolute
+path before you read it. Codex leaves the text as written: then read `reference/codex-host.md` in the
+plugin folder (two folders above the folder of the SKILL.md path Codex gave for this skill), find and
+check `<skill>` as its section Skill folder says, and follow that file for the rest of this skill.
+Then run `bash "<skill>/../../scripts/lib.sh" plugin-root`. It prints `<plugin>`, the absolute plugin
+folder; `<scripts>` is `<plugin>/scripts`. Write every later command and every Read path with these
+filled in as absolute paths. If the command fails, or you cannot give `<skill>` as an absolute path,
+stop, tell the user the corecrew folder was not found, and do not guess a path.
 
 ## Language
 Talk to the user in their language, in plain words. Everything on disk (code, docs, commit
