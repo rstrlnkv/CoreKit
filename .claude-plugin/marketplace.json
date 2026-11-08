@@ -1,13 +1,13 @@
 {
   "name": "corekit",
-  "description": "CoreKit: corecrew for starting and running projects with Claude Code, coremodel for picking the model and effort level, and coreopinion for a second opinion from GPT.",
+  "description": "Three plugins for Claude Code and Codex: a project workflow (corecrew), a model and effort picker (coremodel) and a second opinion from GPT (coreopinion).",
   "owner": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "plugins": [
     {
       "name": "corecrew",
       "displayName": "CoreCrew",
       "source": "./plugins/corecrew",
-      "description": "Start projects from an interview and run tasks with a crew of agents; standards and lessons live in your private Core repo."
+      "description": "Run every project the same way: start from an interview, work with a crew of agents, keep the docs in a private repo."
     },
     {
       "name": "coremodel",

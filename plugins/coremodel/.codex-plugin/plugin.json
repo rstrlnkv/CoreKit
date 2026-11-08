@@ -15,7 +15,7 @@
     "category": "Coding",
     "websiteURL": "https://github.com/rstrlnkv/CoreKit",
     "brandColor": "#3A3FA0",
-    "composerIcon": "./.claude-plugin/icon.png",
-    "logo": "./.claude-plugin/icon.png"
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/icon.png"
   }
 }
