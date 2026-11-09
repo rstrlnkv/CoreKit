@@ -3,7 +3,8 @@
 source "$(dirname "$0")/lib.sh"
 new_sandbox
 
-# label|extended regex (BSD grep -E), one per line; a heredoc, so a pattern may hold both quote characters
+# label|extended regex (BSD grep -E), one per line; a heredoc, so a pattern may hold both quote characters. A label
+# may take several lines: BSD grep is many times slower on one long alternation behind a character class.
 IFS= read -r -d '' PATTERNS <<'EOF'
 sed -i|sed([[:space:]]+-[a-zA-Z]+)*[[:space:]]+-[a-zA-Z]*i
 grep -P|grep([[:space:]]+-[a-zA-Z]+)*[[:space:]]+-[a-zA-Z]*P
@@ -16,46 +17,74 @@ stat -c|stat[[:space:]]+-c
 readlink -f|readlink[[:space:]]+-f
 find -printf|find[[:space:]].*-printf
 xargs -r|xargs([[:space:]]+-[a-zA-Z]+)*[[:space:]]+-[a-zA-Z]*r
-jq as a command|(^|[|;&(`]|(do|then|else)[[:space:]])[[:space:]]*jq([[:space:]]|$)
-GNU long option|(^|[|;&(`]|(do|then|else|if|while|until|!)[[:space:]])[[:space:]]*(sed|date|stat|readlink|cp|mv|ln|rm|head|tail|cut|wc|mktemp|touch|xargs|tr|uniq|du)([[:space:]]+-[^-[:space:]][^[:space:]]*)*[[:space:]]+--[a-z]
 case fall-through|;;&|(^|[^;]);&([[:space:]]|$)
-declare -g|(declare|local|typeset)[[:space:]]+-[a-zA-Z]*g
-[[ -v / [ -v|\[[[:space:]]+-v[[:space:]]
-${x@Q} transform|\$\{[A-Za-z_][A-Za-z0-9_]*(\[[^]]*\])?@[A-Za-z]\}
+declare -g|(declare|local|typeset)([[:space:]]+-[a-zA-Z]+)*[[:space:]]+-[a-zA-Z]*g
+[[ -v / [ -v / test -v|(\[|(^|[^A-Za-z0-9_-])test)[[:space:]]+(![[:space:]]+)?-v[[:space:]]
+${x@Q} transform|\$\{([A-Za-z_][A-Za-z0-9_]*|[0-9]+|[@*])(\[[^]]*\])?@[A-Za-z]\}
 wait -n|(^|[^A-Za-z0-9_])wait[[:space:]]+-[a-zA-Z]*[nfp]
 printf %(..)T|printf[[:space:]].*%\([^)]*\)T
 {a..b..step}|(^|[^$])\{[-+]?[0-9A-Za-z]+\.\.[-+]?[0-9A-Za-z]+\.\.[-+]?[0-9]+\}
 read -t fraction|read([[:space:]]+-[a-zA-Z]+)*[[:space:]]+-[a-zA-Z]*t[[:space:]]*[0-9]*\.[0-9]
 bash 4/5 variable|\$\{?(BASHPID|EPOCHSECONDS|EPOCHREALTIME|SRANDOM|BASH_ARGV0)([^A-Za-z0-9_]|$)
 bash 4/5 shopt option|shopt[[:space:]]+-[a-z]+[[:space:]].*(globstar|lastpipe|autocd|checkjobs|dirspell|direxpand|globasciiranges|inherit_errexit|localvar_inherit|localvar_unset|assoc_expand_once|patsub_replacement|varredir_close)
-head -n -N|(^|[|;&(`]|(do|then|else|if|while|until|!)[[:space:]])[[:space:]]*head([[:space:]]+[^|;&[:space:]]+)*[[:space:]]+-[nc][[:space:]]*-[0-9]
-tac|(^|[|;&(`]|(do|then|else|if|while|until|!)[[:space:]])[[:space:]]*tac([[:space:]]|$)
-sed block without ; before }|sed([[:space:]]+-[a-zA-Z]+)*[[:space:]]+['"]([^'"]*[^${'"])?\{[^{}'"]*[A-Za-z]\}
+sed block without ; before }|sed([[:space:]]+-[a-zA-Z]+)*[[:space:]]+['"]([^'"]*(;|[^s]/|[0-9]))?[[:space:]]*\{[^{}'"]*[^;{}'"[:space:]][[:space:]]*\}
 GNU sed T command|sed([[:space:]]+-[a-zA-Z]+)*[[:space:]]+['"]([^'"]*[;{])?[[:space:]]*T([[:space:]]+[A-Za-z_]+)?[[:space:]]*([;}'"]|$)
-gawk-only awk|(^|[^A-Za-z0-9_])(gensub|asorti?|strftime|systime|mktime|patsplit|and|or|xor|lshift|rshift|compl)\(|PROCINFO|IGNORECASE|BEGINFILE|ENDFILE|FPAT|@include|@load
+gawk-only awk|(gensub|asorti?|strftime|systime|mktime|patsplit|xor|lshift|rshift|compl)\(
+gawk-only awk|[^A-Za-z0-9_](and|or)\(
+gawk-only awk|PROCINFO|IGNORECASE|BEGINFILE|ENDFILE|FPAT|@include|@load
+gawk-only awk|(^|[^A-Za-z0-9_])match\([[:space:]]*(/[^/]*/|"[^"]*"|[^][,()/"]*((\([^()]*\)|\[[^]]*\])[^][,()/"]*)*)[[:space:]]*,[[:space:]]*(/[^/]*/|"[^"]*"|[^][,()/"]*((\([^()]*\)|\[[^]]*\])[^][,()/"]*)*)[[:space:]]*,
+gawk-only awk|(^|[^A-Za-z0-9_])split\([[:space:]]*(/[^/]*/|"[^"]*"|[^][,()/"]*((\([^()]*\)|\[[^]]*\])[^][,()/"]*)*)[[:space:]]*,[[:space:]]*(/[^/]*/|"[^"]*"|[^][,()/"]*((\([^()]*\)|\[[^]]*\])[^][,()/"]*)*)[[:space:]]*,[[:space:]]*(/[^/]*/|"[^"]*"|[^][,()/"]*((\([^()]*\)|\[[^]]*\])[^][,()/"]*)*)[[:space:]]*,
 EOF
 PATTERNS="${PATTERNS%$'\n'}"
+# A construct that is forbidden only as a command, label|regex as above. scan() tries it at the line start, after
+# | ; & ( ` or a shell keyword, and after a VAR=value, env or xargs prefix (AT, one pattern each, for the reason above),
+# and only in the files where the regex alone matches.
+IFS= read -r -d '' CMDS <<'EOF'
+jq as a command|jq([[:space:]]|$)
+GNU long option|(sed|date|stat|readlink|cp|mv|ln|rm|head|tail|cut|wc|mktemp|touch|xargs|tr|uniq|du)([[:space:]]+-[^-[:space:]][^[:space:]]*)*[[:space:]]+--[a-z]
+head -n -N|head([[:space:]]+[^|;&[:space:]]+)*[[:space:]]+-[nc][[:space:]]*-[0-9]
+tac|tac([[:space:]]|$)
+EOF
+CMDS="${CMDS%$'\n'}"
+AT='^
+\|
+;
+&
+\(
+`
+(do|then|else|if|while|until|!)[[:space:]]
+(=[^[:space:]]*|env|xargs([[:space:]]+-[^[:space:]]+)*)[[:space:]]'
 
 # scan <root> <path...> — prints "<path>:<line>: <label>" for each forbidden construct in the files (paths relative to
-# <root>, no ":" in them). An *.awk file is awk, not shell: only the gawk-only pattern applies to it (it applies to the
-# inline awk of a shell file too). --no-run-if-empty is the one GNU long option macOS takes (xargs), so it is dropped
-# first, in a copy under the sandbox; the line numbers stay. One grep per pattern over all the files keeps the scan fast.
+# <root>, no ":" in them), once per line and label. An *.awk file is awk, not shell: only the gawk-only patterns apply
+# to it (they apply to the inline awk of a shell file too). --no-run-if-empty is the one GNU long option macOS takes
+# (xargs), so it is dropped first, in a copy under the sandbox; the line numbers stay. One grep per pattern over all
+# the files keeps the scan fast.
 scan() {
-  local base="$1" m="$SANDBOX/scan" f sh=() all=()
+  local base="$1" m="$SANDBOX/scan" f sh=() all=() hit=() label re at
   shift; rm -rf "$m"
   for f in "$@"; do
     mkdir -p "$m/$(dirname "$f")"; sed 's/--no-run-if-empty//g' "$base/$f" > "$m/$f"
     all[${#all[@]}]="$f"; case "$f" in *.awk) ;; *) sh[${#sh[@]}]="$f" ;; esac
   done
-  (cd "$m" && printf '%s\n' "$PATTERNS" | while IFS='|' read -r label re; do
+  (cd "$m" || exit 1
+  # where <label>: prints the hits of grep -nHE as "<path>:<line>: <label>"
+  where() { sed "s|^\([^:]*\):\([0-9]*\):.*|\1:\2: $1|"; }
+  printf '%s\n' "$PATTERNS" | while IFS='|' read -r label re; do
     if [ "$label" = "gawk-only awk" ]; then set -- "${all[@]}"; else set -- "${sh[@]}"; fi
     [ "$#" -gt 0 ] || continue
-    grep -nHE -- "$re" "$@" | sed "s|^\([^:]*\):\([0-9]*\):.*|\1:\2: $label|"
-  done)
+    grep -nHE -- "$re" "$@" | where "$label"
+  done
+  [ "${#sh[@]}" -gt 0 ] || exit 0
+  printf '%s\n' "$CMDS" | while IFS='|' read -r label re; do
+    hit=(); while IFS= read -r f; do hit[${#hit[@]}]="$f"; done < <(grep -lE -- "$re" "${sh[@]}")
+    [ "${#hit[@]}" -gt 0 ] || continue
+    printf '%s\n' "$AT" | while IFS= read -r at; do grep -nHE -- "${at}[[:space:]]*$re" "${hit[@]}" | where "$label"; done
+  done) | LC_ALL=C sort -u
 }
 
-# Self-check: every pattern catches its construct (one line each, two for the sed block, one more in an awk file),
-# and portable lines pass.
+# Self-check: every pattern catches its construct (one hit per bad line, at least one line per label, one more in an
+# awk file), and portable lines, the shapes this repo uses among them, pass.
 bad="$SANDBOX/bad.sh"
 cat > "$bad" <<'EOF'
 sed -i '' 's/a/b/' f
@@ -89,9 +118,22 @@ sed -n '/a/{p;q}' f
 sed -n '/a/{p}' f
 awk '{ print gensub(/a/, "b", "g") }' f
 sed 's/a/b/;T' f
+sed -n '/x/{s/a/b/}' f
+sed -n '/x/{p }' f
+awk '{ if (match($0, /a(b)/, m)) print m[1] }' f
+awk '{ n = split($0, a, /,/, seps) }' f
+LC_ALL=C cut --complement -f1 f
+env sed --posix 's/a/b/' f
+LC_ALL=C head -n -1 f
+xargs tac < list
+echo "${@@Q}"
+echo "${1@Q}"
+[[ ! -v name ]] && echo unset
+test -v name
+declare -r -g x=1
 EOF
 printf '{ t = strftime("%%F") }\n' > "$SANDBOX/bad.awk"
-assert_eq "$(scan "$SANDBOX" bad.sh bad.awk | wc -l | tr -d ' ')" "32" "self-check hits"
+assert_eq "$(scan "$SANDBOX" bad.sh bad.awk | wc -l | tr -d ' ')" "45" "self-check hits"
 good="$SANDBOX/good.sh"
 cat > "$good" <<'EOF'
 sed -n 's/a/b/p' f > f.tmp && mv f.tmp f
@@ -123,6 +165,10 @@ sed 's/a/T/' f
 sed -E 's/^(.{0,70}).*$/\1/'; sed -e "s|{{NAME}}|$x|g"
 case "$rel" in ../../*) rel="${rel#../../}" ;; esac
 find . | xargs -P "$jobs" -n 2 bash run.sh --one; wc -l f' 'git log --author=x
+sed 's/{name}/x/' f; sed -n '/x/{s/a/b/;}' f; sed -n '/x/{ p; }' f
+awk '{ if (match($0, /a(b)/)) n = split($0, a, /,/) } /x/ && match($1, /y/) { f(a, b) }' f
+LC_ALL=C sort -u f; env LC_ALL=C grep --color=never x f; xargs -0 rm -f < list
+echo "$@" "${1:-x}"; test -n "$x"; [[ ! -n $x ]]; declare -r x=1
 EOF
 assert_eq "$(scan "$SANDBOX" good.sh)" "" "portable lines flagged"
 printf '{ print tolower($0) } # and or not\n' > "$SANDBOX/good.awk"
@@ -161,6 +207,6 @@ scripts "$ROOT" | grep -qx 'plugins/corecrew/scripts/save' && pass || fail "scri
 for want in plugins/corecrew/hooks/guard-code.sh plugins/corecrew/skills/new-project/scripts/scaffold.sh plugins/corecrew/scripts/git-hooks/pre-commit-code plugins/coreopinion/skills/second-opinion/scripts/ask-gpt.sh plugins/coremodel/codex/hint.sh; do
   scripts "$ROOT" | grep -qx "$want" && pass || fail "$want not scanned"
 done
-# every tracked awk program is listed (the count follows the tree; no literal)
-assert_eq "$(scripts "$ROOT" | grep -c '\.awk$')" "$(git -C "$ROOT" ls-files -- 'plugins/*.awk' 'scripts/*.awk' 'tests/*.awk' | wc -l | tr -d ' ')" "every *.awk is scanned"
+# every awk program on disk is listed, tracked or not (the count follows the tree; no literal)
+assert_eq "$(scripts "$ROOT" | grep -c '\.awk$')" "$(find "$ROOT/plugins" "$ROOT/scripts" "$ROOT/tests" -type f -name '*.awk' | wc -l | tr -d ' ')" "every *.awk is scanned"
 finish

@@ -45,6 +45,9 @@ sed -E 's/^[{]"key":"([^"]*)".*"command":"(.*)","async":.*"matcher":(null|"[^"]*
   "$SANDBOX/cc-hooks" | sed -E 's/^([^|]*)[|](null|"([^"]*)")[|]/\1|\3|/' | LC_ALL=C sort > "$SANDBOX/got"
 if cmp -s "$SANDBOX/want" "$SANDBOX/got"; then pass; else fail "matcher, command or timeout differ from hooks.json: $(diff "$SANDBOX/want" "$SANDBOX/got" | head -12)"; fi
 assert_not_contains "$SANDBOX/cc-hooks" 'CLAUDE_PLUGIN_ROOT'
+# the featured-plugin prefetch is off: Codex does not even try that request (the helper's closed proxy makes a try
+# fail and log a WARN, so the try shows even when the machine is online)
+assert_not_contains "$HL.err" 'featured plugin'
 assert_eq "$(grep -c '"warnings":\[\],"errors":\[\]' "$HL")" "1" "hooks/list reports no warning or error"
 # trustStatus "untrusted" is Codex's default for a hook nobody reviewed: asserted only as the fact the README's Codex
 # section relies on (the person reviews and trusts the hooks in /hooks before they run), not as a corecrew choice
