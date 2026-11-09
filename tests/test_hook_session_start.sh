@@ -270,7 +270,7 @@ if [ -d "$SANDBOX/cs/A" ]; then
   run_rc "$CP/code"; echo "$OUT" | grep -qF "$CP/docs/INDEX.md" && pass || fail "CORE_DIR in other case, cwd as on disk: $OUT"
   run_rc "$SANDBOX/CASECORE/ЯДРО/myapp/code"; echo "$OUT" | grep -qF "$CP/docs/INDEX.md" && pass || fail "cwd in other case: $OUT"
 else
-  echo "  note: case-sensitive volume, letter-case test skipped"; pass
+  skip "letter case" "case-sensitive volume"; pass
 fi
 
 # --- an invalid setting is named once, at startup only

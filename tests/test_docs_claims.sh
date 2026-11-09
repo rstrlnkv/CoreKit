@@ -44,4 +44,23 @@ printf '%s\n' '- macOS is tested. Linux is expected to work.' '  Windows is unte
 assert_eq "$(untested_claims "$SANDBOX/doc.md" Linux | cut -d: -f1)" "1" "an 'expected to work' claim is caught for Linux"
 assert_eq "$(untested_claims "$SANDBOX/doc.md" Windows | cut -d: -f1)" "2" "an 'untested' claim is caught for Windows"
 assert_eq "$(untested_claims "$SANDBOX/doc.md" Linux | wc -l | tr -d ' ')" "1" "a plain mention of Linux is not a claim"
+
+# --- CONTRIBUTING names every knob of tests/run.sh. The header of run.sh is the source: a line "#   <knob> ..."
+# whose knob is an option (-j N) or a variable (VERBOSE=1, KEEP_SANDBOX=1). Nothing here reads a literal list of knobs.
+run_knobs() { sed -n -E 's/^#   (-[a-z]|[A-Z][A-Z_]*)[= ].*/\1/p' "$1" | LC_ALL=C sort -u; }
+# names_knob <file> <knob> — the knob as its own word (not inside another word or a longer option)
+names_knob() { grep -qE -- "(^|[^[:alnum:]_-])$2([^[:alnum:]_]|$)" "$1"; }
+knobs="$(run_knobs "$ROOT/tests/run.sh")"
+[ -n "$knobs" ] && pass || fail "no knob lines in the header of tests/run.sh (did the header change its form?)"
+for k in $knobs; do
+  names_knob "$ROOT/CONTRIBUTING.md" "$k" && pass || fail "CONTRIBUTING.md does not name the run.sh knob $k"
+done
+# self-check: knobs are read from the header's form only; a knob must be its own word
+printf '%s\n' '#!/usr/bin/env bash' '# Runs the tests.' '#   bash tests/run.sh [-j N] [word ...]' '#   word ...        a filter' \
+  '#   -j N            N files at a time' '#   VERBOSE=1       every file' '#   KEEP_SANDBOX=1  keep the folder' 'cd x' > "$SANDBOX/run.sh"
+assert_eq "$(run_knobs "$SANDBOX/run.sh" | tr '\n' ' ')" "-j KEEP_SANDBOX VERBOSE " "run_knobs from the header"
+printf 'Use `-j 4` and `KEEP_SANDBOX=1`; -jx and XVERBOSE are other words.\n' > "$SANDBOX/c.md"
+names_knob "$SANDBOX/c.md" -j && pass || fail "names_knob: -j in backticks"
+names_knob "$SANDBOX/c.md" KEEP_SANDBOX && pass || fail "names_knob: KEEP_SANDBOX=1"
+names_knob "$SANDBOX/c.md" VERBOSE && fail "names_knob: XVERBOSE counted as VERBOSE" || pass
 finish

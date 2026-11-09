@@ -87,5 +87,5 @@ if command -v codex >/dev/null 2>&1; then
     out="$(HTTPS_PROXY=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9 ALL_PROXY=http://127.0.0.1:9 bash "$ROOT/tests/test_codex_install.sh" 2>&1)"
     case "$out" in *", 0 failed"*) pass ;; *) fail "codex install test, dead proxy, run $i: $(printf '%s' "$out" | tail -3)" ;; esac
   done
-else echo "  SKIP codex part: codex not on PATH"; fi
+else skip "codex part" "codex not on PATH"; fi
 finish

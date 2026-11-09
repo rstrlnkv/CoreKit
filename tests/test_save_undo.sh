@@ -243,7 +243,7 @@ if [ "$(ls "$SANDBOX/Projects" | grep -ci '^clash$')" -eq 2 ]; then
   [ "$rc" -ne 0 ] && pass || fail "install-hooks with a case clash exited 0"
   assert_contains "$SANDBOX/out" "two folders differ only in case"
 else
-  echo "  note: case-insensitive disk, install-hooks case-clash check skipped"
+  skip "install-hooks case clash" "case-insensitive disk"
 fi
 
 # a git repo beside the Core that is not a project
@@ -397,5 +397,14 @@ grep -qE '(^| )log( |$)' "$SANDBOX/git-calls" && pass || fail "the git wrapper s
 unbounded=$(grep -E '(^| )log( |$)' "$SANDBOX/git-calls" | grep -vE '(^| )(-n [0-9]+|-[0-9]+|--max-count=[0-9]+)( |$)')
 assert_eq "$unbounded" "" "save ran git log without a count limit"
 assert_eq "$(git -C "$C" log -1 --format=%s)" "Bounded" "save through the wrapper did not commit"
+
+# a Core and a tools folder whose paths have spaces: save and undo-step still work
+SANDBOX="$(mktemp -d "$TEST_TMP/sb.XXXXXX")"; export CORE_DIR="$SANDBOX/my projects/Core"
+export CLAUDE_PLUGIN_DATA="$SANDBOX/plugin data"; export COREDEV_TOOLS="$CLAUDE_PLUGIN_DATA/tools"; sync_tools; setup_core
+scaffold_old sp-app; C="$CORE_DIR/sp-app/code"
+(cd "$C" && bash "$SAVE" init) >/dev/null 2>&1
+echo s > "$C/s.txt"; (cd "$C" && bash "$SAVE" s) >/dev/null 2>&1
+(cd "$C" && bash "$UNDO") >/dev/null 2>&1
+assert_no_file "$C/s.txt"
 
 finish

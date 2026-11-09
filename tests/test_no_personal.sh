@@ -3,7 +3,8 @@
 # - absolute home paths (/Users/, /home/, C:\Users\);
 # - email addresses (example.com, example.org, noreply addresses and git@ SSH remotes are fine);
 # - the owner's handle (read from marketplace.json) outside the files that must carry it;
-# - references to the private design spec ("spec section", "spec §", "spec D<n>") outside docs/;
+# - references to the private design spec ("spec section", "spec §", "spec D<n>") outside docs/, and to
+#   a private ADR ("ADR 009") in a shipped plugin file (a template's "ADR 001" heading is allowed);
 # - owner-specific terms from a local list that never enters the repo (see PERSONAL TERMS below);
 # - any project name listed in the owner's private PROJECTS.md (the list never enters the repo).
 # Scans tracked files only (git ls-files -z); binary files are skipped. The output names the file,
@@ -99,6 +100,11 @@ scan_repo() {
            *) lines "reference to the private spec" "$rel" -E 'spec section|spec §|spec D[0-9]' "$f" ;;
          esac ;;
     esac
+    # a shipped file may not cite a private ADR ("ADR 009"); a template's "ADR 001" heading is the user's own record
+    case "$rel" in
+      plugins/*/templates/*) ;;
+      plugins/*) lines "reference to a private ADR" "$rel" -E 'ADR [0-9]' "$f" ;;
+    esac
     [ -s "$kind_file.name" ] && lines "a personal name from the local terms list" "$rel" -iwF -f "$kind_file.name" "$f"
     case "$rel" in
       plugins/*/skills/*|plugins/*/agents/*|plugins/*/reference/*)
@@ -152,6 +158,9 @@ printf 'owner zhandle\n' > "$R/plugins/p/hooks/h.ts"       # hit: a plugin's cod
 printf 'see spec section 4\n' > "$R/plugins/p/hooks/s.sh"  # hit: private spec
 printf 'see spec §4.2 and spec D17\n' > "$R/tests/spec.sh" # hit once: private spec
 printf 'see spec section 4\n' > "$R/docs/design.md"        # allowed: docs/
+printf 'see ADR 009\n' > "$R/plugins/p/hooks/adr.sh"       # hit: a private ADR in a shipped file
+mkdir -p "$SK/templates"; printf '# ADR 001: stack\n' > "$SK/templates/d.md.tmpl"   # allowed: the user's own ADR
+printf 'LIMIT (ADR 009)\n' > "$R/tests/adr.sh"             # allowed: tests are not shipped
 printf 'by Quentin Zarbo\n' > "$R/plugins/p/hooks/n.sh"    # hit: a personal name
 printf 'zarbo was here\n' > "$R/docs/n.md"                 # hit: names are flagged in docs/ too
 printf 'see house-style.md\n' > "$SK/std.md"               # hit: owner standard
@@ -168,6 +177,7 @@ printf 'path %s\n' "$U" > "$R/untracked.sh"                # not tracked: not sc
 hits="$(scan_repo "$R" "" zhandle "$FT" | LC_ALL=C sort)"
 want='docs/n.md:1: a personal name from the local terms list
 docs/ok3.md:1: archive project name
+plugins/p/hooks/adr.sh:1: reference to a private ADR
 plugins/p/hooks/h.ts:1: owner handle outside manifests, READMEs, LICENSE, CHANGELOGs, SECURITY, ARCHITECTURE, CONTRIBUTING, docs
 plugins/p/hooks/n.sh:1: a personal name from the local terms list
 plugins/p/hooks/s.sh:1: reference to the private spec

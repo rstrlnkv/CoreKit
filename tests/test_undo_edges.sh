@@ -179,4 +179,34 @@ assert_exit 0 bash "$UNDO" "$OLD"
 assert_no_file "$C/old.txt"
 assert_no_file "$K/old-step.md"
 
+# undo-step only touches the current project's steps: the other project's docs stay
+new_sandbox; setup_core; sync_tools
+scaffold_old app-a; scaffold_old app-b
+(cd "$CORE_DIR/app-a/code" && bash "$SAVE" init) >/dev/null 2>&1
+(cd "$CORE_DIR/app-b/code" && bash "$SAVE" init) >/dev/null 2>&1
+echo a1 > "$CORE_DIR/app-a/docs/a.md"; (cd "$CORE_DIR/app-a/code" && bash "$SAVE" a1) >/dev/null 2>&1
+echo b1 > "$CORE_DIR/app-b/docs/b.md"; (cd "$CORE_DIR/app-b/code" && bash "$SAVE" b1) >/dev/null 2>&1
+(cd "$CORE_DIR/app-a/code" && bash "$UNDO") >/dev/null 2>&1
+assert_no_file "$CORE_DIR/app-a/docs/a.md"; assert_file "$CORE_DIR/app-b/docs/b.md"
+
+# old layout: undo-step from a worktree reverts the worktree commit
+new_sandbox; setup_core; sync_tools; scaffold_old wt-app; C="$CORE_DIR/wt-app/code"
+(cd "$C" && bash "$SAVE" init) >/dev/null 2>&1
+git -C "$C" worktree add -q .claude/worktrees/w -b w 2>/dev/null; W="$C/.claude/worktrees/w"
+echo w > "$W/w.txt"; (cd "$W" && bash "$SAVE" "wt step") >/dev/null 2>&1
+(cd "$W" && bash "$UNDO") >/dev/null 2>&1
+assert_no_file "$W/w.txt"
+
+# a conflict leaves neither repo half-undone
+new_sandbox; setup_core; sync_tools; scaffold_old cf-app; P="$CORE_DIR/cf-app"; C="$P/code"
+(cd "$C" && bash "$SAVE" init) >/dev/null 2>&1
+echo one > "$C/x.txt"; echo one > "$P/docs/f.md"; (cd "$C" && bash "$SAVE" X) >/dev/null 2>&1
+X=$(git -C "$C" log -1 --format=%B | sed -n 's/^Step-Id: //p')
+echo two > "$P/docs/f.md"; (cd "$C" && bash "$SAVE" Y) >/dev/null 2>&1
+(cd "$C" && bash "$UNDO" "$X") >/dev/null 2>&1; rc=$?
+assert_eq "$rc" "1" "conflicting undo should fail"
+git -C "$C" log --format=%B | grep -q "^Undo-Of: $X" && fail "code half-undone" || pass
+assert_eq "$(git -C "$C" status --porcelain)" "" "code left dirty"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain -- cf-app)" "" "docs left dirty"
+
 finish

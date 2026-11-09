@@ -9,6 +9,11 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+### Fixed
+
+- The Core pre-push hook's hint when `gh` is missing points to the GitHub CLI site
+  (https://cli.github.com) for every OS, as `preflight` does, instead of `brew install gh` only.
+
 ## [0.11.0] - 2026-11-09
 
 ### Changed

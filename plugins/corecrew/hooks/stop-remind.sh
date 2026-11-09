@@ -69,7 +69,7 @@ case "$dirty" in
   *) what="$(msg dirty_both)" ;;
 esac
 # Exit 2 with the reminder on stderr: the one continuation form verified for both hosts (Codex
-# rust-v0.166.0 makes that stderr the continuation prompt, ADR 004; Claude Code shows it to Claude).
+# rust-v0.166.0 makes that stderr the continuation prompt, checked live on that release; Claude Code shows it to Claude).
 # A JSON reply on stdout is not verified for Codex, and the same hooks.json serves both.
 printf '%s\n' "$(msg stop_remind "$what" "$SAVE" "$noattr")" >&2
 exit 2

@@ -22,15 +22,21 @@ a release is made. [ARCHITECTURE.md](ARCHITECTURE.md) explains how the repo is l
 
 ```bash
 bash tests/run.sh                 # every test file; prints ALL TESTS PASSED
+bash tests/run.sh -j 4 guard      # 4 files at a time, only the files whose name contains "guard"
 bash tests/test_hooks.sh          # one file
 claude plugin validate .          # the marketplace
 claude plugin validate plugins/corecrew   # one plugin; also plugins/coremodel, plugins/coreopinion
 ```
 
-The full run takes about ten minutes on a laptop and needs no network; run one file while you work. Every test runs in a sandbox
+The full run takes about ten minutes on a laptop and needs no network; run one file while you work.
+`-j N` runs N files at a time; one or more words after the options run only the files whose name
+contains one of them. `VERBOSE=1` prints every file's output, not only a failing file's;
+`KEEP_SANDBOX=1` keeps the run's temp folder and prints its path. Every test runs in a sandbox
 made by `new_sandbox` in `tests/lib.sh`: its own `HOME`, XDG folders, git config, `CODEX_HOME` and
 Core. A test never touches your real `~/.claude`, `~/.codex`, Core or global git config. Stub
-`gh` on `PATH` instead of calling GitHub.
+`gh` on `PATH` instead of calling GitHub. The suite removes its sandboxes when it ends; folders
+named `np-test.*` or `np-run.*` under the system temp folder are left over from older runs and can
+be deleted by hand: `rm -rf "${TMPDIR:-/tmp}"/np-test.* "${TMPDIR:-/tmp}"/np-run.*`.
 
 CI also runs [ShellCheck](https://www.shellcheck.net/) at `--severity=warning` on the shell files
 of the plugins, the tests and `scripts/`. Run it on the files you changed before you push:

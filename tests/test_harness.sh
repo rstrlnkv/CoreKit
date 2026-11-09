@@ -118,10 +118,11 @@ OUT="$(cd "$T" && KEEP_SANDBOX=1 TMPDIR="$RT" bash run.sh env 2>&1)"; has "kept:
 assert_eq "$(left)" "1" "run.sh KEEP_SANDBOX=1 keeps its root"
 chmod -R u+rwx "$RT"; rm -rf "$RT"
 
-# --- skips go through skip (SKIP-1): a converted file has no old-style `echo "SKIP ..."` or `echo "  note: ..."`
-# line, which run.sh lists only when its words happen to match. Add a file here once it is converted.
-for f in test_codex_chain.sh test_coreopinion.sh test_no_personal.sh test_coremodel_codex.sh test_codex_patch_parity.sh; do
-  old="$(grep -nE 'echo "[[:space:]]*(note:|SKIP )' "$ROOT/tests/$f" | cut -d: -f1 | tr '\n' ' ')"
-  assert_eq "${old:-none}" "none" "$f: old-style skip or note lines (use skip)"
+# --- skips go through skip (SKIP-1, TEST-7): no test file has an old-style `echo "SKIP ..."` or `echo "  note: ..."`
+# line, which run.sh lists only when its words happen to match. The echo must start a command (the fixture above
+# that writes such a line into a fake file, and a comment that quotes one, are not matches).
+for f in "$ROOT"/tests/test_*.sh; do
+  old="$(grep -nE '(^|;|\{|then|else|do)[[:space:]]*echo "[[:space:]]*(note:|SKIP )' "$f" | cut -d: -f1 | tr '\n' ' ')"
+  assert_eq "${old:-none}" "none" "$(basename "$f"): old-style skip or note lines (use skip, or note)"
 done
 finish

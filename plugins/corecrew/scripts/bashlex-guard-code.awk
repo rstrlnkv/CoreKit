@@ -1,7 +1,7 @@
 # scripts/bashlex-guard-code.awk — guard-code.sh's plain reading of a Bash command: the files it would write.
-# Standalone (it does not use bash-lex.awk). It is built for honest mistakes (ADR 009), not against evasion: it
-# reads words, quotes, comments, heredoc bodies, redirects and statement separators, and nothing more. What it
-# does not follow is the LIMIT list in the guard-code.sh header.
+# Standalone (it does not use bash-lex.awk). It is built for honest mistakes (SECURITY.md, "Threat model"), not against
+# evasion: it reads words, quotes, comments, heredoc bodies, redirects and statement separators, and nothing more.
+# What it does not follow is the LIMIT list in the guard-code.sh header.
 # Input: the command with newlines turned into \002 (tr '\n\r' '\002 '). Output, each line at most once:
 #   W <path>            a file written: the target of > >> >| &> >&file <>, tee, touch, the files of sed -i and
 #                       perl -i, the destination of cp, mv, install, git mv

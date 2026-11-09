@@ -7,7 +7,7 @@ if [ -z "$repo" ]; then
 fi
 if ! command -v gh >/dev/null 2>&1; then
   echo "Push blocked: the GitHub CLI (gh) is not installed, so privacy of $repo cannot be checked." >&2
-  echo "Install it (brew install gh), run 'gh auth login', then push again." >&2; exit 1
+  echo "Install the GitHub CLI (https://cli.github.com), run 'gh auth login', then push again." >&2; exit 1
 fi
 # A failed call (no answer, e.g. a network timeout) is tried up to 3 times, 2 s apart
 # (CORECREW_GH_RETRY_SLEEP); an answer, "true" or not, is final.

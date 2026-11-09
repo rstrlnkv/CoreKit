@@ -55,7 +55,9 @@ printf '#!/bin/sh\necho "$GH_STUB"\n' > "$STUB/gh"; chmod +x "$STUB/gh"
 H="$CORE_DIR/.git/hooks/pre-push"; URL=https://github.com/someone/Core.git
 GH_STUB=true  PATH="$STUB:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && pass || fail "private Core push blocked"
 GH_STUB=false PATH="$STUB:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && fail "public Core push allowed" || pass
-PATH="$(path_without gh)" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && fail "push allowed without gh" || pass
+PATH="$(path_without gh)" bash "$H" origin "$URL" </dev/null >/dev/null 2>"$SANDBOX/nogh" && fail "push allowed without gh" || pass
+# the install hint is for every OS, the same as preflight's: the GitHub CLI site, not one package manager
+assert_contains "$SANDBOX/nogh" "https://cli.github.com"; assert_not_contains "$SANDBOX/nogh" "brew"
 GH_STUB=true PATH="$STUB:$PATH" bash "$H" origin "git@github.com:someone/Core.git" </dev/null >/dev/null 2>&1 && pass || fail "ssh url not parsed"
 # a failed gh call (network) is retried: 2 failures then "true" pass, 3 failures block, "false" is final
 FL="$SANDBOX/flaky"; mkdir -p "$FL"
@@ -147,5 +149,16 @@ assert_no_file "$CORE_DIR/foo/code"
 mkdir -p "$CORE_DIR/bar"
 assert_exit 1 bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/bar"
 echo "$OUT" | grep -q 'No git repo at' && pass || fail "no 'No git repo at' message: $OUT"
+
+# the pre-commit hook on non-ASCII paths and case variants; a missing patterns file fails closed
+new_sandbox; setup_core; sync_tools; scaffold_old hk-app; C="$CORE_DIR/hk-app/code"
+bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/hk-app" >/dev/null
+for bad in "папка/CLAUDE.md" "é/.env" Claude.md .ENV; do
+  try_commit "$bad" && fail "commit allowed: $bad" || pass
+  rm -rf "${C:?}/${bad:?}"
+done
+mv "$COREDEV_TOOLS/git-hooks/blocked-patterns" "$SANDBOX/bp"
+try_commit src/ok.txt && fail "missing patterns file must fail closed" || pass
+mv "$SANDBOX/bp" "$COREDEV_TOOLS/git-hooks/blocked-patterns"
 
 finish

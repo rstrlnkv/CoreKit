@@ -3,11 +3,11 @@
 # the model. CODEX_HOME is inside the sandbox; remote plugin features are switched off. Skipped when
 # `codex` is not installed.
 source "$(dirname "$0")/lib.sh"
-if ! command -v codex >/dev/null 2>&1; then echo "SKIP codex-install: codex not on PATH"; exit 0; fi
+if ! command -v codex >/dev/null 2>&1; then skip codex-install "codex not on PATH"; finish; fi
 new_sandbox
 export CODEX_HOME="$SANDBOX/codex-home"; mkdir -p "$CODEX_HOME" "$SANDBOX/work"
 cx() { codex --disable remote_plugin --disable plugin_discovery_prefetch "$@"; }
-echo "  note: $(codex --version)"
+note "$(codex --version)"
 
 assert_exit 0 cx plugin marketplace add "$ROOT"
 assert_exit 0 cx plugin add corecrew@corekit
