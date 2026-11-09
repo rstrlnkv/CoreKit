@@ -89,6 +89,20 @@ coreopinion          yes                                 not supported
 hook trust           on install                          after you enable them in /hooks
 ```
 
+Each hook rule, by host (the test file holds the cases of both hosts):
+
+| Rule | Claude Code | Codex | Test |
+|---|---|---|---|
+| session-start | yes | yes | tests/test_hook_session_start.sh, tests/test_session_start_golden.sh |
+| one-suite | yes | yes | tests/test_hook_one_suite.sh |
+| guard-code, file tools | Write, Edit, NotebookEdit | apply_patch | tests/test_hook_guard_code.sh |
+| guard-code, Bash writes | yes | yes | tests/test_hook_guard_code.sh |
+| read-only checker rule (guard-code) | everywhere | no: not for Codex subagents | tests/test_hook_readonly_agents.sh; Codex: tests/test_hook_guard_code.sh (`no ro_agent for a Codex agent_type`) |
+| guard-secrets | Read, Grep, Glob, Edit, Write, NotebookEdit, Bash | apply_patch, Bash | tests/test_hook_guard_secrets.sh |
+| shell-patch refusal (both guards) | no | guard-code in any folder, guard-secrets inside a project | tests/test_shell_patch.sh, tests/test_shell_patch_exec.sh |
+| stop-remind | yes | yes | tests/test_stop_hook.sh |
+| coremodel hint (codex/hint.sh) | no (the TypeScript module) | yes | tests/test_coremodel_codex.sh |
+
 - **Manifests.** Each host reads its own manifest. The shared fields (name, version, description,
   licence) must match; `tests/test_manifest.sh` checks it. coremodel's Codex description differs
   on purpose: in Codex it only hints. A root `plugin.json` would make Codex skip the hooks, so there
@@ -96,7 +110,9 @@ hook trust           on install                          after you enable them i
 - **Hooks in Codex.** Codex fires PreToolUse for its shell (`Bash`) and for `apply_patch`; it has no
   read, search or list tools to hook. The guards therefore read `apply_patch` patches with
   `scripts/patch-paths.awk`. A rule that exists for one host runs only on that host: the refusal of
-  a patch handed to the shell runs only in Codex.
+  a patch handed to the shell runs only in Codex, where guard-code refuses it in any folder and
+  guard-secrets inside a project. The read-only checker rule acts everywhere in Claude Code and not
+  for Codex subagents (see Codex sandbox below).
 - **Hook trust.** Codex runs a plugin's hooks only after the person enables them in `/hooks`, and
   again after each update. `prepare.sh` says so until the session-start hook has run once.
 - **Settings.** Claude Code passes the plugin options to the hooks. Codex has no options screen, so

@@ -261,6 +261,47 @@ assert_eq "$RC" "0" "sync failure in a project: exit"
 echo "$OUT" | grep -q "^corecrew: tools not refreshed" && pass || fail "sync failure in a project: stdout line expected, got: $OUT"
 assert_eq "$ERR" "" "sync failure in a project: nothing on stderr"
 
+# --- a failing step of prepare never ends the hook early: the tools sync (a plugin copy whose sync-tools.sh exits 1)
+# and, apart from it, the project part (an unreadable code folder). The rest of the context is printed, the tools
+# error goes where it goes when the sync cannot run at all, and the hook exits 0.
+CD0="$(cd "$P/.." && pwd -P)"
+PC="$SANDBOX/pcopy"; cp -R "$PLUGIN" "$PC"
+pc_run() {  # pc_run <cwd> — the plugin copy's hook: stdout in OUT, stderr in ERR, exit code in RC
+  OUT="$(hook_event claude SessionStart "$1" source=startup | CORE_DIR="$CD0" CLAUDE_PLUGIN_ROOT="$PC" bash "$PC/hooks/session-start.sh" 2>"$SANDBOX/err")"; RC=$?; ERR="$(cat "$SANDBOX/err")"
+}
+pc_run "$NC"; OK_OUT="$OUT"
+assert_eq "$RC$ERR" "0" "plugin copy, sync works: exit 0, nothing on stderr"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$PC/scripts/sync-tools.sh"
+pc_run "$NC"
+assert_eq "$RC" "0" "sync-tools exits 1, in a project: exit"
+case "$OUT" in "corecrew: tools not refreshed"*) pass ;; *) fail "sync-tools exits 1, in a project: the error line first, got: $OUT" ;; esac
+assert_eq "$(printf '%s\n' "$OUT" | tail -n +2)" "$OK_OUT" "sync-tools exits 1, in a project: the rest of the context"
+assert_eq "$ERR" "" "sync-tools exits 1, in a project: nothing on stderr"
+pc_run "$SANDBOX/elsewhere"
+assert_eq "$RC" "0" "sync-tools exits 1, elsewhere: exit"
+assert_eq "$OUT" "" "sync-tools exits 1, elsewhere: nothing on stdout"
+case "$ERR" in "corecrew: tools not refreshed"*) pass ;; *) fail "sync-tools exits 1, elsewhere: stderr line expected, got: $ERR" ;; esac
+assert_eq "$(printf '%s\n' "$ERR" | wc -l | tr -d ' ')" "1" "sync-tools exits 1, elsewhere: one line"
+OUT="$(hook_event claude SessionStart "$NC" source=startup | CORE_DIR="$CD0" bash "$H" 2>&1)"; NC_OUT="$OUT"
+chmod 000 "$NC"
+OUT="$(hook_event claude SessionStart "$NC" source=startup | CORE_DIR="$CD0" bash "$H" 2>"$SANDBOX/err")"; RC=$?; ERR="$(cat "$SANDBOX/err")"
+chmod 700 "$NC"
+assert_eq "$RC" "0" "unreadable code folder: exit"
+assert_eq "$ERR" "" "unreadable code folder: nothing on stderr"
+assert_eq "$OUT" "$NC_OUT
+corecrew: could not create $NC/CLAUDE.local.md, so the private CLAUDE.md is not loaded. Run: ln -s \"$NP/CLAUDE.md\" \"$NC/CLAUDE.local.md\"
+corecrew: could not create $NC/AGENTS.md, so tools that read AGENTS.md do not get the private CLAUDE.md. Run: ln -s \"$NP/CLAUDE.md\" \"$NC/AGENTS.md\"" \
+  "unreadable code folder: the context, then the two link lines"
+
+# --- cost: in a project with the tools current, the hook starts one bash (sync-tools.sh) and at most 34 programs
+# (the hook itself, started here by its full path, is not counted)
+REALBASH="$(command -v bash)"
+ss_count() { hook_event claude SessionStart "$NC" source=startup | CORE_DIR="$CD0" "$REALBASH" "$H" >/dev/null 2>&1; }
+ss_count
+count_execs ss_count
+assert_eq "$(grep -cx bash "$EXEC_LOG")" "1" "bash starts in a project with the tools current"
+[ "$EXECS" -le 34 ] && pass || fail "programs started in a project with the tools current: $EXECS (at most 34): $(LC_ALL=C sort "$EXEC_LOG" | uniq -c | tr -s ' \n' ' ')"
+
 # --- letter case: Core path typed in another case than on disk (macOS volumes are case-insensitive)
 mkdir -p "$SANDBOX/cs/a"
 if [ -d "$SANDBOX/cs/A" ]; then

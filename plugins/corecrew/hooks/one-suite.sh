@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Claude Code PreToolUse hook on Bash: holds a test run while another one is running in the same
-# place, and lets it through when that one ends. Two suites at once in one checkout fail each other —
+# Claude Code and Codex PreToolUse hook on Bash: holds a test run while another one is running in the
+# same place, and lets it through when that one ends. Two suites at once in one checkout fail each other —
 # they share build folders, settings and scratch paths — and a note in a project's knowledge saying so
 # does not stop anyone from doing it. The same place: the project's main code folder and its folder in
 # the Core count as one; each linked git worktree is a place of its own. A test run anywhere else on
@@ -32,8 +32,16 @@
 # The default wait of 120 s must stay under this hook's `timeout` in hooks/hooks.json (150: room for
 # the last check and a takeover lock) and well under the stream watchdog, which stops an agent that is
 # silent for 600 s.
-SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
+# Prefilter on the raw input, before anything is sourced or started: every runner and script pattern below
+# (`runners`, `script`) holds "test" or "Test", so a payload without either cannot be a run, unless the
+# word is made later: by an escape json_str decodes into a letter (\u, or an unknown escape such as \e), or
+# by the cuts below that join the text around them (quoted text: ' or an escaped "; a (( )) shift).
+# This filter must stay a superset of `runners` and `script`: a pattern without "test"/"Test", or a new
+# cut, needs a wider filter here.
+bs=\\
+case "$in" in *[tT]est*|*"$bs"[!\"/bfnrt"$bs"]*|*\'*|*"$bs"\"*|*'(('*) ;; *) exit 0 ;; esac
+SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 

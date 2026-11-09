@@ -118,6 +118,26 @@ input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "future file: f
 input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "future file: reminded at every stop"
 rm -f "$C/fp.txt" "$C/future.txt"
 
+# the state file is a function of the tree: written again from scratch, it has the same bytes (a dirty code repo,
+# dirty docs, an untracked file dated in the future, so both parts of the file are there)
+(cd "$C" && bash "$SCRIPTS/save" "s-state") >/dev/null 2>&1
+echo s > "$C/state-a.txt"; echo f > "$C/state-future.txt"; touch -t 209901010000 "$C/state-future.txt"; echo d >> "$P/docs/brief.md"
+ST="$C/.git/new-project-stop-remind"; rm -f "$ST"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "state file: first reminder"
+cp "$ST" "$SANDBOX/state.1"; rm -f "$ST"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "state file: reminder after the state file was removed"
+cmp -s "$ST" "$SANDBOX/state.1" && pass || fail "state file: written again, its content differs: $(diff "$SANDBOX/state.1" "$ST")"
+assert_eq "$(sed -n 2p "$ST")" "$C/state-future.txt" "state file: the future-dated file is its second line"
+
+# cost: a dirty, already reminded project runs each git command once (a shim on PATH counts them)
+GIT="$(command -v git)"; mkdir -p "$SANDBOX/gitshim"
+printf '#!/bin/sh\necho "$*" >> "%s"\nexec "%s" "$@"\n' "$SANDBOX/git.log" "$GIT" > "$SANDBOX/gitshim/git"; chmod +x "$SANDBOX/gitshim/git"
+: > "$SANDBOX/git.log"
+input "$C" false | PATH="$SANDBOX/gitshim:$PATH" bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "git count: already reminded"
+n="$(wc -l < "$SANDBOX/git.log" | tr -d ' ')"
+[ "$n" -le 13 ] && pass || fail "git calls in a dirty, already reminded project: $n (at most 13): $(sed 's/^-C [^ ]* //' "$SANDBOX/git.log" | tr '\n' '|')"
+rm -f "$C/state-a.txt" "$C/state-future.txt"; (cd "$C" && bash "$SCRIPTS/save" "s-state2") >/dev/null 2>&1
+
 # Codex Stop payloads (fixtures built from the rust-v0.166.0 structs): same rules, and an exit 2 carries a
 # non-empty stderr (Codex treats exit 2 with an empty one as a failed hook, not a block)
 FX="$ROOT/tests/fixtures/codex"

@@ -179,14 +179,17 @@ Inside a Core project (the Core folder, or a code folder beside it):
   `public-docs: <paths>` line of the project's `CLAUDE.md`. It judges the paths of the file tools,
   and reads Bash plainly for the common write commands (redirects, `tee`, `touch`, `mkdir`, `cp`,
   `mv`, `install`, `ln`, `git mv`, `sed -i`, `perl -i`); [SECURITY.md](../../SECURITY.md#known-limits-of-the-hooks)
-  lists what it does not follow.
+  lists what it does not follow. In Codex both guards also refuse a patch handed to the shell
+  (`apply_patch` run through Bash): it cannot be checked.
 - **One suite at a time** holds a test run (up to 120 s) while another runs in the same project
   folder, so two runs do not break each other.
-- **Stop** reminds Claude to save a step that is left uncommitted.
+- **Stop** reminds the agent to save a step that is left uncommitted.
 
 Outside a Core project, session start only refreshes the tools and, once per machine, says that the
-Core is not set up. The read-only checker rule applies everywhere: the designer, localizer,
-security and verifier agents may write nothing but temp folders. Every other hook exits at once.
+Core is not set up. In Claude Code the read-only checker rule applies everywhere: the designer,
+localizer, security and verifier agents may write nothing but temp folders; it does not act for
+Codex subagents, which the chain checks instead. In Codex the code guard also refuses a patch handed
+to the shell in any folder. Every other hook passes every call.
 
 The git hooks in the code repo (pre-commit, pre-push) refuse internal files in commits and pushes.
 The Core's pre-push hook refuses to push unless the Core's GitHub repo is private.

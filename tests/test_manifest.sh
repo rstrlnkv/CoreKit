@@ -171,6 +171,10 @@ for s in session-start one-suite guard-code guard-secrets stop-remind; do
   assert_contains "$H" "/hooks/$s.sh"
   assert_file "$PLUGIN/hooks/$s.sh"
 done
+# both hosts read hooks.json, so every script it names says so on line 2 (coremodel's Codex-only codex/hint.sh is not here)
+for s in $(printf '%s\n' "$WIRED" | awk -F'|' '{ print $(NF-1) }'); do
+  case "$(sed -n 2p "$PLUGIN/hooks/$s")" in "# Claude Code and Codex "*) pass ;; *) fail "hooks/$s: line 2 does not say \"Claude Code and Codex\"" ;; esac
+done
 # every command runs through bash (the scripts are not executable) and via the plugin root
 n_cmd="$(grep -c '"command":' "$H")"; n_to="$(grep -c '"timeout":' "$H")"
 assert_eq "$n_cmd" "5" "hook commands in hooks.json"

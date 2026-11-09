@@ -66,13 +66,22 @@ _name_splits() {
 # core_paths <core> <project> — the Core paths that belong to every step of <project>, on one line,
 # space-separated: the project folder plus the shared files. `save` commits exactly these, and the
 # task skill's clean-tree checks look at exactly these (`lib.sh core-paths <project>`). A shared
-# file counts when it exists or git still tracks it (a deletion is part of the step too).
+# file counts when it exists or git still tracks it (a deletion is part of the step too). The entries
+# missing on disk are asked about in one `git ls-files`; each path it prints counts for its first
+# component, the entry it is under. The output keeps the fixed order of the list.
 core_paths() {
-  local core="$1" out="$2" f
-  for f in PROJECTS.md README.md .gitignore .coredev standards knowledge session-rules.md bin hooks; do
-    if [ -e "$core/$f" ] || git -C "$core" ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
-      out="$out $f"
-    fi
+  local core="$1" out="$2" f p missing="" tracked=" " IFS=$' \t\n'
+  local list="PROJECTS.md README.md .gitignore .coredev standards knowledge session-rules.md bin hooks"
+  for f in $list; do
+    [ -e "$core/$f" ] || missing="$missing $f"
+  done
+  if [ -n "$missing" ]; then
+    # shellcheck disable=SC2086  # the fixed names above, none with a space
+    while IFS= read -r -d '' p; do tracked="$tracked${p%%/*} "; done < <(git -C "$core" ls-files -z -- $missing 2>/dev/null)
+  fi
+  for f in $list; do
+    if [ -e "$core/$f" ]; then out="$out $f"
+    else case "$tracked" in *" $f "*) out="$out $f" ;; esac; fi
   done
   printf '%s\n' "$out"
 }
