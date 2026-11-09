@@ -172,6 +172,8 @@ Each hook rule, by host (the test file holds the cases of both hosts):
 - The host's permissions and sandbox are the security boundary; the hooks are a best-effort second
   line (see [SECURITY.md](SECURITY.md#threat-model)).
 - Scripts run on macOS bash 3.2 with BSD tools, without `jq`; `tests/test_portability.sh` checks it.
+- The hook budgets (the programs each hook starts per call) are pinned in `tests/test_hook_cost.sh`;
+  the test is the source.
 - Scripts never overwrite or delete a user's files; a failed step leaves them as they were.
 - Tests run in a sandbox (own `HOME`, `CORE_DIR`) and never touch the real Core, `~/.claude` or `~/.codex`.
 - `coremodel` and `coreopinion` do not depend on `corecrew` or on each other.
