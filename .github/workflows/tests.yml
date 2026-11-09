@@ -25,6 +25,7 @@ jobs:
     timeout-minutes: 45
     env:
       CLAUDE_VERSION: 2.1.319   # the claude CLI the suite runs with; bump on purpose
+      CODEX_VERSION: 0.166.0    # the codex CLI the suite runs with on macOS; bump on purpose
       DISABLE_AUTOUPDATER: 1
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 1
     steps:
@@ -32,6 +33,10 @@ jobs:
       # before the macOS bash 3.2 step: the installer runs under the runner's own shell. Node is on both runners.
       - name: Install the claude CLI
         run: npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}"
+      # macOS only: the sandbox tests expect the macOS seatbelt texts; on Ubuntu the codex parts still skip
+      - name: Install the codex CLI
+        if: runner.os == 'macOS'
+        run: npm install -g "@openai/codex@${CODEX_VERSION}"
       # macOS: the system bash 3.2 at /bin/bash, not a newer one from Homebrew, runs the suite and every script it starts
       - name: Use the system bash 3.2 (macOS)
         if: runner.os == 'macOS'
@@ -46,12 +51,16 @@ jobs:
           command -v claude
           command -v codex || echo "no codex: those parts are skipped"
       - name: Run the suite
-        # a SKIP for lack of claude is a failure here: the step above installed it
+        # a SKIP for lack of claude is a failure here, and on macOS one for lack of codex: the steps above installed them
         shell: bash
         run: |
           bash tests/run.sh 2>&1 | tee "$RUNNER_TEMP/suite.out"
           if grep -F 'claude not on PATH' "$RUNNER_TEMP/suite.out"; then
             echo '::error::the claude CLI is installed, yet tests skipped for lack of it'; exit 1
+          fi
+          if [ "$RUNNER_OS" = macOS ] \
+             && grep -E 'codex (or python3 )?not on PATH|codex debug models --bundled failed' "$RUNNER_TEMP/suite.out"; then
+            echo '::error::the codex CLI is installed, yet tests skipped for lack of it'; exit 1
           fi
 
   shellcheck:

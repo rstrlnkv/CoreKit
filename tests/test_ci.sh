@@ -37,6 +37,20 @@ for v in DISABLE_AUTOUPDATER CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC; do case "
 run="$(printf '%s\n' "$suite" | awk '/Run the suite/{f=1} f')"
 case "$run" in *'claude not on PATH'*) pass ;; *) fail "the suite step fails on a claude skip (grep for: claude not on PATH)" ;; esac
 
+# The suite job installs the codex CLI on macos-latest only (Decision 20 (b): the sandbox tests expect the macOS
+# seatbelt text), pinned, before the bash 3.2 step; on macOS its suite step fails on a codex skip, including
+# test_codex_chain.sh's own skip texts.
+ci="$(printf '%s\n' "$suite" | grep -nE 'npm install -g "?@openai/codex@' | head -1 | cut -d: -f1)"
+[ -n "$ci" ] && pass || fail "the suite job installs @openai/codex with npm"
+[ -n "$ci" ] && [ -n "$nb" ] && [ "$ci" -lt "$nb" ] && pass || fail "the codex install step comes before the bash 3.2 step (lines $ci $nb)"
+cstep="$(printf '%s\n' "$suite" | awk '/- name: Install the codex CLI/{f=1; print; next} f && /- name:/{f=0} f')"
+case "$cstep" in *"if: runner.os == 'macOS'"*) pass ;; *) fail "the codex install step runs on macOS only" ;; esac
+case "$suite" in *'CODEX_VERSION:'*) pass ;; *) fail "the codex version is pinned in env (CODEX_VERSION)" ;; esac
+case "$suite" in *'@openai/codex@${CODEX_VERSION}'*) pass ;; *) fail "the codex install uses CODEX_VERSION" ;; esac
+case "$run" in *'codex (or python3 )?not on PATH|codex debug models --bundled failed'*) pass ;;
+  *) fail "the suite step fails on a codex skip (grep -E for: codex (or python3 )?not on PATH|codex debug models --bundled failed)" ;; esac
+case "$run" in *'RUNNER_OS'*'macOS'*) pass ;; *) fail "the codex skip check is gated on macOS (RUNNER_OS)" ;; esac
+
 # The commit-subjects job: the whole history is fetched, the range is passed through env (never ${{ }} inside run:),
 # and only the new commits are checked.
 cs="$(job "$WF" commit-subjects)"
