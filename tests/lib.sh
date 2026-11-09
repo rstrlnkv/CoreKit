@@ -90,10 +90,42 @@ new_sandbox() {
 # setup_core — creates the Core skeleton in $CORE_DIR (what scaffold.sh requires).
 # The Core template no longer ignores */code/ (code lives beside the Core); tests still built in the
 # old layout (<Core>/<name>/code) get the line back, folded into the setup commit.
+# The first Core a file builds in a fresh folder is published as a cache ($TEST_TMP/core-cache.<key>); a later
+# fresh Core with the same key is a copy of it (about 0.3 s less per call). A built Core holds no absolute path, so
+# a copy differs from a build only in its times: the commit's (and so its SHA) and the files'. The key holds what
+# else could change the result: the GIT_* variables and the global git config (identity, dates, init settings),
+# PATH (a fake git), umask (the modes) and the scripts folder. A Core folder that exists is built as before.
 setup_core() {
+  local cache fresh=""
+  cache="$TEST_TMP/core-cache.$(core_cache_key)"
+  if [ ! -e "$CORE_DIR" ] && [ ! -L "$CORE_DIR" ]; then
+    fresh=1
+    if [ -d "$cache" ]; then
+      mkdir -p "$CORE_DIR" && cp -R "$cache/." "$CORE_DIR/"; return
+    fi
+  fi
   bash "$SCRIPTS/setup-core.sh" "$CORE_DIR" >/dev/null || return 1
   printf '*/code/\n' >> "$CORE_DIR/.gitignore"
-  git -C "$CORE_DIR" add .gitignore && git -C "$CORE_DIR" commit -q --amend --no-edit
+  git -C "$CORE_DIR" add .gitignore && git -C "$CORE_DIR" commit -q --amend --no-edit || return 1
+  [ -z "$fresh" ] || core_cache_publish "$CORE_DIR" "$cache"
+  return 0
+}
+# core_cache_key — prints the cache key of setup_core (a cksum of what can change a built Core, see above)
+core_cache_key() {
+  local v k
+  k="$SCRIPTS|$PATH|$(umask)"
+  for v in $(compgen -A export GIT_); do
+    [ "$v" = GIT_CONFIG_GLOBAL ] || k="$k|$v=${!v}"
+  done
+  [ ! -f "${GIT_CONFIG_GLOBAL:-}" ] || k="$k|global=$(<"$GIT_CONFIG_GLOBAL")"
+  printf '%s' "$k" | cksum | tr -d ' \t'
+}
+# core_cache_publish <core> <cache> — copies <core> into a new folder and links <cache> to it in one step. ln -sn
+# fails on a cache that is already there (mv would move the folder into it, with exit 0), and the copy is removed.
+core_cache_publish() {
+  local tmp
+  tmp="$(mktemp -d "$TEST_TMP/corecache.XXXXXX")" || return 0
+  cp -R "$1/." "$tmp/" && ln -sn "$tmp" "$2" 2>/dev/null || rm -rf "$tmp"
 }
 
 # scaffold_old <name> — scaffold, then put the code folder where the old layout had it
