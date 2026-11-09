@@ -508,6 +508,10 @@ case "$NT" in
     if payload 'npm \u0074est' "$NT/Core/app/code" | grep -qi 'test'; then fail "the \\u case payload holds \"test\""; else pass; fi
     CORE_DIR="$NT/Core" run_hook 'n\pm \u0074est' "$NT/Core/app/code"
     assert_eq "$RC" "2" "an unknown escape and a \\u escape: still recognised"
+    # an unknown escape alone (t\est = test, no \u, no "test" in the payload) is the other half of that branch
+    CORE_DIR="$NT/Core" run_hook 'npm t\est' "$NT/Core/app/code"
+    assert_eq "$RC" "2" "a runner spelled through an unknown escape is still recognised"
+    if payload 'npm t\est' "$NT/Core/app/code" | grep -qi 'test'; then fail "the unknown-escape case payload holds \"test\""; else pass; fi
     # quoted text and (( )) are cut before the match, so they can join a runner word: bash runs go te''st as go test
     for c in "go te''st" 'swift te\"\"st' 'go te((1))st'; do
       CORE_DIR="$NT/Core" run_hook "$c" "$NT/Core/app/code"
