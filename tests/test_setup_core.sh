@@ -183,6 +183,23 @@ files=$(git -C "$CORE_DIR" show --name-only --format= HEAD)
 echo "$files" | grep -qx '.coredev' && pass || fail "retry did not commit .coredev: $files"
 echo "$files" | grep -qxE 'README.md|PROJECTS.md' && fail "retry swept in user files: $files" || pass
 
+# --- a folder that cannot be written stops the run with no commit; after it is fixed the rerun
+# completes the Core in one "Set up Core" commit and leaves it clean (the promise at the top of setup-core.sh)
+if [ "$(id -u)" -eq 0 ]; then
+  skip read-only-standards "running as root"
+else
+  new_sandbox
+  mkdir -p "$CORE_DIR/standards"; chmod a-w "$CORE_DIR/standards"
+  assert_exit 1 bash "$SC" "$CORE_DIR"
+  chmod u+w "$CORE_DIR/standards"
+  assert_eq "$(git -C "$CORE_DIR" rev-list --count HEAD 2>/dev/null || echo 0)" "0" "a commit after a failed write"
+  assert_exit 0 bash "$SC" "$CORE_DIR"
+  echo "$OUT" | grep -qxF 'created standards/README.md' && pass || fail "rerun did not create standards/README.md: $OUT"
+  assert_eq "$(git -C "$CORE_DIR" log --format=%s | grep -cxF 'Set up Core')" "1" "Set up Core commits"
+  assert_eq "$(git -C "$CORE_DIR" rev-list --count HEAD)" "1" "commits after the rerun"
+  assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "the Core is not clean after the rerun"
+fi
+
 # --- usage errors
 assert_exit 2 bash "$SC" --bogus
 finish
