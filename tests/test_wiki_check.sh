@@ -449,6 +449,57 @@ SO="$(bash "$W" "$SANDBOX/untyped" 2>"$SANDBOX/werr")"
 assert_eq "$SO" "wiki-check: u.md: missing front matter field type" "untyped page"
 assert_eq "$(cat "$SANDBOX/werr")" "" "wiki-check stderr with an untyped page"
 
+# History pages (status done or superseded) give no drift: they describe the past, the code moves on.
+clone wiki-good "$SANDBOX/hist"
+sed 's/^status: active/status: done/' "$SANDBOX/hist/docs/architecture.md" > "$SANDBOX/s.tmp" && mv "$SANDBOX/s.tmp" "$SANDBOX/hist/docs/architecture.md"
+sed 's/^status: active/status: superseded/' "$SANDBOX/hist/docs/features/login.md" > "$SANDBOX/s.tmp" && mv "$SANDBOX/s.tmp" "$SANDBOX/hist/docs/features/login.md"
+bash "$SCRIPTS/wiki-index.sh" "$SANDBOX/hist" >/dev/null
+assert_exit 0 bash "$W" "$SANDBOX/hist" --changed src/app.sh src/lib/util.sh src/login.sh
+assert_eq "$OUT" "" "done and superseded pages give no drift"
+
+# --code <dir>: every files: entry of an active page must exist in the working tree of the code root.
+# The code root of wiki-good: the files and folders its pages list, plus entries with a space.
+CR="$SANDBOX/code root"; mkdir -p "$CR/src/lib" "$CR/my dir"
+: > "$CR/src/app.sh"; : > "$CR/src/login.sh"; : > "$CR/my file.sh"
+clone wiki-good "$FX/codewiki"
+sed 's/^  - src\/login\.sh$/&\
+  - "my dir\/"\
+  - my file.sh/' "$FX/codewiki/docs/features/login.md" > "$SANDBOX/s.tmp" && mv "$SANDBOX/s.tmp" "$FX/codewiki/docs/features/login.md"
+assert_contains "$FX/codewiki/docs/features/login.md" '  - "my dir/"'
+# A legitimate tree passes: present files and folders (a folder entry ends in /, a path with a space).
+assert_exit 0 bash "$W" "$FX/codewiki" --code "$CR"
+assert_eq "$OUT" "" "present files: entries pass"
+cd "$SANDBOX" || exit 1                          # a relative code root
+assert_exit 0 bash "$W" "$FX/codewiki" --code "code root/"
+cd "$ROOT" || exit 1
+# --code alone runs only the existence check (no drift without --changed); with --changed both run.
+check codewiki "wiki-check: architecture.md: drift: src/app.sh changed, page not updated" --code "$CR" --changed src/app.sh
+# Missing paths: a file, a folder, a folder entry that is a file, an entry with a space.
+CM="$SANDBOX/code missing"; cp -R "$CR" "$CM"
+rm "$CM/src/login.sh"; rm -r "$CM/src/lib"; : > "$CM/src/lib"; rm -r "$CM/my dir"
+check codewiki "wiki-check: architecture.md: missing file src/lib/
+wiki-check: features/login.md: missing file src/login.sh
+wiki-check: features/login.md: missing file my dir/" --code "$CM"
+check codewiki "wiki-check: architecture.md: missing file src/lib/
+wiki-check: features/login.md: missing file src/login.sh
+wiki-check: features/login.md: missing file my dir/
+wiki-check: features/login.md: drift: my file.sh changed, page not updated" --code "$CM" --changed "my file.sh"
+# Without --code nothing is checked for existence (wiki-good has no code root at all).
+assert_exit 0 bash "$W" "$FX/codewiki"
+# Draft pages list files they will create; history pages list files that may be gone: neither is checked.
+clone codewiki "$SANDBOX/codedraft"
+sed 's/^status: active/status: draft/' "$SANDBOX/codedraft/docs/features/login.md" > "$SANDBOX/s.tmp" && mv "$SANDBOX/s.tmp" "$SANDBOX/codedraft/docs/features/login.md"
+sed 's/^status: active/status: superseded/' "$SANDBOX/codedraft/docs/architecture.md" > "$SANDBOX/s.tmp" && mv "$SANDBOX/s.tmp" "$SANDBOX/codedraft/docs/architecture.md"
+bash "$SCRIPTS/wiki-index.sh" "$SANDBOX/codedraft" >/dev/null
+assert_exit 0 bash "$W" "$SANDBOX/codedraft" --code "$CM"
+assert_eq "$OUT" "" "draft and history pages are not checked for missing files"
+# --code needs a folder that exists, and comes before --changed.
+assert_exit 2 bash "$W" "$FX/codewiki" --code
+assert_exit 2 bash "$W" "$FX/codewiki" --code ""
+assert_exit 2 bash "$W" "$FX/codewiki" --code --changed src/app.sh
+assert_exit 2 bash "$W" "$FX/codewiki" --code "$SANDBOX/does-not-exist"
+assert_exit 2 bash "$W" "$FX/codewiki" --code "$CR/src/app.sh"
+
 # Rules file and docs.
 assert_file "$PLUGIN/reference/wiki.md"
 [ "$(wc -l < "$PLUGIN/reference/wiki.md")" -le 80 ] && pass || fail "reference/wiki.md over 80 lines"
