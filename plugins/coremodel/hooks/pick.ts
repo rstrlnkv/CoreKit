@@ -1,3 +1,5 @@
+// The pick for one prompt (classify, then switch, ask or suggest) and its record: the session
+// counts ($.state stats) and the transcript rows ($.state marks).
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
@@ -36,12 +38,12 @@ export async function newChat($: EngineInterface, fromEngine: boolean): Promise<
 }
 
 /** Updates this session's counts, starting from zeros. */
-export async function count($: EngineInterface, f: (s: Stats) => Stats): Promise<void> {
+async function count($: EngineInterface, f: (s: Stats) => Stats): Promise<void> {
   await update($, stats, cur => f(cur ?? NO_STATS))
 }
 
 /** A row in the transcript for an applied switch. Its id comes from $.state, so a reload never reuses one. */
-export async function placeMark($: EngineInterface, change: Mark) {
+async function placeMark($: EngineInterface, change: Mark) {
   let n = 0
   await count($, s => {
     n = s.marks + 1
@@ -53,7 +55,7 @@ export async function placeMark($: EngineInterface, change: Mark) {
 }
 
 /** A level named in typed text, in any locale; undefined when it names none. */
-export function typedLevel(text: string): Level | undefined {
+function typedLevel(text: string): Level | undefined {
   const x = text.trim().toLowerCase().replace(/[«»"]/g, '')
   return toLevel(x) || LEVELS.find(l => Object.values(LOCALES).some(s => s.level[l].toLowerCase() === x))
 }

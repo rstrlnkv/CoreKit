@@ -1,3 +1,5 @@
+// The model and level held on main-chat requests ($.state override), the band above the prompt
+// ($.state band), and the presses that change them: the mode, the pane, the cost question.
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
@@ -25,7 +27,7 @@ export async function applyModel($: EngineInterface, key: ModelKey, base: string
 }
 
 /** What the drawings read: the held pair, or null when nothing is held. */
-export async function syncOverride($: EngineInterface): Promise<void> {
+async function syncOverride($: EngineInterface): Promise<void> {
   const pair = { model: session.modelHold?.key ?? null, level: session.hold?.level ?? null }
   await update($, override, () => (pair.model || pair.level ? pair : null))
 }

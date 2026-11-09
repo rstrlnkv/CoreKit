@@ -1,3 +1,4 @@
+// What the host says: the account's model list, the mode, the language, the chat's size; and the debug log.
 import type { EngineInterface } from 'claude-code'
 
 import type { Lang } from '../types'

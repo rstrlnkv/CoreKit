@@ -1,3 +1,4 @@
+// The band's buttons: Switch and Keep on a suggestion, and the undo of a silent switch.
 import type { EngineInterface } from 'claude-code'
 
 import type { Band, Level } from '../types'

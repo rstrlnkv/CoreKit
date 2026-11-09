@@ -45,7 +45,14 @@ plugins/corecrew/                 project workflow
     older-formats.md              how a project made by an older version is brought up to date
   evals/                          trigger evals
 plugins/coremodel/                model and effort picker
-  hooks/                          the Claude Code module (TypeScript)
+  hooks/                          the Claude Code module (TypeScript): register.tsx wires the hooks;
+                                  session.ts the module variables, host.ts what the host says and
+                                  the debug log, ask.ts the classifier call and its failures,
+                                  hold.ts the held pair, the band and the pane presses, pick.ts the
+                                  pick with its counts and transcript rows, actions.ts the band's
+                                  buttons, command.ts /coremodel, views.tsx the footer, pane, rows
+                                  and band; classifier.ts, models.ts, policy.ts and locales/ make no
+                                  calls on `$` (a $.state key lives in the one file that uses it)
   codex/                          hint.sh and hooks.json: the Codex hint
   types/index.d.ts                the plugin's type contract (the host API types are written by
                                   Claude Code into .claude-plugin/types/, which git does not track)

@@ -1,3 +1,4 @@
+// The session's memory: the module variables, which start over on a reload, and how long a band stays.
 import type { Band, Lang, Level } from '../types'
 import type { ModelKey } from './models'
 

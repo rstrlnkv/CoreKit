@@ -1,3 +1,5 @@
+// The classifier call: a second try when the first hangs or fails, the cut by an Esc, and the
+// failures in a row ($.state failure).
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelCompleteResult } from 'claude-code'
 
@@ -35,7 +37,7 @@ export async function failed($: EngineInterface, lang: Lang, reason: string): Pr
 }
 
 /** The first call that answers; when none does, the last failure (a call that throws counts as one). */
-export function firstAnswered(calls: Promise<ModelCompleteResult>[]): Promise<ModelCompleteResult> {
+function firstAnswered(calls: Promise<ModelCompleteResult>[]): Promise<ModelCompleteResult> {
   return new Promise((resolve, reject) => {
     let left = calls.length
     const failed = (settle: () => void) => {
