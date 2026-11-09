@@ -9,6 +9,11 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+### Added
+
+- prepare says when the `AGENTS.md` link cannot be created (for example in a read-only code
+  folder), with the command that makes it.
+
 ### Changed
 
 - The code guard reads a Bash command with the same tokenizer as the secrets guard and the read-only
@@ -20,6 +25,8 @@ commit log has the full detail.
   page whose `files:` names a missing path is reported, and task's release blocks on it.
 - The git hook, shim and save texts name the host that installed corecrew, or neither; adopt's
   last line names no host.
+- The read-only checker's refusal is always English, whatever `ui_language` says: only a subagent
+  reads it.
 
 ### Deprecated
 
@@ -39,6 +46,8 @@ commit log has the full detail.
   orphan branch whose first commit (made with `--no-verify`) holds `CLAUDE.md`, `AGENTS.md`, `.env`
   or a key is blocked. A forced push over a remote tip this repo never fetched is checked as well,
   and a push whose commits git cannot list is blocked instead of passing unchecked.
+- prepare's note for an empty `core.hooksPath` says to remove the setting
+  (`git config --unset core.hooksPath`) and then install the hooks, fully in the chosen language.
 
 ## [0.12.0] - 2026-11-09
 

@@ -4,10 +4,11 @@
 # ~/.config/corecrew/settings or $CORECREW_CONFIG (lines "key: value"; the only source in Codex), the
 # default. Project facts live in <Core>/.coredev (lines "key: value"). Files are read, never executed.
 # load_settings sets: CORE_DIR, CORE_NAME, PROJECTS_DIR, ATTRIBUTION, MODEL_PROFILE, UI_LANGUAGE,
-# APP_ID_PREFIX, SETTINGS_WARN (records "key<TAB>value<TAB>source<TAB>value in effect" of values ignored as invalid).
+# APP_ID_PREFIX, SETTINGS_WARN (records "key<TAB>value<TAB>source<TAB>value in effect" of values ignored as invalid;
+# their texts are msg_settings_warning in hooks/messages.sh).
 #
 # The helpers live in parts next to this file, which it sources (callers source only lib.sh):
-#   lib-paths.sh     expand_home canon_dir lc norm_path resolve_abs
+#   lib-paths.sh     expand_home canon_dir lc norm_path resolve_abs (and expand_home_r canon_dir_r, which set a variable)
 #   lib-settings.sh  coredev_get coredev_set core_ready settings_file_path resolve_setting load_settings ...
 #   lib-layout.sh    project_of worktree_of code_root_of code_dir_of layout_of valid_project_name
 #   lib-host.sh      codex_home host tools_dir hooks_marker_path plugin_version
@@ -74,13 +75,26 @@ patch_paths() {
 #      | project-of <path> | code-root <path> | code-dir <name> | layout <name> (see project_of, code_root_of, code_dir_of, layout_of)
 # shellcheck disable=SC2034  # SETTINGS_WARN and CLAUDE_PLUGIN_OPTION_* set here are read by the parts (lib-settings.sh)
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  # _warn_settings — the SETTINGS_WARN records as English lines (the texts of hooks/messages.sh). messages.sh is
+  # sourced only here; where it is missing (the tools copy) nothing is printed and the exit code stays.
+  _warn_settings() {
+    local k v s e
+    [ -n "$SETTINGS_WARN" ] || return 0
+    # shellcheck disable=SC1091
+    . "$_LIB_DIR/../hooks/messages.sh" 2>/dev/null || return 0
+    while IFS=$'\t' read -r k v s e; do
+      [ -n "$k" ] || continue
+      UI_LANGUAGE=en msg_settings_warning "$k" "$v" "$s" "$e" "$(settings_file_path)"; printf '\n'
+    done <<< "$SETTINGS_WARN"
+    return 0
+  }
   _ORIG_CORE_DIR="${CORE_DIR:-}"
   load_settings
   case "${1:-}" in
     get) [ $# -eq 2 ] || { echo "Usage: lib.sh get <key>" >&2; exit 2; }; coredev_get "$2" ;;
     set) [ $# -eq 3 ] || { echo "Usage: lib.sh set <key> <value>" >&2; exit 2; }; coredev_set "$2" "$3" ;;
     ready) core_ready ;;
-    core-dir) [ -z "$CORE_DIR" ] || printf '%s\n' "$CORE_DIR"; settings_warning_lines >&2; [ -n "$CORE_DIR" ] ;;
+    core-dir) [ -z "$CORE_DIR" ] || printf '%s\n' "$CORE_DIR"; _warn_settings >&2; [ -n "$CORE_DIR" ] ;;
     setting-path) settings_file_path; echo ;;
     settings)
       shift; keys=""; CORE_DIR="$_ORIG_CORE_DIR"; SETTINGS_WARN=""; _settings_file_check
@@ -101,7 +115,7 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
         if [ "$k" = core_dir ]; then _core_raw "$REPLY"; if [ -n "$CORE_RAW" ]; then printf 'core_dir: %s\n' "$(canon_dir "$CORE_RAW")"; else printf 'core_dir: \n'; fi
         else printf '%s: %s\n' "$k" "$REPLY"; fi
       done
-      settings_warning_lines >&2 ;;
+      _warn_settings >&2 ;;
     codex-profile) . "$_LIB_DIR/lib-codex-profile.sh" || exit 1; codex_profile ;;
     host) host; echo ;;
     role-model) . "$_LIB_DIR/lib-role-model.sh" || exit 1; shift; role_model "$@" ;;

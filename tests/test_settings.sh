@@ -254,6 +254,20 @@ ERRW="$(CORE_DIR=rel bash "$LIB" core-dir 2>&1 >/dev/null)"
 case "$ERRW" in *'environment variable CORE_DIR'*'Unset or correct the CORE_DIR variable'*'Using ~/Projects/Core'*) pass ;; *) fail "env warning: $ERRW" ;; esac
 ERRW="$(CLAUDE_PLUGIN_OPTION_CORE_DIR=rel bash "$LIB" core-dir 2>&1 >/dev/null)"
 case "$ERRW" in *"plugin option"*"options in Claude Code"*) pass ;; *) fail "option warning: $ERRW" ;; esac
+# one text per warning: the CLI prints the texts of hooks/messages.sh, in English whatever ui_language says
+assert_eq "$(cat "$SCRIPTS/lib.sh" "$SCRIPTS/lib-settings.sh" | grep -c 'is not valid')" "0" "no warning text outside hooks/messages.sh"
+sfw 'attribution: yes\nui_language: ru\n'
+ERRW="$(bash "$LIB" settings attribution 2>&1 >/dev/null)"
+case "$ERRW" in 'corecrew: attribution "yes" (settings file) is not valid: use allow or forbid.'*) pass ;; *) fail "CLI warning with ui_language ru: $ERRW" ;; esac
+# a lib.sh without hooks/messages.sh beside it (the tools copy) prints no warning; stdout and the exit code stay
+mkdir -p "$SANDBOX/nomsg/scripts"; cp "$SCRIPTS"/lib*.sh "$SANDBOX/nomsg/scripts/"
+OUTO="$(CORE_DIR=rel bash "$SANDBOX/nomsg/scripts/lib.sh" core-dir 2>"$SANDBOX/err")"; RCO=$?
+assert_eq "$RCO" "0" "no messages.sh: core-dir exit"; assert_eq "$OUTO" "$RH/Projects/Core" "no messages.sh: core-dir stdout"
+assert_eq "$(cat "$SANDBOX/err")" "" "no messages.sh: no warning"
+OUTO="$(bash "$SANDBOX/nomsg/scripts/lib.sh" settings attribution 2>"$SANDBOX/err")"; RCO=$?
+assert_eq "$RCO$OUTO" "0attribution: allow" "no messages.sh: settings exit and stdout"
+assert_eq "$(cat "$SANDBOX/err")" "" "no messages.sh: settings prints no warning"
+sfw ''
 # unreadable file: defaults (skipped as root, which reads anything)
 printf 'attribution: forbid\n' > "$SANDBOX/unread"; chmod 000 "$SANDBOX/unread"
 if [ ! -r "$SANDBOX/unread" ]; then
@@ -278,4 +292,39 @@ if command -v zsh >/dev/null 2>&1; then
   assert_eq "$(zsh -c 'bash "$1" settings attribution='"'"'${user_config.attribution}'"'"' model_profile='"'"'${user_config.model_profile}'"'"'' _ "$LIB")" "attribution: forbid
 model_profile: strong" "zsh: literal placeholders fall to the file"
 fi
+
+# --- load_settings (every hook, save, undo-step and adopt run it) starts no program and no subshell but canon_dir's
+# one `cd -P` for each of the two paths; a settings file adds three: its size, twice, and the awk that reads it
+subs() { bash -c '. "$1"; PS4=+; set -x; load_settings' _ "$LIB" 2>&1 | awk '/^\+\+/ && prev !~ /^\+\+/ {s++} {prev=$0} END{print s+0}'; }
+rm -f "$SF"
+assert_eq "$(subs)" "2" "load_settings, no settings file: command substitutions"
+# shellcheck disable=SC1090
+assert_eq "$( ( . "$LIB"; count_execs load_settings; printf '%s:%s' "$EXECS" "$(tr '\n' ' ' < "$EXEC_LOG")" ) )" "0:" \
+  "load_settings, no settings file: programs started"
+sfw 'attribution: forbid\n'
+assert_eq "$(subs)" "5" "load_settings with a settings file: command substitutions"
+# trailing newlines are dropped where $(...) dropped them: an option value, a settings file path, a Core path, HOME
+sq() { bash -c '. "$1"; load_settings; printf "[%s]" "${!2}"' _ "$LIB" "$1"; }
+assert_eq "$(CORECREW_CONFIG="$SF
+" sq ATTRIBUTION)" "[forbid]" "a settings file path that ends in a newline"
+rm -f "$SF"
+assert_eq "$(CLAUDE_PLUGIN_OPTION_ATTRIBUTION="forbid
+" CLAUDE_PLUGIN_OPTION_UI_LANGUAGE="ru
+
+" sq ATTRIBUTION; sq UI_LANGUAGE)" "[forbid][en]" "an option value that ends in a newline"
+assert_eq "$(CLAUDE_PLUGIN_OPTION_UI_LANGUAGE="ru
+
+" sq UI_LANGUAGE)" "[ru]" "a ui_language option that ends in newlines"
+mkdir -p "$SANDBOX/nl
+"
+assert_eq "$(CORE_DIR="$SANDBOX/nl
+/y
+" sq CORE_DIR; CORE_DIR="$SANDBOX/nl
+/y
+" sq PROJECTS_DIR; CORE_DIR="$SANDBOX/nl
+/y
+" sq CORE_NAME)" "[$RS/nl/y][$RS/nl][y]" "a Core path whose folder name ends in a newline"
+assert_eq "$(HOME="$HOME
+" CORE_DIR='~' sq CORE_DIR)" "[$RH]" "a HOME that ends in a newline"
+assert_eq "$(CORE_DIR=/ sq CORE_NAME; CORE_DIR=/ sq PROJECTS_DIR; CORE_DIR=//x sq PROJECTS_DIR)" "[/][/][/]" "the root as the Core and beside it"
 finish

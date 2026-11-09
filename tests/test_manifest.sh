@@ -16,7 +16,7 @@ assert_contains "$P" '"options": ["economy", "balanced", "strong"]'
 assert_contains "$P" '"default": "balanced"'
 assert_contains "$P" '"title": "Hook messages language"'
 assert_contains "$P" '"description": "Language of the messages corecrew hooks show: en (English) or ru (Russian)."'
-assert_contains "$P" '"options": ["en", "ru"]'
+# the ui_language options are MSG_LANGS of hooks/messages.sh: tests/test_hook_messages.sh
 assert_contains "$P" '"default": "en"'
 CR="$PLUGIN/README.md"   # corecrew's own README; the root README is the marketplace overview
 assert_contains "$CR" '`ui_language`'
