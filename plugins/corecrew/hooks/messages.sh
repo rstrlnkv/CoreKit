@@ -20,7 +20,7 @@
 
 # shellcheck disable=SC2034  # MSG_KEYS is read by tests/test_hook_messages.sh (both languages for every key)
 MSG_KEYS="sync_failed sync_not_ours agents_in_core hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
-session_rules schema_none run_starting layout_note old_hooks guard_code_blocked guard_code_public guard_code_too_many patch_too_many patch_unjudgeable patch_no_reader patch_shell secrets_blocked secrets_ask
+session_rules schema_none run_starting layout_note old_hooks hooks_path guard_code_blocked guard_code_public guard_code_too_many patch_too_many patch_unjudgeable patch_no_reader patch_shell secrets_blocked secrets_ask
 local_link_created agents_link_created agents_link_wrong local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind
 readonly_agent settings_invalid_path settings_invalid_value settings_unreadable settings_no_home allowed_attribution allowed_model_profile
 src_env src_option src_file fix_env fix_option fix_file codex_trust codex_profile"
@@ -64,6 +64,8 @@ _msg_text() {
     ru:layout_note) MSG_T='Заметка о структуре: структура этого Core — версия @1, плагину нужна @2. Обновите её (добавится только недостающее): bash "@3" "@4"' ;;
     en:old_hooks) MSG_T='Old git hooks from an older version: @1. Replace them with: bash "@2" "@3"' ;;
     ru:old_hooks) MSG_T='Найдены старые git-хуки от прошлой версии: @1. Замените их командой: bash "@2" "@3"' ;;
+    en:hooks_path) MSG_T='corecrew git hooks do not run in @1: core.hooksPath sends git to @2. To chain them from your own hooks, run: bash "@3" "@4" (it prints the lines to add).' ;;
+    ru:hooks_path) MSG_T='Git-хуки corecrew не работают в @1: core.hooksPath направляет git в @2. Чтобы подключить их к вашим хукам, выполните: bash "@3" "@4" (команда напечатает строки для добавления).' ;;
     en:readonly_agent) MSG_T='corecrew: @1 is a read-only checker and must not change anything (@2). Write logs and scratch files under @3; report a needed change for engineer to make.' ;;
     ru:readonly_agent) MSG_T='corecrew: @1 только читает и ничего не меняет (@2). Журналы и черновики пишите в @3; нужное изменение передайте engineer.' ;;
     en:guard_code_blocked) MSG_T='corecrew: @1 is an internal file and must not live in the code folder. Write it to @2 instead.' ;;

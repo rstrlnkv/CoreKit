@@ -97,6 +97,15 @@ if [ "$part" = all ] || [ "$part" = project ]; then
     if [ -n "$stale" ]; then
       printf '%s\n' "$(msg old_hooks "$stale" "$ROOT/scripts/install-hooks.sh" "$P")"
     fi
+    # core.hooksPath: git runs the hooks of another folder (husky, lefthook, a global setting), or none when
+    # the value is empty, so the corecrew shims never run there. install-hooks prints the lines to chain them,
+    # but only when it is called; say so here as well, each time, until the setting changes.
+    if [ -n "$code" ]; then
+      hp=""
+      if hp="$(git -C "$code" config --get core.hooksPath 2>/dev/null)"; then
+        printf '%s\n' "$(msg hooks_path "$code" "${hp:-(an empty value: git runs no hooks)}" "$ROOT/scripts/install-hooks.sh" "$P")"
+      fi
+    fi
   fi
 fi
 

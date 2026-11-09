@@ -9,6 +9,12 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+### Added
+
+- `prepare` (and so session start) says when `core.hooksPath` keeps the corecrew git hooks from
+  running in the code repo, and names the command that prints the lines to chain them. Before, only
+  `install-hooks` said so, and only when it ran.
+
 ### Fixed
 
 - The Core pre-push hook's hint when `gh` is missing points to the GitHub CLI site

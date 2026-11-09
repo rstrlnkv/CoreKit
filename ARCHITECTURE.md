@@ -95,8 +95,10 @@ hook trust           on install                          after you enable them i
   sources its parts (`lib-*.sh`). The guards read a Bash command with awk, not with a shell: the
   code guard with `bashlex-guard-code.awk`; the secrets guard and the read-only checker rule with
   the shared tokenizer `bash-lex.awk` and their own part. `sync-tools.sh` copies the scripts into
-  the plugin's data folder (`tools/`), the one place git hooks run them from, so a plugin update
-  reaches the git hooks without reinstalling them.
+  the plugin's data folder (`tools/` under `~/.claude/plugins/data/corecrew-<marketplace>/` in
+  Claude Code and `~/.codex/plugins/data/corecrew-<marketplace>/` in Codex, `$CODEX_HOME` when
+  set), the one place git hooks run them from, so a plugin update reaches the git hooks without
+  reinstalling them.
 - **Git hooks** (`scripts/git-hooks/`) are shims installed by `install-hooks.sh` into the code repo
   (pre-commit, pre-push: no `CLAUDE.md`, `AGENTS.md`, `.claude/`, secrets or keys in commits) and
   into the Core (pre-push: the GitHub repo must be private).

@@ -32,6 +32,18 @@ run claude --cwd "$C"; assert_eq "$OUT" "" "second run is silent"
 run claude --cwd "$SANDBOX/elsewhere"; assert_eq "$OUT" "" "outside a project: silent"
 run claude; assert_eq "$RC" "0" "default cwd: exit"
 
+# --- core.hooksPath set in the code repo: git runs other hooks, so the note names the folder and the chaining command
+mkdir -p "$SANDBOX/myhooks"; git -C "$C" config core.hooksPath "$SANDBOX/myhooks"
+run claude --cwd "$C"
+echo "$OUT" | grep -qF "core.hooksPath" && pass || fail "hooksPath note missing: $OUT"
+echo "$OUT" | grep -qF "$SANDBOX/myhooks" && pass || fail "hooksPath note names the folder: $OUT"
+echo "$OUT" | grep -qF "install-hooks.sh\" \"$P\"" && pass || fail "hooksPath note names the chaining command: $OUT"
+git -C "$C" config core.hooksPath ""
+run claude --cwd "$C"
+echo "$OUT" | grep -qF "core.hooksPath" && pass || fail "empty hooksPath (git runs no hooks) is named: $OUT"
+git -C "$C" config --unset core.hooksPath
+run claude --cwd "$C"; assert_eq "$OUT" "" "hooksPath unset: silent again"
+
 # --- the trust note (codex host): no marker, older marker, current marker
 run codex --cwd "$C"
 echo "$OUT" | grep -qF "open /hooks" && pass || fail "trust note missing: $OUT"
