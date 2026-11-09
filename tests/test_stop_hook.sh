@@ -150,6 +150,22 @@ echo u >> "$C/tmp-new.txt"
 for _ in 1 2 3; do input "$C" false | PATH="$SANDBOX/nomktemp:$PATH" bash "$H" >/dev/null 2>&1; printf '%s ' "$?"; done > "$SANDBOX/rcs"
 assert_eq "$(cat "$SANDBOX/rcs")" "2 0 0 " "no temp file: three stops on an unchanged tree"
 rm -rf "$C/.tmp" "$C/tmp-new.txt"; (cd "$C" && bash "$SCRIPTS/save" "s-tmp") >/dev/null 2>&1
+# the untracked list's temp file sits in the code repo's git folder and goes with the hook: after every stop above
+# (reminded, not reminded, exit 0 and exit 2) none is left there
+GDC="$(git -C "$C" rev-parse --absolute-git-dir)"
+assert_eq "$(find "$GDC" -maxdepth 1 -name 'corecrew-stop.*' | wc -l | tr -d ' ')" "0" "a corecrew-stop temp file was left in $GDC"
+
+# a Core path that is a tracked folder gone from disk (its whole folder deleted) still belongs to the step:
+# core_paths keeps the first part of each tracked path, so the deletion is a docs change and is reminded
+CORE_ROOT="$(git -C "$P" rev-parse --show-toplevel)"
+mkdir -p "$CORE_ROOT/knowledge/deep"; echo k > "$CORE_ROOT/knowledge/deep/note.md"
+git -C "$CORE_ROOT" add -f knowledge/deep/note.md && git -C "$CORE_ROOT" -c user.name=t -c user.email=t@t commit -qm k --no-verify
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "tracked Core folder: clean tree passes"
+rm -rf "$CORE_ROOT/knowledge"
+cps="$(cd "$C" && . "$SCRIPTS/_locate.sh" && locate && printf ' %s ' "$CORE_PATHS")"
+echo "$cps" | grep -q ' knowledge ' && pass || fail "a tracked folder missing on disk is not a Core path: $cps"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "a deleted tracked Core folder is a docs change"
+git -C "$CORE_ROOT" checkout -q -- knowledge
 
 # Codex Stop payloads (fixtures built from the rust-v0.166.0 structs): same rules, and an exit 2 carries a
 # non-empty stderr (Codex treats exit 2 with an empty one as a failed hook, not a block)
