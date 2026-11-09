@@ -1,5 +1,5 @@
-# scripts/bash-lex.awk — the shared Bash tokenizer of guard-secrets.sh and of the read-only checkers' rule in
-# guard-code.sh. guard-code's write check does not use it: it has its own reader, bashlex-guard-code.awk.
+# scripts/bash-lex.awk — the shared Bash tokenizer of guard-secrets.sh and of both readers of guard-code.sh: the
+# read-only checkers' rule (bashlex-readonly.awk) and the write check (bashlex-guard-code.awk).
 # One linear pass over a command whose newlines were turned into \002 and carriage returns into spaces
 # (tr '\n\r' '\002 '). Quoted text is words, heredoc bodies and comments are skipped, wrapper words
 # (sudo, env, time, if, do, ...) and VAR=value prefixes are skipped. Run it as
@@ -11,7 +11,7 @@
 # is needed. Any other text (a command line queued by enqueue, or any text when lexsp is not 1: a command with a \004
 # byte of its own keeps it as a word byte, as the shell does) is read byte by byte. Every string made from the text
 # (seg) has its \004 turned back into spaces, so a hook program never sees one.
-# The hook program supplies (see bashlex-guard-secrets.awk, bashlex-readonly.awk):
+# The hook program supplies (see bashlex-guard-secrets.awk, bashlex-readonly.awk, bashlex-guard-code.awk):
 #   classify(b)  — b is the base name of a command word; returns the command to remember, or "?" to
 #                  ignore its arguments (it may also note state, e.g. cdseen for cd)
 #   on_out(w)    — w is the target of an output redirect (> >> >| &> >&file)
@@ -19,11 +19,14 @@
 #   on_subst(w)  — w is a word with a command substitution inside double quotes ("$(...)" or backticks);
 #                  it may call subst_queue(w) to have each substitution lexed as a command line after the
 #                  main pass (both programs do), or enqueue(text) for any other text
-#   finalize()   — one command is complete: cmd (its name) and args[1..na] (its words) are set
-#   globals it may set: full (stop reading); nomore is set here by <<"WORD" inside "$(...)" (reading stops:
-#   a hook that must not fail open there can look at it in its END block)
+#   finalize()   — one command is complete: cmd (its name), args[1..na] (its words) and sep (what ended it:
+#                  ; | & && ( ) ` "nl" for a newline, "" for the end of the text) are set
+#   globals it may set: full (stop reading); in BEGIN, nofollow = 1 (enqueue() queues nothing: bash -c, eval and
+#   "$(...)" are not followed), dqhd = 1 (<<"WORD" inside "$(...)" is read as a heredoc), longw (the word a hook
+#   gets for a word longer than 4096 bytes; "" when unset). nomore is set here by <<"WORD" inside "$(...)" when
+#   dqhd is not set (reading stops: a hook that must not fail open there can look at it in its END block)
 # A shell run with -c (bash -c "...", sh -c, zsh -c, ...) and eval hand their command line to enqueue() too.
-# State this file owns: cmd, args, na, wrapped, shk/sargs/nsa (shell -c and eval), and the redirect/heredoc flags.
+# State this file owns: cmd, args, na, sep, wrapped, shk/sargs/nsa (shell -c and eval), and the redirect/heredoc flags.
 
 BEGIN {
   NL = "\002"; BL = (lexsp == 1) ? "\004" : ""; STOP = " \t\002;|" "&<>()`\047\"\\" BL
@@ -86,7 +89,7 @@ function skip_heredocs(   k, j, line, found) {
 }
 function endword(   w, qd, b, rw, x) {
   if (!inword) return
-  w = word; qd = hasq; x = wx
+  w = wbad ? longw : word; qd = hasq; x = wx
   inword = 0; word = ""; wx = ""; hasq = 0; wl = 0; wbad = 0
   if (wsub) { wsub = 0; on_subst(x) }
   if (skip_next) { skip_next = 0; return }
@@ -138,10 +141,11 @@ function wrapper_opt(w,   n, p, l) {
     if ((wname, l) in WOPT) { if (p == n) wskip = 1; return }
   }
 }
-# stmt_end — a command ends (; | & ( ) ` or a newline): the hook-specific finalize() judges it, then the
-# state is cleared.
-function stmt_end() {
+# stmt_end(s) — a command ends (s: ; | & && ( ) ` "nl" for a newline, "" for the end): the hook-specific
+# finalize() judges it, with sep = s, then the state is cleared.
+function stmt_end(s) {
   if (shk) shell_inner()
+  sep = s
   finalize()
   split("", args); split("", sargs)
   shk = 0; nsa = 0
@@ -150,8 +154,8 @@ function stmt_end() {
 # fdword — a redirect starts: a word of digits right before it (2>, 0<) is the descriptor, not an argument.
 # Not when the word is itself the target of a redirect still waiting for one (2>&1<file: 1 is the target).
 function fdword() { if (inword && !hasq && !wbad && !want_redir && !want_in && word ~ /^[0-9]+$/) { inword = 0; word = ""; wx = ""; wl = 0 } else endword() }
-# enqueue(text) — a command line to lex after the main pass (at most 50)
-function enqueue(t) { if (nq < 50) Q[++nq] = t }
+# enqueue(text) — a command line to lex after the main pass (at most 50; none when the hook set nofollow)
+function enqueue(t) { if (nq < 50 && !nofollow) Q[++nq] = t }
 # subst_queue(w) — w has a $(...) or backtick substitution from inside double quotes: each body is queued as a
 # command line (an unbalanced $( takes the rest of the word). A hook program's on_subst may call it.
 function subst_queue(w,   n, p, c, depth, st, q) {
@@ -199,7 +203,7 @@ function lex(text,   lxn, lxk, lxpos, lxw, lxl, lxc) {
     if (!lxc) { split(text, C, ""); lxc = 1 }
     c = C[i]
     if (c == " " || c == "\t" || c == BL) { endword(); i++; continue }
-    if (c == NL) { endword(); stmt_end(); i++; if (hdn > 0) skip_heredocs(); continue }
+    if (c == NL) { endword(); stmt_end("nl"); i++; if (hdn > 0) skip_heredocs(); continue }
     if (c == "#" && !inword) { while (i <= len && C[i] != NL) i++; continue }
     if (c == "\\") {
       if (i < len) {
@@ -227,14 +231,13 @@ function lex(text,   lxn, lxk, lxpos, lxw, lxl, lxc) {
         if (d == "<" && C[j + 1] == "<" && C[j + 2] != "<") {
           p = j + 2; st = 0
           if (C[p] == "-") { st = 1; p++ }
-          # <<"WORD" inside "$(...)": stop judging. A "<<" that is the end of the string ("<<" followed by
-          # something that is no delimiter word and quote) is only text.
+          # <<"WORD" inside "$(...)": stop judging, or with dqhd read it as a heredoc. A "<<" that is the end of the
+          # string ("<<" followed by something that is no delimiter word and quote) is only text.
+          dl = ""
           if (C[p] == "\"") {
             q = p + 1; while (q <= len && C[q] != "" && index(WORDCH, C[q]) > 0) q++
-            if (q > p + 1 && C[q] == "\"") { nomore = 1; break }
-          }
-          dl = ""
-          if (C[p] == "\047") {
+            if (q > p + 1 && C[q] == "\"") { if (!dqhd) { nomore = 1; break }; dl = seg(p + 1, q); p = q + 1 }
+          } else if (C[p] == "\047") {
             q = p + 1; while (q <= len && C[q] != "\047" && C[q] != NL && C[q] != "\"") q++
             if (C[q] == "\047") { dl = seg(p + 1, q); p = q + 1 }
           } else {
@@ -254,14 +257,15 @@ function lex(text,   lxn, lxk, lxpos, lxw, lxl, lxc) {
       if (nomore) break
       i = j + 1; continue
     }
-    if (c == ";" || c == "|" || c == "(" || c == ")" || c == "`") { endword(); stmt_end(); i++; continue }
+    if (c == ";" || c == "|" || c == "(" || c == ")" || c == "`") { endword(); stmt_end(c); i++; continue }
     if (c == "&") {
       endword()
       if (C[i + 1] == ">") {
         i += 2; if (C[i] == ">") i++
         want_redir = 1; continue
       }
-      stmt_end(); i++; continue
+      if (C[i + 1] == "&") { stmt_end("&&"); i += 2; continue }
+      stmt_end("&"); i++; continue
     }
     if (c == ">") {
       fdword()
@@ -291,7 +295,7 @@ function lex(text,   lxn, lxk, lxpos, lxw, lxl, lxc) {
     while (j <= len && index(STOP, C[j]) == 0) j++
     app(seg(i, j)); inword = 1; i = j
   }
-  endword(); stmt_end()
+  endword(); stmt_end("")
 }
 END {
   lex(buf)

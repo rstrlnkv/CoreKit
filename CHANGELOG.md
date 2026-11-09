@@ -11,6 +11,11 @@ commit log has the full detail.
 
 ### Changed
 
+- The code guard reads a Bash command with the same tokenizer as the secrets guard and the read-only
+  checkers. A wrapper option that takes a value is now skipped as that wrapper's own table lists it:
+  `stdbuf -o L tee`, `sudo -k tee`, `sudo -s tee`, `sudo --user x tee`, `sudo -iu x tee`,
+  `exec -a x tee`, `exec -c tee` and `time -o f tee` are judged, and refused when the target is an
+  internal file; `nice 5 tee x` and `sudo 5 tee x` are no longer judged (the shell runs `5`).
 - wiki-check: pages with status done or superseded no longer report drift; with `--code`, an active
   page whose `files:` names a missing path is reported, and task's release blocks on it.
 

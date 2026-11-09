@@ -1,8 +1,10 @@
 # scripts/bashlex-guard-code.awk — guard-code.sh's plain reading of a Bash command: the files it would write.
-# Standalone (it does not use bash-lex.awk). It is built for honest mistakes (SECURITY.md, "Threat model"), not against
-# evasion: it reads words, quotes, comments, heredoc bodies, redirects and statement separators, and nothing more.
-# What it does not follow is the LIMIT list in the guard-code.sh header.
-# Input: the command with newlines turned into \002 (tr '\n\r' '\002 '). Output, each line at most once:
+# Used with scripts/bash-lex.awk (the tokenizer, shared with guard-secrets and the read-only checkers):
+#   awk -v lexsp=<0|1> -f bash-lex.awk -f bashlex-guard-code.awk
+# It is built for honest mistakes (SECURITY.md, "Threat model"), not against evasion: it switches off the
+# tokenizer's following of bash -c, sh -c, eval and "$(...)" (nofollow), reads <<"WORD" inside "$(...)" as a heredoc
+# (dqhd), and gets "\001" for a word longer than 4096 bytes (longw). What it does not follow is the LIMIT list in
+# the guard-code.sh header. Output, each line at most once:
 #   W <path>            a file written: the target of > >> >| &> >&file <>, tee, touch, the files of sed -i and
 #                       perl -i, the destination of cp, mv, install, git mv
 #   D <path>            a directory made: mkdir, install -d
@@ -19,10 +21,9 @@
 # or a copy into a folder (L, J) counts as three targets toward CAP and MORE: it costs about that much to judge.
 
 BEGIN {
-  NL = "\002"; CAP = 100; MORE = 100; MAXW = 4096; BAD = "$`*?[{\t\001\002"
+  nofollow = 1; dqhd = 1; longw = "\001"
+  CAP = 100; MORE = 100; BAD = "$`*?[{\t\001\002"
   split("tee touch mkdir cp mv ln install sed perl git cd pushd popd", t, " "); for (k in t) TRACK[t[k]] = 1
-  split("sudo doas command builtin exec nohup time env nice timeout gtimeout stdbuf setsid caffeinate ionice unbuffer if then else elif do while until ! { }", t, " ")
-  for (k in t) WRAP[t[k]] = 1
   split("docs .claude claude.md claude.local.md agents.md", t, " "); for (k in t) INTERNAL[t[k]] = 1
   # options that take the next word as their value
   vopt("touch", "-t -d -r --date --reference"); vopt("mkdir", "-m --mode"); vopt("install", "-m -o -g -S --mode --owner --group --suffix")
@@ -30,8 +31,14 @@ BEGIN {
 }
 function vopt(c, list,   n, l, x) { n = split(list, l, " "); for (x = 1; x <= n; x++) VOPT[c, l[x]] = 1 }
 
-{ text = (NR == 1 ? "" : text "\n") $0 }
-END { lex() }
+# --- the tokenizer's hooks
+function classify(b) {
+  if (b == "cd" || b == "pushd" || b == "popd") cdseen = 1
+  return (b in TRACK) ? b : "?"
+}
+function on_out(w) { emit("W", w, "") }
+function on_in(w) { }        # a file read is not a file written
+function on_subst(w) { }     # "$(...)" is not followed (LIMIT)
 
 # --- printing
 function internal(p,   n, part, x) {
@@ -62,12 +69,17 @@ function emit(kind, p, src,   key, w) {
   if (src == "") printf "%s\t%s\n", kind, p; else printf "%s\t%s\t%s\n", kind, p, src
 }
 
-# --- one command is complete: cmd and args[1..na]
-function finalize(   k, a, n, op, dd, tdir, script, inpl, dir, c, val) {
+# --- one command is complete: cmd and args[1..na]; sep is what ended it (bash-lex.awk, stmt_end)
+function finalize() {
+  if (sep == "(" || sep == ")" || sep == "`") nosimple = 1
   # the leading `cd <absolute folder>` ended by && ; or a newline: the folder the relative targets after it are in
   if (cmd == "cd" && nstmt == 0 && !nosimple && na == 1 && args[1] ~ /^\// && plain(args[1]) && (sep == "&&" || sep == ";" || sep == "nl")) {
     cdbase = args[1]; sub(/\/+$/, "", cdbase); cdseen = 0
   }
+  writes()
+  if (cmd != "") nstmt++
+}
+function writes(   k, a, n, op, dd, tdir, script, inpl, dir, c, val) {
   c = cmd; k = 1
   if (c == "git") { if (args[1] != "mv") return; c = "mv"; k = 2 }
   n = 0; dd = 0; tdir = ""; script = 0; inpl = 0; dir = 0
@@ -100,107 +112,4 @@ function finalize(   k, a, n, op, dd, tdir, script, inpl, dir, c, val) {
     if (tdir != "") { for (k = 1; k <= n; k++) emit("J", tdir, op[k]) }
     else if (n >= 2) { emit("W", op[n], ""); for (k = 1; k < n; k++) emit("J", op[n], op[k]) }
   }
-}
-function stmt_end() {
-  finalize()
-  if (cmd != "") nstmt++
-  split("", args); na = 0; cmd = ""; wrapped = 0; wskip = 0; want = ""; dup = 0; sep = ""
-}
-
-# --- words
-function add(ch) { if (wl >= MAXW) wbad = 1; else { word = word ch; wl++ } }
-function endword(   w, b) {
-  if (!inword) return
-  w = wbad ? "\001" : word
-  b = wq; inword = 0; word = ""; wl = 0; wbad = 0; wq = 0
-  if (want == "out") { want = ""; if (!(dup && w ~ /^([0-9]+-?|-)$/)) emit("W", w, ""); dup = 0; return }
-  if (want == "skip") { want = ""; return }
-  if (want == "hd") { want = ""; hd[++hdn] = w; hds[hdn] = hdstrip; return }
-  if (cmd == "") {
-    if (!b && w ~ /^[A-Za-z_][A-Za-z0-9_]*=/) return          # VAR=value before the command
-    if (wrapped) {                                               # sudo -u x, nice -n 5, timeout 5, env -i
-      if (wskip) { wskip = 0; return }
-      if (w ~ /^-/) { if (w ~ /^-[ugnskCc]$/) wskip = 1; return }
-      if (w ~ /^[0-9.]+[smhd]?$/) return
-    }
-    b = w; sub(/.*\//, "", b)
-    if (b in WRAP) { wrapped = 1; return }
-    if (b == "cd" || b == "pushd" || b == "popd") cdseen = 1
-    cmd = (b in TRACK) ? b : "?"
-    return
-  }
-  if (cmd != "?") args[++na] = w
-}
-# fdword — a redirect starts: a word of digits right before it is the descriptor (2>), not an argument
-function fdword() {
-  if (inword && !wq && word ~ /^[0-9]+$/) { inword = 0; word = ""; wl = 0 } else endword()
-}
-
-# --- heredocs: the bodies of the heredocs started on the line that just ended are skipped
-function skip_bodies(   k, j, line, found, x) {
-  for (k = 1; k <= hdn; k++) {
-    for (found = 0; i <= len && !found; i = j + 1) {
-      for (j = i; j <= len && C[j] != NL; j++) ;
-      line = ""
-      if (j - i <= MAXW) for (x = i; x < j; x++) line = line C[x]
-      if (hds[k]) sub(/^\t+/, "", line)
-      found = (line == hd[k])
-    }
-  }
-  hdn = 0
-}
-# dquote — a double-quoted string from C[i]. A heredoc inside it ("$(cat <<'EOF' ... EOF)", the commit message
-# idiom) has its body skipped, so a stray quote there cannot flip the quoting.
-function dquote(   j, d, p, q, k, dl, st) {
-  inword = 1; wq = 1
-  for (j = i + 1; j <= len && C[j] != "\""; ) {
-    d = C[j]
-    if (d == "\\" && C[j + 1] == NL) { j += 2; continue }
-    if (d == "\\" && index("\"\\$`", C[j + 1])) { add(C[j + 1]); j += 2; continue }
-    if (d == NL && hdn) { i = j + 1; skip_bodies(); j = i; continue }
-    if (d == "<" && C[j + 1] == "<" && C[j + 2] != "<") {
-      p = j + 2; st = 0; dl = ""
-      if (C[p] == "-") { st = 1; p++ }
-      q = C[p]; if (q == "'" || q == "\"") p++; else q = ""
-      for (k = p; k <= len && C[k] ~ /[A-Za-z0-9_]/; k++) dl = dl C[k]
-      if (dl != "" && (q == "" || C[k] == q)) { hd[++hdn] = dl; hds[hdn] = st; j = k + (q != ""); continue }
-    }
-    add(d); j++
-  }
-  i = j + 1
-}
-
-function lex(   c) {
-  len = split(text, C, ""); i = 1
-  while (i <= len) {
-    c = C[i]
-    if (c == " " || c == "\t") { endword(); i++ }
-    else if (c == NL) { endword(); sep = "nl"; stmt_end(); i++; if (hdn) skip_bodies() }
-    else if (c == "#" && !inword) { while (i <= len && C[i] != NL) i++ }
-    else if (c == "\\") { if (C[i + 1] != NL) { add(C[i + 1]); inword = 1; wq = 1 }; i += 2 }
-    else if (c == "'") { inword = 1; wq = 1; for (i++; i <= len && C[i] != "'"; i++) add(C[i]); i++ }
-    else if (c == "\"") dquote()
-    else if (c == ";" || c == "|") { endword(); sep = c; stmt_end(); i++ }
-    else if (c == "(" || c == ")" || c == "`") { endword(); sep = c; nosimple = 1; stmt_end(); i++ }
-    else if (c == "&") {
-      endword(); i++
-      if (C[i] == ">") { i++; if (C[i] == ">") i++; want = "out" }
-      else { sep = "&"; if (C[i] == "&") { i++; sep = "&&" }; stmt_end() }
-    } else if (c == ">") {                                       # > >> >| >& (>( is a process substitution)
-      fdword(); i++
-      if (C[i] == "(") continue
-      if (C[i] == ">" || C[i] == "|") i++
-      if (C[i] == "&") { i++; dup = 1 }
-      want = "out"
-    } else if (c == "<") {                                       # < <> <& <<< << <<- (<( is a process substitution)
-      fdword(); i++
-      if (C[i] == "(") continue
-      if (C[i] == ">") { i++; want = "out"; continue }
-      if (C[i] == "<" && C[i + 1] == "<") { i += 2; want = "skip"; continue }
-      if (C[i] == "<") { i++; hdstrip = 0; if (C[i] == "-") { hdstrip = 1; i++ }; want = "hd"; continue }
-      if (C[i] == "&") i++
-      want = "skip"
-    } else { add(c); inword = 1; i++ }
-  }
-  endword(); stmt_end()
 }

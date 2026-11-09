@@ -25,9 +25,9 @@ plugins/corecrew/                 project workflow
                                   lib-host.sh, lib-scaffold.sh, lib-json.sh; and, each for one subcommand
                                   only, lib-codex-profile.sh, lib-role-model.sh, lib-tree-state.sh
     shell-patch.sh                the check for a Codex patch handed to the shell (sourced by both guards)
-    bashlex-guard-code.awk        the code guard's own reader of a Bash command: the files it writes
-    bash-lex.awk                  the shared Bash tokenizer, for bashlex-guard-secrets.awk (the secrets
-                                  guard) and bashlex-readonly.awk (the read-only checker rule)
+    bash-lex.awk                  the one Bash tokenizer, for bashlex-guard-code.awk (the code guard: the
+                                  files a command writes), bashlex-guard-secrets.awk (the secrets guard)
+                                  and bashlex-readonly.awk (the read-only checker rule)
     patch-paths.awk               the paths of a Codex apply_patch patch, for both guards
     prepare.sh, setup-core.sh     a host and project brought up to date; the Core created or completed
     sync-tools.sh                 the scripts copied into the plugin's data folder (tools/)
@@ -111,8 +111,9 @@ hook trust           on install                          after you enable them i
   a one-time "Core not set up" hint) and the read-only checker rule act; every other hook exits at once.
 - **Scripts** hold the logic, so hooks stay thin. A script or hook sources `lib.sh`, and `lib.sh`
   sources its parts (`lib-*.sh`). The guards read a Bash command with awk, not with a shell: the
-  code guard with `bashlex-guard-code.awk`; the secrets guard and the read-only checker rule with
-  the shared tokenizer `bash-lex.awk` and their own part. `sync-tools.sh` copies the scripts into
+  code guard, the secrets guard and the read-only checker rule each with the one tokenizer
+  `bash-lex.awk` and their own part (`bashlex-guard-code.awk`, `bashlex-guard-secrets.awk`,
+  `bashlex-readonly.awk`). `sync-tools.sh` copies the scripts into
   the plugin's data folder (`tools/` under `~/.claude/plugins/data/corecrew-<marketplace>/` in
   Claude Code and `~/.codex/plugins/data/corecrew-<marketplace>/` in Codex, `$CODEX_HOME` when
   set), the one place git hooks run them from, so a plugin update reaches the git hooks without

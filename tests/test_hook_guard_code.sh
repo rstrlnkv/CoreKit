@@ -310,7 +310,7 @@ timed_json "$SANDBOX/big7.json"; blocked "Write with 1 MB of content" "$C/docs/b
 words="$(yes 'ab' | head -n 25000 | tr '\n' ' ')"
 printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"touch %s"}}' "$C" "$words" > "$SANDBOX/lin1.json"
 printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"touch %s%s%s%s"}}' "$C" "$words" "$words" "$words" "$words" > "$SANDBOX/lin4.json"
-assert_linear "bashlex-guard-code.awk: 25000 against 100000 touch targets" 6 'watched "$SANDBOX/lin1.json"' 'watched "$SANDBOX/lin4.json"'
+assert_linear "bash-lex.awk + bashlex-guard-code.awk: 25000 against 100000 touch targets" 6 'watched "$SANDBOX/lin1.json"' 'watched "$SANDBOX/lin4.json"'
 
 }
 bg sec_size
@@ -712,6 +712,12 @@ sec_writers() {
   sh 'install -d docs/x';                blocked "install -d docs/x" "$C/docs/x" "$CORE_DIR/p/docs/x"
   sh 'install -t docs/ a b';             blocked "install -t docs/" "$C/docs/a" "$CORE_DIR/p/docs/a"
   sh 'cp -p a src/b && mv src/b CLAUDE.local.md'; blocked "mv after cp, CLAUDE.local.md" "$C/CLAUDE.local.md" "$CORE_DIR/p/CLAUDE.local.md"
+  # a wrapper option that takes a value (the tokenizer's per-wrapper table): the command after it is judged
+  for c in 'stdbuf -o L tee docs/a.md' 'sudo -k tee docs/a.md' 'exec -a x tee docs/a.md' 'time -o out tee docs/a.md'; do
+    sh "$c"; blocked "$c" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  done
+  # a command with a \004 byte of its own is read byte by byte (lexsp=0): still judged
+  sh "echo x$(printf '\004')y > docs/a.md"; blocked "a command with a \\004 byte" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
   # a link source spelled with a variable is unknown: the link itself is still judged where it lands
   sh 'ln -s "$HOME/notes.md" src/CLAUDE.md'; blocked "ln -s \$HOME/... src/CLAUDE.md" "$C/src/CLAUDE.md" "$CORE_DIR/p/src/CLAUDE.md"
   sh 'ln -sf "$CORE_DIR/p/docs" docs';   blocked "ln -sf \$CORE_DIR/... docs" "$C/docs" "$CORE_DIR/p/docs"
@@ -731,7 +737,9 @@ sec_writers() {
            "perl -pe 's/a/b/' AGENTS.md" "perl -pi -e 's/a/b/' src/a.c" "perl -ne 'print if /docs/' CLAUDE.md" \
            'git mv docs/a.md src/a.md' 'git mv a b' 'git log -- docs CLAUDE.md' 'git rm docs/a.md' 'git commit -m "mv notes to docs/"' \
            'install -m 755 build/app bin/app' 'install -d .claude' 'npm install' 'brew install docs' 'pip install -r docs/req.txt' \
-           'make install DESTDIR=docs' 'echo cp a CLAUDE.md' 'grep -rn "tee docs" .' 'ls -la > src/listing.txt'; do
+           'make install DESTDIR=docs' 'echo cp a CLAUDE.md' 'grep -rn "tee docs" .' 'ls -la > src/listing.txt' \
+           'sudo -k tee src/a.md' 'stdbuf -o L tee src/out.txt' 'exec -a x tee src/b.txt' 'time -o out tee src/c.txt' \
+           'cat 0<in > src/a'; do
     sh "$c"; hook_ok "Bash passes: $c"
   done
   # LIMIT (ADR 009): what the plain reading does not follow; each passes and is listed in the guard-code.sh header
@@ -739,7 +747,7 @@ sec_writers() {
            'echo docs/a.md | xargs touch' 'find . -name a -exec cp {} docs/ \;' 'python3 -c "open(\"CLAUDE.md\",\"w\")"' \
            'bash -c "echo x > docs/a.md"' 'eval "touch CLAUDE.md"' 'sh write-docs.sh' 'rsync a docs/' 'dd of=docs/a.md' \
            'git -C . mv a docs/a' 'tar -xf a.tar -C docs' 'curl -o docs/a.md http://x' 'echo x > "$(echo docs)/a.md"' \
-           'stdbuf -o L tee docs/a.md'; do
+           'sudo -a x tee docs/a.md' 'nice 5 tee docs/a.md'; do
     sh "$c"; hook_ok "LIMIT, passes: $c"
   done
 }
