@@ -363,6 +363,22 @@ assert_exit 2 bash "$AD" --from "$F"
 after="$(snap)"
 assert_eq "$after" "$before" "commit failure changed something (existing .gitignore)"
 assert_eq "$(cat "$F/.gitignore")" "build/" ".gitignore not restored"
+
+# --- the rule readers are awk files beside adopt.sh (rule-block.awk, fold-rules.awk); a plugin copy
+# without rule-block.awk stops in the staging phase, before the repo commit, with nothing changed
+assert_file "$SCRIPTS/rule-block.awk"; assert_file "$SCRIPTS/fold-rules.awk"
+grep -qF '/rule-block.awk' "$AD" && pass || fail "adopt.sh does not load rule-block.awk"
+grep -qF '/fold-rules.awk' "$AD" && pass || fail "adopt.sh does not load fold-rules.awk"
+new_sandbox; setup_core
+cp -R "$PLUGIN" "$SANDBOX/plugin-copy"; rm -f "$SANDBOX/plugin-copy/scripts/rule-block.awk"
+F="$SANDBOX/Projects/rd-app"; mkrepo "$F"
+mkdir -p "$F/.claude/rules"; printf 'Rule.\n' > "$F/.claude/rules/r.md"; git -C "$F" add -A && git -C "$F" commit -q -m rule
+before="$(snap)"
+OUT="$(bash "$SANDBOX/plugin-copy/scripts/adopt.sh" --from "$F" 2>&1)"; rc=$?
+assert_eq "$rc" "1" "missing reader exit"
+echo "$OUT" | grep -q "could not read .claude/rules/r.md" && pass || fail "missing reader message: $OUT"
+assert_eq "$(snap)" "$before" "a missing reader changed something"
+assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "temp folder left in the Core (missing reader)"
 }
 bg part_refusals
 
