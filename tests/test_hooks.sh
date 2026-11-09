@@ -191,6 +191,10 @@ BROKEN="$SANDBOX/broken"; mkdir -p "$BROKEN"; cp "$SCRIPTS/install-hooks.sh" "$B
 assert_exit 1 bash "$BROKEN/install-hooks.sh" "$P"
 echo "$OUT" | grep -q 'hooks installed' && fail "claimed success without sources" || pass
 echo "$OUT" | grep -qi 'missing\|not found' && pass || fail "no plain message: $OUT"
+# a copy complete but for allowed-patterns is incomplete too: the exceptions are one of the hook sources
+NOALLOW="$SANDBOX/no allowed"; cp -R "$SCRIPTS" "$NOALLOW"; rm -f "$NOALLOW/git-hooks/allowed-patterns"
+assert_exit 1 bash "$NOALLOW/install-hooks.sh" "$P"
+echo "$OUT" | grep -qF "git-hooks/allowed-patterns is missing" && pass || fail "missing allowed-patterns not named: $OUT"
 # new layout: code repo beside the Core (<Projects>/Foo), project dir argument is <Core>/foo
 new_sandbox; setup_core; sync_tools
 F="$SANDBOX/Projects/Foo"; mkdir -p "$F" "$CORE_DIR/foo"; git -C "$F" init -q
@@ -226,6 +230,15 @@ assert_file "$AP"
 mv "$AP" "$SANDBOX/ap"
 try_commit src/ok.txt && fail "missing allowed-patterns must fail closed" || pass
 mv "$SANDBOX/ap" "$AP"
+# pre-push fails closed too: with either list missing, even a clean commit is not pushed, with a plain line
+R5="$SANDBOX/missing lists"; pp_repo "$R5"; nv_commit "$R5" src/a.txt
+for l in blocked-patterns allowed-patterns; do
+  mv "$COREDEV_TOOLS/git-hooks/$l" "$SANDBOX/list.keep"
+  OUT=$(git -C "$R5" push -q origin HEAD:refs/heads/main 2>&1) && fail "missing $l: the push was allowed" || pass
+  echo "$OUT" | grep -qF "git-hooks/$l is missing" && pass || fail "missing $l: no plain line from pre-push: $OUT"
+  mv "$SANDBOX/list.keep" "$COREDEV_TOOLS/git-hooks/$l"
+done
+git -C "$R5" push -q origin HEAD:refs/heads/main 2>/dev/null && pass || fail "with both lists back, a clean push was blocked"
 cp "$AP" "$SANDBOX/ap.keep"; { printf '\n'; cat "$SANDBOX/ap.keep"; printf '  \n\n'; } > "$AP"
 try_commit .env && fail "a blank line in allowed-patterns let .env through" || pass
 rm -rf "${C:?}/.env"
