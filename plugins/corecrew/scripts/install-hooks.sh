@@ -42,7 +42,7 @@ fi
 
 # This script's own git-hooks/ folder must be complete: an incomplete copy cannot be trusted.
 SRC="$(cd "$(dirname "$0")" && pwd)/git-hooks"
-for f in pre-commit-code pre-push-code pre-push-core blocked-patterns; do
+for f in pre-commit-code pre-push-code pre-push-core blocked-patterns allowed-patterns; do
   [ -f "$SRC/$f" ] || { echo "corecrew: hook source $SRC/$f is missing; hooks not installed." >&2; exit 1; }
 done
 

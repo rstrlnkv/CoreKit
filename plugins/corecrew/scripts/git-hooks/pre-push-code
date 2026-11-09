@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # corecrew git hook: re-checks pushed commits (catches commits made with --no-verify).
-PATTERNS="$(dirname "$0")/blocked-patterns"
-if [ ! -r "$PATTERNS" ]; then
-  echo "Blocked: $PATTERNS is missing, so internal files can't be checked. Start Claude Code once with corecrew enabled to refresh the tools." >&2
-  exit 1
-fi
+# blocked-patterns lists what is refused, allowed-patterns the exceptions (.env.example and the like); a missing list
+# fails closed, and blank lines of the exceptions are dropped (grep reads an empty pattern as "matches every path").
+PATTERNS="$(dirname "$0")/blocked-patterns"; ALLOWED="$(dirname "$0")/allowed-patterns"
+for f in "$PATTERNS" "$ALLOWED"; do
+  if [ ! -r "$f" ]; then
+    echo "Blocked: $f is missing, so internal files can't be checked. Start Claude Code once with corecrew enabled to refresh the tools." >&2
+    exit 1
+  fi
+done
 remote="$1"; zero=0000000000000000000000000000000000000000
 while read -r _ lsha _ rsha; do   # <local ref> <local sha> <remote ref> <remote sha>; the refs are not needed
   [ "$lsha" = "$zero" ] && continue
@@ -12,7 +16,7 @@ while read -r _ lsha _ rsha; do   # <local ref> <local sha> <remote ref> <remote
   else range=$(git rev-list "$rsha..$lsha"); fi
   for c in $range; do
     bad=$(git -c core.quotePath=false diff-tree --no-commit-id --name-only -r --diff-filter=ACMR "$c" \
-          | grep -iE -f "$PATTERNS" | grep -viE '(^|/)\.env\.(example|sample|template)$')
+          | grep -iE -f "$PATTERNS" | grep -viE -f <(grep -v '^[[:space:]]*$' "$ALLOWED"))
     if [ -n "$bad" ]; then
       echo "Push blocked: commit $(git rev-parse --short "$c") contains files that must not be published:" >&2
       echo "$bad" | sed 's/^/  - /' >&2

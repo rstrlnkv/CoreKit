@@ -99,7 +99,7 @@ for f in $FILES; do
 done
 # Executable regardless of how the plugin cache stored the modes.
 chmod +x "$NEW/save" "$NEW/undo-step" "$NEW/install-hooks.sh" "$NEW"/git-hooks/* 2>/dev/null
-chmod -x "$NEW/git-hooks/blocked-patterns" 2>/dev/null
+chmod -x "$NEW/git-hooks/blocked-patterns" "$NEW/git-hooks/allowed-patterns" 2>/dev/null
 D="$(data_dir)"
 if [ -n "$D" ]; then printf '%s\n' "$D" > "$NEW/.data-dir" || { rm -rf "$NEW"; exit 1; }; fi
 printf '%s\n%s\n' "$VER" "$(sum_of "$NEW")" > "$NEW/VERSION"

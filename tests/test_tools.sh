@@ -11,13 +11,17 @@ grep -nE '(tools (updated|current) |VERSION.*")[0-9]+\.[0-9]+\.[0-9]+' "$0" | gr
 assert_exit 0 bash "$SYNC" "$PLUGIN" "$T"
 assert_eq "$OUT" "tools updated $V" "first sync output"
 for f in save undo-step _locate.sh lib.sh install-hooks.sh \
-         git-hooks/pre-commit-code git-hooks/pre-push-code git-hooks/pre-push-core git-hooks/blocked-patterns; do
+         git-hooks/pre-commit-code git-hooks/pre-push-code git-hooks/pre-push-core git-hooks/blocked-patterns \
+         git-hooks/allowed-patterns; do
   assert_file "$T/$f"
 done
 assert_eq "$(head -1 "$T/VERSION")" "$V" "VERSION file: the version on line 1"
 sed -n 2p "$T/VERSION" | grep -qE '^[0-9]+ [0-9]+$' && pass || fail "VERSION file: no content checksum on line 2: $(cat "$T/VERSION")"
 for f in save undo-step install-hooks.sh git-hooks/pre-commit-code git-hooks/pre-push-code git-hooks/pre-push-core; do
   [ -x "$T/$f" ] && pass || fail "not executable: $T/$f"
+done
+for f in git-hooks/blocked-patterns git-hooks/allowed-patterns; do
+  [ -x "$T/$f" ] && fail "a pattern list is executable: $T/$f" || pass
 done
 assert_eq "$(ls "$SANDBOX/data" | tr '\n' ' ')" "tools " "no temp dir left behind"
 
@@ -28,7 +32,7 @@ assert_eq "$OUT" "tools current $V" "second sync output"
 assert_file "$T/marker"
 
 # a damaged copy is healed: same VERSION, but a file is gone -> updated and restored
-for f in git-hooks/blocked-patterns git-hooks/pre-push-core _locate.sh lib.sh install-hooks.sh undo-step; do
+for f in git-hooks/blocked-patterns git-hooks/allowed-patterns git-hooks/pre-push-core _locate.sh lib.sh install-hooks.sh undo-step; do
   rm -f "$T/$f"
   assert_exit 0 bash "$SYNC" "$PLUGIN" "$T"
   assert_eq "$OUT" "tools updated $V" "sync after deleting $f"
