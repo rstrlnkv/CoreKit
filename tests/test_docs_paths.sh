@@ -206,7 +206,9 @@ check_fixtures() {
   spans="$(awk '/^#/ { f = ($0 == "### Test fixtures"); next } f' "$1" | grep -oE '`[^` ]+`' | tr -d '`' \
     | sed -e 's|^tests/fixtures/||' -e 's|/$||')"
   [ -n "$spans" ] || { fail "$(basename "$1") has no ### Test fixtures section with code spans"; return; }
-  for name in "$2"/*; do
+  # every top-level name, dot names too (.[!.]* and ..?* never match . or ..); a glob that matched nothing is skipped
+  for name in "$2"/* "$2"/.[!.]* "$2"/..?*; do
+    [ -e "$name" ] || [ -L "$name" ] || continue
     name="${name##*/}"
     found=""
     while IFS= read -r t; do
@@ -225,4 +227,8 @@ printf '%s\n' '# C' '### Test fixtures' '- `std-*.md`, `tests/fixtures/wiki-good
 printf '%s\n' 'copy_fixture std-a.md x' > "$SANDBOX/ts/test_a.sh"
 ( FAILS=0; check_fixtures "$SANDBOX/c2.md" "$SANDBOX/fx" "$SANDBOX/ts" >/dev/null; [ "$FAILS" -eq 2 ] ) \
   && pass || fail "a fixture missing from the doc and the tests does not fail twice"
+# a dot-named fixture counts too (.a and ..a, never . or ..): each of the two fails twice more
+mkdir -p "$SANDBOX/fx/.zz-hidden" "$SANDBOX/fx/..zz-two"
+( FAILS=0; check_fixtures "$SANDBOX/c2.md" "$SANDBOX/fx" "$SANDBOX/ts" >/dev/null; [ "$FAILS" -eq 6 ] ) \
+  && pass || fail "a dot-named fixture missing from the doc and the tests is not checked"
 finish
