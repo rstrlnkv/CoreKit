@@ -208,7 +208,8 @@ the same way, except `ui_language`, which falls back to `en` silently.
 
 ## Requirements
 
-- **OS:** macOS and Linux; CI runs the tests on both.
+- **OS:** macOS and Linux; CI runs the tests on both. Any CPU architecture: the plugin is bash
+  scripts with no native code.
   Windows needs [Git for Windows](https://git-scm.com/download/win), because the hooks run in Git Bash; it is untested.
 - **Claude Code** 2.1.271 or newer (its settings with a list of choices need it), or the **Codex CLI**.
 - **git**, and the **GitHub CLI** `gh`, logged in with `gh auth login`. `gh` is used to create repos,
