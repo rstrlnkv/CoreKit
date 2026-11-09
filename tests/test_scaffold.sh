@@ -314,6 +314,17 @@ else
   [ -z "$OUT" ] && pass || fail "wiki-check after the rerun printed: $OUT"
 fi
 
+# --- a dangling symlink at a destination stays a link: the page is written to the link's target
+new_sandbox
+mkdir -p "$CORE_DIR" "$SANDBOX/dots"
+ln -s "$SANDBOX/dots/core-readme.md" "$CORE_DIR/README.md"
+assert_exit 0 bash "$SCRIPTS/setup-core.sh" "$CORE_DIR"
+echo "$OUT" | grep -qxF 'created README.md' && pass || fail "setup-core did not report README.md: $OUT"
+[ -L "$CORE_DIR/README.md" ] && pass || fail "the user's README.md link was replaced by a file"
+[ -s "$SANDBOX/dots/core-readme.md" ] && pass || fail "the link's target was not written"
+left="$(find "$CORE_DIR" "$SANDBOX/dots" -name '*.tmp.*' -print)"
+[ -z "$left" ] && pass || fail "temp files left after writing through a link: $left"
+
 # the wiki has one place for all worktrees: <Core>/<p>/docs/, which the task skill updates from a
 # worktree too (no "never edit ../docs/ from a worktree" that contradicts it)
 T="$SKILL/templates/CLAUDE.md.tmpl"

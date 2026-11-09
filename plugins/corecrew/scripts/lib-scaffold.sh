@@ -30,14 +30,22 @@ render() {
 # put <template> <dest> [copy] — create dest from template unless it exists. Default mode
 # renders placeholders through render() above; "copy" copies the file as is. The file is written
 # to dest.tmp.<pid> and moved into place, so a failed write leaves no partial dest a rerun would skip.
+# A dangling symlink at dest stays: the file goes to the end of the link chain, as a plain write would.
 put() {
-  local src="$1" dest="$2" mode="${3:-render}" tmp
+  local src="$1" dest="$2" mode="${3:-render}" tmp out n=0 t
   if [ -e "$dest" ]; then echo "skipped $(rel_core "$dest")"; return 0; fi
   if [ "${DRY:-0}" -eq 1 ]; then echo "would create $(rel_core "$dest")"; return 0; fi
-  mkdir -p "$(dirname "$dest")" || return 1
-  tmp="$dest.tmp.$$"
+  out="$dest"
+  while [ -L "$out" ] && [ "$n" -lt 16 ]; do
+    t="$(readlink "$out")" || return 1
+    case "$t" in /*) out="$t" ;; *) out="$(dirname "$out")/$t" ;; esac
+    n=$((n + 1))
+  done
+  [ -L "$out" ] && return 1
+  [ "$out" = "$dest" ] && { mkdir -p "$(dirname "$dest")" || return 1; }
+  tmp="$out.tmp.$$"
   if [ "$mode" = copy ]; then cp "$src" "$tmp"; else render "$src" "$tmp"; fi \
-    && mv "$tmp" "$dest" || { rm -f "$tmp"; return 1; }
+    && mv "$tmp" "$out" || { rm -f "$tmp"; return 1; }
   echo "created $(rel_core "$dest")"
 }
 
