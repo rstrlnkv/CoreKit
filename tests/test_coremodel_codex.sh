@@ -11,12 +11,12 @@
 source "$(dirname "$0")/lib.sh"
 new_sandbox
 # Processes are found by the pids the stub writes, never by name: another suite running at the same time has
-# stubs with the same command line. OURS holds the pids of a check in progress; the EXIT trap stops them, then
-# removes the sandboxes as lib.sh's own trap does.
+# stubs with the same command line. OURS holds the pids of a check in progress; they are stopped when the file exits
+# (at_exit, before lib.sh removes the sandboxes).
 OURS=""
 # shellcheck disable=SC2086  # a list of pids
 stop_ours() { [ -z "$OURS" ] || kill $OURS 2>/dev/null; OURS=""; }
-trap 'stop_ours; remove_sandboxes' EXIT
+at_exit stop_ours
 # poll <tenths> <cmd...> — runs cmd every 0.1 s until it succeeds, at most <tenths> more times; 1 when it never did
 poll() { local n="$1"; shift; while ! "$@"; do [ "$n" -gt 0 ] || return 1; n=$((n - 1)); sleep 0.1; done; }
 # gone <pid> — the process is not running (not a child of this shell: a child stays a zombie until waited for)
@@ -319,7 +319,7 @@ done
 run_hint "$PATHSTUB" '{"hook_event_name":"SessionStart","prompt":"fix the flaky login test"}'
 silent "other event"
 
-# timeout: the stub sleeps 10 s, the limit is 2 s
+# timeout: the stub sleeps 10 s, the limit is 2 s. Wall time on purpose: this times a real wait, not work.
 t0="$(date +%s)"
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" STUB_MODE=sleep COREMODEL_HINT_TIMEOUT=2
 t1="$(date +%s)"
@@ -374,11 +374,10 @@ assert_contains "$STDIN" 'fix the flaky login test'
 assert_eq "$(tail -1 "$SANDBOX/argv.txt")" "-" "prompt read from stdin (last argument -)"
 # a 1 MB prompt with many \n escapes
 awk 'BEGIN{printf "{\"hook_event_name\":\"UserPromptSubmit\",\"prompt\":\""; for(i=0;i<100000;i++) printf "line%d\\n", i; printf "\"}"}' > "$SANDBOX/big.json"
-t0="$(date +%s)"
-rm -f "$CALLS"; env PATH="$PATHSTUB" COREMODEL_CONFIG="$ON_SF" /bin/bash "$HINT" < "$SANDBOX/big.json" > "$SANDBOX/out" 2>/dev/null; RC=$?
-t1="$(date +%s)"
+rm -f "$CALLS"; cpu_run env PATH="$PATHSTUB" COREMODEL_CONFIG="$ON_SF" /bin/bash "$HINT" < "$SANDBOX/big.json" > "$SANDBOX/out" 2>/dev/null; RC=$?
 assert_eq "$RC" "0" "1 MB prompt: exit 0"
-if [ $((t1 - t0)) -lt 5 ]; then pass; else fail "1 MB prompt took $((t1 - t0)) s"; fi
+# CPU time (cpu_run, tests/lib.sh), which load on the machine does not raise
+if [ "$CPU_MS" -lt 5000 ]; then pass; else fail "1 MB prompt took $CPU_MS ms of CPU"; fi
 assert_eq "$(ncalls)" "0" "1 MB prompt: cut at 256 KB, so it ends unterminated and gets no call"
 # SIGTERM to hint.sh while the stub sleeps: nothing is left running. hint.sh is this shell's child ($! is its
 # pid: env execs bash); it is stopped once the stub has started its sleep (polled, up to 10 s).

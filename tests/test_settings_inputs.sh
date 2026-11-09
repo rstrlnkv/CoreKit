@@ -7,34 +7,30 @@
 #  - an empty HOME turns the default core_dir ~/Projects/Core into /Projects/Core at the filesystem root.
 source "$(dirname "$0")/lib.sh"
 new_sandbox
-trap 'rm -rf "$SANDBOX"' EXIT
 LIB="$SCRIPTS/lib.sh"
 unset CORE_DIR CLAUDE_PLUGIN_OPTION_CORE_DIR CLAUDE_PLUGIN_OPTION_ATTRIBUTION CLAUDE_PLUGIN_OPTION_MODEL_PROFILE CLAUDE_PLUGIN_OPTION_UI_LANGUAGE CORECREW_CONFIG
 export HOME="$SANDBOX/home"; mkdir -p "$HOME"
 command -v timeout >/dev/null 2>&1 || timeout() { shift; "$@"; }
+# The speed limits below are on CPU time (cpu_run, tests/lib.sh), which load on the machine does not raise.
 
 # 1. one huge line (250 KB of 'a', then a real key): the file is over 64 KB, so it is not read; the answer comes fast
 F="$SANDBOX/huge"
 head -c 250000 /dev/zero | tr '\0' 'a' > "$F"; printf '\nattribution: forbid\n' >> "$F"
-t0="$(date +%s)"
-got="$(CORECREW_CONFIG="$F" timeout 60 bash "$LIB" settings attribution 2>/dev/null)"
-t1="$(date +%s)"
+CORECREW_CONFIG="$F" cpu_run timeout 60 bash "$LIB" settings attribution > "$SANDBOX/got" 2>/dev/null; got="$(<"$SANDBOX/got")"
 assert_eq "$got" "attribution: allow" "a 250 KB settings file is over the 64 KB limit: not read, the default is used"
-[ $((t1 - t0)) -lt 3 ] && pass || fail "lib.sh settings with a 250 KB line took $((t1 - t0)) s (quadratic read of the settings file)"
+[ "$CPU_MS" -lt 3000 ] && pass || fail "lib.sh settings with a 250 KB line took $CPU_MS ms of CPU (quadratic read of the settings file)"
 # the same through a guard hook: the whole hook must stay far below its 15 s timeout
 CD="$SANDBOX/Projects/Core"; mkdir -p "$CD/p/code"; : > "$CD/p/CLAUDE.md"
-t0="$(date +%s)"
-printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"%s/docs/a.md","content":"x"}}' "$CD/p/code" "$CD/p/code" \
-  | CORE_DIR="$CD" CORECREW_CONFIG="$F" timeout 60 bash "$HOOKS/guard-code.sh" >/dev/null 2>"$SANDBOX/hook.err"; rc=$?
-t1="$(date +%s)"
-[ $((t1 - t0)) -lt 3 ] && pass || fail "guard-code with a 250 KB settings line took $((t1 - t0)) s (hook timeout 15 s, a timeout does not block)"
+printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"%s/docs/a.md","content":"x"}}' "$CD/p/code" "$CD/p/code" > "$SANDBOX/write.json"
+CORE_DIR="$CD" CORECREW_CONFIG="$F" cpu_run timeout 60 bash "$HOOKS/guard-code.sh" < "$SANDBOX/write.json" >/dev/null 2>"$SANDBOX/hook.err"; rc=$?
+[ "$CPU_MS" -lt 3000 ] && pass || fail "guard-code with a 250 KB settings line took $CPU_MS ms of CPU (hook timeout 15 s, a timeout does not block)"
 assert_eq "$rc" "2" "guard-code still refuses docs/ with a huge settings file"
 
 # a 40 KB line (under the limit) is read in one linear pass and the key after it is found
 M="$SANDBOX/mid"; { head -c 40000 /dev/zero | tr '\0' 'a'; printf '\nattribution: forbid\n'; } > "$M"
-t0="$(date +%s)"; got="$(CORECREW_CONFIG="$M" bash "$LIB" settings attribution 2>/dev/null)"; t1="$(date +%s)"
+CORECREW_CONFIG="$M" cpu_run bash "$LIB" settings attribution > "$SANDBOX/got" 2>/dev/null; got="$(<"$SANDBOX/got")"
 assert_eq "$got" "attribution: forbid" "a key after a 40 KB line is still read"
-[ $((t1 - t0)) -lt 2 ] && pass || fail "a 40 KB line took $((t1 - t0)) s"
+[ "$CPU_MS" -lt 2000 ] && pass || fail "a 40 KB line took $CPU_MS ms of CPU"
 
 # 2. a relative CORECREW_CONFIG is not read against the cwd
 mkdir -p "$SANDBOX/cwd"; printf 'attribution: forbid\n' > "$SANDBOX/cwd/rel-settings"

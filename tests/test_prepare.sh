@@ -4,7 +4,6 @@
 source "$(dirname "$0")/lib.sh"
 new_sandbox
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR COREKIT_HOST
-trap 'chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
 PREP="$SCRIPTS/prepare.sh"
 assert_file "$PREP"
 setup_core

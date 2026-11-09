@@ -616,30 +616,30 @@ sec_blanks() {
 }
 bg sec_blanks
 
-# --- time: a 1 MB command, and many words
-timed_json() { local t0=$SECONDS; run_json "$(<"$1")"; T=$((SECONDS - t0)); }
+# --- time: a 1 MB command, and many words. T = the hook's CPU time in ms (cpu_run, tests/lib.sh)
+timed_json() { cpu_run run_json "$(<"$1")"; T=$CPU_MS; }
 sec_size() {
 words="$(head -c 1000000 /dev/zero | tr '\0' 'a' | sed 's/aaaaaaaaaa/aaaaaaaaa /g')"
 printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"echo %s .env"}}' "$C" "$words" > "$SANDBOX/big1.json"
-timed_json "$SANDBOX/big1.json"; ok "1 MB command, .env only as an echo argument"; [ "$T" -lt 15 ] && pass || fail "1 MB took ${T} s"
+timed_json "$SANDBOX/big1.json"; ok "1 MB command, .env only as an echo argument"; [ "$T" -lt 15000 ] && pass || fail "1 MB took ${T} ms of CPU"
 printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"echo %s; cat .env"}}' "$C" "$words" > "$SANDBOX/big2.json"
-timed_json "$SANDBOX/big2.json"; blocked "1 MB of words, then cat .env" ".env"; [ "$T" -lt 15 ] && pass || fail "1 MB then cat .env took ${T} s"
+timed_json "$SANDBOX/big2.json"; blocked "1 MB of words, then cat .env" ".env"; [ "$T" -lt 15000 ] && pass || fail "1 MB then cat .env took ${T} ms of CPU"
 printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"echo %s"}}' "$C" "$words" > "$SANDBOX/big3.json"
-timed_json "$SANDBOX/big3.json"; ok "1 MB command with no secret"; [ "$T" -lt 5 ] && pass || fail "1 MB plain took ${T} s"
+timed_json "$SANDBOX/big3.json"; ok "1 MB command with no secret"; [ "$T" -lt 5000 ] && pass || fail "1 MB plain took ${T} ms of CPU"
 many="$(head -c 400000 /dev/zero | tr '\0' 'a' | sed 's/aaaaaaaaaa/.envrc .env.sample /g')"
 printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"cat %s .env"}}' "$C" "$many" > "$SANDBOX/big4.json"
-timed_json "$SANDBOX/big4.json"; blocked "40000 allowed .env names, then .env" ".env"; [ "$T" -lt 15 ] && pass || fail "many allowed names took ${T} s"
+timed_json "$SANDBOX/big4.json"; blocked "40000 allowed .env names, then .env" ".env"; [ "$T" -lt 15000 ] && pass || fail "many allowed names took ${T} ms of CPU"
 many="$(head -c 400000 /dev/zero | tr '\0' 'a' | sed 's/aaaaaaaaaa/\/other\/.ssh\/a /g')"
 printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"cat %s"}}' "$C" "$many" > "$SANDBOX/big5.json"
-timed_json "$SANDBOX/big5.json"; ok "many words with a foreign .ssh folder"; [ "$T" -lt 15 ] && pass || fail "many .ssh words took ${T} s"
+timed_json "$SANDBOX/big5.json"; ok "many words with a foreign .ssh folder"; [ "$T" -lt 15000 ] && pass || fail "many .ssh words took ${T} ms of CPU"
 # a Write with 1 MB content that mentions secrets; the path is clean or secret
 body="$(head -c 1000000 /dev/zero | tr '\0' 'y' | sed 's/yyyyyyyyyy/.env.local /g')"
 printf '{"cwd":"%s","tool_name":"Write","tool_input":{"content":"%s","file_path":"%s/src/big.md"}}' "$C" "$body" "$C" > "$SANDBOX/big6.json"
-timed_json "$SANDBOX/big6.json"; ok "Write with 1 MB content full of .env.local"; [ "$T" -lt 10 ] && pass || fail "1 MB Write took ${T} s"
+timed_json "$SANDBOX/big6.json"; ok "Write with 1 MB content full of .env.local"; [ "$T" -lt 10000 ] && pass || fail "1 MB Write took ${T} ms of CPU"
 printf '{"cwd":"%s","tool_name":"Write","tool_input":{"content":"%s","file_path":"%s/.env"}}' "$C" "$body" "$C" > "$SANDBOX/big7.json"
-timed_json "$SANDBOX/big7.json"; blocked "Write .env with 1 MB content" "$C/.env"; [ "$T" -lt 10 ] && pass || fail "1 MB Write .env took ${T} s"
+timed_json "$SANDBOX/big7.json"; blocked "Write .env with 1 MB content" "$C/.env"; [ "$T" -lt 10000 ] && pass || fail "1 MB Write .env took ${T} ms of CPU"
 printf '{"cwd":"%s","tool_name":"Write","tool_input":{"content":"%s","file_path":"%s/src/big.md' "$C" "$body" "$C" > "$SANDBOX/big8.json"
-timed_json "$SANDBOX/big8.json"; closed "truncated 1 MB Write with .env.local in the content"; [ "$T" -lt 10 ] && pass || fail "1 MB odd took ${T} s"
+timed_json "$SANDBOX/big8.json"; closed "truncated 1 MB Write with .env.local in the content"; [ "$T" -lt 10000 ] && pass || fail "1 MB odd took ${T} ms of CPU"
 assert_eq "$ERR" "$(msg .env.local)" "truncated 1 MB Write: exactly the message (no pipe noise)"
 # odd input whose only secret-looking string is a .ssh folder, after 1 MB of other text (raw_hit's .ssh scan)
 body="$(head -c 1000000 /dev/zero | tr '\0' 'y' | sed 's/yyyyyyyyyy/~\/.ssh\/k /g')"
@@ -648,8 +648,14 @@ timed_json "$SANDBOX/big9.json"; blocked "truncated 1 MB Write with ~/.ssh in th
 # odd input: a Grep path that is a number, after 1 MB of .env.local mentions (the hint and key scans)
 printf '{"cwd":"%s","tool_name":"Grep","tool_input":{"pattern":"%s","path":1,"glob":"x"}}' "$C" "$body" > "$SANDBOX/big10.json"
 timed_json "$SANDBOX/big10.json"; blocked "Grep with an odd path and 1 MB of .ssh mentions" ".ssh"
+# growth: four times the words cost about three times the CPU in bash-lex.awk (a quadratic reader would cost 16 times)
+words="$(yes 'ab' | head -n 25000 | tr '\n' ' ')"
+printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"cat %s.env.example"}}' "$C" "$words" > "$OD/lin1.json"
+printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"cat %s%s%s%s.env.example"}}' "$C" "$words" "$words" "$words" "$words" > "$OD/lin4.json"
+assert_linear "bash-lex.awk: 25000 against 100000 words" 6 'run_json "$(<"$OD/lin1.json")"' 'run_json "$(<"$OD/lin4.json")"'
 }
-# run alone after the parallel sections: a timing check must not share the runner with 12 others
+bg sec_size
+
 
 # Codex: apply_patch and a patch handed to Bash (fixtures built from the rust-v0.166.0 structs)
 FX="$ROOT/tests/fixtures/codex"
@@ -732,9 +738,8 @@ sec_codex() {
   patch "$big*** Add File: .env${nl}+x${nl}$E"; blocked_any "codex 101st path (.env) is refused"
   grep -q 'at most 100' "$OD/err" && pass || fail "the cap message must say at most 100 files: $ERR"
   patch "$big*** Update File: src/a${nl}*** Move to: .env${nl}@@${nl}$E"; blocked_any "codex 101st-102nd, Move to .env is refused"
-  local t0=$SECONDS
-  bigjson 5000 apply_patch; run_json "$(<"$OD/big.json")"; blocked_any "codex 5000 harmless paths are refused"
-  [ $((SECONDS - t0)) -lt 10 ] && pass || fail "5000 paths took $((SECONDS - t0)) s (hook timeout 15 s)"
+  bigjson 5000 apply_patch; cpu_run run_json "$(<"$OD/big.json")"; blocked_any "codex 5000 harmless paths are refused"
+  [ "$CPU_MS" -lt 10000 ] && pass || fail "5000 paths took $CPU_MS ms of CPU (hook timeout 15 s)"
   grep -q 'at most 100' "$OD/err" && pass || fail "the cap message must say at most 100 files"
   # whitespace as Codex trims it
   patch "$B${nl}$(printf '\302\240')*** Add File: .env${nl}+x${nl}$E"; blocked "codex NBSP-indented header" ".env"
@@ -903,6 +908,5 @@ sec_bypass() {
 bg sec_bypass
 
 bg_wait
-sec_size
 
 finish

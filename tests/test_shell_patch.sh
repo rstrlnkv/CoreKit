@@ -363,10 +363,10 @@ passes 'exec -a name ./a* x' "LIMIT: a glob after exec -a name"
 passes "cat <<EOF | sh${nl}./a* x${nl}EOF" "LIMIT: a short glob in a heredoc body fed to a shell"
 
 # --- a 1 MB command stays well inside the 15 s hook timeout (grep, tr and one awk pass: linear)
-timed() { # timed <label> <want: 0 refused | 1 pass> <command>
-  local t0=$SECONDS rc dt
-  shell_patch_refused "$3"; rc=$?; dt=$((SECONDS - t0))
-  [ "$dt" -lt 10 ] && [ "$rc" -eq "$2" ] && pass || fail "$1: took $dt s, rc=$rc (want $2)"
+timed() { # timed <label> <want: 0 refused | 1 pass> <command> — the check's CPU time (cpu_run, tests/lib.sh)
+  local rc
+  cpu_run shell_patch_refused "$3"; rc=$?
+  [ "$CPU_MS" -lt 10000 ] && [ "$rc" -eq "$2" ] && pass || fail "$1: took $CPU_MS ms of CPU, rc=$rc (want $2)"
 }
 timed "1 MB of non-hits" 1 "$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 40000; i++) printf "make apply_pat_x -o a/b/c; "; print "ls" }')"
 timed "1 MB of readers in a pipe" 1 "$(LC_ALL=C awk 'BEGIN { printf "grep apply_patch src"; for (i = 0; i < 40000; i++) printf " | sort"; print "" }')"
@@ -377,6 +377,12 @@ timed "1 MB of shells, then bash -c apply_patch" 0 "$(LC_ALL=C awk 'BEGIN { for 
 timed "1 MB of shells without a hit" 1 "$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 40000; i++) printf "bash -c '"'"'ls; ls'"'"'; "; print "bash -c ls" }')"
 timed "1 MB of quotes, then apply_patch" 0 "$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 300000; i++) printf "\"\"x"; print "; apply_patch" }')"
 timed "1 MB of \$' escapes" 0 "$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 100000; i++) printf "$'"'"'a'"'"' "; print "$'"'"'\\x61'"'"'" }')"
+# growth: four times the commands cost about three times the CPU (a quadratic reader would cost 16 times)
+# shellcheck disable=SC2034  # read by the command lines assert_linear evals
+SP1="$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 10000; i++) printf "bash -c '"'"'ls; ls'"'"'; "; print "bash -c apply_patch" }')"
+# shellcheck disable=SC2034  # (as above)
+SP4="$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 40000; i++) printf "bash -c '"'"'ls; ls'"'"'; "; print "bash -c apply_patch" }')"
+assert_linear "shell_patch_refused: 10000 against 40000 commands" 6 'shell_patch_refused "$SP1"' 'shell_patch_refused "$SP4"'
 
 # --- find's program-running primaries with the terminator in QUOTES. Quoted text is opaque to the structure checks,
 # so `';'` leaves no ; for the "no list" check: only the find rule refuses these (a copy of the rule without it stayed

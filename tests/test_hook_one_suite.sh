@@ -18,7 +18,7 @@ export ONE_SUITE_PROCS="$FAKE"
 export ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0 ONE_SUITE_TURN="$SANDBOX/turn"
 dummy=""   # fake and stop (tests/lib.sh) start and end the fake runs
 PTMP="$(cd -P /tmp && pwd)"; NOTOWNED="$PTMP/onesuite-turn-$$"   # see "a state folder not owned by this user"
-trap 'stop_fakes; rm -rf "$NOTOWNED"' EXIT
+at_exit 'rm -rf "$NOTOWNED"'   # the fake runs are stopped by lib.sh's EXIT trap
 
 # payload <json-escaped command> [cwd] [description]
 payload() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"%s"}}' "${2-$C}" "$1" "${3:-run}"; }
@@ -233,7 +233,7 @@ rm -rf "$ONE_SUITE_TURN"
 
 # --- the turn must never make the hook spin: it either waits (sleeping) or lets the call through
 # timed_hook <json-escaped command> — RC, OUT and ERR as run_hook; T = seconds it took; a hook that
-# spins is killed after 10 s (RC 143)
+# spins is killed after 10 s (RC 143). Wall time on purpose: this times a real wait, not work.
 timed_hook() {
   payload "$@" > "$SANDBOX/in"
   local t0=$SECONDS
@@ -250,6 +250,7 @@ assert_eq "$RC" "2" "run active, turn dir cannot exist: normal refusal"
 
 # --- the wait: a run that ends inside the limit lets the waiter through, and not before it ends
 ( sleep 3; kill "$dummy" 2>/dev/null ) &
+# Wall time on purpose: this times a real wait, not work.
 t0=$(date +%s); ONE_SUITE_WAIT=20 run_hook 'swift test'; t=$(( $(date +%s) - t0 ))
 assert_eq "$RC" "0" "a waiter is let through when the run ends"
 [ "$t" -ge 2 ] && [ "$t" -lt 15 ] && pass || fail "waiter waited ${t} s (want 2..14)"
@@ -335,6 +336,7 @@ export ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0
 rm -rf "$ONE_SUITE_TURN"
 ONE_SUITE_GRACE=30 expect 0 "the first of two takes the turn" 'swift test'
 ONE_SUITE_GRACE=30 expect 2 "the second is held while the turn is fresh" 'swift test'
+# Wall time on purpose: this times a real wait, not work.
 t0=$(date +%s); ONE_SUITE_GRACE=3 ONE_SUITE_WAIT=20 run_hook 'swift test'; t=$(( $(date +%s) - t0 ))
 assert_eq "$RC" "0" "a turn past its grace is taken by the next waiter"
 [ "$t" -ge 1 ] && [ "$t" -lt 15 ] && pass || fail "stale turn: waited ${t} s"
@@ -343,6 +345,7 @@ expect 0 "after the run ends: allowed" 'swift test'
 # not 10 s. A run that was let through shows among the processes well within it.
 rm -rf "$ONE_SUITE_TURN"
 ( unset ONE_SUITE_GRACE; ONE_SUITE_WAIT=20; export ONE_SUITE_WAIT; run_hook 'swift test'; exit $RC ); assert_eq "$?" "0" "default grace: the first run goes"
+# Wall time on purpose: this times a real wait, not work.
 t0=$(date +%s); ( unset ONE_SUITE_GRACE; ONE_SUITE_WAIT=20; export ONE_SUITE_WAIT; run_hook 'swift test'; exit $RC ); rc=$?; t=$(( $(date +%s) - t0 ))
 assert_eq "$rc" "0" "default grace: a re-run at once goes"
 [ "$t" -le 4 ] && pass || fail "default grace: a re-run at once waited ${t} s"
@@ -403,7 +406,7 @@ check_stress "stale turn, 8 waiters (no flock on PATH)"
 
 # the lock itself: flock is used when it is installed, mkdir otherwise, and a lock that cannot be had
 # neither hangs the hook nor lets everything through. stale_run <path-dir> — one waiter, stale turn,
-# with PATH=<path-dir>: RC, T (seconds), ERR.
+# with PATH=<path-dir>: RC, T (seconds), ERR. Wall time on purpose: this times a real wait, not work.
 stale_run() {
   rm -rf "$SANDBOX/lk"; mkdir -p "$SANDBOX/lk/turn"; echo 1 > "$SANDBOX/lk/turn/at"
   payload 'swift test' > "$SANDBOX/in"
@@ -433,7 +436,7 @@ stale_run "$SANDBOX/noflock"
 assert_eq "$RC" "0" "no flock: the stale turn is taken"
 assert_no_file "$SANDBOX/lk/turn.lockd"
 [ "$(cat "$SANDBOX/lk/turn/at")" -gt 1000000000 ] && pass || fail "no flock: the new turn has no time in it"
-# a mkdir lock left by a hook that died is broken after about 2 s
+# a mkdir lock left by a hook that died is broken after about 2 s. Wall time on purpose: this times a real wait, not work.
 rm -rf "$SANDBOX/lk"; mkdir -p "$SANDBOX/lk/turn" "$SANDBOX/lk/turn.lockd"; echo 1 > "$SANDBOX/lk/turn/at"
 payload 'swift test' > "$SANDBOX/in"; t0=$SECONDS
 PATH="$SANDBOX/noflock" ONE_SUITE_PROCS='onesuite-fake[-]none' ONE_SUITE_GRACE=5 ONE_SUITE_WAIT=1 ONE_SUITE_TURN="$SANDBOX/lk/turn" \

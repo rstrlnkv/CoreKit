@@ -48,6 +48,72 @@ OUT="$(cd "$T" && KEEP_SANDBOX=1 TMPDIR="$RT" bash x_sb1.sh 2>&1)"
 assert_eq "$(left)" "1" "KEEP_SANDBOX=1 keeps the sandboxes"; has "kept:" "KEEP_SANDBOX=1"
 chmod -R u+rwx "$RT"; rm -rf "$RT"; mkdir -p "$RT"
 
+# --- at_exit: a file's own cleanup runs from lib.sh's one EXIT trap, in order, after finish or a plain exit (whose
+# code stays); the sandboxes are still removed, or kept under KEEP_SANDBOX=1; the fake runs are stopped
+export AT_MARK="$SANDBOX/at-ran"
+fake x_at.sh 'new_sandbox; at_exit "echo one >> \"\$AT_MARK\""; at_exit "echo two >> \"\$AT_MARK\""; pass; finish'
+rm -f "$AT_MARK"; one x_at.sh
+assert_eq "$RC" "0" "at_exit: exit 0"; assert_eq "$(tr '\n' ' ' < "$AT_MARK" 2>/dev/null)" "one two " "at_exit: both commands ran, in order"
+assert_eq "$(left)" "0" "at_exit: sandbox left after finish"
+fake x_at2.sh 'new_sandbox; at_exit "echo ran >> \"\$AT_MARK\""; exit 3'
+rm -f "$AT_MARK"; one x_at2.sh
+assert_eq "$RC" "3" "at_exit: a plain exit keeps its code"; assert_eq "$(cat "$AT_MARK" 2>/dev/null)" "ran" "at_exit: ran after a plain exit"
+assert_eq "$(left)" "0" "at_exit: sandbox left after a plain exit"
+rm -f "$AT_MARK"; OUT="$(cd "$T" && KEEP_SANDBOX=1 TMPDIR="$RT" bash x_at.sh 2>&1)"
+assert_eq "$(tr '\n' ' ' < "$AT_MARK" 2>/dev/null)" "one two " "at_exit under KEEP_SANDBOX=1: the cleanup ran"
+assert_eq "$(left)" "1" "at_exit under KEEP_SANDBOX=1: the sandbox is kept"; has "kept:" "at_exit under KEEP_SANDBOX=1"
+[ -n "$(find "$RT" -mindepth 2 -maxdepth 2 -name 'sb.*')" ] && pass || fail "at_exit under KEEP_SANDBOX=1: the kept folder holds no sb.*"
+chmod -R u+rwx "$RT"; rm -rf "$RT"; mkdir -p "$RT"
+fake x_fk.sh 'new_sandbox; fake "$SANDBOX" "harness-fake-run-$$"; echo "$FAKE_PID" > "$AT_MARK"; pass; exit 0'
+rm -f "$AT_MARK"; one x_fk.sh; fpid="$(cat "$AT_MARK" 2>/dev/null)"
+i=0; while [ -n "$fpid" ] && kill -0 "$fpid" 2>/dev/null && [ $i -lt 20 ]; do sleep 0.1; i=$((i + 1)); done
+[ -n "$fpid" ] && ! kill -0 "$fpid" 2>/dev/null && pass || { fail "a fake run outlived its file (pid ${fpid:-none})"; [ -z "$fpid" ] || kill "$fpid" 2>/dev/null; }
+assert_eq "$(left)" "0" "fake runs: sandbox left"
+
+# --- cpu_run, assert_linear and count_execs: speed is judged by CPU time, which load on the machine does not raise
+# cpu_run runs the command in this shell: what it sets (RC, OUT, ERR) and its exit code survive. CPU_MS counts the
+# children and the shell itself, not the time spent waiting.
+cat > "$T/x_cpu.sh" <<'EOF'
+source "$(dirname "$0")/lib.sh"
+setall() { RC=7; OUT=o; ERR=e; rc=5; return 3; }
+cpu_run setall; r=$?
+[ "$RC/$OUT/$ERR/$rc/$r" = "7/o/e/5/3" ] && pass || fail "cpu_run lost what the command set: $RC/$OUT/$ERR/$rc/$r"
+case "$CPU_MS" in ""|*[!0-9]*) fail "CPU_MS is not a number: $CPU_MS" ;; *) pass ;; esac
+cpu_run sleep 1; [ "$CPU_MS" -lt 500 ] && pass || fail "a sleep counted as CPU time: $CPU_MS ms"
+cpu_run awk 'BEGIN { for (i = 0; i < 3000000; i++) x++ }'; [ "$CPU_MS" -ge 20 ] && pass || fail "a busy child was not counted: $CPU_MS ms"
+spin() { local i=0; while [ $i -lt 30000 ]; do i=$((i + 1)); done; }
+cpu_run spin; [ "$CPU_MS" -ge 20 ] && pass || fail "a busy function in this shell was not counted: $CPU_MS ms"
+finish
+EOF
+one x_cpu.sh; assert_eq "$RC" "0" "cpu_run: $OUT"
+# assert_linear passes a linear command and fails a quadratic one, naming its label
+cat > "$T/x_lin.sh" <<'EOF'
+source "$(dirname "$0")/lib.sh"
+lin() { awk -v n="$1" 'BEGIN { for (i = 0; i < n; i++) x++ }'; }
+quad() { awk -v n="$1" 'BEGIN { for (i = 0; i < n; i++) for (j = 0; j < n; j += 100) x++ }'; }
+assert_linear "a linear loop" 6 "lin 2000000" "lin 8000000"
+[ -n "${QUAD:-}" ] && assert_linear "a quadratic loop" 6 "quad 8000" "quad 32000"
+finish
+EOF
+one x_lin.sh; assert_eq "$RC" "0" "assert_linear: a linear command passes: $OUT"
+OUT="$(cd "$T" && QUAD=1 TMPDIR="$RT" bash x_lin.sh 2>&1)"; RC=$?
+assert_eq "$RC" "1" "assert_linear: a quadratic command fails"; has "FAIL: a quadratic loop" "assert_linear on a quadratic command"
+# count_execs counts every program started through PATH, nested ones too, and keeps the exit code
+cat > "$T/x_exec.sh" <<'EOF'
+source "$(dirname "$0")/lib.sh"
+exec_shims
+count_execs bash -c 'ls / >/dev/null; sh -c "cat </dev/null"; exit 4'; r=$?
+assert_eq "$r" "4" "count_execs: the exit code"
+assert_eq "$EXECS" "4" "count_execs: bash, ls, sh and the nested cat"
+assert_eq "$(tr '\n' ' ' < "$EXEC_LOG")" "bash ls sh cat " "count_execs: the log"
+count_execs true; assert_eq "$EXECS" "0" "count_execs: a builtin starts nothing"
+case ":$PATH:" in *":$EXEC_SHIMS:"*) fail "the shims stay on PATH after count_execs" ;; *) pass ;; esac
+finish
+EOF
+one x_exec.sh; assert_eq "$RC" "0" "count_execs: $OUT"
+assert_eq "$(left)" "0" "cpu_run, assert_linear, count_execs: nothing left"
+chmod -R u+rwx "$RT"; rm -rf "$RT"; mkdir -p "$RT"
+
 # --- run.sh: a filter, one line with the time per file, quiet passing files, the skip list after the result
 rm -f "$T"/x_*.sh
 fake test_ok.sh 'note "noisy"; pass; finish'

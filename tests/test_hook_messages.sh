@@ -8,7 +8,6 @@ new_sandbox
 M="$HOOKS/messages.sh"
 export CLAUDE_PLUGIN_ROOT="$PLUGIN"
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
-trap 'chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
 assert_file "$M"
 
 # --- The table: both languages for every key; the key list matches the branches; every key used by a hook exists.
@@ -207,7 +206,6 @@ done
 H="$HOOKS/one-suite.sh"
 FAKE="onesuite-fake-run-$$"
 export ONE_SUITE_PROCS="$FAKE" ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0 ONE_SUITE_TURN="$SANDBOX/turn"
-trap 'stop_fakes; chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
 # the fake run works inside the project: one-suite holds only runs of the same project
 fake "$C" "$FAKE"; dummy=$FAKE_PID
 for v in "${VARIANTS[@]}"; do

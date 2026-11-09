@@ -281,34 +281,42 @@ bg sec_json
 # size and speed
 sec_size() {
 # --- speed and size: a huge command is judged in time (the tokenizer is linear)
-timed_json() { # timed_json <file> — RC, OUT, ERR as run_json; T = seconds; a hook that spins is killed after 20 s (RC 143)
-  local t0=$SECONDS
+# watched <file> — runs the hook on the file; RC = its exit code. A watchdog kills a hook that hangs after 60 s (RC 143):
+# it only stops a hang, the speed is judged by CPU time (cpu_run, tests/lib.sh).
+watched() {
   ( trap '' PIPE; exec bash "$H" < "$1" ) >"$OD/out" 2>"$OD/err" & local hp=$!
-  ( sleep 20; kill "$hp" 2>/dev/null ) >/dev/null 2>&1 & local wd=$!; disown "$wd" 2>/dev/null
+  ( sleep 60; kill "$hp" 2>/dev/null ) >/dev/null 2>&1 & local wd=$!; disown "$wd" 2>/dev/null
   wait "$hp"; RC=$?; kill "$wd" 2>/dev/null
-  T=$((SECONDS - t0)); OUT="$(<"$OD/out")"; ERR="$(<"$OD/err")"
+  [ "$RC" != 143 ] || fail "$1: the hook hung and was killed by the 60 s watchdog"
 }
+# timed_json <file> — RC, OUT, ERR as run_json; T = the hook's CPU time in ms
+timed_json() { cpu_run watched "$1"; T=$CPU_MS; OUT="$(<"$OD/out")"; ERR="$(<"$OD/err")"; }
 words="$(yes 'ab' | head -n 40000 | tr '\n' ' ')"           # about 120 KB of short words
 printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"echo %s"}}' "$C" "$words" > "$SANDBOX/big1.json"
-timed_json "$SANDBOX/big1.json"; ok "120 KB of words"; [ "$T" -lt 5 ] && pass || fail "120 KB of words took ${T} s"
+timed_json "$SANDBOX/big1.json"; ok "120 KB of words"; [ "$T" -lt 5000 ] && pass || fail "120 KB of words took ${T} ms of CPU"
 one="$(head -c 100000 /dev/zero | tr '\0' 'x')"
 printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"echo %s > docs/a.md"}}' "$C" "$one" > "$SANDBOX/big3.json"
-timed_json "$SANDBOX/big3.json"; blocked "one 100 KB word, then a redirect" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"; [ "$T" -lt 5 ] && pass || fail "one 100 KB word took ${T} s"
+timed_json "$SANDBOX/big3.json"; blocked "one 100 KB word, then a redirect" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"; [ "$T" -lt 5000 ] && pass || fail "one 100 KB word took ${T} ms of CPU"
 printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"echo \\"%s\\" > docs/a.md; echo %s"}}' "$C" "$one" "'$one'" > "$SANDBOX/big4.json"
-timed_json "$SANDBOX/big4.json"; blocked "100 KB double-quoted word" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"; [ "$T" -lt 5 ] && pass || fail "100 KB quoted word took ${T} s"
+timed_json "$SANDBOX/big4.json"; blocked "100 KB double-quoted word" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"; [ "$T" -lt 5000 ] && pass || fail "100 KB quoted word took ${T} ms of CPU"
 esc="$(yes 'a\\\"b' | head -n 20000 | tr '\n' ' ')"
 printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"echo \\"%s\\""}}' "$C" "$esc" > "$SANDBOX/big5.json"
-timed_json "$SANDBOX/big5.json"; ok "100 KB of escapes in one quoted string"; [ "$T" -lt 5 ] && pass || fail "escapes took ${T} s"
+timed_json "$SANDBOX/big5.json"; ok "100 KB of escapes in one quoted string"; [ "$T" -lt 5000 ] && pass || fail "escapes took ${T} ms of CPU"
 reds="$(yes '>x' | head -n 20000 | tr '\n' ' ')"
 printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"echo %s"}}' "$C" "$reds" > "$SANDBOX/big6.json"
-timed_json "$SANDBOX/big6.json"; ok "20000 redirects to an ordinary file (the target count is capped)"; [ "$T" -lt 8 ] && pass || fail "many redirects took ${T} s"
-# the one big case, over 1 MB of words and then a redirect into docs/, under a 20 s watchdog
+timed_json "$SANDBOX/big6.json"; ok "20000 redirects to an ordinary file (the target count is capped)"; [ "$T" -lt 8000 ] && pass || fail "many redirects took ${T} ms of CPU"
+# the one big case, over 1 MB of words and then a redirect into docs/
 words="$(yes 'ab' | head -n 360000 | tr '\n' ' ')"
 printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"echo %s > docs/a.md"}}' "$C" "$words" > "$SANDBOX/big2.json"
-timed_json "$SANDBOX/big2.json"; blocked "1 MB of words, then a redirect into docs/" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"; [ "$T" -lt 15 ] && pass || fail "1 MB then redirect took ${T} s"
+timed_json "$SANDBOX/big2.json"; blocked "1 MB of words, then a redirect into docs/" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"; [ "$T" -lt 15000 ] && pass || fail "1 MB then redirect took ${T} ms of CPU"
 # a Write with a 1 MB content field: the path is still read
 printf '{"cwd":"%s","tool_name":"Write","tool_input":{"content":"%s","file_path":"%s/docs/big.md"}}' "$C" "$(head -c 1000000 /dev/zero | tr '\0' 'y')" "$C" > "$SANDBOX/big7.json"
-timed_json "$SANDBOX/big7.json"; blocked "Write with 1 MB of content" "$C/docs/big.md" "$CORE_DIR/p/docs/big.md"; [ "$T" -lt 5 ] && pass || fail "1 MB Write took ${T} s"
+timed_json "$SANDBOX/big7.json"; blocked "Write with 1 MB of content" "$C/docs/big.md" "$CORE_DIR/p/docs/big.md"; [ "$T" -lt 5000 ] && pass || fail "1 MB Write took ${T} ms of CPU"
+# growth: four times the targets cost about three times the CPU (a quadratic reader would cost 16 times)
+words="$(yes 'ab' | head -n 25000 | tr '\n' ' ')"
+printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"touch %s"}}' "$C" "$words" > "$SANDBOX/lin1.json"
+printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"touch %s%s%s%s"}}' "$C" "$words" "$words" "$words" "$words" > "$SANDBOX/lin4.json"
+assert_linear "bashlex-guard-code.awk: 25000 against 100000 touch targets" 6 'watched "$SANDBOX/lin1.json"' 'watched "$SANDBOX/lin4.json"'
 
 }
 bg sec_size
@@ -688,13 +696,11 @@ sec_codex() {
   patch "$big*** Add File: $D${nl}+x${nl}$E"; blocked_any "codex 101st path (docs/a.md) is refused"
   patch "$big*** Add File: src/last.txt${nl}+x${nl}$E"; blocked_any "codex 101 harmless paths are refused"
   grep -q 'at most 100' "$OD/err" && pass || fail "the cap message must say at most 100 files: $ERR"
-  local t0=$SECONDS
-  bigjson 5000 apply_patch; run_json "$(<"$OD/big.json")"; blocked_any "codex 5000 harmless paths are refused"
-  [ $((SECONDS - t0)) -lt 10 ] && pass || fail "5000 paths took $((SECONDS - t0)) s (hook timeout 15 s)"
+  bigjson 5000 apply_patch; cpu_run run_json "$(<"$OD/big.json")"; blocked_any "codex 5000 harmless paths are refused"
+  [ "$CPU_MS" -lt 10000 ] && pass || fail "5000 paths took $CPU_MS ms of CPU (hook timeout 15 s)"
   grep -q 'at most 100' "$OD/err" && pass || fail "the cap message must say at most 100 files"
-  t0=$SECONDS
-  bigjson 5000 Bash; run_json "$(<"$OD/big.json")"; refused "codex Bash 5000 paths are refused as a shell patch"
-  [ $((SECONDS - t0)) -lt 10 ] && pass || fail "Bash form: 5000 paths took $((SECONDS - t0)) s (hook timeout 15 s)"
+  bigjson 5000 Bash; cpu_run run_json "$(<"$OD/big.json")"; refused "codex Bash 5000 paths are refused as a shell patch"
+  [ "$CPU_MS" -lt 10000 ] && pass || fail "Bash form: 5000 paths took $CPU_MS ms of CPU (hook timeout 15 s)"
   # every exit-2 path writes a non-empty stderr (Codex ignores exit 2 with an empty one)
   fx pre-apply-patch-add; [ -n "$ERR" ] && pass || fail "exit 2 with an empty stderr"
 }
@@ -842,18 +848,18 @@ bg sec_writers
 # than 100 such targets past the first 100 refuse the whole command, so the hook stays well within its 15 s timeout.
 # And many deep new paths are judged well within that timeout too.
 sec_cap() {
-  local i O links n150="" n100="" deep="" deepd="" t0 X="$CORE_DIR/cap/code" pub100="" pub101="" pub1000="" plain1000=""
+  local i O links n150="" n100="" deep="" deepd="" X="$CORE_DIR/cap/code" pub100="" pub101="" pub1000="" plain1000=""
   i=1; while [ $i -le 1000 ]; do
     pub1000="$pub1000 docs/pub/x$i"; plain1000="$plain1000 src/x$i"
     [ $i -le 100 ] && pub100="$pub1000"; [ $i -le 101 ] && pub101="$pub1000"; i=$((i + 1))
   done
   # the project exists, with a public docs/, before any run: the passing runs below judge inside a project
   mkdir -p "$X/src"; printf '# cap\npublic-docs: docs/\n' > "$CORE_DIR/cap/CLAUDE.md"
-  t0=$SECONDS; run_bash "touch$pub1000" "$X"; blocked_any "1000 internal-looking targets are refused"
+  cpu_run run_bash "touch$pub1000" "$X"; blocked_any "1000 internal-looking targets are refused"
   grep -q 'too many files to check' "$OD/err" && pass || fail "the too-many message: $ERR"
-  [ $((SECONDS - t0)) -lt 5 ] && pass || fail "1000 internal-looking targets took $((SECONDS - t0)) s (hook timeout 15 s)"
-  t0=$SECONDS; run_bash "touch$plain1000" "$X"; ok "1000 ordinary targets pass"
-  [ $((SECONDS - t0)) -lt 5 ] && pass || fail "1000 ordinary targets took $((SECONDS - t0)) s (hook timeout 15 s)"
+  [ "$CPU_MS" -lt 5000 ] && pass || fail "1000 internal-looking targets took $CPU_MS ms of CPU (hook timeout 15 s)"
+  cpu_run run_bash "touch$plain1000" "$X"; ok "1000 ordinary targets pass"
+  [ "$CPU_MS" -lt 5000 ] && pass || fail "1000 ordinary targets took $CPU_MS ms of CPU (hook timeout 15 s)"
   run_bash "touch$plain1000; touch$pub100" "$X"; ok "100 targets, then 100 public internal-looking ones pass"
   run_bash "touch$plain1000; touch$pub101" "$X"; blocked_any "100 targets, then 101 internal-looking ones are refused"
   grep -q 'too many files to check' "$OD/err" && pass || fail "the too-many message after 101: $ERR"
@@ -862,8 +868,8 @@ sec_cap() {
   run_bash "touch$pub1000" "$O"; ok "1000 internal-looking targets outside a project pass"
   # a link costs more to judge than a plain target: 200 links into a public docs/ end in time
   links=""; i=1; while [ $i -le 200 ]; do links="$links s$i"; i=$((i + 1)); done
-  t0=$SECONDS; run_bash "ln -s$links docs/pub/" "$X"
-  [ $((SECONDS - t0)) -lt 5 ] && pass || fail "200 links into docs/pub/ took $((SECONDS - t0)) s (hook timeout 15 s)"
+  cpu_run run_bash "ln -s$links docs/pub/" "$X"
+  [ "$CPU_MS" -lt 5000 ] && pass || fail "200 links into docs/pub/ took $CPU_MS ms of CPU (hook timeout 15 s)"
   i=1; while [ $i -le 150 ]; do n150="${n150}touch x$i; "; [ $i -le 100 ] && n100="$n150"; i=$((i + 1)); done
   i=1; while [ $i -le 100 ]; do deep="${deep}touch d$i/a/b/c/d/e/f/g/h/i/j/x.txt; "; deepd="${deepd}mkdir -p docs/d$i/a/b/c/d/e/f/g/h/i/j; "; i=$((i + 1)); done
   run_bash "${n100}echo x > docs/late.md";   blocked "100 targets, then docs/late.md" "$C/docs/late.md" "$CORE_DIR/p/docs/late.md"
@@ -877,10 +883,10 @@ sec_cap() {
   mkdir -p "$C/docs" "$C/src"; ln -s "$C/docs" "$C/src/capdocs"
   run_bash "echo x > src/capdocs/a.md";      blocked "a link into docs/ is followed" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
   run_bash "${n150}echo x > src/capdocs/a.md"; ok "LIMIT: past 100 targets, a link into docs/ is not followed"
-  t0=$SECONDS; run_bash "$deep"
-  ok "100 deep new paths"; [ $((SECONDS - t0)) -lt 5 ] && pass || fail "100 deep new paths took $((SECONDS - t0)) s (hook timeout 15 s)"
-  t0=$SECONDS; run_bash "$deepd" "$X"
-  ok "100 deep new public docs/ dirs"; [ $((SECONDS - t0)) -lt 8 ] && pass || fail "100 deep docs/ dirs took $((SECONDS - t0)) s (hook timeout 15 s)"
+  cpu_run run_bash "$deep"
+  ok "100 deep new paths"; [ "$CPU_MS" -lt 5000 ] && pass || fail "100 deep new paths took $CPU_MS ms of CPU (hook timeout 15 s)"
+  cpu_run run_bash "$deepd" "$X"
+  ok "100 deep new public docs/ dirs"; [ "$CPU_MS" -lt 8000 ] && pass || fail "100 deep docs/ dirs took $CPU_MS ms of CPU (hook timeout 15 s)"
 }
 bg sec_cap
 
