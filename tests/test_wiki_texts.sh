@@ -112,6 +112,18 @@ for w in 'wiki-migrate.sh" "<Core>/<project>" --dry-run' 'show its output to the
          'wiki: migrate to the 0.7 format' '--no-attribution' 'Without that "ok", stop the chain'; do
   printf '%s\n' "$ofw" | grep -qF -- "$w" && pass || fail "older-formats.md, Wiki without types, lacks: $w"
 done
+# older-formats.md covers every older format; each section names the versions that made it ("Made by corecrew
+# <first>-<last>.") and its support deadline (Decision 12 A: until corecrew 1.0).
+secs="$(grep '^## ' "$OF" | tr '\n' '|')"
+assert_eq "$secs" "## Wiki without types|## Brief with a stage field|## Knowledge with sections|## Old layout|## Old git hooks|## Core without a schema|" "older-formats.md sections"
+for w in 'Made by corecrew ' 'Supported until corecrew 1.0'; do
+  miss="$(awk -v w="$w" '/^## /{if (n != "" && !h) m = m n "|"; n = $0; h=0; next} index($0, w) == 1 {h=1}
+    END {if (n != "" && !h) m = m n "|"; print m}' "$OF")"
+  assert_eq "$miss" "" "every older-formats.md section has a line that starts with '$w'"
+done
+bad="$(grep '^Made by corecrew' "$OF" | grep -vE '^Made by corecrew [0-9]+\.[0-9]+\.[0-9]+-[0-9]+\.[0-9]+\.[0-9]+\.$')"
+assert_eq "$bad" "" "Made by lines read 'Made by corecrew <first>-<last>.' with full versions"
+assert_not_contains "$OF" 'follow its family links'
 # the wiki step comes before the base commits are recorded (the migration commit is not chain work)
 ws="$(printf '%s\n' "$st" | grep -n 'wiki-migrate.sh' | head -1 | cut -d: -f1)"
 bs="$(printf '%s\n' "$st" | grep -n 'Base commits' | head -1 | cut -d: -f1)"
