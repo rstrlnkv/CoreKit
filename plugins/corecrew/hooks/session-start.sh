@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code SessionStart hook (startup, resume, clear, compact, fork). Stdout becomes context.
+# Claude Code and Codex SessionStart hook (startup, resume, clear, compact, fork). Stdout becomes context.
 #  1. refreshes the tools copy (scripts/prepare.sh prepare_tools; runs everywhere; it only touches the plugin's own folder);
 #  2. Core not set up and the session is not in a project: one hint per machine (marker in state/), shown to the person as a systemMessage;
 #  3. inside a project (<Core>/<project>/ or its code folder beside the Core, worktrees included): project name, docs index, tools, standards,

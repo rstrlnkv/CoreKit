@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Claude Code PreToolUse hook on Bash: holds a test run while another one is running in the same
-# place, and lets it through when that one ends. Two suites at once in one checkout fail each other —
+# Claude Code and Codex PreToolUse hook on Bash: holds a test run while another one is running in the
+# same place, and lets it through when that one ends. Two suites at once in one checkout fail each other —
 # they share build folders, settings and scratch paths — and a note in a project's knowledge saying so
 # does not stop anyone from doing it. The same place: the project's main code folder and its folder in
 # the Core count as one; each linked git worktree is a place of its own. A test run anywhere else on

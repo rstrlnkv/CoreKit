@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code Stop hook: reminds Claude to run `save` when the code repo or this
+# Claude Code and Codex Stop hook: reminds the agent to run `save` when the code repo or this
 # project's docs have uncommitted changes. Reminds once per stop (stop_hook_active) and
 # once per set of changes, so it stays quiet while Claude waits for the user's approval.
 # Inert outside a project (<Core>/<project>/ or
