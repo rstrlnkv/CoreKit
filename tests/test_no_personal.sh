@@ -4,7 +4,8 @@
 # - email addresses (example.com, example.org, noreply addresses and git@ SSH remotes are fine);
 # - the owner's handle (read from marketplace.json) outside the files that must carry it;
 # - references to the private design spec ("spec section", "spec §", "spec D<n>") outside docs/, and to
-#   a private ADR ("ADR 009") in a shipped plugin file (a template's "ADR 001" heading is allowed);
+#   a private ADR ("ADR 009") in a shipped plugin file (a template's "ADR 001" heading is allowed), and to a
+#   private plan or task ("plan 3c", "task 4") in a shipped plugin file;
 # - owner-specific terms from a local list that never enters the repo (see PERSONAL TERMS below);
 # - any project name listed in the owner's private PROJECTS.md (the list never enters the repo).
 # Scans tracked files only (git ls-files -z); binary files are skipped. The output names the file,
@@ -96,6 +97,10 @@ scan_repo() {
       plugins/*/templates/*) ;;
       plugins/*) lines "reference to a private ADR" "$rel" -E 'ADR [0-9]' "$f" ;;
     esac
+    # nor a private plan or its steps ("see the plan 3c", "task 4 adds"): the reader of a shipped file has neither
+    case "$rel" in
+      plugins/*) lines "reference to a private plan or task" "$rel" -E '[Pp]lan [0-9]|[Tt]ask [0-9]' "$f" ;;
+    esac
     [ -s "$kind_file.name" ] && lines "a personal name from the local terms list" "$rel" -iwF -f "$kind_file.name" "$f"
     case "$rel" in
       plugins/*/skills/*|plugins/*/agents/*|plugins/*/reference/*)
@@ -147,6 +152,9 @@ printf 'see spec section 4\n' > "$R/docs/design.md"        # allowed: docs/
 printf 'see ADR 009\n' > "$R/plugins/p/hooks/adr.sh"       # hit: a private ADR in a shipped file
 mkdir -p "$SK/templates"; printf '# ADR 001: stack\n' > "$SK/templates/d.md.tmpl"   # allowed: the user's own ADR
 printf 'LIMIT (ADR 009)\n' > "$R/tests/adr.sh"             # allowed: tests are not shipped
+printf 'see the plan 3c\n' > "$R/plugins/p/hooks/plan.sh"  # hit: a private plan in a shipped file
+printf 'Task 4 adds it\n' > "$R/plugins/p/hooks/task.sh"   # hit: a private task in a shipped file
+printf 'plan 3c, task 4\n' > "$R/tests/plan.sh"            # allowed: tests are not shipped
 printf 'by Quentin Zarbo\n' > "$R/plugins/p/hooks/n.sh"    # hit: a personal name
 printf 'zarbo was here\n' > "$R/docs/n.md"                 # hit: names are flagged in docs/ too
 printf 'see house-style.md\n' > "$SK/std.md"               # hit: owner standard
@@ -167,7 +175,9 @@ plugins/p/CHANGELOG.md:2: absolute home path (/Users/, /home/ or C:\Users\)
 plugins/p/hooks/adr.sh:1: reference to a private ADR
 plugins/p/hooks/h.ts:1: owner handle outside manifests, READMEs, LICENSE, CHANGELOGs, SECURITY, ARCHITECTURE, CONTRIBUTING, docs
 plugins/p/hooks/n.sh:1: a personal name from the local terms list
+plugins/p/hooks/plan.sh:1: reference to a private plan or task
 plugins/p/hooks/s.sh:1: reference to the private spec
+plugins/p/hooks/task.sh:1: reference to a private plan or task
 plugins/p/skills/s/handle.md:1: owner handle outside manifests, READMEs, LICENSE, CHANGELOGs, SECURITY, ARCHITECTURE, CONTRIBUTING, docs
 plugins/p/skills/s/leak-home.md:1: absolute home path (/Users/, /home/ or C:\Users\)
 plugins/p/skills/s/leak-win.md:1: absolute home path (/Users/, /home/ or C:\Users\)

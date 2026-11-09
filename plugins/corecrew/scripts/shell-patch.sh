@@ -1,5 +1,6 @@
 # shell-patch.sh — the guards' check for a Codex patch handed to the shell. Sourced by hooks/guard-code.sh and
 # hooks/guard-secrets.sh after lib.sh (it uses host and json_str from there); nothing else needs it.
+# The awk programs are inline on purpose: the rule needs no other plugin file, so a missing scripts/*.awk cannot switch it off.
 
 # shell_patch_host <hook input JSON> — exit 0 when the shell-patch refusal applies: the host is Codex (host: the plugin
 # lies under CODEX_HOME), or the input carries Codex's turn_id (a dev install whose path says nothing; Claude Code sends no
@@ -71,9 +72,10 @@ shell_patch_refused() {
   plain="$(printf '%s' "$1" | LC_ALL=C tr -d '\047\042\134\012\015')"
   # s: the text with its quoted strings opaque (see above); newline and CR become \005
   s="$(printf '%s' "$1" | LC_ALL=C tr '\n\r' '\005\005' | LC_ALL=C sed -E "$quote_re")"
-  # Pipe noise: the host may run the hook with SIGPIPE ignored; then a writer whose reader stops early prints "write
-  # error: Broken pipe" to the user. So readers take all their input (sed -n 1p, not head -n 1), and a printf in front of
-  # grep -q, or a filter in front of an awk that may fail, has its stderr dropped (a write is all it can fail at).
+  # Pipe noise: the host may run the hook with SIGPIPE ignored (seen on Linux CI); then a writer whose reader stops early
+  # (bash 5's printf builtin, tr) prints "write error: Broken pipe" to the user. So readers take all their input (sed -n
+  # 1p, not head -n 1), and a printf in front of grep -q, or a filter in front of an awk that may fail, has its stderr
+  # dropped (a write is all it can fail at). The guards rely on this note.
   hit="$(printf '%s\n' "$plain" | LC_ALL=C grep -oiE 'apply_patch|applypatch|apply-patch' | LC_ALL=C sed -n 1p)"
   [ -n "$hit" ] || { printf '%s\n' "$flat" 2>/dev/null | LC_ALL=C grep -qE '\*\*\* Begin Patch.*\*\*\* (Add File|Update File|Delete File|Move to):' && hit='*** Begin Patch'; }
   [ -n "$hit" ] || { printf '%s\n' "$flat" 2>/dev/null | LC_ALL=C grep -qE "\\\$$q.*\\\\([xuU]|[0-7])" && hit="\$'\\...'"; }

@@ -7,6 +7,10 @@
 #   corecrew: <path> is an internal file and must not live in the code folder. Write it to <Core>/<project>/<relative path> instead.
 #   Docs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in <Core>/<project>/CLAUDE.md.
 # Nothing is ever printed to stdout.
+# Second rule, the read-only checkers (designer, localizer, security, verifier): their tools leave out Write and Edit,
+# and in Bash they may change nothing but the temp folders. The hook input names the agent (agent_type) inside a
+# subagent, so this holds wherever the agent runs, in a project or not. A temp folder that holds a project (a test
+# sandbox) is still that project. A checker that cannot run refuses: these agents should change nothing.
 #
 # Rules, all compared on the canonical path (".." and symlinks resolved, letter case as on disk
 # for the part that exists, then folded to lower case for the comparison, ASCII only):
@@ -14,9 +18,9 @@
 #   Core and so passes), or <Core>/<p>/code/ in the old layout, or a worktree root <code root>/.claude/worktrees/<w>/ or any other linked git worktree of the code folder (worktree_of);
 #   inside a worktree the path relative to the worktree root is what counts.
 # - Blocked: docs and docs/** and .claude/** at the root, and CLAUDE.md / CLAUDE.local.md / AGENTS.md at
-#   ANY depth. The pre-commit hook (scripts/git-hooks/blocked-patterns) is narrower: it blocks only docs/superpowers/,
-#   CLAUDE*.md, AGENTS.md, .claude/, .env* and key files, so a docs/x.md that got past this hook (a Bash form it does
-#   not read) can still be committed by hand; tests/test_hooks.sh lets docs/README.md through on purpose.
+#   ANY depth. The pre-commit hook is narrower (its list is scripts/git-hooks/blocked-patterns): of docs/ it blocks only
+#   docs/superpowers/, so a docs/x.md that got past this hook (a Bash form it does not read) can still be committed by
+#   hand; tests/test_hooks.sh lets docs/README.md through on purpose.
 # - Allowed: .claude/settings.local.json, .claude/worktrees/** (the worktree dirs themselves: mkdir, an
 #   existing directory or a trailing slash; a file written directly under .claude/worktrees/ is blocked), and the
 #   paths on a "public-docs: <paths>" line of <Core>/<p>/CLAUDE.md (space or comma separated, relative
@@ -30,32 +34,12 @@
 #   W lines judged; besides, its "***" lines are checked raw (internal_hit: a component docs, .claude, claude.md,
 #   claude.local.md or agents.md in any case, no public-docs exception) and a hit is refused; no hit passes. Header lines and
 #   paths are trimmed like Codex does (Unicode spaces too). A text with no string to read passes.
-#   In Codex only (scripts/shell-patch.sh shell_patch_host: the plugin lies under CODEX_HOME, or the input carries Codex's turn_id; Claude
-#   Code has no apply_patch tool, so nothing is refused there) a patch handed to the shell is refused, not judged, in every
-#   folder, and the message names what matched. This is BEST EFFORT, NOT A SECURITY BOUNDARY: it
-#   catches plain and accidental shell patches and many disguised ones, cannot see names the shell builds at run time, and the
-#   apply_patch tool form is the checked path (known ways past it: the Limits below, plus $'apply'$'_patch', 'apply_pat'?h,
-#   extglob, IFS changes, write_stdin) (a scope gate by cwd or by wrapper was bypassed
-#   twice; paths built by cd, quoting, $(...) or a variable cannot be checked from the command text). Rule, in
-#   scripts/shell-patch.sh shell_patch_refused (no shell parsing; a missing file lets every call pass, like a missing
-#   lib.sh): a hit is apply_patch, applypatch or apply-patch (any letter case) in the text
-#   once ' " \ and newlines are deleted (also --codex-run-as-apply-patch), or "*** Begin Patch" followed by an Add File,
-#   Update File, Delete File or Move to marker, or a $' with an escape, or an unquoted glob word that can match the name
-#   and is a command word or keeps 4 or more literal characters (../bin/apply_pat?h, ls; * x; not rm -rf dist/*); in a
-#   heredoc body it is never a command word and counts when it has a / (../bin/*pply_patch*), or is Markdown emphasis whose
-#   text holds apply_ apply- or applyp (*apply_pat*; **Patch**, *apply* pass), or is no emphasis and its literal part holds
-#   "apply" or it has a ? or [ or an inner * (apply_pa*, ap?ly_patch, appl*_patch; a leading-star *ply_patch is a limit).
-#   A hit passes only in the simple form: one read-only
-#   command (grep egrep fgrep rg, git log|show|diff|grep|status|blame|commit -m, cat head tail ls wc find) piped only through
-#   sort uniq cut tr nl wc head tail grep rg; quoted text is opaque there, outside quotes no $ ` \ ; & < > ( ) { } ! or newline;
-#   no assignment first, and no program-running option (git -c -p -O --pag* --ext* --output* --open-files-in-pager* and their
-#   abbreviations, not --oneline; rg --pre -z, find -exec -delete, sort --co*). Exit 2 with
-#   "run patches with the apply_patch tool ... (matched: <what>)". Over-blocking by design (Codex): echo apply_patch, cd x && grep apply_patch .,
-#   grep apply_patch f > out, man apply_patch, FOO=apply_patch make, grep apply_patch $FILE. Limits: a name built at run time (a=apply;
-#   ${a}_patch, $(...) or backticks (also empty), brace expansion, $'apply'$'_patch', 'apply_pat'?h, extglob), a glob that expands to a file whose name is an option (-...), a script file or
-#   interpreter that runs it.
+#   In Codex only (scripts/shell-patch.sh shell_patch_host), a patch handed to the shell is refused, not judged, in every
+#   folder (a scope gate by cwd or by wrapper was bypassed twice), with exit 2 and a message naming the match. BEST
+#   EFFORT, NOT A SECURITY BOUNDARY (SECURITY.md); the rule and its limits are in scripts/shell-patch.sh.
 #   Limit: Codex does send agent_type for subagents, but ro_agent never fires there: Codex agent names are neither
-#   corecrew:* nor the bare checker names (a Codex crew is started by text; task 4 adds a git status check).
+#   corecrew:* nor the bare checker names (a Codex crew is started by text; the Codex chain checks read-only steps with
+#   lib.sh tree-state).
 #   Limit: write_stdin into an open exec session: no evidence that it runs the hook (to be checked live).
 # - Bash: a plain reading for honest mistakes (SECURITY.md, "Threat model": the host's permissions and the git pre-commit
 #   and pre-push hooks are the boundary; deliberate evasion is out of scope). scripts/bashlex-guard-code.awk, on the shared
@@ -93,8 +77,6 @@ SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/scripts/shell-patch.sh" 2>/dev/null || exit 0   # shell_patch_host, shell_patch_refused (Codex)
-# A writer into a pipe whose reader may stop early has its stderr dropped: with SIGPIPE ignored, bash 5's printf
-# builtin and tr report "Broken pipe" to the user (seen on Linux CI).
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 
 tool="$(json_str "$in" tool_name)"
@@ -197,10 +179,7 @@ check_path() {
   exit 2
 }
 
-# --- The read-only checkers (designer, localizer, security, verifier): their tools leave out Write and
-# Edit, and in Bash they may change nothing but the temp folders. The hook input names the agent
-# (agent_type) inside a subagent, so this holds wherever the agent runs, in a project or not.
-# A temp folder that holds a project (a test sandbox) is still that project.
+# --- The read-only checkers: the second rule of the header.
 ro_agent() {
   local a; a="$(json_str "$in" agent_type)"
   case "$a" in corecrew:*) a="${a#corecrew:}" ;; *:*) return 1 ;; esac
@@ -244,8 +223,7 @@ case "$tool" in Write|Edit|NotebookEdit|apply_patch|Bash) ;; *) exit 0 ;; esac
 # is cut into components at / \ quotes, blanks and shell punctuation; a component docs, .claude, claude.md,
 # claude.local.md or agents.md (any letter case) is a hit. Used where a patch cannot be read as headers: no
 # public-docs entry or settings.local.json exception applies there, so this errs on the side of blocking.
-# Every reader in these pipelines takes all of its input (sed -n 1p, not grep -m1 or head): the host may run the hook
-# with SIGPIPE ignored, and then a writer whose reader stopped early prints "write error: Broken pipe" to the user.
+# Every reader in these pipelines takes all of its input (pipe noise: scripts/shell-patch.sh).
 internal_hit() {
   local hit
   hit="$(LC_ALL=C tr '\134\057\042[:space:]\054:;=()<>&|\173\175\140\047' '\n' | LC_ALL=C tr 'A-Z' 'a-z' \

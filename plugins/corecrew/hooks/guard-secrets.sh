@@ -29,21 +29,10 @@
 #   a file tool; Delete File passes (like `rm .env`). The patch body is never scanned (it may mention .env).
 #   A text this hook cannot read as a patch (an X line, or no path at all) fails closed on a secret-looking string
 #   in any line that holds "***"; with no such line it passes. More than 100 paths (a C line) are refused. Header
-#   lines and paths are trimmed like Codex does (Unicode spaces too). In Codex only (scripts/shell-patch.sh shell_patch_host: the plugin under
-#   CODEX_HOME, or turn_id in the input; Claude Code has no apply_patch tool) a patch handed to the shell is refused, not judged,
-#   with the match named in the message
-#   (a substring hit on apply_patch, applypatch or apply-patch once quotes, backslashes and newlines are deleted, or a
-#   "*** Begin Patch" with a file marker, or a $' with an escape, or an unquoted glob word that can match the name as a command
-#   word or with 4 or more literal characters, a wildcard argument being no hit and a heredoc body's glob word counting only
-#   when it has a /, or is Markdown emphasis holding apply_ apply- or applyp (**Patch**, *apply* pass), or else holds
-#   "apply", a ? or [, or an inner * (a leading-star *ply_patch is a limit), unless the
-#   command is in the simple form: one read-only reader piped only through sort, uniq, cut, tr, nl, wc, head, tail, grep, rg,
-#   with no $ outside single quotes, substitution, list, redirect or program-running option (quoted text is opaque);
-#   BEST EFFORT, NOT A SECURITY BOUNDARY (the apply_patch tool form is the checked path; the real boundary for secrets in
-#   Codex is a sandbox profile, see the plan 3c); limits: a name built at run time (variable, ${...}, $(...) or backticks,
-#   brace expansion, $'apply'$'_patch', 'apply_pat'?h, extglob, IFS changes), a glob that expands to a file named like an
-#   option, a script or interpreter, write_stdin; see scripts/shell-patch.sh shell_patch_refused and guard-code.sh): a path built
-#   by cd, quoting or $(...) cannot be checked from the command text. Plain mentions in a reader (grep, git commit -m) pass.
+#   lines and paths are trimmed like Codex does (Unicode spaces too).
+#   In Codex only (scripts/shell-patch.sh shell_patch_host), a patch handed to the shell is refused, not judged, with exit 2
+#   and a message naming the match. BEST EFFORT, NOT A SECURITY BOUNDARY: the real boundary for secrets in Codex is a
+#   sandbox profile: lib.sh codex-profile (SECURITY.md). The rule and its limits are in scripts/shell-patch.sh.
 #   This refusal keeps the project gate of the hook (secrets are judged only in a project; guard-code refuses in every folder);
 #   load_settings runs before project_of, so a core_dir that lives only in the settings file counts.
 #   Limits: view_image (reads an image file) does not run the hook in Codex, so a secret reached through it is not
@@ -99,8 +88,6 @@ SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/scripts/shell-patch.sh" 2>/dev/null || exit 0   # shell_patch_host, shell_patch_refused (Codex)
-# A writer into a pipe whose reader may stop early has its stderr dropped: with SIGPIPE ignored, bash 5's printf
-# builtin and tr report "Broken pipe" to the user (seen on Linux CI).
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 
 tool="$(json_str "$in" tool_name)"
@@ -177,10 +164,7 @@ is_secret() {
 # The text is cut into components at / \ " whitespace , : ; = ( ) < > | & { } ` ' ; a component is
 # .env or .env.<x> (x not example|sample|template) or .env followed by * or ?; "/.ssh" ends a path
 # or is followed by a separator.
-# Pipe noise: the host may run the hook with SIGPIPE ignored, and then a writer whose reader stops early prints
-# "write error: Broken pipe" to the user. So a reader here takes all of its input (sed -n 1p, not head -n 1), and the
-# writer in front of an early reader (grep -q, an awk that may fail) is a printf or tr whose stderr is dropped: a
-# write is all either can fail at, and the guard reads the reader's status and output, never the writer's.
+# Readers take all their input and early readers' writers drop their stderr (pipe noise: scripts/shell-patch.sh).
 raw_hit() {
   local t hit
   t="$(cat)"
