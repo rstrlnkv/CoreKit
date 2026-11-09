@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# sync-tools.sh keeps a stable copy of the plugin's scripts in the data folder.
+# sync-tools.sh keeps a stable copy of the plugin's scripts in the data folder. Its lock (runs at the same time, a live
+# or dead holder) and a copy or swap that fails halfway are tested here too.
 source "$(dirname "$0")/lib.sh"
 new_sandbox
 SYNC="$SCRIPTS/sync-tools.sh"
@@ -122,6 +123,30 @@ printf '%s\n' "$V" > "$T3/VERSION"
 assert_exit 0 bash "$SYNC" "$R" "$T3"
 assert_eq "$OUT" "tools updated $V" "version-only VERSION: updated"
 assert_eq "$(wc -l < "$T3/VERSION" | tr -d ' ')" "2" "VERSION rewritten with the checksum"
+# A copy or a swap that fails halfway leaves the old tools working: the plugin changes again (else the copy is current and
+# nothing is copied), then (1) cp fails on its third call, (2) mv fails only to move the new copy in.
+REALCP="$(command -v cp)"; REALMV="$(command -v mv)"
+printf '# changed again\n' >> "$R/scripts/save"
+CPF="$SANDBOX/cpfail"; mkdir -p "$CPF"
+printf '#!/bin/sh\nn=$(cat "%s/cp.n" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "%s/cp.n"\n[ "$n" -eq 3 ] && exit 1\nexec "%s" "$@"\n' \
+  "$SANDBOX" "$SANDBOX" "$REALCP" > "$CPF/cp"; chmod +x "$CPF/cp"
+before="$(tree_sum "$T3")"
+PATH="$CPF:$PATH" bash "$SYNC" "$R" "$T3" >/dev/null 2>"$SANDBOX/cpfail.err"; assert_eq "$?" "1" "cp fails halfway: exit 1"
+assert_eq "$(cat "$SANDBOX/cp.n")" "3" "cp fails halfway: the stub failed the third copy"
+assert_eq "$(tree_sum "$T3")" "$before" "cp fails halfway: the old copy changed"
+assert_eq "$(ls -A "$(dirname "$T3")")" "tools" "cp fails halfway: something left beside tools"
+assert_contains "$SANDBOX/cpfail.err" "tools not updated"
+MVF="$SANDBOX/mvfail"; mkdir -p "$MVF"
+printf '#!/bin/sh\ncase "$1" in *.new.*) exit 1 ;; esac\nexec "%s" "$@"\n' "$REALMV" > "$MVF/mv"; chmod +x "$MVF/mv"
+PATH="$MVF:$PATH" bash "$SYNC" "$R" "$T3" >/dev/null 2>"$SANDBOX/mvfail.err"; assert_eq "$?" "1" "mv of the new copy fails: exit 1"
+assert_eq "$(tree_sum "$T3")" "$before" "mv of the new copy fails: the old copy is not back as it was"
+assert_eq "$(ls -A "$(dirname "$T3")")" "tools" "mv of the new copy fails: something left beside tools"
+assert_contains "$SANDBOX/mvfail.err" "could not replace"
+assert_exit 0 bash "$SYNC" "$R" "$T3"
+assert_eq "$OUT" "tools updated $V" "after the failures: updated"
+assert_eq "$(tail -1 "$T3/save")" "# changed again" "after the failures: the new save was copied"
+assert_exit 0 bash "$SYNC" "$R" "$T3"
+assert_eq "$OUT" "tools current $V" "after the failures: current"
 
 # A target folder that is not ours (non-empty, no VERSION) is never replaced: exit 2, nothing changed.
 F="$SANDBOX/foreign"; mkdir -p "$F/sub"; echo mine > "$F/notes.txt"; echo x > "$F/sub/y"
@@ -142,7 +167,6 @@ assert_file "$SANDBOX/empty/tools/save"
 
 # --- a stale lock (dead owner) is taken over by an atomic rename, so only one waiter wins
 SL="$SANDBOX/stale"; mkdir -p "$SL"; STUB="$SANDBOX/stub"; mkdir -p "$STUB"
-REALMV="$(command -v mv)"
 printf '#!/bin/sh\necho "$@" >> "%s/mv.log"\nexec "%s" "$@"\n' "$SANDBOX" "$REALMV" > "$STUB/mv"; chmod +x "$STUB/mv"
 mkdir "$SL/tools.lock"; echo 99999999 > "$SL/tools.lock/pid"
 PATH="$STUB:$PATH" bash "$SYNC" "$PLUGIN" "$SL/tools" > "$SANDBOX/stale.out" 2>&1
@@ -158,7 +182,7 @@ done
 # The lock changes hands between a waiter's read of the dead pid and its rename: the first waiter to read the pid
 # stalls (stub cat), the other takes the dead lock over and copies slowly (stub cp). The stalled waiter must not move
 # the new owner's live lock away, or both copy at once and one copy lands inside tools/.
-RS="$SANDBOX/racestub"; mkdir -p "$RS"; REALCAT="$(command -v cat)"; REALCP="$(command -v cp)"
+RS="$SANDBOX/racestub"; mkdir -p "$RS"; REALCAT="$(command -v cat)"
 printf '#!/bin/sh\n"%s" "$@"; case "$*" in *tools.lock/pid*) mkdir "%s/stalled" 2>/dev/null && sleep 2 ;; esac\n' "$REALCAT" "$SANDBOX" > "$RS/cat"
 printf '#!/bin/sh\nsleep 0.2\nexec "%s" "$@"\n' "$REALCP" > "$RS/cp"; chmod +x "$RS/cat" "$RS/cp"
 for i in 1 2; do
@@ -168,6 +192,38 @@ for i in 1 2; do
   assert_eq "$("$REALCAT" "$SANDBOX/r1" "$SANDBOX/r2" | grep -c 'tools updated')" "1" "lock changes hands, round $i: only one run made the copy"
   assert_eq "$(ls -A "$SL/tools" | grep -c 'new')" "0" "lock changes hands, round $i: no copy inside tools"
   assert_eq "$(ls -A "$SL" | grep -vc '^tools$')" "0" "lock changes hands, round $i: nothing but tools in the folder"
+done
+
+# --- sync-tools: the lock
+SYNC="$SCRIPTS/sync-tools.sh"; T="$SANDBOX/lt/tools"
+# legitimate: a first run, a second run, no lock and no temp left
+mkdir -p "$SANDBOX/lt"; bash "$SYNC" "$PLUGIN" "$T" >/dev/null; assert_eq "$?" "0" "sync: first run"
+assert_eq "$(ls -A "$SANDBOX/lt")" "tools" "sync: nothing but tools left beside it"
+# a live holder: a stale copy is not touched by a run that cannot get the lock, which exits 0 after the wait
+printf 'x\n' > "$T/extra"; : > "$T/save"          # damaged copy
+mkdir "$T.lock"; sleep 30 & HOLD=$!; echo $HOLD > "$T.lock/pid"
+# Wall time on purpose: this times a real wait, not work.
+before="$(tree_sum "$T")"; t0=$SECONDS
+OUT="$(bash "$SYNC" "$PLUGIN" "$T" 2>&1)"; RC=$?
+assert_eq "$RC" "0" "sync: busy lock: clean skip"
+case "$OUT" in "tools busy"*) pass ;; *) fail "busy lock: $OUT" ;; esac
+[ $((SECONDS - t0)) -le 14 ] && pass || fail "busy wait too long: $((SECONDS - t0))"
+assert_eq "$(tree_sum "$T")" "$before" "sync: busy lock: tools untouched"
+assert_eq "$(ls -A "$SANDBOX/lt" | grep -c '\.new\.\|\.old\.')" "0" "sync: busy lock: no temp folders"
+[ -d "$T.lock" ] && pass || fail "the holder's lock was removed"
+kill $HOLD 2>/dev/null; wait $HOLD 2>/dev/null
+# a dead holder: the lock is taken over and the copy repaired
+OUT="$(bash "$SYNC" "$PLUGIN" "$T" 2>&1)"; assert_eq "$OUT" "tools updated $(sed -n 1p "$T/VERSION")" "sync: dead holder's lock taken over"
+assert_eq "$(ls -A "$SANDBOX/lt")" "tools" "sync: lock and temp folders gone"
+[ ! -e "$T/extra" ] && pass || fail "damaged copy not rebuilt"
+# several at once, three rounds: all exit 0, one copy, nothing left beside or inside it
+for round in 1 2 3; do
+  rm -rf "$T"
+  for i in 1 2 3 4 5 6; do bash "$SYNC" "$PLUGIN" "$T" > "$SANDBOX/s$i" 2>&1 & done; wait
+  assert_eq "$(cat "$SANDBOX"/s? | grep -vc '^tools \(updated\|current\) ')" "0" "sync round $round: only plain lines"
+  assert_eq "$(ls -A "$SANDBOX/lt")" "tools" "sync round $round: nothing beside tools"
+  assert_eq "$(ls -A "$T" | grep -c 'tmp\|\.new\|\.part\|lock')" "0" "sync round $round: nothing inside tools"
+  assert_file "$T/VERSION"
 done
 
 # --- install-hooks.sh writes the shims where git runs hooks: core.hooksPath and linked worktrees
