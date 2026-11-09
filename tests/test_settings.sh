@@ -327,4 +327,17 @@ assert_eq "$(CORE_DIR="$SANDBOX/nl
 assert_eq "$(HOME="$HOME
 " CORE_DIR='~' sq CORE_DIR)" "[$RH]" "a HOME that ends in a newline"
 assert_eq "$(CORE_DIR=/ sq CORE_NAME; CORE_DIR=/ sq PROJECTS_DIR; CORE_DIR=//x sq PROJECTS_DIR)" "[/][/][/]" "the root as the Core and beside it"
+# load_settings and resolve_setting return 0 when a key, the settings file or .coredev is missing: a caller may run
+# under set -e (as on 2104bfb)
+rm -f "$SF"; mkdir -p "$SANDBOX/core-nofacts"; printf 'schema: 2\n' > "$SANDBOX/core-nofacts/.coredev"
+for cd_ in "$SANDBOX/nocore" "$SANDBOX/core-nofacts"; do
+  assert_eq "$(CORE_DIR="$cd_" bash -ec '. "$1"; load_settings; echo ok' _ "$LIB" 2>&1)" "ok" "load_settings under set -e, no settings file ($cd_)"
+  assert_eq "$(CORE_DIR="$cd_" bash -c '. "$1"; load_settings; echo "rc=$?"' _ "$LIB" 2>&1)" "rc=0" "load_settings exit code ($cd_)"
+done
+assert_eq "$(bash -ec '. "$1"; resolve_setting attribution; echo " ok"' _ "$LIB" 2>&1)" "allow ok" "resolve_setting under set -e, no settings file"
+sfw 'model_profile: strong\n'
+assert_eq "$(CORE_DIR="$SANDBOX/nocore" bash -ec '. "$1"; load_settings; echo "ok $MODEL_PROFILE"' _ "$LIB" 2>&1)" "ok strong" \
+  "load_settings under set -e, a settings file without most keys"
+assert_eq "$(bash -ec '. "$1"; resolve_setting attribution; echo " ok"' _ "$LIB" 2>&1)" "allow ok" "resolve_setting under set -e, key not in the file"
+rm -f "$SF"
 finish
