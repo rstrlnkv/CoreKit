@@ -9,6 +9,8 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-10
+
 ### Added
 
 - prepare says when the `AGENTS.md` link cannot be created (for example in a read-only code

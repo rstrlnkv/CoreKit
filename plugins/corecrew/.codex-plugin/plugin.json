@@ -1,6 +1,6 @@
 {
   "name": "corecrew",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Run every project the same way: start from an interview, work with a crew of agents, keep the docs in a private repo.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",
