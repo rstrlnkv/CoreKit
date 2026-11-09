@@ -4,6 +4,7 @@
 # unsubstituted "${user_config.ui_language}" value means en. Arguments print verbatim. Every key in the
 # table has both an en and a ru text. Exit codes and stdout/stderr channels stay as they were.
 source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib-hook.sh"
 new_sandbox
 M="$HOOKS/messages.sh"
 export CLAUDE_PLUGIN_ROOT="$PLUGIN"
@@ -87,11 +88,10 @@ VARIANTS=(unset en ru xx "$PLACEHOLDER")
 
 # --- session-start: stdout and exit 0 in every case
 H="$HOOKS/session-start.sh"
-input() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"SessionStart","source":"startup"}' "$1"; }
 mkdir -p "$SANDBOX/elsewhere"
 for v in "${VARIANTS[@]}"; do
   rm -rf "$CLAUDE_PLUGIN_DATA/state"
-  OUT="$(input "$SANDBOX/elsewhere" | vrun "$v" bash "$H" 2>"$SANDBOX/err")"; RC=$?
+  OUT="$(hook_event claude SessionStart "$SANDBOX/elsewhere" source=startup | vrun "$v" bash "$H" 2>"$SANDBOX/err")"; RC=$?
   assert_eq "$RC" "0" "session-start hint exit [$v]"; assert_eq "$(cat "$SANDBOX/err")" "" "session-start hint: stderr empty [$v]"
   check "$v" "core not found" "$OUT" "{\"systemMessage\":\"corecrew: Core not found at $CORE_DIR — /corecrew:new-project or /corecrew:task adopt <folder> will set it up\"}" \
     "{\"systemMessage\":\"corecrew: Core не найден в $CORE_DIR — /corecrew:new-project или /corecrew:task adopt <folder> создадут его\"}"
@@ -99,7 +99,7 @@ done
 mkdir -p "$CORE_DIR"
 for v in en ru; do
   rm -rf "$CLAUDE_PLUGIN_DATA/state"
-  OUT="$(input "$SANDBOX/elsewhere" | vrun "$v" bash "$H" 2>&1)"
+  OUT="$(hook_event claude SessionStart "$SANDBOX/elsewhere" source=startup | vrun "$v" bash "$H" 2>&1)"
   check "$v" "core not set up" "$OUT" "{\"systemMessage\":\"corecrew: Core at $CORE_DIR is not set up — /corecrew:new-project or /corecrew:task adopt <folder> will set it up\"}" \
     "{\"systemMessage\":\"corecrew: Core в $CORE_DIR не настроен — /corecrew:new-project или /corecrew:task adopt <folder> настроят его\"}"
 done
@@ -110,7 +110,7 @@ P="$CORE_DIR/$PN"; mkdir -p "$P/code/.git/hooks" "$CORE_DIR/standards" "$CORE_DI
 echo "# new-project hook" > "$P/code/.git/hooks/pre-commit"
 printf 'rule one\nrule two' > "$CORE_DIR/session-rules.md"
 for v in "${VARIANTS[@]}"; do
-  OUT="$(input "$P/code" | vrun "$v" bash "$H" 2>"$SANDBOX/err")"; RC=$?
+  OUT="$(hook_event claude SessionStart "$P/code" source=startup | vrun "$v" bash "$H" 2>"$SANDBOX/err")"; RC=$?
   assert_eq "$RC" "0" "session-start project exit [$v]"; assert_eq "$(cat "$SANDBOX/err")" "" "session-start project: stderr empty [$v]"
   check "$v" "project" "$OUT" "corecrew: you are in the Core project \"$PN\" (Core: $CORE_DIR)
 Project docs index: $P/docs/INDEX.md
@@ -130,19 +130,19 @@ Old git hooks from an older version: $P/code/.git/hooks/pre-commit. Replace them
 done
 rm -f "$CORE_DIR/standards/a.md" "$CORE_DIR/standards/b.md"
 for v in en ru; do
-  OUT="$(input "$P/code" | vrun "$v" bash "$H" 2>&1)"
+  OUT="$(hook_event claude SessionStart "$P/code" source=startup | vrun "$v" bash "$H" 2>&1)"
   check "$v" "no standards" "$OUT" "Standards: none" "Стандарты: нет"
 done
 # attribution=forbid adds the flag in both languages
-OUT="$(input "$P/code" | CLAUDE_PLUGIN_OPTION_ATTRIBUTION=forbid vrun ru bash "$H" 2>&1)"
+OUT="$(hook_event claude SessionStart "$P/code" source=startup | CLAUDE_PLUGIN_OPTION_ATTRIBUTION=forbid vrun ru bash "$H" 2>&1)"
 check ru "forbid flag" "$OUT" "" "\"<message>\" --no-attribution; отменить"
 # a failing tools refresh: on stdout inside a project, on stderr elsewhere
 mkdir -p "$SANDBOX/emptyroot"
-OUT="$(input "$P/code" | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" vrun ru bash "$H" 2>/dev/null)"
+OUT="$(hook_event claude SessionStart "$P/code" source=startup | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" vrun ru bash "$H" 2>/dev/null)"
 check ru "sync failed (project, stdout)" "$OUT" "" "corecrew: инструменты не обновлены: "
-OUT="$(input "$P/code" | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" vrun en bash "$H" 2>/dev/null)"
+OUT="$(hook_event claude SessionStart "$P/code" source=startup | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" vrun en bash "$H" 2>/dev/null)"
 check en "sync failed (project, stdout)" "$OUT" "corecrew: tools not refreshed: " ""
-OUT="$(input "$SANDBOX/elsewhere" | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" vrun ru bash "$H" 2>&1 >/dev/null)"
+OUT="$(hook_event claude SessionStart "$SANDBOX/elsewhere" source=startup | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" vrun ru bash "$H" 2>&1 >/dev/null)"
 check ru "sync failed (elsewhere, stderr)" "$OUT" "" "corecrew: инструменты не обновлены: "
 rm -rf "$CORE_DIR" "$CLAUDE_PLUGIN_DATA/state"
 
@@ -177,7 +177,7 @@ done
 # --- the shell-patch refusal (Codex input: turn_id), in both guards: the text names what matched
 for H in "$HOOKS/guard-code.sh" "$HOOKS/guard-secrets.sh"; do
   for v in "${VARIANTS[@]}"; do
-    printf '{"session_id":"s","turn_id":"t","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"cd d && ../bin/apply_pat?h x"}}' "$C" \
+    hook_event codex PreToolUse "$C" turn_id=t tool=Bash command="cd d && ../bin/apply_pat?h x" \
       | vrun "$v" bash "$H" >"$SANDBOX/out" 2>"$SANDBOX/err"; RC=$?
     assert_eq "$RC" "2" "patch_shell exit [$v] $(basename "$H")"; assert_eq "$(cat "$SANDBOX/out")" "" "patch_shell: stdout empty [$v]"
     check "$v" "patch_shell $(basename "$H")" "$(cat "$SANDBOX/err")" \

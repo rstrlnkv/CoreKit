@@ -2,13 +2,14 @@
 # A linked worktree is trusted only when its main folder knows it and is the project's own code folder; code-root
 # stays inside its root; link creation and the tools swap survive runs at the same time; sync failures are translated.
 source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib-hook.sh"
 new_sandbox
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR COREKIT_HOST
 setup_core
 bash "$SKILL/scripts/scaffold.sh" --name trust >/dev/null
 PR="$(dirname "$CORE_DIR")"; C="$PR/trust"; P="$CORE_DIR/trust"
 git -C "$C" commit -q --allow-empty -m init
-wt_of() { ( . "$SCRIPTS/lib.sh"; WT_ROOT=""; WT_MAIN=""; worktree_of "$1"; echo "$? $WT_ROOT $WT_MAIN" ); }
+# wt_of: tests/lib-hook.sh
 guard() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"file_path":"%s","content":"x"}}' "$3" "$1" "$2" | bash "$HOOKS/guard-code.sh" >/dev/null 2>"$SANDBOX/err"; RC=$?; }
 mkdir -p "$SANDBOX/elsewhere"
 

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # hooks/session-start.sh: tools sync, one-time Core hint, project context.
 source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib-hook.sh"
 new_sandbox
 H="$HOOKS/session-start.sh"
 export CLAUDE_PLUGIN_ROOT="$PLUGIN"
 assert_file "$H"
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
 
-input() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"SessionStart","source":"startup"}' "$1"; }
 # run_rc <cwd> — stdout and stderr in OUT, exit code in RC
-run_rc() { OUT="$(input "$1" | bash "$H" 2>&1)"; RC=$?; }
+run_rc() { OUT="$(hook_event claude SessionStart "$1" source=startup | bash "$H" 2>&1)"; RC=$?; }
 
 # --- no Core yet: the hint comes once per machine; tools are synced either way
 mkdir -p "$SANDBOX/elsewhere"
@@ -21,7 +21,7 @@ assert_file "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
 # the hint is valid JSON even with a quote and a backslash in the Core path
 if command -v python3 >/dev/null 2>&1; then
   rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
-  J="$(input "$SANDBOX/elsewhere" | CORE_DIR="$SANDBOX/we\\ird \"q\"" bash "$H" 2>&1)"
+  J="$(hook_event claude SessionStart "$SANDBOX/elsewhere" source=startup | CORE_DIR="$SANDBOX/we\\ird \"q\"" bash "$H" 2>&1)"
   printf '%s' "$J" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); assert "ird" in d["systemMessage"]' && pass || fail "hint is not valid JSON: $J"
 fi
 assert_file "$CLAUDE_PLUGIN_DATA/tools/VERSION"
@@ -39,7 +39,7 @@ OUT="$(printf '{"cwd":"unterminated' | bash "$H" 2>&1)"; assert_eq "$?" "0" "bro
 # --- no CLAUDE_PLUGIN_DATA: the data folder follows the marketplace in the plugin root's path (plugins/cache/<marketplace>/
 # corecrew/<version>), not a fixed corecrew-corekit
 LNK="$SANDBOX/mkt/.claude/plugins/cache/shop/corecrew/1.0.0"; mkdir -p "$(dirname "$LNK")"; ln -s "$PLUGIN" "$LNK"
-OUT="$(input "$SANDBOX/elsewhere" | env -u CLAUDE_PLUGIN_DATA -u COREDEV_TOOLS HOME="$SANDBOX/mkt" CLAUDE_PLUGIN_ROOT="$LNK" bash "$LNK/hooks/session-start.sh" 2>&1)"; RC=$?
+OUT="$(hook_event claude SessionStart "$SANDBOX/elsewhere" source=startup | env -u CLAUDE_PLUGIN_DATA -u COREDEV_TOOLS HOME="$SANDBOX/mkt" CLAUDE_PLUGIN_ROOT="$LNK" bash "$LNK/hooks/session-start.sh" 2>&1)"; RC=$?
 assert_eq "$RC" "0" "marketplace data folder: exit"
 case "$OUT" in *"Core not found"*) pass ;; *) fail "marketplace data folder: no hint: $OUT" ;; esac
 assert_file "$SANDBOX/mkt/.claude/plugins/data/corecrew-shop/state/core-hint-shown"
@@ -71,7 +71,7 @@ echo "$OUT" | grep -qiE "layout|schema|install-hooks|session rules" && fail "une
 echo "$OUT" | grep -qF "Core not found" && fail "hint inside a project" || pass
 # attribution=forbid: the save command it prints carries --no-attribution; allow (default) does not
 echo "$OUT" | grep -qF -- "--no-attribution" && fail "--no-attribution without forbid: $OUT" || pass
-OUT="$(input "$C" | CLAUDE_PLUGIN_OPTION_ATTRIBUTION=forbid bash "$H" 2>&1)"
+OUT="$(hook_event claude SessionStart "$C" source=startup | CLAUDE_PLUGIN_OPTION_ATTRIBUTION=forbid bash "$H" 2>&1)"
 echo "$OUT" | grep -qF "bash \"$T/save\" \"<message>\" --no-attribution" && pass || fail "forbid: save line lacks --no-attribution: $OUT"
 # standards: names on one line, README.md left out
 printf -- '---\nname: alpha\n---\n' > "$CORE_DIR/standards/alpha.md"; : > "$CORE_DIR/standards/beta.md"
@@ -249,7 +249,7 @@ echo "$OUT" | grep -qF "$EP/docs/INDEX.md" && pass || fail "symlinked core_dir: 
 # --- a failing tools sync never blocks; one short line. Outside a project it goes to stderr, in a project to stdout.
 export CORE_DIR="$P/.."; mkdir -p "$SANDBOX/emptyroot/scripts"
 sync_fail() {  # sync_fail <cwd> — stdout in OUT, stderr in ERR, exit code in RC
-  OUT="$(input "$1" | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" bash "$H" 2>"$SANDBOX/err")"; RC=$?; ERR="$(cat "$SANDBOX/err")"
+  OUT="$(hook_event claude SessionStart "$1" source=startup | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" bash "$H" 2>"$SANDBOX/err")"; RC=$?; ERR="$(cat "$SANDBOX/err")"
 }
 sync_fail "$SANDBOX/elsewhere"
 assert_eq "$RC" "0" "sync failure: exit"
@@ -277,40 +277,39 @@ fi
 rm -rf "$SANDBOX/ss"; mkdir -p "$SANDBOX/ss/xdg/corecrew" "$SANDBOX/ss/el"
 SSC="$SANDBOX/ss/Core"; CORE_DIR="$SSC" setup_core
 printf 'core_dir: %s\n' "$SSC" > "$SANDBOX/ss/xdg/corecrew/settings"
-sinput() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"SessionStart","source":"%s"}' "$1" "$2"; }
 rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
-OUT="$(sinput "$SANDBOX/ss/el" startup | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
+OUT="$(hook_event claude SessionStart "$SANDBOX/ss/el" source=startup | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
 case "$OUT" in "{\"systemMessage\":\""*"core_dir"*"Core"*) pass ;; *) fail "elsewhere, startup: expected one systemMessage with the warning, got: $OUT" ;; esac
 assert_eq "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "1" "elsewhere: one line"
-OUT="$(sinput "$SANDBOX/ss/el" resume | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
+OUT="$(hook_event claude SessionStart "$SANDBOX/ss/el" source=resume | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
 assert_eq "$OUT" "" "elsewhere, resume: silent"
-OUT="$(sinput "$SANDBOX/ss/el" compact | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
+OUT="$(hook_event claude SessionStart "$SANDBOX/ss/el" source=compact | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
 assert_eq "$OUT" "" "elsewhere, compact: silent"
 if command -v python3 >/dev/null 2>&1; then
   rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
-  J="$(sinput "$SANDBOX/ss/el" startup | env -u CORE_DIR HOME="$SANDBOX/ss/nohome" XDG_CONFIG_HOME="$SANDBOX/ss/none" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
+  J="$(hook_event claude SessionStart "$SANDBOX/ss/el" source=startup | env -u CORE_DIR HOME="$SANDBOX/ss/nohome" XDG_CONFIG_HOME="$SANDBOX/ss/none" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
   printf '%s' "$J" | python3 -I -c 'import json,sys; d=json.loads(sys.stdin.read()); m=d["systemMessage"]; assert "core_dir" in m and "Core not found" in m' && pass || fail "warning + hint is not one valid JSON line: $J"
 fi
 # several warnings: one per line (JSON \n), in the person's language
 printf 'core_dir: %s\nattribution: yes\nmodel_profile: fast\nui_language: ru\n' "$SSC" > "$SANDBOX/ss/xdg/corecrew/settings"
 rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
-OUT="$(sinput "$SANDBOX/ss/el" startup | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" bash "$H" 2>&1)"
+OUT="$(hook_event claude SessionStart "$SANDBOX/ss/el" source=startup | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" bash "$H" 2>&1)"
 assert_eq "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "1" "several warnings: one JSON line"
 case "$OUT" in *'attribution'*'\n'*'model_profile'*) pass ;; *) fail "several warnings: expected an escaped newline between them: $OUT" ;; esac
 case "$OUT" in *"файл настроек"*) pass ;; *) fail "ru warning expected: $OUT" ;; esac
 case "$OUT" in *"settings file"*) fail "English source label in ru: $OUT" ;; *) pass ;; esac
 mkdir -p "$SSC/wpx/docs"; echo "# wpx" > "$SSC/wpx/CLAUDE.md"
-OUT="$(sinput "$SSC/wpx" startup | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" bash "$H" 2>&1)"
+OUT="$(hook_event claude SessionStart "$SSC/wpx" source=startup | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" bash "$H" 2>&1)"
 assert_eq "$(printf '%s\n' "$OUT" | grep -cE '^corecrew: (attribution|model_profile) ')" "2" "project: one warning per line"
 printf 'core_dir: %s\n' "$SSC" > "$SANDBOX/ss/xdg/corecrew/settings"
 # inside a project: a plain stdout line before the project header
 mkdir -p "$SSC/wpx/docs"; echo "# wpx" > "$SSC/wpx/CLAUDE.md"
-OUT="$(sinput "$SSC/wpx" startup | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
+OUT="$(hook_event claude SessionStart "$SSC/wpx" source=startup | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
 first="$(printf '%s\n' "$OUT" | head -1)"
 case "$first" in *core_dir*Core*) pass ;; *) fail "project: warning should be the first line, got: $first" ;; esac
 printf '%s\n' "$OUT" | grep -qF "wpx" && pass || fail "project header still printed: $OUT"
-OUT="$(sinput "$SSC/wpx" resume | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
+OUT="$(hook_event claude SessionStart "$SSC/wpx" source=resume | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
 printf '%s\n' "$OUT" | grep -q "core_dir" && fail "project, resume: no warning expected" || pass
-OUT="$(sinput "$SSC/wpx" startup | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" bash "$H" 2>&1)"
+OUT="$(hook_event claude SessionStart "$SSC/wpx" source=startup | env -u CORE_DIR XDG_CONFIG_HOME="$SANDBOX/ss/xdg" bash "$H" 2>&1)"
 printf '%s\n' "$OUT" | grep -q "not valid" && fail "no warning without a problem" || pass
 finish

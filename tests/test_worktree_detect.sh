@@ -2,6 +2,7 @@
 # lib.sh worktree_of / project_of / code_root_of and the hooks in a git worktree that lives anywhere
 # (Codex puts worktrees outside <Projects>), with real `git worktree add`.
 source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib-hook.sh"
 new_sandbox
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
 setup_core
@@ -10,9 +11,7 @@ PR="$(dirname "$CORE_DIR")"; C="$PR/wtapp"
 git -C "$C" commit -q --allow-empty -m init
 mkdir -p "$SANDBOX/elsewhere"
 
-proj() { bash "$SCRIPTS/lib.sh" project-of "$1" 2>/dev/null; }   # prints the project; its exit code is kept
-# wt_of <path> — "<rc> <WT_ROOT> <WT_MAIN>" from worktree_of
-wt_of() { ( . "$SCRIPTS/lib.sh"; WT_ROOT=""; WT_MAIN=""; worktree_of "$1"; rc=$?; echo "$rc $WT_ROOT $WT_MAIN" ); }
+# proj and wt_of: tests/lib-hook.sh
 guard() { # guard <tool> <path> <cwd> — guard-code rc in RC, stderr in ERR
   printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"file_path":"%s","content":"x"}}' "$3" "$1" "$2" | bash "$HOOKS/guard-code.sh" >/dev/null 2>"$SANDBOX/err"; RC=$?; ERR="$(<"$SANDBOX/err")"; }
 

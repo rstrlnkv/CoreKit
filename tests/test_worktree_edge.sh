@@ -3,14 +3,14 @@
 # nested worktrees, a worktree inside the Core, a renamed main folder, concurrent prepare runs, paths with spaces,
 # symlinked paths, a CODEX_HOME that is a symlink.
 source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib-hook.sh"
 new_sandbox
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR COREKIT_HOST
 setup_core
 bash "$SKILL/scripts/scaffold.sh" --name edge >/dev/null
 PR="$(dirname "$CORE_DIR")"; C="$PR/edge"; P="$CORE_DIR/edge"
 git -C "$C" commit -q --allow-empty -m init
-proj() { bash "$SCRIPTS/lib.sh" project-of "$1" 2>/dev/null; }
-wt_of() { ( . "$SCRIPTS/lib.sh"; WT_ROOT=""; WT_MAIN=""; worktree_of "$1"; rc=$?; echo "$rc $WT_ROOT $WT_MAIN" ); }
+# proj and wt_of: tests/lib-hook.sh
 guard() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"file_path":"%s","content":"x"}}' "$3" "$1" "$2" | bash "$HOOKS/guard-code.sh" >/dev/null 2>"$SANDBOX/err"; RC=$?; }
 
 # --- the .git file of a worktree, rewritten: relative gitdir, trailing blanks, CRLF
