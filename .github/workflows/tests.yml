@@ -51,7 +51,8 @@ jobs:
           command -v claude
           command -v codex || echo "no codex: those parts are skipped"
       - name: Run the suite
-        # a SKIP for lack of claude is a failure here, and on macOS one for lack of codex: the steps above installed them
+        # a SKIP for lack of claude is a failure here, and on macOS every SKIP that names codex: the steps above
+        # installed both, and a codex part skipped for any reason (nested sandbox, root) went unchecked
         shell: bash
         run: |
           # one file per core; run.sh starts the largest files first
@@ -60,8 +61,8 @@ jobs:
             echo '::error::the claude CLI is installed, yet tests skipped for lack of it'; exit 1
           fi
           if [ "$RUNNER_OS" = macOS ] \
-             && grep -E 'codex (or python3 )?not on PATH|codex debug models --bundled failed' "$RUNNER_TEMP/suite.out"; then
-            echo '::error::the codex CLI is installed, yet tests skipped for lack of it'; exit 1
+             && grep -E '^SKIP .*codex' "$RUNNER_TEMP/suite.out"; then
+            echo '::error::the codex CLI is installed, yet codex parts of the suite skipped'; exit 1
           fi
 
   shellcheck:

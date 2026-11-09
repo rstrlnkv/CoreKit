@@ -41,8 +41,8 @@ case "$run" in *'bash tests/run.sh -j "$(getconf _NPROCESSORS_ONLN 2>/dev/null |
   *) fail "the suite step runs tests/run.sh -j <cores> and tees its output" ;; esac
 
 # The suite job installs the codex CLI on macos-latest only (Decision 20 (b): the sandbox tests expect the macOS
-# seatbelt text), pinned, before the bash 3.2 step; on macOS its suite step fails on a codex skip, including
-# test_codex_chain.sh's own skip texts.
+# seatbelt text), pinned, before the bash 3.2 step; on macOS its suite step fails on every skip that names codex
+# (R3-35): a missing CLI, a failed catalog, a nested sandbox or a root user all leave codex parts unchecked.
 ci="$(printf '%s\n' "$suite" | grep -nE 'npm install -g "?@openai/codex@' | head -1 | cut -d: -f1)"
 [ -n "$ci" ] && pass || fail "the suite job installs @openai/codex with npm"
 [ -n "$ci" ] && [ -n "$nb" ] && [ "$ci" -lt "$nb" ] && pass || fail "the codex install step comes before the bash 3.2 step (lines $ci $nb)"
@@ -50,11 +50,13 @@ cstep="$(printf '%s\n' "$suite" | awk '/- name: Install the codex CLI/{f=1; prin
 case "$cstep" in *"if: runner.os == 'macOS'"*) pass ;; *) fail "the codex install step runs on macOS only" ;; esac
 case "$suite" in *'CODEX_VERSION:'*) pass ;; *) fail "the codex version is pinned in env (CODEX_VERSION)" ;; esac
 case "$suite" in *'@openai/codex@${CODEX_VERSION}'*) pass ;; *) fail "the codex install uses CODEX_VERSION" ;; esac
-# (two asserts, one per alternative of the grep -E pattern: test_isolation.sh would read a "|" before the word
-# codex as a run of the codex CLI)
-case "$run" in *"grep -E 'codex (or python3 )?not on PATH"*) pass ;; *) fail "the suite step fails on a codex skip (grep -E for: codex (or python3 )?not on PATH)" ;; esac
-case "$run" in *'codex debug models --bundled failed'"' "*) pass ;; *) fail "the suite step fails on test_codex_chain.sh's catalog skip: 'codex debug models --bundled failed'" ;; esac
-case "$run" in *'RUNNER_OS'*'macOS'*) pass ;; *) fail "the codex skip check is gated on macOS (RUNNER_OS)" ;; esac
+# the macOS check is the step's if-block that names RUNNER_OS; it greps run.sh's SKIP lines for codex anywhere in
+# them (a file name such as test_codex_chain.sh counts), not for chosen skip texts
+mac="$(printf '%s\n' "$run" | awk '/^ *if .*RUNNER_OS/{f=1} f; f && /^ *fi$/{exit}')"
+case "$mac" in *'macOS'*) pass ;; *) fail "the codex skip check is gated on macOS (RUNNER_OS)" ;; esac
+case "$mac" in *"grep -E '^SKIP .*codex' "*) pass ;; *) fail "on macOS the suite step fails on every codex skip (grep -E '^SKIP .*codex')" ;; esac
+case "$mac" in *'not on PATH'*|*'--bundled failed'*) fail "the macOS codex check still names chosen skip texts" ;; *) pass ;; esac
+case "$mac" in *'exit 1'*) pass ;; *) fail "the macOS codex check exits 1" ;; esac
 
 # The commit-subjects job: the whole history is fetched, the range is passed through env (never ${{ }} inside run:),
 # and only the new commits are checked.
