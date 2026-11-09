@@ -50,10 +50,10 @@ run: `claude plugin eval plugins/corecrew --ablation none --no-publish`.
 - **Test first.** Write a failing test in `tests/`, watch it fail, then write the code. A bug fix
   starts with a test that reproduces the bug. For skill and agent texts, test their structure and
   contracts (front matter, sizes, paths that exist, names that match), not single phrases.
-- **Portable bash.** Scripts must run on macOS bash 3.2 with BSD tools. Do not use `sed -i`,
-  `mapfile`/`readarray`, `${x,,}`/`${x^^}`, `grep -P`, `declare -A` or `local -n`; write to a temp
-  file and `mv` it instead of editing in place. No `jq`: read JSON with `grep`, `sed` or `awk`.
-  Quote paths; they may contain spaces. `tests/test_portability.sh` enforces this.
+- **Portable bash.** Scripts must run on macOS bash 3.2 with BSD tools. Write to a temp file and
+  `mv` it instead of editing in place. No `jq`: read JSON with `grep`, `sed` or `awk`. Quote paths;
+  they may contain spaces. `tests/test_portability.sh` lists the forbidden constructs and enforces
+  them; add a pattern there when you find a new one.
 - **Never overwrite or delete the user's files.** Scripts that create files are idempotent and say
   `created` or `skipped`. A script that moves or deletes user files needs a test that a failed step
   leaves the files as they were.

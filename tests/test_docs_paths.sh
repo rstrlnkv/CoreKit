@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The public docs (READMEs, SECURITY.md, ARCHITECTURE.md, CONTRIBUTING.md, docs/*.md) name repo
+# The public docs (READMEs, SECURITY.md, ARCHITECTURE.md, CONTRIBUTING.md, docs/*.md, .github/) name repo
 # paths: every one must exist, so a file that was moved or removed cannot stay in the text.
 # A root doc names paths from the repo root (plugins/, docs/, tests/, evals/). A plugin's README may
 # also name paths inside its plugin (skills/, scripts/, hooks/, ...) or inside one of its skills,
@@ -17,7 +17,8 @@ paths_in() {
 }
 
 docs=""
-for d in README.md README.*.md SECURITY.md ARCHITECTURE.md CONTRIBUTING.md plugins/*/README.md plugins/*/README.*.md docs/*.md; do
+for d in README.md README.*.md SECURITY.md ARCHITECTURE.md CONTRIBUTING.md plugins/*/README.md plugins/*/README.*.md docs/*.md \
+  .github/*.md .github/ISSUE_TEMPLATE/*.md; do
   [ -f "$ROOT/$d" ] && docs="$docs $d"
 done
 for doc in README.md SECURITY.md ARCHITECTURE.md CONTRIBUTING.md plugins/corecrew/README.md plugins/coremodel/README.md plugins/coreopinion/README.md; do
@@ -152,6 +153,15 @@ section "$ROOT/SECURITY.md" '### Known limits of the hooks' | grep -qF 'blocked-
 assert_not_contains "$PLUGIN/hooks/guard-code.sh" "so the hook and the commit check agree"
 # the network detail lives in the plugin READMEs; SECURITY.md only links them, so no copy can drift
 for w in 'gh run' 'gh auth status' 'api.github.com'; do assert_not_contains "$ROOT/SECURITY.md" "$w"; done
+# the forbidden bash constructs are listed once, in tests/test_portability.sh: CONTRIBUTING.md and the PR
+# template keep the principle and point there instead of copying the list
+for f in CONTRIBUTING.md .github/pull_request_template.md; do
+  assert_contains "$ROOT/$f" 'tests/test_portability.sh'
+  LC_ALL=C grep -qE 'mapfile|readarray|grep -P|declare -A|local -n' "$ROOT/$f" \
+    && fail "$f copies the forbidden constructs of tests/test_portability.sh" || pass
+done
+assert_contains "$ROOT/.github/pull_request_template.md" 'CONTRIBUTING.md'
+assert_contains "$ROOT/.github/pull_request_template.md" 'commit-subjects'
 
 # the self-check: a made-up path is caught, a real one is not, placeholders are skipped
 new_sandbox
