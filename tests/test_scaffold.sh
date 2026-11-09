@@ -158,8 +158,9 @@ c=$(grep -c '^- demo-app ' "$CORE_DIR/PROJECTS.md"); assert_eq "$c" "1" "PROJECT
 assert_contains "$CORE_DIR/PROJECTS.md" "Test app"
 assert_contains "$CORE_DIR/PROJECTS.md" "- demo-app — Test app — demo-app/"
 
-# --- second run changes nothing
+# --- second run changes nothing (tree_sum skips links: their targets are read separately)
 before=$(tree_sum "$CORE_DIR")
+before_k=$(tree_sum "$K"); before_l="$(readlink "$K/CLAUDE.local.md") $(readlink "$K/AGENTS.md")"
 assert_exit 0 bash "$S" --name demo-app --purpose "Test app"
 echo "$OUT" | grep -qxF 'skipped ../demo-app/AGENTS.md' && pass || fail "second run lacks skipped AGENTS.md: $OUT"
 echo "$OUT" | grep -q '^created' && fail "second run created files" || pass
@@ -171,6 +172,9 @@ echo "$OUT" | grep -qxF 'skipped demo-app/docs/INDEX.md' && pass || fail "second
 echo "$OUT" | grep -v '^skipped' | grep -q . && fail "second run printed a non-skipped line: $OUT" || pass
 after=$(tree_sum "$CORE_DIR")
 assert_eq "$before" "$after" "tree changed on re-run"
+assert_eq "$(tree_sum "$K")" "$before_k" "code folder changed on re-run"
+assert_eq "$(readlink "$K/CLAUDE.local.md") $(readlink "$K/AGENTS.md")" "$before_l" "links changed on re-run"
+[ "$before_l" = "$P/CLAUDE.md $P/CLAUDE.md" ] && pass || fail "links do not point to the private CLAUDE.md: $before_l"
 
 # --- a folder that is not ours blocks the run; nothing is written
 new_sandbox; setup_core
