@@ -292,4 +292,39 @@ if command -v zsh >/dev/null 2>&1; then
   assert_eq "$(zsh -c 'bash "$1" settings attribution='"'"'${user_config.attribution}'"'"' model_profile='"'"'${user_config.model_profile}'"'"'' _ "$LIB")" "attribution: forbid
 model_profile: strong" "zsh: literal placeholders fall to the file"
 fi
+
+# --- load_settings (every hook, save, undo-step and adopt run it) starts no program and no subshell but canon_dir's
+# one `cd -P` for each of the two paths; a settings file adds three: its size, twice, and the awk that reads it
+subs() { bash -c '. "$1"; PS4=+; set -x; load_settings' _ "$LIB" 2>&1 | awk '/^\+\+/ && prev !~ /^\+\+/ {s++} {prev=$0} END{print s+0}'; }
+rm -f "$SF"
+assert_eq "$(subs)" "2" "load_settings, no settings file: command substitutions"
+# shellcheck disable=SC1090
+assert_eq "$( ( . "$LIB"; count_execs load_settings; printf '%s:%s' "$EXECS" "$(tr '\n' ' ' < "$EXEC_LOG")" ) )" "0:" \
+  "load_settings, no settings file: programs started"
+sfw 'attribution: forbid\n'
+assert_eq "$(subs)" "5" "load_settings with a settings file: command substitutions"
+# trailing newlines are dropped where $(...) dropped them: an option value, a settings file path, a Core path, HOME
+sq() { bash -c '. "$1"; load_settings; printf "[%s]" "${!2}"' _ "$LIB" "$1"; }
+assert_eq "$(CORECREW_CONFIG="$SF
+" sq ATTRIBUTION)" "[forbid]" "a settings file path that ends in a newline"
+rm -f "$SF"
+assert_eq "$(CLAUDE_PLUGIN_OPTION_ATTRIBUTION="forbid
+" CLAUDE_PLUGIN_OPTION_UI_LANGUAGE="ru
+
+" sq ATTRIBUTION; sq UI_LANGUAGE)" "[forbid][en]" "an option value that ends in a newline"
+assert_eq "$(CLAUDE_PLUGIN_OPTION_UI_LANGUAGE="ru
+
+" sq UI_LANGUAGE)" "[ru]" "a ui_language option that ends in newlines"
+mkdir -p "$SANDBOX/nl
+"
+assert_eq "$(CORE_DIR="$SANDBOX/nl
+/y
+" sq CORE_DIR; CORE_DIR="$SANDBOX/nl
+/y
+" sq PROJECTS_DIR; CORE_DIR="$SANDBOX/nl
+/y
+" sq CORE_NAME)" "[$RS/nl/y][$RS/nl][y]" "a Core path whose folder name ends in a newline"
+assert_eq "$(HOME="$HOME
+" CORE_DIR='~' sq CORE_DIR)" "[$RH]" "a HOME that ends in a newline"
+assert_eq "$(CORE_DIR=/ sq CORE_NAME; CORE_DIR=/ sq PROJECTS_DIR; CORE_DIR=//x sq PROJECTS_DIR)" "[/][/][/]" "the root as the Core and beside it"
 finish

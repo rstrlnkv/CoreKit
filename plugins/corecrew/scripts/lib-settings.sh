@@ -1,18 +1,22 @@
 # lib-settings.sh — user settings and the Core facts file, for lib.sh (source lib.sh, not this file). See the header of lib.sh.
 
-# coredev_get <key> — prints the value of "key: value" in $CORE_DIR/.coredev (first match).
-coredev_get() {
+# _coredev_get_r <key> — sets _CDV to the value of "key: value" in $CORE_DIR/.coredev (first match); exit 1 when
+# the file has no line for the key.
+_coredev_get_r() {
   local f="${CORE_DIR:-}/.coredev" line
-  [ -f "$f" ] || return 0
+  _CDV=""
+  [ -f "$f" ] || return 1
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line%$'\r'}"
     case "$line" in
-      "$1: "*) printf '%s\n' "${line#"$1: "}"; return 0 ;;
-      "$1:") printf '\n'; return 0 ;;
+      "$1: "*) _CDV="${line#"$1: "}"; return 0 ;;
+      "$1:") return 0 ;;
     esac
   done < "$f"
-  return 0
+  return 1
 }
+# coredev_get <key> — prints the value with a newline (nothing when there is none).
+coredev_get() { _coredev_get_r "$1" && printf '%s\n' "$_CDV"; return 0; }
 
 # core_ready — exit 0 when $CORE_DIR/.coredev has a line "schema: <n>" (n = digits), else 1.
 # A .coredev that only holds other keys (e.g. app-id-prefix) does not count as a set-up Core.
@@ -63,14 +67,17 @@ opt_value() {
   printf '%s' "$1"
 }
 
-# settings_file_path — the settings file: $CORECREW_CONFIG (absolute; a relative one is ignored, as it would
-# follow the cwd), else $XDG_CONFIG_HOME/corecrew/settings (an empty or relative XDG_CONFIG_HOME is ignored),
-# else ~/.config/corecrew/settings. With no usable HOME there is no file: prints nothing, exit 1.
-settings_file_path() {
-  case "${CORECREW_CONFIG:-}" in /*) printf '%s' "$CORECREW_CONFIG"; return 0 ;; esac
-  case "${XDG_CONFIG_HOME:-}" in /*) printf '%s/corecrew/settings' "${XDG_CONFIG_HOME%/}"; return 0 ;; esac
-  case "${HOME:-}" in /*) printf '%s/.config/corecrew/settings' "$HOME" ;; *) return 1 ;; esac
+# _sfp_r — sets _SFP to the settings file: $CORECREW_CONFIG (absolute; a relative one is ignored, as it would follow
+# the cwd), else $XDG_CONFIG_HOME/corecrew/settings (an empty or relative XDG_CONFIG_HOME is ignored), else
+# ~/.config/corecrew/settings. With no usable HOME there is no file: _SFP empty, exit 1.
+_sfp_r() {
+  _SFP=""
+  case "${CORECREW_CONFIG:-}" in /*) _SFP="$CORECREW_CONFIG"; return 0 ;; esac
+  case "${XDG_CONFIG_HOME:-}" in /*) _SFP="${XDG_CONFIG_HOME%/}/corecrew/settings"; return 0 ;; esac
+  case "${HOME:-}" in /*) _SFP="$HOME/.config/corecrew/settings" ;; *) return 1 ;; esac
 }
+# settings_file_path — prints what _sfp_r sets; exit 1 when there is no file.
+settings_file_path() { _sfp_r || return 1; printf '%s' "$_SFP"; }
 
 # _sf_big <file> — exit 0 when the settings file is over 64 KB: it is not read (a hook has 15 s), see _settings_file_check.
 _sf_big() { [ "$(wc -c < "$1" 2>/dev/null | tr -d ' ')" -gt 65536 ] 2>/dev/null; }
@@ -82,7 +89,8 @@ _sf_load() {
   local f
   [ -z "${_SF_DONE:-}" ] || return 0
   _SF_DONE=1; _SF_DATA=""
-  f="$(settings_file_path)" || return 0
+  _sfp_r || return 0
+  _nl_trim "$_SFP"; f="$_NT"
   [ -f "$f" ] && [ -r "$f" ] && ! _sf_big "$f" || return 0
   _SF_DATA="$(LC_ALL=C awk '
       NR == 1 && substr($0, 1, 3) == "\357\273\277" { $0 = substr($0, 4) }
@@ -99,15 +107,19 @@ _sf_load() {
         printf "%s\t%s\n", k, v
       }' "$f" 2>/dev/null)" || _SF_DATA=""
 }
-# _sf_get <key> — prints the value of the first "key: value" line of the settings file: trimmed, one pair of matching
-# quotes removed, CR dropped, "#" inside a value is data; blanks before the colon and a leading UTF-8 BOM are accepted.
-_sf_get() {
+# _sf_get_r <key> — sets _SF_V to the value of the first "key: value" line of the settings file: trimmed, one pair
+# of matching quotes removed, CR dropped, "#" inside a value is data; blanks before the colon and a leading UTF-8 BOM
+# are accepted. Exit 1 when the file has no such line.
+_sf_get_r() {
   local k v
+  _SF_V=""
   while IFS=$'\t' read -r k v; do
-    [ "$k" = "$1" ] && { printf '%s' "$v"; return 0; }
+    [ "$k" = "$1" ] && { _SF_V="$v"; return 0; }
   done <<< "$_SF_DATA"
-  return 0
+  return 1
 }
+# _sf_get <key> — prints what _sf_get_r sets.
+_sf_get() { _sf_get_r "$1"; printf '%s' "$_SF_V"; return 0; }
 
 # _setting_valid <key> <value> — exit 0 when the value is usable. core_dir: ~, ~/..., or an absolute path.
 _setting_valid() {
@@ -136,10 +148,12 @@ _resolve_setting() {
       2:attribution) v="${CLAUDE_PLUGIN_OPTION_ATTRIBUTION:-}"; src="option" ;;
       2:model_profile) v="${CLAUDE_PLUGIN_OPTION_MODEL_PROFILE:-}"; src="option" ;;
       2:ui_language) v="${CLAUDE_PLUGIN_OPTION_UI_LANGUAGE:-}"; src="option" ;;
-      3:*) v="$(_sf_get "$key")"; src="file" ;;
+      3:*) _sf_get_r "$key"; v="$_SF_V"; src="file" ;;
       *) continue ;;
     esac
-    v="$(opt_value "$v")"
+    # as opt_value: a placeholder is no value; trailing newlines are dropped
+    # shellcheck disable=SC2016  # the placeholder text is literal
+    case "$v" in *'${user_config.'*) v="" ;; *) _nl_trim "$v"; v="$_NT" ;; esac
     [ -n "$v" ] || continue
     if _setting_valid "$key" "$v"; then REPLY="$v"; break; fi
     # an unknown ui_language is silently English (as documented in hooks/messages.sh); the rest is named in
@@ -161,7 +175,8 @@ _resolve_setting() {
 
 # _settings_file_check — a settings file that exists but cannot be read (or is over 64 KB) is named once (key settings_file).
 _settings_file_check() {
-  local f; f="$(settings_file_path)" || return 0
+  local f; _sfp_r || return 0
+  _nl_trim "$_SFP"; f="$_NT"
   if [ -f "$f" ] && { [ ! -r "$f" ] || _sf_big "$f"; }; then
     SETTINGS_WARN="${SETTINGS_WARN}settings_file"$'\t'"${f}"$'\t'"file"$'\t'"the defaults"$'\n'
   fi
@@ -183,12 +198,13 @@ _core_raw() {
         return 0 ;;
       esac ;;
   esac
-  CORE_RAW="$(expand_home "$1")"
+  expand_home_r "$1"; CORE_RAW="$_EH"
   while [ "${#CORE_RAW}" -gt 1 ] && [ "${CORE_RAW%/}" != "$CORE_RAW" ]; do CORE_RAW="${CORE_RAW%/}"; done
 }
 
 # load_settings — see the header. An invalid core_dir (not absolute, not ~...) is ignored with a warning,
-# never read as relative to the current folder.
+# never read as relative to the current folder. It starts no program and no subshell but canon_dir_r's cd -P for
+# the two paths (and _sf_big and _sf_load's for a settings file): every hook runs it.
 # shellcheck disable=SC2034  # the variables it sets are read by the scripts that source lib.sh
 load_settings() {
   SETTINGS_WARN=""; _SF_DONE=""
@@ -196,14 +212,14 @@ load_settings() {
   _resolve_setting core_dir; _core_raw "$REPLY"
   if [ -z "$CORE_RAW" ]; then CORE_DIR=""; CORE_NAME=""; PROJECTS_DIR=""   # no usable HOME: no Core, hooks stay inert
   else
-    CORE_DIR="$(canon_dir "$CORE_RAW")"
-    CORE_NAME="$(basename "$CORE_DIR")"
+    canon_dir_r "$CORE_RAW"; CORE_DIR="$_CANON"
+    _basename_r "$CORE_DIR"; CORE_NAME="$_BN"
     # beside the Core as typed: a core_dir that is a symlink keeps the code folders next to the link,
     # not next to its target
-    PROJECTS_DIR="$(canon_dir "$(dirname "$CORE_RAW")")"
+    _dirname_r "$CORE_RAW"; canon_dir_r "$_DN"; PROJECTS_DIR="$_CANON"
   fi
   _resolve_setting attribution; ATTRIBUTION="$REPLY"
   _resolve_setting model_profile; MODEL_PROFILE="$REPLY"
   _resolve_setting ui_language; UI_LANGUAGE="$REPLY"
-  APP_ID_PREFIX="$(coredev_get app-id-prefix)"
+  _coredev_get_r app-id-prefix; APP_ID_PREFIX="$_CDV"
 }

@@ -1,21 +1,51 @@
 # lib-paths.sh — path helpers of lib.sh (source lib.sh, not this file): expand_home, canon_dir, lc, norm_path, resolve_abs.
+# The *_r forms set a variable instead of printing, so a caller needs no "$(...)" subshell.
 
-# expand_home <path> — a leading ~ or ~/ becomes $HOME.
+# _nl_trim <text> — sets _NT: the text without its trailing newlines, as "$(...)" gives a printed value.
+_nl_trim() { _NT="$1"; while [ "${_NT%$'\n'}" != "$_NT" ]; do _NT="${_NT%$'\n'}"; done; }
+
+# expand_home_r <path> — sets _EH: a leading ~ or ~/ becomes $HOME; trailing newlines are dropped (as
+# "$(expand_home ...)" dropped them). No subshell: load_settings runs in every hook.
 # shellcheck disable=SC2088  # the ~ is a literal to compare, not to expand
-expand_home() {
+expand_home_r() {
   case "$1" in
-    "~") printf '%s' "$HOME" ;;
-    "~/"*) printf '%s/%s' "$HOME" "${1#"~/"}" ;;
-    *) printf '%s' "$1" ;;
+    "~") _nl_trim "$HOME" ;;
+    "~/"*) _nl_trim "$HOME/${1#"~/"}" ;;
+    *) _nl_trim "$1" ;;
   esac
+  _EH="$_NT"
+}
+# expand_home <path> — prints what expand_home_r sets.
+expand_home() { expand_home_r "$1"; printf '%s' "$_EH"; }
+
+# _basename_r <path>, _dirname_r <path> — set _BN and _DN as basename and dirname print them (trailing slashes
+# ignored; "/" stays "/"; a bare name has the dirname "."), without starting a program.
+_basename_r() {
+  local p="$1"
+  while [ "${#p}" -gt 1 ] && [ "${p%/}" != "$p" ]; do p="${p%/}"; done
+  case "$p" in /) ;; */*) p="${p##*/}" ;; esac
+  _nl_trim "$p"; _BN="$_NT"
+}
+_dirname_r() {
+  local p="$1"
+  while [ "${#p}" -gt 1 ] && [ "${p%/}" != "$p" ]; do p="${p%/}"; done
+  case "$p" in
+    /) ;;
+    */*) p="${p%/*}"
+      while [ "${#p}" -gt 1 ] && [ "${p%/}" != "$p" ]; do p="${p%/}"; done
+      [ -n "$p" ] || p="/" ;;
+    *) p="." ;;
+  esac
+  _nl_trim "$p"; _DN="$_NT"
 }
 
-# canon_dir <path> — the physical path (symlinks resolved, letter case as on disk: /bin/pwd -P
+# canon_dir_r <path> — sets _CANON: the physical path (symlinks resolved, letter case as on disk: /bin/pwd -P
 # reports the case on disk, the shell's own pwd keeps what was typed). For a path that does not exist
 # yet, the deepest existing ancestor is resolved and the missing components are appended, so
-# the string stays the same after the directory is created. No trailing slash.
-canon_dir() {
-  local p rest="" base c; p="$(expand_home "$1")"
+# the string stays the same after the directory is created. No trailing slash, no trailing newline.
+# One subshell: the cd -P.
+canon_dir_r() {
+  local p rest="" base c; expand_home_r "$1"; p="$_EH"
   while [ "${#p}" -gt 1 ] && [ "${p%/}" != "$p" ]; do p="${p%/}"; done
   base="$p"
   # the missing parts are cut off with ${..%/*} and ${..##*/} (no basename/dirname process per part: a guard judges
@@ -28,11 +58,13 @@ canon_dir() {
       *) rest="/$base$rest"; base="." ;;
     esac
   done
-  c="$(cd -P "$base" 2>/dev/null && { /bin/pwd -P 2>/dev/null || pwd; })" || { printf '%s\n' "$p"; return 0; }
+  c="$(cd -P "$base" 2>/dev/null && { /bin/pwd -P 2>/dev/null || pwd; })" || { _nl_trim "$p"; _CANON="$_NT"; return 0; }
   [ "$c" = "/" ] && c=""
   [ -z "$c$rest" ] && c="/"
-  printf '%s%s\n' "$c" "$rest"
+  _nl_trim "$c$rest"; _CANON="$_NT"
 }
+# canon_dir <path> — prints what canon_dir_r sets, with a newline.
+canon_dir() { canon_dir_r "$1"; printf '%s\n' "$_CANON"; }
 
 # lc <text> — ASCII lower case (bytes above 127 are left alone, so Cyrillic stays as it is).
 lc() { printf '%s' "$1" | LC_ALL=C tr 'A-Z' 'a-z'; }

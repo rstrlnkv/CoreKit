@@ -8,7 +8,7 @@
 # their texts are msg_settings_warning in hooks/messages.sh).
 #
 # The helpers live in parts next to this file, which it sources (callers source only lib.sh):
-#   lib-paths.sh     expand_home canon_dir lc norm_path resolve_abs
+#   lib-paths.sh     expand_home canon_dir lc norm_path resolve_abs (and expand_home_r canon_dir_r, which set a variable)
 #   lib-settings.sh  coredev_get coredev_set core_ready settings_file_path resolve_setting load_settings ...
 #   lib-layout.sh    project_of worktree_of code_root_of code_dir_of layout_of valid_project_name
 #   lib-host.sh      codex_home host tools_dir hooks_marker_path plugin_version
