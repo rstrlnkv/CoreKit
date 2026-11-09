@@ -54,7 +54,8 @@ jobs:
         # a SKIP for lack of claude is a failure here, and on macOS one for lack of codex: the steps above installed them
         shell: bash
         run: |
-          bash tests/run.sh 2>&1 | tee "$RUNNER_TEMP/suite.out"
+          # one file per core; run.sh starts the largest files first
+          bash tests/run.sh -j "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)" 2>&1 | tee "$RUNNER_TEMP/suite.out"
           if grep -F 'claude not on PATH' "$RUNNER_TEMP/suite.out"; then
             echo '::error::the claude CLI is installed, yet tests skipped for lack of it'; exit 1
           fi

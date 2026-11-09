@@ -36,6 +36,9 @@ case "$suite" in *'CLAUDE_VERSION:'*) pass ;; *) fail "the claude version is pin
 for v in DISABLE_AUTOUPDATER CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC; do case "$suite" in *"$v: 1"*) pass ;; *) fail "$v: 1 in the suite env" ;; esac; done
 run="$(printf '%s\n' "$suite" | awk '/Run the suite/{f=1} f')"
 case "$run" in *'claude not on PATH'*) pass ;; *) fail "the suite step fails on a claude skip (grep for: claude not on PATH)" ;; esac
+# The suite runs one file per core (run.sh starts the largest files first), its output still teed for the skip greps.
+case "$run" in *'bash tests/run.sh -j "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)" 2>&1 | tee'*) pass ;;
+  *) fail "the suite step runs tests/run.sh -j <cores> and tees its output" ;; esac
 
 # The suite job installs the codex CLI on macos-latest only (Decision 20 (b): the sandbox tests expect the macOS
 # seatbelt text), pinned, before the bash 3.2 step; on macOS its suite step fails on a codex skip, including
