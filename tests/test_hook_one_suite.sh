@@ -490,4 +490,34 @@ for c in 'echo $((1<<3)); swift test' 'x=$(( 1 << 3 )) && pytest' 'echo $(( (1<<
 done
 ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0 run_hook 'cat <<EOF\nswift test\nEOF'; assert_eq "$RC" "0" "heredoc body still skipped"
 
+# --- the raw-input prefilter: a payload with no "test"/"Test" and no unusual escape exits before anything is
+# sourced. These cases need a project path without "test" (the sandbox path holds np-test), so a second Core
+# lives in a temp folder of its own; on a machine whose temp path holds "test" they are skipped.
+stop "$dummy"; dummy=""
+NT="$(mktemp -d "${TMPDIR:-/tmp}/os.XXXXXX")" && NT="$(cd -P "$NT" && pwd)"
+at_exit 'rm -rf "$NT"'
+case "$NT" in
+  *[tT]est*) skip "prefilter" "the temp path $NT holds \"test\"" ;;
+  *)
+    mkdir -p "$NT/Core/app/code"; : > "$NT/Core/app/CLAUDE.md"
+    fake "$NT/Core/app/code" "$FAKE"; dummy=$FAKE_PID
+    # a runner spelled through a \u escape (npm test = npm test) is still a run
+    CORE_DIR="$NT/Core" run_hook 'npm test' "$NT/Core/app/code"
+    assert_eq "$RC" "2" "a runner spelled through a \\u escape is still recognised"
+    CORE_DIR="$NT/Core" run_hook 'n\pm test' "$NT/Core/app/code"
+    assert_eq "$RC" "2" "an unknown escape and a \\u escape: still recognised"
+    # quoted text and (( )) are cut before the match, so they can join a runner word: bash runs go te''st as go test
+    for c in "go te''st" 'swift te\"\"st' 'go te((1))st'; do
+      CORE_DIR="$NT/Core" run_hook "$c" "$NT/Core/app/code"
+      assert_eq "$RC" "2" "a runner word joined by a cut: $c"
+    done
+    CORE_DIR="$NT/Core" run_hook 'git status' "$NT/Core/app/code"
+    assert_eq "$RC" "0" "no test word: passes"
+    # a payload with no runner word starts only the hook's own bash and cat
+    os_plain() { printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"git status"}}' "$NT/Core/app/code" | CORE_DIR="$NT/Core" bash "$H" >/dev/null 2>&1; }
+    count_execs os_plain
+    assert_eq "$(LC_ALL=C sort "$EXEC_LOG" | tr '\n' ' ')" "bash cat " "no-match payload: programs started ($EXECS)"
+    stop "$dummy"; dummy="" ;;
+esac
+
 finish
