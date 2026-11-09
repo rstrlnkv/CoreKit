@@ -289,6 +289,27 @@ assert_exit 1 bash "$S" --name cs-app
 assert_eq "$(grep -c '^- cs-app ' "$CORE_DIR/PROJECTS.md")" "0" "PROJECTS.md entry added after a failed code-side step"
 [ -f "$K2/.claude" ] && pass || fail "the .claude file was replaced"
 
+# --- a template that cannot be read: exit 1, no empty page and no temp file left; a rerun creates the page
+if [ "$(id -u)" -eq 0 ]; then
+  skip unreadable-template "running as root"
+else
+  new_sandbox; setup_core
+  cp -R "$PLUGIN" "$SANDBOX/plugin-copy"
+  AT="$SANDBOX/plugin-copy/skills/new-project/templates/docs/architecture.md.tmpl"
+  SC="$SANDBOX/plugin-copy/skills/new-project/scripts/scaffold.sh"
+  chmod 000 "$AT"
+  assert_exit 1 bash "$SC" --name tf-app
+  assert_no_file "$CORE_DIR/tf-app/docs/architecture.md"
+  left="$(find "$CORE_DIR" -name '*.tmp.*' -print)"
+  [ -z "$left" ] && pass || fail "temp files left after a failed write: $left"
+  chmod 644 "$AT"
+  assert_exit 0 bash "$SC" --name tf-app
+  echo "$OUT" | grep -qxF 'created tf-app/docs/architecture.md' && pass || fail "rerun did not create architecture.md: $OUT"
+  [ -s "$CORE_DIR/tf-app/docs/architecture.md" ] && pass || fail "architecture.md is empty after the rerun"
+  assert_exit 0 bash "$SCRIPTS/wiki-check.sh" "$CORE_DIR/tf-app"
+  [ -z "$OUT" ] && pass || fail "wiki-check after the rerun printed: $OUT"
+fi
+
 # the wiki has one place for all worktrees: <Core>/<p>/docs/, which the task skill updates from a
 # worktree too (no "never edit ../docs/ from a worktree" that contradicts it)
 T="$SKILL/templates/CLAUDE.md.tmpl"
