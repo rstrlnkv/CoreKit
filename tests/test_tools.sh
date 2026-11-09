@@ -123,6 +123,15 @@ printf '%s\n' "$V" > "$T3/VERSION"
 assert_exit 0 bash "$SYNC" "$R" "$T3"
 assert_eq "$OUT" "tools updated $V" "version-only VERSION: updated"
 assert_eq "$(wc -l < "$T3/VERSION" | tr -d ' ')" "2" "VERSION rewritten with the checksum"
+# each VERSION line is compared exactly as written: blanks around the version or the checksum make the copy stale
+assert_exit 0 bash "$SYNC" "$R" "$T3"; assert_eq "$OUT" "tools current $V" "blanks: current before the edit"
+cp "$T3/VERSION" "$SANDBOX/version.keep"
+for edit in '1s/.*/  & /' '2s/.*/	& /'; do
+  sed "$edit" "$SANDBOX/version.keep" > "$T3/VERSION"
+  assert_exit 0 bash "$SYNC" "$R" "$T3"
+  assert_eq "$OUT" "tools updated $V" "a VERSION line with blanks ($edit): updated"
+  cmp -s "$T3/VERSION" "$SANDBOX/version.keep" && pass || fail "VERSION not rewritten without blanks ($edit): $(cat "$T3/VERSION")"
+done
 # A copy or a swap that fails halfway leaves the old tools working: the plugin changes again (else the copy is current and
 # nothing is copied), then (1) cp fails on its third call, (2) mv fails only to move the new copy in.
 REALCP="$(command -v cp)"; REALMV="$(command -v mv)"
