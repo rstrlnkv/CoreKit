@@ -151,7 +151,6 @@ done
 # apply_patch, pass. In Codex a wildcard argument passes, and a real shell patch is refused with the match named
 # (guard-secrets only inside a project: outside one it judges nothing).
 C="$CORE_DIR/p/code"; O="$SANDBOX/not a project"; mkdir -p "$O"
-OD="$SANDBOX"
 gate() { run_hook "$HOOKS/$1" "$(hook_event "${4:-codex}" PreToolUse "$3" tool=Bash command="$2")"; } # gate <hook> <cmd> <cwd> [claude]
 gate_named() { # gate_named <label> <match> — the shell-patch refusal, and the message names the match
   hook_refused_patch "$1"
