@@ -56,7 +56,7 @@ step, and any step that needed its result, as not done and why. In
 stay uncommitted, and the report says
 `Commit: stopped — Codex sandbox keeps .git read-only`. Never look for a way around the sandbox.
 `save` printing `save: git could not write ...` means it ran inside the sandbox: run it again with
-approval.
+approval once. If it still prints that line, the commit stops with the report above.
 
 ## Questions
 Codex has no AskUserQuestion tool. Ask in plain chat instead: at most three questions in one message,
