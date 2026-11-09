@@ -111,7 +111,7 @@ assert_eq "$(readlink "$F/CLAUDE.local.md")" "$P/CLAUDE.md" "link target"
 [ -L "$F/AGENTS.md" ] && pass || fail "no AGENTS.md link"
 assert_eq "$(readlink "$F/AGENTS.md")" "$P/CLAUDE.md" "AGENTS.md link target"
 assert_contains "$F/.claude/settings.local.json" "\"$P\""
-assert_eq "$(cat "$F/.worktreeinclude")" "$(cat "$SKILL/templates/code/worktreeinclude")" ".worktreeinclude from the template"
+assert_eq "$(cat "$F/.worktreeinclude")" "$(cat "$PLUGIN/templates/code/worktreeinclude")" ".worktreeinclude from the template"
 echo "$DRY_OUT" | grep -qF ".worktreeinclude" && pass || fail "plan lacks .worktreeinclude: $DRY_OUT"
 grep -qxF -- "- foo — Adopted existing project — Foo/" "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md line: $(cat "$CORE_DIR/PROJECTS.md")"
 assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "Adopt foo" "Core commit"
@@ -714,7 +714,7 @@ F="$SANDBOX/Projects/gi-app"; mkdir -p "$F/src"; git init -q "$F" && git -C "$F"
 printf 'node_modules/\n.env.*\n' > "$F/.gitignore"
 printf '# Old\n' > "$F/CLAUDE.md"; echo 'echo a' > "$F/src/a.sh"
 git -C "$F" add -A && git -C "$F" commit -q -m initial
-WANT="$(grep -E '^(CLAUDE|AGENTS\.md$|\.claude/|docs/superpowers/|!?\.env)' "$SKILL/templates/code/gitignore-common")"
+WANT="$(grep -E '^(CLAUDE|AGENTS\.md$|\.claude/|docs/superpowers/|!?\.env)' "$PLUGIN/templates/code/gitignore-common")"
 printf '%s\n' "$WANT" | grep -qxF CLAUDE.local.md && pass || fail "fixture: template lacks CLAUDE.local.md: $WANT"
 [ "$(printf '%s\n' "$WANT" | grep -c .)" -ge 8 ] && pass || fail "fixture: template ignore lines: $WANT"
 assert_exit 0 bash "$AD" --from "$F" --dry-run
@@ -741,7 +741,7 @@ assert_eq "$(git -C "$F" status --porcelain)" "" "code repo dirty after save"
 # a .gitignore that already has every line: nothing added, no repo commit
 new_sandbox; setup_core
 F="$SANDBOX/Projects/gi-full"; mkdir -p "$F"; git init -q "$F" && git -C "$F" symbolic-ref HEAD refs/heads/main
-grep -v '^#' "$SKILL/templates/code/gitignore-common" > "$F/.gitignore"; echo x > "$F/main.sh"
+grep -v '^#' "$PLUGIN/templates/code/gitignore-common" > "$F/.gitignore"; echo x > "$F/main.sh"
 printf 'mine\n' > "$F/.worktreeinclude"
 git -C "$F" add -A && git -C "$F" commit -q -m initial
 assert_exit 0 bash "$AD" --from "$F" --dry-run

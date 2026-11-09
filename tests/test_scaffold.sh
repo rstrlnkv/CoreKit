@@ -32,7 +32,7 @@ assert_dir "$P/docs/features"; assert_dir "$P/docs/specs"; assert_dir "$P/docs/p
 assert_dir "$K/.git"
 assert_dir "$CORE_DIR/.git"
 assert_file "$CORE_DIR/.gitignore"
-assert_not_contains "$SKILL/templates/core/gitignore" "*/code/"
+assert_not_contains "$PLUGIN/templates/core/gitignore" "*/code/"
 assert_file "$CORE_DIR/README.md"
 # scaffold copies no machinery into Core
 assert_no_file "$CORE_DIR/bin"; assert_no_file "$CORE_DIR/hooks"
@@ -90,9 +90,9 @@ grep -A6 'sort' "$W" | grep -qi 'desc' && pass || fail "wiki.base: sort is not d
 # the five columns appear in order
 assert_eq "$(grep -E '^[[:space:]]*- (file\.name|type|status|updated|description)[[:space:]]*$' "$W" | sed 's/^[[:space:]]*- //' | head -5 | tr '\n' ' ')" "file.name type status updated description " "wiki.base column order"
 # the template INDEX.md.tmpl is gone: INDEX is generated, not copied
-assert_no_file "$SKILL/templates/docs/INDEX.md.tmpl"
+assert_no_file "$PLUGIN/templates/docs/INDEX.md.tmpl"
 # new-project text templates ship the vault files
-for t in wiki.base obsidian-app.json obsidian-gitignore; do assert_file "$SKILL/templates/docs/$t"; done
+for t in wiki.base obsidian-app.json obsidian-gitignore; do assert_file "$PLUGIN/templates/docs/$t"; done
 
 # CLAUDE.md: plain link to wiki, no @-imports, placeholders filled
 assert_contains "$P/CLAUDE.md" "$P/docs/INDEX.md"
@@ -252,7 +252,7 @@ echo "$OUT" | grep -qi 'wiki-index' && pass || fail "scaffold output does not me
 echo "$OUT" | grep -q 'created.*INDEX.md' && fail "scaffold claims INDEX.md was created: $OUT" || pass
 
 # wiki.base leaves out superpowers/ like knowledge/ and standards/
-assert_contains "$SKILL/templates/docs/wiki.base" "superpowers/"
+assert_contains "$PLUGIN/templates/docs/wiki.base" "superpowers/"
 # the rendered CLAUDE.md names wiki-index.sh by its plugin path and does not say it is printed at session start
 new_sandbox; setup_core
 bash "$S" --name cm-app >/dev/null
@@ -299,7 +299,7 @@ if [ "$(id -u)" -eq 0 ]; then
 else
   new_sandbox; setup_core
   cp -R "$PLUGIN" "$SANDBOX/plugin-copy"
-  AT="$SANDBOX/plugin-copy/skills/new-project/templates/docs/architecture.md.tmpl"
+  AT="$SANDBOX/plugin-copy/templates/docs/architecture.md.tmpl"
   SC="$SANDBOX/plugin-copy/skills/new-project/scripts/scaffold.sh"
   chmod 000 "$AT"
   assert_exit 1 bash "$SC" --name tf-app
@@ -327,7 +327,7 @@ left="$(find "$CORE_DIR" "$SANDBOX/dots" -name '*.tmp.*' -print)"
 
 # the wiki has one place for all worktrees: <Core>/<p>/docs/, which the task skill updates from a
 # worktree too (no "never edit ../docs/ from a worktree" that contradicts it)
-T="$SKILL/templates/CLAUDE.md.tmpl"
+T="$PLUGIN/templates/CLAUDE.md.tmpl"
 assert_not_contains "$T" "Never edit \`../docs/\` from a worktree"
 assert_contains "$T" "one wiki for every worktree"
 assert_contains "$T" "{{PROJECT_DIR}}/docs/"

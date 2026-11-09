@@ -187,7 +187,7 @@ assert_eq "$(git -C "$C" log -1 --format=%B | grep -ciE 'generated with \[claude
 # --- new layout: code in <Projects>/Foo beside the Core, docs in <Core>/foo, CLAUDE.local.md symlink
 F="$SANDBOX/Projects/Foo"; mkdir -p "$F" "$CORE_DIR/foo"
 echo "# foo" > "$CORE_DIR/foo/CLAUDE.md"
-git -C "$F" init -q; cp "$PLUGIN/skills/new-project/templates/code/gitignore-common" "$F/.gitignore"
+git -C "$F" init -q; cp "$PLUGIN/templates/code/gitignore-common" "$F/.gitignore"
 ln -s "$CORE_DIR/foo/CLAUDE.md" "$F/CLAUDE.local.md"
 echo "n1" > "$F/n.txt"; echo "doc1" > "$CORE_DIR/foo/d.md"
 (cd "$F" && bash "$SAVE" "New layout step") > "$SANDBOX/out" 2>&1

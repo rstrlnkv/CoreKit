@@ -19,7 +19,7 @@
 # Only test-coredev/ in both places and the line in PROJECTS.md are written; the rest is left alone.
 set -u
 ROOT_DIR="$(cd "$(dirname "$0")/../plugins/corecrew" && pwd)"   # the corecrew plugin
-TPL="$ROOT_DIR/skills/new-project/templates"
+TPL="$ROOT_DIR/templates"
 . "$ROOT_DIR/scripts/lib.sh"
 
 refuse() { echo "make-test-coredev: $1" >&2; exit 2; }

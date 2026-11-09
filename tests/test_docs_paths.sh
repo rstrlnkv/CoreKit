@@ -106,6 +106,11 @@ for f in "$PLUGIN"/scripts/*; do
   n="${f##*/}"
   named_in_tree "$n" "$ROOT/ARCHITECTURE.md" && pass || fail "ARCHITECTURE.md tree does not name scripts/$n"
 done
+# and every file in a skill's scripts/, for the same reason
+for f in "$ROOT"/plugins/*/skills/*/scripts/*; do
+  [ -e "$f" ] || continue
+  named_in_tree "${f##*/}" "$ROOT/ARCHITECTURE.md" && pass || fail "ARCHITECTURE.md tree does not name ${f#"$ROOT"/}"
+done
 # coreopinion's agents/openai.yaml keeps its skill out of Codex (coreopinion is Claude Code only): the tree names it
 for f in "$ROOT"/plugins/coreopinion/skills/*/agents/openai.yaml; do
   [ -f "$f" ] || continue
