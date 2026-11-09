@@ -231,6 +231,7 @@ chmod -R u+rwx "$RT"; rm -rf "$RT"
 # --- snap_tree: two snapshots with no change are identical; each change below alters the snapshot, and undoing it
 # gives the first snapshot back. The repo is nested, as a code repo sits under a sandbox.
 S="$SANDBOX/snap"; G="$S/a repo"; mkdir -p "$G/sub"
+echo one > "$S/plain"   # outside any repo: only the file sums see its content
 git init -q "$G"; echo one > "$G/f"; ln -s f "$G/l"; printf 'ign\n' > "$G/.gitignore"; ln -s f "$G/ign"
 git -C "$G" add -A; git -C "$G" commit -q -m one
 echo two > "$G/f"; git -C "$G" commit -q -am two
@@ -251,6 +252,8 @@ C="$(git -C "$G" commit-tree "$H0^{tree}" -p "$H0" -m same)"
 changed "HEAD moved to a commit of the same tree" 'git -C "$G" reset -q --soft "$C"' 'git -C "$G" reset -q --soft "$H0"'
 changed "an index-only change" 'git -C "$G" rm -q --cached f' 'git -C "$G" add f'
 changed "an empty folder" 'mkdir "$S/empty"' 'rmdir "$S/empty"'
+# the same size, the same path, no repo: only the file sums (tree_sum) see a change of content
+changed "the content of a file outside a repo" 'echo two > "$S/plain"' 'echo one > "$S/plain"'
 changed ".git/REVERT_HEAD" 'git -C "$G" rev-parse HEAD > "$G/.git/REVERT_HEAD"' 'rm "$G/.git/REVERT_HEAD"'
 changed ".git/index.lock" ': > "$G/.git/index.lock"' 'rm "$G/.git/index.lock"'
 # shellcheck disable=SC2034  # read in the eval string of changed
