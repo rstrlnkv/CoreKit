@@ -537,24 +537,35 @@ assert_eq "$(git -C "$F" log -1 --format=%s)" "Move internal Claude files to Cor
 git -C "$F" cat-file -e HEAD~1:CLAUDE.md 2>/dev/null && pass || fail "history lost"
 assert_no_file "$F/CLAUDE.local.md"
 # the staging folder carries the project name; a rerun refuses while the staged copy is there (plain and
-# --dry-run), names it and says how to recover; nothing changes
+# --dry-run), names it and the repo commit to revert by its hash (the user may have committed since); nothing changes
 LEFT="$(ls -d "$CORE_DIR"/.adopt.mv-app.*/p 2>/dev/null)"; LEFT="${LEFT%/p}"
 [ -n "$LEFT" ] && pass || fail "no staging folder named after the project: $(ls -A "$CORE_DIR")"
-LW="leftover staged copy of mv-app: $LEFT (an earlier adopt stopped); if the last commit in $F is \"Move internal Claude files to Core\", undo it with git -C \"$F\" revert --no-edit HEAD; then remove $LEFT and run adopt again"
+MVC="$(git -C "$F" rev-parse HEAD)"
+echo 'echo later' > "$F/src/later.sh"; git -C "$F" add -A && git -C "$F" commit -q -m "more work"
+LW="leftover staged copy of mv-app: $LEFT (an earlier adopt stopped); undo its repo commit with git -C \"$F\" revert --no-edit $MVC, then remove $LEFT and run adopt again"
 refuses "$LW" --from "$F"
 refuses "$LW" --from "$F" --dry-run
+REC="$(printf '%s\n' "$OUT" | sed -n 's/.*undo its repo commit with \(git -C .* revert --no-edit [0-9a-f]*\), then .*/\1/p')"
+[ -n "$REC" ] && pass || fail "no revert command in the refusal: $OUT"
 assert_eq "$(head -1 "$STAGED/CLAUDE.md")" "# Old project" "staged CLAUDE.md after the rerun"
 assert_no_file "$CORE_DIR/mv-app"
 # another project's leftover does not block adopt of this one
 mkrepo "$SANDBOX/Projects/other-app"
 assert_exit 0 bash "$AD" --from "$SANDBOX/Projects/other-app"
 assert_file "$CORE_DIR/other-app/CLAUDE.md"; assert_dir "$LEFT"
-# the recovery the refusal names works: revert, remove the leftover, adopt again
-git -C "$F" revert --no-edit HEAD >/dev/null && pass || fail "revert of the repo commit failed"
+# the recovery the refusal prints, followed literally: the revert brings the user's pages back to the repo; while
+# the leftover is still there, the refusal now says only to remove it
+[ -n "$REC" ] && eval "$REC >/dev/null" && pass || fail "the printed revert failed: $REC"
+assert_file "$F/CLAUDE.md"; assert_file "$F/docs/guide.md"; assert_file "$F/src/later.sh"
+refuses "leftover staged copy of mv-app: $LEFT (an earlier adopt stopped; its repo commit is undone); remove $LEFT and run adopt again" --from "$F"
 rm -rf "$LEFT"
 assert_exit 0 bash "$AD" --from "$F"
 assert_eq "$(head -1 "$CORE_DIR/mv-app/CLAUDE.md")" "# Old project" "CLAUDE.md after the recovery"
+assert_file "$CORE_DIR/mv-app/docs/guide.md"
 assert_eq "$(last_line "$OUT")" "open: $F" "last line after the recovery"
+# a leftover with no repo commit (a run killed while staging): the refusal says only to remove it
+mkrepo "$SANDBOX/Projects/kill-app"; mkdir -p "$CORE_DIR/.adopt.kill-app.AbC123/p"
+refuses "leftover staged copy of kill-app: $CORE_DIR/.adopt.kill-app.AbC123 (an earlier adopt stopped before its repo commit); remove $CORE_DIR/.adopt.kill-app.AbC123 and run adopt again" --from "$SANDBOX/Projects/kill-app"
 }
 bg part_names_and_files
 
