@@ -182,7 +182,7 @@ assert_eq "$(git -C "$CORE_DIR" show --name-only --format= HEAD | sed 's|/.*||' 
 # --- a 0.6-format wiki (tests/fixtures/wiki-old): adopt ends with a migrated wiki. Dates depend on the
 # repo's history, so they are not compared here (test_wiki_migrate.sh compares the tree byte for byte).
 new_sandbox; setup_core
-F="$SANDBOX/Projects/wiki-old"; mkdir -p "$F"; cp -R "$ROOT/tests/fixtures/wiki-old/docs" "$F/docs"; cp "$ROOT/tests/fixtures/wiki-old/CLAUDE.md.in" "$F/CLAUDE.md"
+F="$SANDBOX/Projects/wiki-old"; copy_fixture wiki-old "$F"
 git init -q "$F" && git -C "$F" symbolic-ref HEAD refs/heads/main
 git -C "$F" add -A && git -C "$F" commit -q -m initial
 assert_exit 0 bash "$AD" --from "$F"

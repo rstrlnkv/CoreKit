@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # wiki-migrate.sh: converts a 0.6-format wiki (fixture tests/fixtures/wiki-old) to the 0.7 format
-# (expected result: tests/fixtures/wiki-old.expected, byte for byte).
+# (expected result: tests/fixtures/wiki-old.expected, byte for byte; its docs/wiki.base, docs/.obsidian/app.json
+# and docs/.obsidian/.gitignore come from the new-project templates, copied below).
 #
 # Contract the tests pin:
 #   stdout, one line per changed file, in this order, then the warnings:
@@ -45,13 +46,16 @@ source "$(dirname "$0")/lib.sh"
 WM="$SCRIPTS/wiki-migrate.sh"
 WC="$SCRIPTS/wiki-check.sh"
 WI="$SCRIPTS/wiki-index.sh"
-# The fixtures keep CLAUDE.md as CLAUDE.md.in (a tracked CLAUDE.md is gitignored in this repo):
-# work on copies with the real name, outside the per-section sandboxes.
+# Work on copies of the fixtures, outside the per-section sandboxes.
 FXT="$(mktemp -d "${TMPDIR:-/tmp}/wm-fixtures.XXXXXX")"; at_exit 'rm -rf "$FXT"'
-cp -R "$ROOT/tests/fixtures/wiki-old" "$ROOT/tests/fixtures/wiki-old.expected" "$FXT/"
-for f in "$FXT"/*/CLAUDE.md.in; do mv "$f" "${f%.in}"; done
+copy_fixture wiki-old "$FXT/wiki-old"; copy_fixture wiki-old.expected "$FXT/wiki-old.expected"
 FXO="$FXT/wiki-old"
 FXE="$FXT/wiki-old.expected"
+# The vault files wiki-migrate creates are the templates' own (one source, not a copy in the fixture).
+mkdir -p "$FXE/docs/.obsidian"
+cp "$SKILL/templates/docs/wiki.base" "$FXE/docs/wiki.base"
+cp "$SKILL/templates/docs/obsidian-app.json" "$FXE/docs/.obsidian/app.json"
+cp "$SKILL/templates/docs/obsidian-gitignore" "$FXE/docs/.obsidian/.gitignore"
 
 WANT_OUT="updated docs/architecture.md
 updated docs/brief.md
