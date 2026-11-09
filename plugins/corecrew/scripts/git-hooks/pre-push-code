@@ -12,10 +12,15 @@ done
 remote="$1"; zero=0000000000000000000000000000000000000000
 while read -r _ lsha _ rsha; do   # <local ref> <local sha> <remote ref> <remote sha>; the refs are not needed
   [ "$lsha" = "$zero" ] && continue
-  if [ "$rsha" = "$zero" ]; then range=$(git rev-list "$lsha" --not --remotes="$remote")
-  else range=$(git rev-list "$rsha..$lsha"); fi
+  # A new branch, or a remote tip this repo never fetched (rev-list cannot read it): every commit that no
+  # remote-tracking ref of this remote has. When even that fails, nothing can be checked: the push is blocked.
+  if [ "$rsha" = "$zero" ] || ! range=$(git rev-list "$rsha..$lsha" 2>/dev/null); then
+    range=$(git rev-list "$lsha" --not --remotes="$remote") || {
+      echo "Push blocked: git could not list the commits to push, so they can't be checked." >&2; exit 1; }
+  fi
   for c in $range; do
-    bad=$(git -c core.quotePath=false diff-tree --no-commit-id --name-only -r --diff-filter=ACMR "$c" \
+    # (--root: a commit with no parent lists every file it adds)
+    bad=$(git -c core.quotePath=false diff-tree --root --no-commit-id --name-only -r --diff-filter=ACMR "$c" \
           | grep -iE -f "$PATTERNS" | grep -viE -f <(grep -v '^[[:space:]]*$' "$ALLOWED"))
     if [ -n "$bad" ]; then
       echo "Push blocked: commit $(git rev-parse --short "$c") contains files that must not be published:" >&2

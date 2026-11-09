@@ -35,6 +35,10 @@ commit log has the full detail.
   (`cp .env.example .env 0</dev/null`), and the read-only checkers judge the real destination of
   such a command: the digits of `N<` are the descriptor, not an argument.
 - adopt refuses to run over a leftover staged copy of the same project and says how to recover.
+- The code repo's pre-push hook checks a root commit too: the first push of a new repo or of an
+  orphan branch whose first commit (made with `--no-verify`) holds `CLAUDE.md`, `AGENTS.md`, `.env`
+  or a key is blocked. A forced push over a remote tip this repo never fetched is checked as well,
+  and a push whose commits git cannot list is blocked instead of passing unchecked.
 
 ## [0.12.0] - 2026-11-09
 

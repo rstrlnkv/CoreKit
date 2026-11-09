@@ -51,6 +51,46 @@ git -C "$C" push -q origin main 2>"$SANDBOX/push.err" && fail "push of CLAUDE.md
 # the advice fits both hosts
 assert_contains "$SANDBOX/push.err" "Remove them from history before pushing (ask your assistant to help)."
 
+# pp_repo <dir>: a new repo with corecrew's pre-push shim and a bare remote <dir>.git as origin
+pp_repo() {
+  git init -q "$1" && cp "$C/.git/hooks/pre-push" "$1/.git/hooks/pre-push" && git init -q --bare "$1.git" \
+    && git -C "$1" remote add origin "$1.git"
+}
+# nv_commit <repo> <path>...: commits the files past .gitignore and pre-commit, so only pre-push judges them
+nv_commit() {
+  local r="$1" p; shift
+  for p in "$@"; do mkdir -p "$r/$(dirname "$p")"; echo x > "$r/$p"; git -C "$r" add -f "$p"; done
+  git -C "$r" -c user.name=t -c user.email=t@t commit -q --no-verify -m "add $*"
+}
+# a root commit is checked too: the first push of a new repo, and of an orphan branch
+R1="$SANDBOX/root one"; pp_repo "$R1"; nv_commit "$R1" CLAUDE.md
+git -C "$R1" push -q origin HEAD:refs/heads/main 2>/dev/null && fail "first push of a root commit holding CLAUDE.md allowed" || pass
+R2="$SANDBOX/root two"; pp_repo "$R2"; nv_commit "$R2" .env; nv_commit "$R2" src/a.txt
+git -C "$R2" push -q origin HEAD:refs/heads/main 2>/dev/null && fail "first push of a root commit holding .env allowed" || pass
+R3="$SANDBOX/root three"; pp_repo "$R3"; nv_commit "$R3" src/a.txt .env.example; nv_commit "$R3" src/b.txt
+git -C "$R3" push -q origin HEAD:refs/heads/main 2>/dev/null && pass || fail "a legitimate first push was blocked"
+nv_commit "$R3" src/c.txt
+git -C "$R3" push -q origin HEAD:refs/heads/main 2>/dev/null && pass || fail "a legitimate normal push was blocked"
+git -C "$R3" checkout -q --orphan side && git -C "$R3" rm -rq --cached . && nv_commit "$R3" AGENTS.md
+git -C "$R3" push -q origin side 2>/dev/null && fail "push of an orphan branch whose root commit holds AGENTS.md allowed" || pass
+git -C "$R3" checkout -q --orphan pages && git -C "$R3" rm -rq --cached . && nv_commit "$R3" index.html
+git -C "$R3" push -q origin pages 2>/dev/null && pass || fail "a legitimate orphan branch push was blocked"
+git -C "$R3" checkout -q -f main
+# a remote tip this repo never fetched (another clone pushed it): the commits are still checked (a forced push)
+git clone -q -b main "$R3.git" "$SANDBOX/other clone" && nv_commit "$SANDBOX/other clone" src/z.txt \
+  && git -C "$SANDBOX/other clone" push -q origin HEAD:refs/heads/main && pass || fail "setup: the other clone's push"
+nv_commit "$R3" CLAUDE.md
+git -C "$R3" push -q --force origin HEAD:refs/heads/main 2>/dev/null && fail "forced push over an unknown remote tip let CLAUDE.md through" || pass
+git -C "$R3" reset -q --hard HEAD~1; nv_commit "$R3" src/d.txt
+git -C "$R3" push -q --force origin HEAD:refs/heads/main 2>/dev/null && pass || fail "a legitimate forced push over an unknown remote tip was blocked"
+# when git cannot list the commits at all, nothing can be checked: the push is blocked with a plain line
+NL="$SANDBOX/nolist"; mkdir -p "$NL"
+printf '#!/bin/sh\ncase "$*" in *rev-list*) exit 128 ;; esac\nexec "%s" "$@"\n' "$(command -v git)" > "$NL/git"; chmod +x "$NL/git"
+(cd "$R3" && printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" 1111111111111111111111111111111111111111 \
+  | PATH="$NL:$PATH" bash "$COREDEV_TOOLS/git-hooks/pre-push-code" origin "$R3.git") 2>"$SANDBOX/nolist.err" \
+  && fail "push allowed when the commits could not be listed" || pass
+assert_contains "$SANDBOX/nolist.err" "git could not list the commits to push"
+
 # Core pre-push: privacy check via gh
 STUB="$SANDBOX/stub"; mkdir -p "$STUB"
 printf '#!/bin/sh\necho "$GH_STUB"\n' > "$STUB/gh"; chmod +x "$STUB/gh"
@@ -190,6 +230,11 @@ cp "$AP" "$SANDBOX/ap.keep"; { printf '\n'; cat "$SANDBOX/ap.keep"; printf '  \n
 try_commit .env && fail "a blank line in allowed-patterns let .env through" || pass
 rm -rf "${C:?}/.env"
 try_commit .env.example && pass || fail "a blank line in allowed-patterns blocked .env.example"
+# pre-push too (a clean root commit first, so only the blank line is judged)
+R4="$SANDBOX/blank line"; pp_repo "$R4"; nv_commit "$R4" src/a.txt; nv_commit "$R4" CLAUDE.md
+git -C "$R4" push -q origin HEAD:refs/heads/main 2>/dev/null && fail "a blank line in allowed-patterns let CLAUDE.md through pre-push" || pass
+git -C "$R4" reset -q --hard HEAD~1; nv_commit "$R4" cfg/.env.example
+git -C "$R4" push -q origin HEAD:refs/heads/main 2>/dev/null && pass || fail "a blank line in allowed-patterns blocked .env.example in pre-push"
 cp "$SANDBOX/ap.keep" "$AP"
 
 # --- One list. The hooks (blocked-patterns minus allowed-patterns) and templates/code/gitignore-common agree on every
@@ -233,8 +278,6 @@ sub/server.KEY
 x.pem.bak
 src/main.dart
 $NESTED"
-# (a root commit first: pre-push-code checks no root commit, its diff-tree lists nothing for one)
-git -C "$TB" -c user.name=t -c user.email=t@t commit -q --allow-empty --no-verify -m root
 EMPTY="$(git -C "$TB" hash-object -w --stdin </dev/null)"
 printf '%s\n' "$SAMPLES" | while IFS= read -r p; do git -C "$TB" update-index --add --cacheinfo "100644,$EMPTY,$p"; done
 listed() { sed -n 's/^  - //p'; }   # the "  - <path>" lines a hook prints
