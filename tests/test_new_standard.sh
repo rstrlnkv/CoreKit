@@ -55,11 +55,11 @@ assert_exit 1 bash "$C" "$E/fence.md"
 assert_eq "$OUT" "check-standard: missing section Exceptions" "fenced heading ignored"
 # Exactly 120 lines is fine.
 { cat "$FX/standard-good.md"; i=0; while [ $i -lt 92 ]; do echo "- l$i"; i=$((i+1)); done; } > "$E/l120.md"
-assert_eq "$(wc -l < "$E/l120.md" | tr -d ' ')" 120 "fixture length"
+assert_eq "$(wc -l < "$E/l120.md" | tr -d ' ')" 120 "fixture line count"
 assert_exit 0 bash "$C" "$E/l120.md"
 # 121 lines is one too many.
 { cat "$FX/standard-good.md"; i=0; while [ $i -lt 93 ]; do echo "- l$i"; i=$((i+1)); done; } > "$E/l121.md"
-assert_eq "$(wc -l < "$E/l121.md" | tr -d ' ')" 121 "fixture length"
+assert_eq "$(wc -l < "$E/l121.md" | tr -d ' ')" 121 "fixture line count"
 assert_exit 1 bash "$C" "$E/l121.md"
 assert_eq "$OUT" "check-standard: over 120 lines" "l121 output"
 # All seven roles are accepted.
@@ -123,7 +123,6 @@ assert_contains "$SK" "imperative rule"
 assert_contains "$SK" "writes nothing"
 assert_contains "$SK" "diff -u"
 grep -qiE 'never write[s]? into the plugin' "$SK" && pass || fail "SKILL.md must say it never writes into the plugin"
-[ "$(wc -l < "$SK")" -lt 500 ] && pass || fail "SKILL.md is 500 lines or more"
 assert_not_contains "$SK" "superpowers:"
 # new-project points at the knowledge format.
 assert_contains "$SKILL/SKILL.md" 'reference/knowledge.md'
@@ -135,7 +134,6 @@ assert_contains "$K" 'docs/knowledge/'
 assert_contains "$K" '<Core>/knowledge/'
 assert_contains "$K" 'symptom → cause → guard'
 assert_contains "$K" 'Knowledge line:'
-[ "$(wc -l < "$K")" -le 80 ] && pass || fail "knowledge.md over 80 lines"
 # REV-5: one list of lines, no sections inside a role file, no families, no cap on the role file.
 assert_eq "$(grep '^## ' "$K" | tr '\n' '|')" "## Two levels|## A role file|## The line|## Who writes it|" "knowledge.md sections"
 for s in 'Families' '80 lines' 'How proof is made here' 'Where things are' 'What has broken here' 'What you must not do here'; do

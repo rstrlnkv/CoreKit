@@ -51,6 +51,10 @@ run: `claude plugin eval plugins/corecrew --ablation none --no-publish`.
 - **Test first.** Write a failing test in `tests/`, watch it fail, then write the code. A bug fix
   starts with a test that reproduces the bug. For skill and agent texts, test their structure and
   contracts (front matter, sizes, paths that exist, names that match), not single phrases.
+- **Sizes.** `tests/test_sizes.sh` holds one table of size limits: lines, words or the longest line,
+  per kind of file (skills, references, agents, shell, awk, TypeScript, tests), with the tight
+  limits of single files and the named exceptions above the defaults. A file over its limit is
+  split; raise a limit only with a reason in its row.
 - **Portable bash.** Scripts must run on macOS bash 3.2 with BSD tools. Write to a temp file and
   `mv` it instead of editing in place. No `jq`: read JSON with `grep`, `sed` or `awk`. Quote paths;
   they may contain spaces. `tests/test_portability.sh` lists the forbidden constructs and enforces

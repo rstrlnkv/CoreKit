@@ -16,8 +16,6 @@ for r in $ROLES; do
   f="$AG/$r.md"
   assert_file "$f"
   [ -f "$f" ] || continue
-  # size
-  [ "$(wc -l < "$f")" -le 60 ] && pass || fail "$r.md is over 60 lines"
   # frontmatter: opens on line 1, exactly these keys in this order, nothing else
   [ "$(sed -n 1p "$f")" = "---" ] && pass || fail "$r.md does not open with ---"
   keys="$(front "$f" | sed -n 's/^\([A-Za-z]*\):.*/\1/p' | tr '\n' ' ')"

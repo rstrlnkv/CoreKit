@@ -15,7 +15,6 @@ assert_contains "$SK" "disable-model-invocation: true"
 assert_contains "$SK" 'argument-hint: "<task> | release <version> | adopt <folder>"'
 desc="$(sed -n 's/^description: //p' "$SK" | head -1)"
 [ -n "$desc" ] && [ "${#desc}" -le 200 ] && pass || fail "description missing or over 200 chars (${#desc})"
-[ "$(wc -l < "$SK")" -lt 500 ] && pass || fail "SKILL.md is 500 lines or more"
 
 # SKILL.md body
 for w in 'maxTurns' 'three engineer passes' 'foreground' \
@@ -138,7 +137,6 @@ if grep -rF "superpowers:" "$T" >/dev/null 2>&1; then fail "superpowers: referen
 # release.md: the seven release postconditions, in order, with the exact commands.
 REL="$T/references/release.md"
 assert_file "$REL"
-[ "$(wc -l < "$REL")" -le 80 ] && pass || fail "release.md is over 80 lines"
 prev=0
 for n in 1 2 3 4 5 6 7; do
   l="$(grep -nE "^$n\\. " "$REL" | head -1 | cut -d: -f1)"

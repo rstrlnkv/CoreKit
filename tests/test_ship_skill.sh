@@ -94,7 +94,6 @@ case "$steps" in *'Pushed: origin/<branch>'*) pass ;; *) fail "the report names 
 rep="$(printf '%s\n' "$steps" | awk '/\*\*Report\.\*\*/{f=1} f')"
 case "$rep" in *'git push origin --delete <branch>'*) pass ;; *) fail "the report gives the command to delete the remote branch later" ;; esac
 assert_eq "$(grep -c -- '--delete' "$SK")" "1" "the delete command is only in the Report"
-[ "$(wc -l < "$SK")" -le 150 ] && pass || fail "ship SKILL.md is over 150 lines"
 
 # The release commit subject is short and valid in both worlds: chore(<part>): release <version>, or chore: release <version>.
 case "$steps" in *'chore(<part>): release <version>'*'chore: release <version>'*) pass ;; *) fail "the Release step gives the release commit subject" ;; esac
