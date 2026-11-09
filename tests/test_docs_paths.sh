@@ -150,6 +150,8 @@ section "$ROOT/README.md" '### Claude Code' | grep -qF 'SECURITY.md#recommended-
 section "$ROOT/SECURITY.md" '### Known limits of the hooks' | grep -qF 'blocked-patterns' && pass \
   || fail "SECURITY.md Known limits does not name blocked-patterns (the pre-commit hook's list)"
 assert_not_contains "$PLUGIN/hooks/guard-code.sh" "so the hook and the commit check agree"
+# the network detail lives in the plugin READMEs; SECURITY.md only links them, so no copy can drift
+for w in 'gh run' 'gh auth status' 'api.github.com'; do assert_not_contains "$ROOT/SECURITY.md" "$w"; done
 
 # the self-check: a made-up path is caught, a real one is not, placeholders are skipped
 new_sandbox
