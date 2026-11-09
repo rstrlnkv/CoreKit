@@ -126,6 +126,10 @@ assert_contains "$F/.git/hooks/pre-commit" "corecrew hook shim"
 assert_contains "$CORE_DIR/.git/hooks/pre-push" "corecrew hook shim"
 ls -A "$CORE_DIR" | grep -q '^\.adopt' && fail "temp dir left in Core" || pass
 assert_eq "$(bash "$SCRIPTS/lib.sh" project-of "$F")" "foo" "project_of after adopt"
+# the line before the last asks for a new session in the code folder and names no host
+assert_eq "$(printf '%s\n' "$OUT" | tail -2 | head -1)" "start a new session in $F so CLAUDE.local.md loads" "restart line"
+# a second adopt of the same folder: the Core folder is taken; nothing changes
+refuses "target exists: $CORE_DIR/foo" --from "$F"
 
 # --- the classic repo: files move, history stays, wiki is green; a settings.local.json of the user's
 # is left as is with a warning
@@ -532,6 +536,25 @@ assert_file "$F/src/a.sh"; assert_dir "$F/.git"
 assert_eq "$(git -C "$F" log -1 --format=%s)" "Move internal Claude files to Core" "repo commit kept"
 git -C "$F" cat-file -e HEAD~1:CLAUDE.md 2>/dev/null && pass || fail "history lost"
 assert_no_file "$F/CLAUDE.local.md"
+# the staging folder carries the project name; a rerun refuses while the staged copy is there (plain and
+# --dry-run), names it and says how to recover; nothing changes
+LEFT="$(ls -d "$CORE_DIR"/.adopt.mv-app.*/p 2>/dev/null)"; LEFT="${LEFT%/p}"
+[ -n "$LEFT" ] && pass || fail "no staging folder named after the project: $(ls -A "$CORE_DIR")"
+LW="leftover staged copy of mv-app: $LEFT (an earlier adopt stopped); if the last commit in $F is \"Move internal Claude files to Core\", undo it with git -C \"$F\" revert --no-edit HEAD; then remove $LEFT and run adopt again"
+refuses "$LW" --from "$F"
+refuses "$LW" --from "$F" --dry-run
+assert_eq "$(head -1 "$STAGED/CLAUDE.md")" "# Old project" "staged CLAUDE.md after the rerun"
+assert_no_file "$CORE_DIR/mv-app"
+# another project's leftover does not block adopt of this one
+mkrepo "$SANDBOX/Projects/other-app"
+assert_exit 0 bash "$AD" --from "$SANDBOX/Projects/other-app"
+assert_file "$CORE_DIR/other-app/CLAUDE.md"; assert_dir "$LEFT"
+# the recovery the refusal names works: revert, remove the leftover, adopt again
+git -C "$F" revert --no-edit HEAD >/dev/null && pass || fail "revert of the repo commit failed"
+rm -rf "$LEFT"
+assert_exit 0 bash "$AD" --from "$F"
+assert_eq "$(head -1 "$CORE_DIR/mv-app/CLAUDE.md")" "# Old project" "CLAUDE.md after the recovery"
+assert_eq "$(last_line "$OUT")" "open: $F" "last line after the recovery"
 }
 bg part_names_and_files
 

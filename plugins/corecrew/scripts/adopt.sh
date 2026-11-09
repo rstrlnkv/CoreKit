@@ -18,6 +18,8 @@
 #   target exists: <path>        <Core>/<name> (new layout) or a <Projects> folder named <name> in any
 #                                letter case (old layout)
 #   two folders differ only in case: <A>, <B>
+#   leftover staged copy of <name>: <Core>/.adopt.<name>.XXXXXX (...)   (new layout: an earlier adopt stopped after
+#       staging; the line says how to recover: revert the repo commit if it was made, remove the folder, rerun)
 #   Core is not set up
 #   CLAUDE.local.md exists in <folder>: move it away first (...)    (a file, or a link elsewhere)
 #   not found: <path>                  a --public-docs path that is not in the repo
@@ -28,7 +30,8 @@
 #       not compare the disks of <Core> and <Projects>" when df gives no usable answer)
 #   git does not know your name and email (...)
 # Only files git tracks are copied and removed; ignored files stay in the repo untouched.
-# Exit 1 (nothing deleted; the message says where the files are): a failed mv after the repo commit.
+# Exit 1 (nothing deleted; the message says where the files are): a failed mv after the repo commit. The staged
+# copy stays in <Core>/.adopt.<name>.XXXXXX; a rerun refuses (leftover staged copy) until it is recovered.
 # Exit 1 (nothing changed; wiki-migrate's stderr line says why): wiki-migrate fails on the staged copy (new
 # layout), before the repo commit.
 # Steps (new layout): copy CLAUDE.md, AGENTS.md, docs/ and .claude/ (not settings.local.json, not
@@ -218,6 +221,14 @@ preconditions() {
     K="$FROM"   # the code folder: stays where it is
     { [ ! -e "$P" ] && [ ! -L "$P" ]; } || refuse "target exists: $P"
     CLASH="$(code_dir_of "$NAME" 2>&1 >/dev/null)"; [ $? -ne 3 ] || refuse "$CLASH"
+    # A staged copy left by an earlier adopt of this project (its move into the Core failed, or the run was
+    # killed): another run would stage the template pages over the user's lost ones. Names carry no glob
+    # characters (valid_project_name), and .adopt.<name>.* never matches another project's folder.
+    for d in "$CORE_DIR/.adopt.$NAME".*/p; do
+      [ -d "$d" ] || continue
+      d="${d%/p}"
+      refuse "leftover staged copy of $NAME: $d (an earlier adopt stopped); if the last commit in $FROM is \"Move internal Claude files to Core\", undo it with git -C \"$FROM\" revert --no-edit HEAD; then remove $d and run adopt again"
+    done
   else
     K="$PROJECTS_DIR/$NAME"   # the code folder after the move
     for d in "$PROJECTS_DIR"/*; do
@@ -430,7 +441,7 @@ print_plan() {
 # Sets TMP, STAGE, COMMITTED, CREATED, MIG.
 stage() {
   COMMITTED=0
-  TMP="$(mktemp -d "$CORE_DIR/.adopt.XXXXXX")" || { echo "adopt: cannot create a temp folder in $CORE_DIR" >&2; exit 1; }
+  TMP="$(mktemp -d "$CORE_DIR/.adopt.$NAME.XXXXXX")" || { echo "adopt: cannot create a temp folder in $CORE_DIR" >&2; exit 1; }
   trap cleanup EXIT
   STAGE="$TMP/p"
   # shellcheck disable=SC2034  # render() in lib.sh fills the templates with it
@@ -606,7 +617,7 @@ finish() {
   fi
   WOUT="$(bash "$ROOT_DIR/scripts/wiki-check.sh" "$P" 2>&1)"
   if [ -n "$WOUT" ]; then echo "the wiki has problems to fix:"; printf '%s\n' "$WOUT"; else echo "wiki: green"; fi
-  echo "restart Claude Code in $K so CLAUDE.local.md loads"
+  echo "start a new session in $K so CLAUDE.local.md loads"
   echo "open: $K"
 }
 

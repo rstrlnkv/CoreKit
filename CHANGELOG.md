@@ -24,6 +24,7 @@ commit log has the full detail.
 
 - A template write that fails leaves no empty file that a rerun would skip: scaffold, adopt and
   setup-core write each file to a temp file and move it into place.
+- adopt refuses to run over a leftover staged copy of the same project and says how to recover.
 
 ## [0.12.0] - 2026-11-09
 
