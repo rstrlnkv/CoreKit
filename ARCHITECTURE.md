@@ -54,6 +54,7 @@ plugins/coreopinion/              second opinion from GPT (Claude Code only)
     agents/openai.yaml            Codex: keeps the skill out of Codex (coreopinion is Claude Code only)
   evals/                          trigger evals
 scripts/commit-subjects.sh        the check of this repo's own commit subjects (CI job and optional commit-msg hook)
+scripts/make-test-coredev.sh      builds test-coredev, the hand-made project for an end-to-end try of /corecrew:task
 tests/                            bash tests, run by tests/run.sh; lib.sh gives each test a sandbox
 docs/                             upgrade guides (migration-*.md) and icon sources (icons/)
 ```
