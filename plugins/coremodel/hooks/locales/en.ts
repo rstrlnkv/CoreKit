@@ -1,9 +1,15 @@
-// The words CoreModel shows, in English. Every locale has the same keys (the type `Strings`): to add a
-// language, copy this file, translate the values, and add it to LOCALES in ../policy.ts.
+// The words CoreModel shows, in English. Every locale has the same keys (the type `Strings`). To add a
+// language: copy ru.ts (typed `Strings`) to <code>.ts and translate the values and `hostNames`; add it to
+// LOCALES in ../policy.ts (settingLang and hostLang read that list); add <code> to Lang in
+// ../../types/index.d.ts and to the `language` options in ../../.claude-plugin/plugin.json.
+// The Codex hint (codex/hint.sh) stays English.
 // Names of models are not translated; a `pair` is a model and an effort already joined ("Opus · High").
 import type { Level } from '../../types'
 
 export const en = {
+  // Claude Code's `language` setting, trimmed and lower-case, that picks this locale under `auto`.
+  // English has none: it is the fallback.
+  hostNames: null as RegExp | null,
   level: { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' } as Record<Level, string>,
   mode: { auto: 'Auto', suggest: 'Suggest', off: 'Off' },
   modeHint: {

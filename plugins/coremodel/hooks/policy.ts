@@ -1,12 +1,14 @@
 // The consent rule and the words the person reads. No calls on `$` here.
-import type { Level } from '../types'
+import type { Lang, Level } from '../types'
 import { LEVELS, type Pick } from './classifier'
 import { en, type Strings } from './locales/en'
 import { ru } from './locales/ru'
 import { LADDER, MODELS, type ModelKey, stronger, switchUsd } from './models'
 
 export type Mode = 'suggest' | 'auto' | 'off'
-export type Lang = 'ru' | 'en'
+
+/** Every locale, English first. A new one is added here, in Lang (types/index.d.ts) and in the manifest's `language` options. */
+export const LOCALES: Record<Lang, Strings> = { en, ru }
 
 /** The modes in the one order every surface shows them; the first is the default. */
 export const MODES: readonly Mode[] = ['auto', 'suggest', 'off']
@@ -29,12 +31,15 @@ export function decide(mode: Mode, now: Level | '', pick: Pick | null): Action {
 
 /**
  * Claude Code's own `language` setting (free text: "russian", "Russian", "ru", "ru-RU", "русский")
- * as a language of ours: Russian when it names Russian, English for any other or none. The text
- * of a prompt never decides: Cyrillic letters are also Ukrainian, Bulgarian, Serbian or Kazakh.
+ * as a language of ours: the first locale whose `hostNames` matches it, English for any other or
+ * none. The text of a prompt never decides: Cyrillic letters are also Ukrainian, Bulgarian, Serbian
+ * or Kazakh.
  */
 export function hostLang(v: unknown): Lang {
   if (typeof v !== 'string') return 'en'
-  return /^(ru|rus|russian|русский)([-_ .].*)?$/.test(v.trim().toLowerCase()) ? 'ru' : 'en'
+  const x = v.trim().toLowerCase()
+  for (const [lang, s] of Object.entries(LOCALES) as [Lang, Strings][]) if (s.hostNames?.test(x)) return lang
+  return 'en'
 }
 
 /** What to do with the model part of a pick. */
@@ -80,12 +85,10 @@ export function effortOptions(pick: Level, now: Level | ''): Level[] {
   return nearest(LEVELS, pick, now, LEVELS)
 }
 
-
-const LOCALES: Record<Lang, Strings> = { en, ru }
-
 /** The plugin's own `language` setting when it names a language of ours; null for `auto` or anything else. */
 export function settingLang(v: unknown): Lang | null {
-  return v === 'en' || v === 'ru' ? v : null
+  // An own key only: `v in LOCALES` would also take 'toString'.
+  return typeof v === 'string' && Object.prototype.hasOwnProperty.call(LOCALES, v) ? (v as Lang) : null
 }
 
 const fmt = (x: number) => String(Math.round(x * 10) / 10)

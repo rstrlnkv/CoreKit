@@ -149,7 +149,7 @@ stops using that model for the session and says so in the pane (`/coremodel rech
 | `useHaiku`, `useSonnet`, `useOpus`, `useFable` | on (default) or off | **Allow …**: the models coremodel may pick; they narrow what your account lists, never add one. All off: the effort only |
 | `pickModel` | `on` (default), `off` | `off`: pick the effort only, never the model |
 
-To add a language, copy `hooks/locales/en.ts`, translate the values and add the table to `LOCALES` in `hooks/policy.ts`.
+To add a language: copy `hooks/locales/ru.ts` to `hooks/locales/<code>.ts` and translate the values and `hostNames` (the Claude Code `language` values that choose it under `auto`); add the table to `LOCALES` in `hooks/policy.ts`, which `settingLang` and `hostLang` read; add `<code>` to `Lang` in `types/index.d.ts` and to the `language` options in `.claude-plugin/plugin.json` (a test checks the options against the locale files). The Codex hint stays English.
 
 ### Cost
 

@@ -4,6 +4,10 @@
 # Runs in a sandbox: `claude plugin test` writes $HOME/.claude.json, which must not be the developer's.
 source "$(dirname "$0")/lib.sh"
 P="$ROOT/plugins/coremodel"
+# the `language` setting offers auto and one value per locale file, nothing more or less
+LANG_OPTS="$(awk '/"language": *\{/ { on = 1 } on && /"options"/ { opts = 1; next } opts && /\]/ { exit } opts { gsub(/[ ",]/, ""); if ($0 != "") print }' "$P/.claude-plugin/plugin.json" | LC_ALL=C sort | tr '\n' ' ')"
+LOCALE_FILES="$( (echo auto; for f in "$P"/hooks/locales/*.ts; do basename "$f" .ts; done) | LC_ALL=C sort | tr '\n' ' ')"
+assert_eq "$LANG_OPTS" "$LOCALE_FILES" "plugin.json language options vs hooks/locales/*.ts"
 if ! command -v claude >/dev/null 2>&1; then skip coremodel "claude not on PATH"; finish; fi
 new_sandbox
 assert_dir "$P"

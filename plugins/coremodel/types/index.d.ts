@@ -2,6 +2,9 @@
 // written by Claude Code into .claude-plugin/types/ and are not tracked.
 export type Level = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
+/** The languages of the words: one per file in hooks/locales/. */
+export type Lang = 'en' | 'ru'
+
 /** The models CoreModel picks from, weakest to strongest. */
 export type ModelKey = 'haiku' | 'sonnet' | 'opus' | 'fable'
 
@@ -16,7 +19,7 @@ export type Band = {
   /** The classifier's short reason. */
   why: string
   /** The language of the words when the band was made; an older band keeps its own. */
-  lang: 'ru' | 'en'
+  lang: Lang
   /** The model the switch moved to, and from; null when the model did not change. */
   model: ModelKey | null
   fromModel: ModelKey | ''
@@ -27,7 +30,7 @@ export type Band = {
 }
 
 /** One switch, drawn as a row in the transcript. */
-export type Mark = { level: Level | null; from: Level | ''; model: ModelKey | null; fromModel: ModelKey | ''; why: string; lang: 'ru' | 'en' }
+export type Mark = { level: Level | null; from: Level | ''; model: ModelKey | null; fromModel: ModelKey | ''; why: string; lang: Lang }
 
 /** What this session's picks came to. */
 export type Stats = {

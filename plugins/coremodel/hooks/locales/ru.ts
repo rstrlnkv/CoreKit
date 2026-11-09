@@ -2,6 +2,7 @@
 import type { Strings } from './en'
 
 export const ru: Strings = {
+  hostNames: /^(ru|rus|russian|русский)([-_ .].*)?$/,
   level: { low: 'Низкое', medium: 'Среднее', high: 'Высокое', xhigh: 'Очень высокое', max: 'Максимальное' },
   mode: { auto: 'Автоматически', suggest: 'Советовать', off: 'Выкл' },
   modeHint: {

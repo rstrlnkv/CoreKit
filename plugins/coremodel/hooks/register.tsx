@@ -1,10 +1,10 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelCompleteResult, Register, RenderChildren } from 'claude-code'
 
-import type { Band, Level, Mark, Stats } from '../types'
+import type { Band, Lang, Level, Mark, Stats } from '../types'
 import { buildPrompt, LEVELS, parseAnswer, type Pick, toLevel } from './classifier'
 import { detectModels, enabledModels, LADDER, MODELS, type ModelKey, requestModel, standIn, toModel } from './models'
-import { decide, decideModel, effortOptions, hostLang, type Lang, type Mode, MODES, modelOptions, settingLang, texts } from './policy'
+import { decide, decideModel, effortOptions, hostLang, LOCALES, type Mode, MODES, modelOptions, settingLang, texts } from './policy'
 
 const PLUGIN = 'coremodel'
 const band = atom({ plugin: 'coremodel', key: 'band' } as const, null)
@@ -326,10 +326,10 @@ async function classify($: EngineInterface, text: string, now: Level | '', model
   return pick
 }
 
-/** A level named in typed text, in English or Russian; undefined when it names none. */
+/** A level named in typed text, in any locale; undefined when it names none. */
 function typedLevel(text: string): Level | undefined {
   const x = text.trim().toLowerCase().replace(/[«»"]/g, '')
-  return toLevel(x) || LEVELS.find(l => texts('en').levelName(l).toLowerCase() === x || texts('ru').levelName(l).toLowerCase() === x)
+  return toLevel(x) || LEVELS.find(l => Object.values(LOCALES).some(s => s.level[l].toLowerCase() === x))
 }
 
 /** The pick for one prompt, then the switch, the question, or nothing. */
