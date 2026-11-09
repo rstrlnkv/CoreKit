@@ -383,6 +383,13 @@ SP1="$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 10000; i++) printf "bash -c '"'"'ls
 # shellcheck disable=SC2034  # (as above)
 SP4="$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 40000; i++) printf "bash -c '"'"'ls; ls'"'"'; "; print "bash -c apply_patch" }')"
 assert_linear "shell_patch_refused: 10000 against 40000 commands" 6 'shell_patch_refused "$SP1"' 'shell_patch_refused "$SP4"'
+# the same with no hit (the word reader reads the whole text; BSD awk once grew faster than linear here, on one long line)
+# shellcheck disable=SC2034  # (as above)
+SN1="$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 10000; i++) printf "make x -o a/b/c; "; print "ls" }')"
+# shellcheck disable=SC2034  # (as above)
+SN4="$(LC_ALL=C awk 'BEGIN { for (i = 0; i < 40000; i++) printf "make x -o a/b/c; "; print "ls" }')"
+shell_patch_refused "$SN1" && fail "no hit: 10000 make commands are refused" || pass
+assert_linear "shell_patch_refused, no hit: 10000 against 40000 commands" 6 'shell_patch_refused "$SN1"' 'shell_patch_refused "$SN4"'
 
 # --- find's program-running primaries with the terminator in QUOTES. Quoted text is opaque to the structure checks,
 # so `';'` leaves no ; for the "no list" check: only the find rule refuses these (a copy of the rule without it stayed
@@ -396,18 +403,21 @@ passes "find . -name apply_patch -print" "find -name apply_patch"
 passes "find . -iname 'apply_patch*'" "find -iname quoted glob"
 
 # --- shell_patch_host: the refusal runs in Codex only, where the plugin lies under CODEX_HOME (COREKIT_HOST stands in for
-# it) or the hook input carries Codex's turn_id. A raw input on purpose: these cases test the reading of turn_id.
+# it) or the hook input carries Codex's turn_id. The guards pass the turn_id they parsed from the input (json_fields; tid
+# below reads it the same way), so a turn_id inside a command is no turn_id.
+tid() { json_str "$1" turn_id; }
 cl_in='{"session_id":"s","transcript_path":"/t.jsonl","cwd":"/p","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"apply_patch"},"tool_use_id":"toolu_1"}'
 cx_in='{"session_id":"s","turn_id":"turn-1","transcript_path":null,"cwd":"/p","hook_event_name":"PreToolUse","model":"gpt-5","permission_mode":"default","tool_name":"Bash","tool_input":{"command":"apply_patch"},"tool_use_id":"call_1"}'
-( unset COREKIT_HOST; shell_patch_host "$cl_in" ) && fail "shell_patch_host: Claude Code's input, no host set: Codex" || pass
-( unset COREKIT_HOST; shell_patch_host "$cx_in" ) && pass || fail "shell_patch_host: Codex's turn_id, no host set: not Codex"
-( export COREKIT_HOST=claude; shell_patch_host "$cl_in" ) && fail "shell_patch_host: COREKIT_HOST=claude, Claude Code's input: Codex" || pass
-( export COREKIT_HOST=claude; shell_patch_host "$cx_in" ) && pass || fail "shell_patch_host: the turn_id says Codex even when the host does not"
-( export COREKIT_HOST=codex; shell_patch_host "$cl_in" ) && pass || fail "shell_patch_host: COREKIT_HOST=codex, Claude Code's input: not Codex"
-( export COREKIT_HOST=codex; shell_patch_host "$cx_in" ) && pass || fail "shell_patch_host: COREKIT_HOST=codex, Codex's input: not Codex"
-( unset COREKIT_HOST; shell_patch_host '{"session_id":"s","cwd":"/p","tool_input":{"command":"x \"turn_id\":\"t\""}}' ) \
+( unset COREKIT_HOST; shell_patch_host "$(tid "$cl_in")" ) && fail "shell_patch_host: Claude Code's input, no host set: Codex" || pass
+( unset COREKIT_HOST; shell_patch_host "$(tid "$cx_in")" ) && pass || fail "shell_patch_host: Codex's turn_id, no host set: not Codex"
+( export COREKIT_HOST=claude; shell_patch_host "$(tid "$cl_in")" ) && fail "shell_patch_host: COREKIT_HOST=claude, Claude Code's input: Codex" || pass
+( export COREKIT_HOST=claude; shell_patch_host "$(tid "$cx_in")" ) && pass || fail "shell_patch_host: the turn_id says Codex even when the host does not"
+( export COREKIT_HOST=codex; shell_patch_host "$(tid "$cl_in")" ) && pass || fail "shell_patch_host: COREKIT_HOST=codex, Claude Code's input: not Codex"
+( export COREKIT_HOST=codex; shell_patch_host "$(tid "$cx_in")" ) && pass || fail "shell_patch_host: COREKIT_HOST=codex, Codex's input: not Codex"
+( unset COREKIT_HOST; shell_patch_host "$(tid '{"session_id":"s","cwd":"/p","tool_input":{"command":"x \"turn_id\":\"t\""}}')" ) \
   && fail "shell_patch_host: a turn_id inside the command is read as the input's" || pass
 ( unset COREKIT_HOST; shell_patch_host '' ) && fail "shell_patch_host: no input: Codex" || pass
+( unset COREKIT_HOST; shell_patch_host ) && fail "shell_patch_host: no argument: Codex" || pass
 
 # --- everyday commands pass in Codex: a wildcard argument is no command (the list the guard files ran at hook level)
 for c in 'wc -l a/* b/* 2>/dev/null | tail -1' 'cd x && ls scripts/* && cat .claude-plugin/marketplace.json' \

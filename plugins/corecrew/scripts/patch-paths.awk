@@ -1,5 +1,5 @@
 # scripts/patch-paths.awk — the file paths of a Codex apply_patch text. Used by guard-code.sh and
-# guard-secrets.sh (through lib.sh patch_paths):
+# guard-secrets.sh (through guard-lib.sh patch_paths):
 #   LC_ALL=C awk -f patch-paths.awk
 # stdin: the patch text (the tool input "command" of apply_patch). A patch handed to the shell is not read here: the guards refuse it.
 # Prints "<kind>\t<path>":

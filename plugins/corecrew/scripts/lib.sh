@@ -13,9 +13,9 @@
 #   lib-layout.sh    project_of worktree_of code_root_of code_dir_of layout_of valid_project_name
 #   lib-host.sh      codex_home host tools_dir hooks_marker_path plugin_version
 #   lib-scaffold.sh  rel_core render put mkdir_p git_init put_project_docs link_* projects_entry projects_upsert
-#   lib-json.sh      json_str (the hook JSON reader; its awk program is inline, so file tools need no awk file)
+#   lib-json.sh      json_str json_fields (the hook JSON readers; their awk program is inline, so file tools need no awk file)
 # Three subcommands source their own file when run: lib-codex-profile.sh, lib-role-model.sh, lib-tree-state.sh.
-# The guards' shell-patch check is scripts/shell-patch.sh (not part of lib.sh). sync-tools.sh copies every part
+# The guards' shell-patch check is scripts/shell-patch.sh and their shared code scripts/guard-lib.sh (neither is part of lib.sh). sync-tools.sh copies every part
 # into the tools copy (save, undo-step and install-hooks source lib.sh there).
 
 # The Core layout schema this plugin version writes and expects (the one place it is defined).
@@ -53,17 +53,6 @@ for _lib_part in "$_LIB_DIR/lib-paths.sh" "$_LIB_DIR/lib-settings.sh" "$_LIB_DIR
   . "$_lib_part" || { echo "corecrew: $_lib_part is missing or broken" >&2; unset _lib_part; return 1 2>/dev/null || exit 1; }
 done
 unset _lib_part
-
-# --- Hook helpers (no jq).
-
-# patch_paths <text> — the file paths in a Codex apply_patch text, one "<kind>\t<path>" per line: W written, S move
-# source, D deleted, X unreadable, C more than 100 paths. See scripts/patch-paths.awk. Needs $SELF (the plugin
-# root). Status 1 when the reader (patch-paths.awk) is missing or awk failed; status 0 when it ran, even if it printed
-# nothing (a patch that names no file, e.g. Begin Patch + End Patch).
-patch_paths() {
-  [ -r "$SELF/scripts/patch-paths.awk" ] || return 1
-  printf '%s\n' "$1" | LC_ALL=C awk -f "$SELF/scripts/patch-paths.awk" 2>/dev/null
-}
 
 # CLI: bash lib.sh get <key> | set <key> <value> | ready (exit 0 when core_ready) | core-dir (absolute path; warnings for ignored values on stderr)
 #      | settings [key[=optionvalue] ...] (resolved user settings, one "key: value" line each)

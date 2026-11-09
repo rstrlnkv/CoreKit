@@ -29,21 +29,10 @@
 #   a file tool; Delete File passes (like `rm .env`). The patch body is never scanned (it may mention .env).
 #   A text this hook cannot read as a patch (an X line, or no path at all) fails closed on a secret-looking string
 #   in any line that holds "***"; with no such line it passes. More than 100 paths (a C line) are refused. Header
-#   lines and paths are trimmed like Codex does (Unicode spaces too). In Codex only (scripts/shell-patch.sh shell_patch_host: the plugin under
-#   CODEX_HOME, or turn_id in the input; Claude Code has no apply_patch tool) a patch handed to the shell is refused, not judged,
-#   with the match named in the message
-#   (a substring hit on apply_patch, applypatch or apply-patch once quotes, backslashes and newlines are deleted, or a
-#   "*** Begin Patch" with a file marker, or a $' with an escape, or an unquoted glob word that can match the name as a command
-#   word or with 4 or more literal characters, a wildcard argument being no hit and a heredoc body's glob word counting only
-#   when it has a /, or is Markdown emphasis holding apply_ apply- or applyp (**Patch**, *apply* pass), or else holds
-#   "apply", a ? or [, or an inner * (a leading-star *ply_patch is a limit), unless the
-#   command is in the simple form: one read-only reader piped only through sort, uniq, cut, tr, nl, wc, head, tail, grep, rg,
-#   with no $ outside single quotes, substitution, list, redirect or program-running option (quoted text is opaque);
-#   BEST EFFORT, NOT A SECURITY BOUNDARY (the apply_patch tool form is the checked path; the real boundary for secrets in
-#   Codex is a sandbox profile, see the plan 3c); limits: a name built at run time (variable, ${...}, $(...) or backticks,
-#   brace expansion, $'apply'$'_patch', 'apply_pat'?h, extglob, IFS changes), a glob that expands to a file named like an
-#   option, a script or interpreter, write_stdin; see scripts/shell-patch.sh shell_patch_refused and guard-code.sh): a path built
-#   by cd, quoting or $(...) cannot be checked from the command text. Plain mentions in a reader (grep, git commit -m) pass.
+#   lines and paths are trimmed like Codex does (Unicode spaces too).
+#   In Codex only (scripts/shell-patch.sh shell_patch_host), a patch handed to the shell is refused, not judged, with exit 2
+#   and a message naming the match. BEST EFFORT, NOT A SECURITY BOUNDARY: the real boundary for secrets in Codex is a
+#   sandbox profile: lib.sh codex-profile (SECURITY.md). The rule and its limits are in scripts/shell-patch.sh.
 #   This refusal keeps the project gate of the hook (secrets are judged only in a project; guard-code refuses in every folder);
 #   load_settings runs before project_of, so a core_dir that lives only in the settings file counts.
 #   Limits: view_image (reads an image file) does not run the hook in Codex, so a secret reached through it is not
@@ -82,8 +71,8 @@
 #   the Bash path fails open (silently); the file tools are still judged. If awk is there but fails, the
 #   hook fails closed when the command has a secret-looking string.
 # - Inert outside a project (<Core>/<project>/
-#   or its code folder beside the Core): cwd missing or not in a project -> exit 0 at once (so ~/.ssh is
-#   open when Claude works outside a project). No network, no git.
+#   or its code folder beside the Core): with the cwd missing or not in a project, every call passes (exit 0; so ~/.ssh
+#   is open when Claude works outside a project). No network, no git.
 #
 # Fail closed (the one hook that does): the input is odd when a path key the tool needs cannot be read
 # as a clean string (truncated JSON, a number, an array, an object, null, a key spelled with an escape);
@@ -99,20 +88,35 @@ SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/scripts/shell-patch.sh" 2>/dev/null || exit 0   # shell_patch_host, shell_patch_refused (Codex)
-# A writer into a pipe whose reader may stop early has its stderr dropped: with SIGPIPE ignored, bash 5's printf
-# builtin and tr report "Broken pipe" to the user (seen on Linux CI).
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
+. "$SELF/scripts/guard-lib.sh" 2>/dev/null || exit 0   # TAB, guard_refuse, guard_lex, guard_patch, ...: both guards share them
 
-tool="$(json_str "$in" tool_name)"
+# The input is read once, for every key the hook may need (json_fields: one awk pass). The j_<key> values of the file
+# tools are read by name in the loop over $req and $opt below.
+# shellcheck disable=SC2034
+{ IFS= read -r -d '' tool; IFS= read -r -d '' cwd; IFS= read -r -d '' cmd; IFS= read -r -d '' j_file_path
+  IFS= read -r -d '' j_notebook_path; IFS= read -r -d '' j_path; IFS= read -r -d '' j_glob; IFS= read -r -d '' j_pattern
+  IFS= read -r -d '' turn_id
+} < <(json_fields "$in" tool_name cwd command file_path notebook_path path glob pattern turn_id)
 case "$tool" in Read|Edit|Write|NotebookEdit|Grep|Glob|apply_patch|Bash) ;; *) exit 0 ;; esac
-cwd="$(json_str "$in" cwd)"
 [ -n "$cwd" ] || exit 0
-load_settings
-project_of "$cwd" >/dev/null || exit 0
+
+# in_project — the project gate: secrets are judged only in a project, so outside one every call passes (exit 0).
+# load_settings runs before project_of, so a core_dir that lives only in the settings file counts. It runs right before
+# a refusal (die and the other exits 2 below), not first: a call with nothing secret-looking needs no settings. It loads
+# them once (load_settings is not idempotent: a symlinked core_dir becomes canonical); IN_PROJECT is never taken from the
+# environment, where it would switch the gate off.
+IN_PROJECT=""
+in_project() {
+  [ -n "$IN_PROJECT" ] && return 0
+  load_settings
+  project_of "$cwd" >/dev/null || exit 0
+  IN_PROJECT=1
+}
 
 die() {
-  printf '%s\n%s\n' "$(msg secrets_blocked "$1")" "$(msg secrets_ask)" >&2
-  exit 2
+  in_project
+  guard_refuse "$(msg secrets_blocked "$1")" "$(msg secrets_ask)"
 }
 
 # is_secret_name <name> — exit 0 for .env, .env.<x> (x not example, sample, template) and a name that
@@ -177,24 +181,26 @@ is_secret() {
 # The text is cut into components at / \ " whitespace , : ; = ( ) < > | & { } ` ' ; a component is
 # .env or .env.<x> (x not example|sample|template) or .env followed by * or ?; "/.ssh" ends a path
 # or is followed by a separator.
-# Pipe noise: the host may run the hook with SIGPIPE ignored, and then a writer whose reader stops early prints
-# "write error: Broken pipe" to the user. So a reader here takes all of its input (sed -n 1p, not head -n 1), and the
-# writer in front of an early reader (grep -q, an awk that may fail) is a printf or tr whose stderr is dropped: a
-# write is all either can fail at, and the guard reads the reader's status and output, never the writer's.
+# Readers take all their input and early readers' writers drop their stderr (pipe noise: scripts/shell-patch.sh).
 raw_hit() {
   local t hit
   t="$(cat)"
-  hit="$({ printf '%s' "$t"; } 2>/dev/null | LC_ALL=C tr '\134\057\042[:space:]\054:;=()<>&|\173\175\140\047' '\n' \
+  hit="$({ printf '%s' "$t"; } 2>/dev/null | guard_components \
     | LC_ALL=C grep -iE '^\.env([*?]|\.|$)' | LC_ALL=C grep -viE '^\.env\.(example|sample|template)$' | LC_ALL=C sed -n 1p)"
   if [ -n "$hit" ]; then printf '%s' "$hit"; return 0; fi
   if printf '%s' "$t" 2>/dev/null | LC_ALL=C grep -qiE '/\.ssh([/"\\]|$)'; then printf '.ssh'; return 0; fi
   return 1
 }
 
+# judge_patch <kind> <path> — one path of the patch (guard_patch): the file written (W) and the source of a move (S).
+# shellcheck disable=SC2329  # called by name through guard_patch
+judge_patch() {
+  case "$1" in W|S) if is_secret "$2"; then die "$2"; fi ;; esac
+}
+
 # --- apply_patch (Codex): the paths written or moved are judged like a file tool's; a delete passes.
 if [ "$tool" = apply_patch ]; then
-  patch="$(json_str "$in" command)"
-  TAB="$(printf '\t')"
+  patch="$cmd"
   if [ -z "$patch" ]; then
     # no string to read (missing, empty, not a string): only the "***" header lines of the raw text count
     hit="$({ printf '%s' "$in"; } 2>/dev/null | sed 's/\\n/\
@@ -202,17 +208,9 @@ if [ "$tool" = apply_patch ]; then
     exit 0
   fi
   # the reader is missing or failed: nothing can be judged (a name may hide a TAB), refuse; ran with no output: pass
-  found="$(patch_paths "$patch")" || { printf '%s\n' "$(msg patch_no_reader)" >&2; exit 2; }
-  [ -n "$found" ] || exit 0
-  unreadable=""
-  while IFS="$TAB" read -r kind a; do
-    case "$kind" in
-      C) printf '%s\n' "$(msg patch_too_many 100)" >&2; exit 2 ;;
-      W|S) if is_secret "$a"; then die "$a"; fi ;;
-      X) unreadable=1 ;;
-    esac
-  done <<< "$found"
-  if [ -n "$unreadable" ]; then
+  guard_patch "$patch" judge_patch
+  case "$?" in 1) in_project; guard_refuse "$(msg patch_no_reader)" ;; 2) in_project; guard_refuse "$(msg patch_too_many 100)" ;; esac
+  if [ -n "$PATCH_X" ]; then
     hit="$(printf '%s\n' "$patch" | LC_ALL=C grep -F '***' | raw_hit)" && die "$hit"
   fi
   exit 0
@@ -220,24 +218,21 @@ fi
 
 # --- Bash: the candidates found by one awk pass, judged here.
 if [ "$tool" = Bash ]; then
-  cmd="$(json_str "$in" command)"
   if [ -z "$cmd" ]; then
     hit="$({ printf '%s' "$in"; } 2>/dev/null | raw_hit)" && die "$hit"
     exit 0
   fi
   # A Codex patch handed to the shell is refused, in Codex only (see the header).
-  if shell_patch_host "$in" && shell_patch_refused "$cmd"; then printf '%s\n' "$(msg patch_shell "$SHELL_PATCH_HIT")" >&2; exit 2; fi
+  if guard_shell_patch "$turn_id" "$cmd"; then in_project; guard_refuse "$(msg patch_shell "$SHELL_PATCH_HIT")"; fi
   # Cheap exit: a secret path has a dot in it (.env, .ssh; quotes or a backslash in the name are
-  # removed by the lexer, so the raw text is not searched for ".env"). Everything else is lexed.
+  # removed by the lexer, so the raw text is not searched for ".env"). Everything else is lexed, in a project only.
   case "$cmd" in *.*) ;; *) exit 0 ;; esac
+  in_project
   [ -r "$SELF/scripts/bash-lex.awk" ] && [ -r "$SELF/scripts/bashlex-guard-secrets.awk" ] || exit 0
-  # spaces become \004 when the command has no \004 byte: the tokenizer then reads a plain word whole (scripts/bash-lex.awk, Speed)
-  sp=' '; lexsp=0; eot="$(printf '\004')"; case "$cmd" in *"$eot"*) ;; *) sp="$eot"; lexsp=1 ;; esac
-  targets="$({ printf '%s' "$cmd"; } 2>/dev/null | LC_ALL=C tr '\n\r ' "$(printf '\002')$sp$sp" 2>/dev/null | LC_ALL=C awk -v lexsp="$lexsp" -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-guard-secrets.awk" 2>/dev/null)"
+  targets="$(guard_lex bashlex-guard-secrets.awk "$cmd")"
   # awk itself failed: the command is unknown, so a secret-looking string in it is refused
   if [ "$?" -ne 0 ]; then hit="$({ printf '%s' "$cmd"; } 2>/dev/null | raw_hit)" && die "$hit"; exit 0; fi
   [ -n "$targets" ] || exit 0
-  TAB="$(printf '\t')"
   stopped=""
   while IFS="$TAB" read -r kind a unk judged; do
     if [ "$kind" = X ]; then stopped=1; continue; fi
@@ -262,7 +257,7 @@ esac
 hint=""
 printf '%s' "$in" 2>/dev/null | LC_ALL=C grep -qiE '\.env|\.ssh' && hint=1
 for key in $req $opt; do
-  v="$(json_str "$in" "$key")"
+  v="j_$key"; v="${!v}"
   if [ -n "$v" ]; then
     if is_secret "$v"; then die "$v"; fi
   fi
@@ -288,8 +283,8 @@ done
 # path and glob together: Grep path + glob, Glob path + pattern
 jp=""; jg=""
 case "$tool" in
-  Grep) jp="$(json_str "$in" path)"; jg="$(json_str "$in" glob)" ;;
-  Glob) jp="$(json_str "$in" path)"; jg="$(json_str "$in" pattern)" ;;
+  Grep) jp="$j_path"; jg="$j_glob" ;;
+  Glob) jp="$j_path"; jg="$j_pattern" ;;
 esac
 if [ -n "$jp" ] && [ -n "$jg" ]; then
   case "$jg" in "!"*|/*|"~"*|'$HOME'*|'${HOME}'*) ;; *)

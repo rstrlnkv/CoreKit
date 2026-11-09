@@ -1,12 +1,14 @@
 # shell-patch.sh — the guards' check for a Codex patch handed to the shell. Sourced by hooks/guard-code.sh and
-# hooks/guard-secrets.sh after lib.sh (it uses host and json_str from there); nothing else needs it.
+# hooks/guard-secrets.sh after lib.sh (it uses host from there); nothing else needs it.
+# The awk programs are inline on purpose: the rule needs no other plugin file, so a missing scripts/*.awk cannot switch it off.
 
-# shell_patch_host <hook input JSON> — exit 0 when the shell-patch refusal applies: the host is Codex (host: the plugin
-# lies under CODEX_HOME), or the input carries Codex's turn_id (a dev install whose path says nothing; Claude Code sends no
-# turn_id). Claude Code has no apply_patch tool, so there a program of that name is the person's own and nothing is refused.
+# shell_patch_host <turn_id> — exit 0 when the shell-patch refusal applies: the hook input carries Codex's turn_id (the
+# guards read it from the input; Codex always sends one, Claude Code never does, so it is tested first), or the host is
+# Codex (host: the plugin lies under CODEX_HOME). Claude Code has no apply_patch tool, so there a program of that name is
+# the person's own and nothing is refused.
 shell_patch_host() {
-  [ "$(host)" = codex ] && return 0
-  [ -n "$(json_str "${1:-}" turn_id)" ]
+  [ -n "${1:-}" ] && return 0
+  [ "$(host)" = codex ]
 }
 
 # shell_patch_refused <command> — exit 0 when a Bash command applies a patch through the shell, which no hook can
@@ -63,17 +65,23 @@ shell_patch_host() {
 # grep/sed/awk; linear in the text.
 # shellcheck disable=SC2034  # SHELL_PATCH_HIT is read by the guards (their refusal message names it)
 shell_patch_refused() {
-  local q="'" flat plain hit="" out s one quote_re
+  local q="'" flat plain hit="" out s one quote_re ctl redir_re sep_re
   SHELL_PATCH_HIT=""
   one="$(printf '\001')"
   quote_re='s/'"'"'(-?)[^'"'"']*'"'"'|"(-?)[^"$`\]*"/'"$one"'\1\2/g'
+  # the word reader's two cuts, done by sed (one long line costs BSD awk's gsub more than linear time): a redirect operator
+  # becomes a \007 word (the next word is its target), a command separator (\005 stands for a newline) a word of its own
+  ctl="$(printf '\005\007')"
+  redir_re='s/&?[0-9]*[<>]+[&|]?-?/ '"${ctl#?}"' /g'
+  sep_re='s/[|;&()`'"${ctl%?}"']/ & /g'
   flat="$(printf '%s' "$1" | LC_ALL=C tr '\n\r' '  ')"
   plain="$(printf '%s' "$1" | LC_ALL=C tr -d '\047\042\134\012\015')"
   # s: the text with its quoted strings opaque (see above); newline and CR become \005
   s="$(printf '%s' "$1" | LC_ALL=C tr '\n\r' '\005\005' | LC_ALL=C sed -E "$quote_re")"
-  # Pipe noise: the host may run the hook with SIGPIPE ignored; then a writer whose reader stops early prints "write
-  # error: Broken pipe" to the user. So readers take all their input (sed -n 1p, not head -n 1), and a printf in front of
-  # grep -q, or a filter in front of an awk that may fail, has its stderr dropped (a write is all it can fail at).
+  # Pipe noise: the host may run the hook with SIGPIPE ignored (seen on Linux CI); then a writer whose reader stops early
+  # (bash 5's printf builtin, tr) prints "write error: Broken pipe" to the user. So readers take all their input (sed -n
+  # 1p, not head -n 1), and a printf in front of grep -q, or a filter in front of an awk that may fail, has its stderr
+  # dropped (a write is all it can fail at). The guards rely on this note.
   hit="$(printf '%s\n' "$plain" | LC_ALL=C grep -oiE 'apply_patch|applypatch|apply-patch' | LC_ALL=C sed -n 1p)"
   [ -n "$hit" ] || { printf '%s\n' "$flat" 2>/dev/null | LC_ALL=C grep -qE '\*\*\* Begin Patch.*\*\*\* (Add File|Update File|Delete File|Move to):' && hit='*** Begin Patch'; }
   [ -n "$hit" ] || { printf '%s\n' "$flat" 2>/dev/null | LC_ALL=C grep -qE "\\\$$q.*\\\\([xuU]|[0-7])" && hit="\$'\\...'"; }
@@ -144,7 +152,10 @@ shell_patch_refused() {
       }' 2>/dev/null)"
     # the last line is the \001done the reader prints at its end: without it the reader failed, so the text is unknown
     case "$out" in *"$one"done) out="${out%"$one"done}" ;; *) out="" ;; esac
-    [ -n "$out" ] && out="$({ printf '%s' "$out"; } 2>/dev/null | LC_ALL=C tr '\n\r' '\005\005' 2>/dev/null | LC_ALL=C sed -E "$quote_re" 2>/dev/null | LC_ALL=C awk '
+    # The word reader reads one blank-separated piece per record (RS is a space; the text has no newline left but the one
+    # sed may add at its end), so no awk string grows with the text: linear on BSD awk too.
+    [ -n "$out" ] && out="$({ printf '%s' "$out"; } 2>/dev/null | LC_ALL=C tr '\n\r' '\005\005' 2>/dev/null \
+      | LC_ALL=C sed -E -e "$quote_re" -e "$redir_re" -e "$sep_re" 2>/dev/null | LC_ALL=C awk '
       # glob_re: the regex of a glob word; LIT counts its literal characters
       function glob_re(w,   re, i, j, c, L, cls) {
         re = "^"; L = length(w); LIT = 0
@@ -193,12 +204,14 @@ shell_patch_refused() {
         l = b; gsub(/\*/, "", l)
         return index(l, "apply") > 0
       }
-      BEGIN { N[1] = "apply_patch"; N[2] = "applypatch"; N[3] = "apply-patch"; hit = ""; bt = 0; incase = 0 }
+      BEGIN { RS = " "; N[1] = "apply_patch"; N[2] = "applypatch"; N[3] = "apply-patch"; hit = ""; bt = 0; incase = 0; n = 0 }
+      # W[1..n]: the words of the whole text, in order
       {
-        line = $0
-        gsub(/&?[0-9]*[<>]+[&|]?-?/, " \007 ", line)   # a redirect operator: the next word is its target
-        gsub(/[|;&()`\005]/, " & ", line)               # a command separator is a word of its own
-        n = split(line, W, /[ \t]+/)
+        line = $0; sub(/\n$/, "", line)
+        m = split(line, T, /[ \t]+/)
+        for (k = 1; k <= m; k++) if (T[k] != "") W[++n] = T[k]
+      }
+      END {
         cmd = 1; skip = 0; data = 0; wrap = 0
         for (i = 1; i <= n && hit == ""; i++) {
           w = W[i]
@@ -231,8 +244,8 @@ shell_patch_refused() {
           re = glob_re(tolower(b))
           for (k = 1; k <= 3; k++) if (N[k] ~ re && (at || (LIT >= 4 && (!data || dataword(tolower(b), c))))) hit = c
         }
-      }
-      END { if (hit == "") print "none"; else print "hit " hit }' 2>/dev/null)"
+        if (hit == "") print "none"; else print "hit " hit
+      }' 2>/dev/null)"
     case "$out" in none) ;; "hit "*) hit="${out#hit }" ;; *) hit="a command this check could not read" ;; esac
   fi
   [ -n "$hit" ] || return 1

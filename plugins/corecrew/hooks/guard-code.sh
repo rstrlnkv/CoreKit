@@ -7,6 +7,10 @@
 #   corecrew: <path> is an internal file and must not live in the code folder. Write it to <Core>/<project>/<relative path> instead.
 #   Docs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in <Core>/<project>/CLAUDE.md.
 # Nothing is ever printed to stdout.
+# Second rule, the read-only checkers (designer, localizer, security, verifier): their tools leave out Write and Edit,
+# and in Bash they may change nothing but the temp folders. The hook input names the agent (agent_type) inside a
+# subagent, so this holds wherever the agent runs, in a project or not. A temp folder that holds a project (a test
+# sandbox) is still that project. A checker that cannot run refuses: these agents should change nothing.
 #
 # Rules, all compared on the canonical path (".." and symlinks resolved, letter case as on disk
 # for the part that exists, then folded to lower case for the comparison, ASCII only):
@@ -14,9 +18,9 @@
 #   Core and so passes), or <Core>/<p>/code/ in the old layout, or a worktree root <code root>/.claude/worktrees/<w>/ or any other linked git worktree of the code folder (worktree_of);
 #   inside a worktree the path relative to the worktree root is what counts.
 # - Blocked: docs and docs/** and .claude/** at the root, and CLAUDE.md / CLAUDE.local.md / AGENTS.md at
-#   ANY depth. The pre-commit hook (scripts/git-hooks/blocked-patterns) is narrower: it blocks only docs/superpowers/,
-#   CLAUDE*.md, AGENTS.md, .claude/, .env* and key files, so a docs/x.md that got past this hook (a Bash form it does
-#   not read) can still be committed by hand; tests/test_hooks.sh lets docs/README.md through on purpose.
+#   ANY depth. The pre-commit hook is narrower (its list is scripts/git-hooks/blocked-patterns): of docs/ it blocks only
+#   docs/superpowers/, so a docs/x.md that got past this hook (a Bash form it does not read) can still be committed by
+#   hand; tests/test_hooks.sh lets docs/README.md through on purpose.
 # - Allowed: .claude/settings.local.json, .claude/worktrees/** (the worktree dirs themselves: mkdir, an
 #   existing directory or a trailing slash; a file written directly under .claude/worktrees/ is blocked), and the
 #   paths on a "public-docs: <paths>" line of <Core>/<p>/CLAUDE.md (space or comma separated, relative
@@ -30,32 +34,12 @@
 #   W lines judged; besides, its "***" lines are checked raw (internal_hit: a component docs, .claude, claude.md,
 #   claude.local.md or agents.md in any case, no public-docs exception) and a hit is refused; no hit passes. Header lines and
 #   paths are trimmed like Codex does (Unicode spaces too). A text with no string to read passes.
-#   In Codex only (scripts/shell-patch.sh shell_patch_host: the plugin lies under CODEX_HOME, or the input carries Codex's turn_id; Claude
-#   Code has no apply_patch tool, so nothing is refused there) a patch handed to the shell is refused, not judged, in every
-#   folder, and the message names what matched. This is BEST EFFORT, NOT A SECURITY BOUNDARY: it
-#   catches plain and accidental shell patches and many disguised ones, cannot see names the shell builds at run time, and the
-#   apply_patch tool form is the checked path (known ways past it: the Limits below, plus $'apply'$'_patch', 'apply_pat'?h,
-#   extglob, IFS changes, write_stdin) (a scope gate by cwd or by wrapper was bypassed
-#   twice; paths built by cd, quoting, $(...) or a variable cannot be checked from the command text). Rule, in
-#   scripts/shell-patch.sh shell_patch_refused (no shell parsing; a missing file lets every call pass, like a missing
-#   lib.sh): a hit is apply_patch, applypatch or apply-patch (any letter case) in the text
-#   once ' " \ and newlines are deleted (also --codex-run-as-apply-patch), or "*** Begin Patch" followed by an Add File,
-#   Update File, Delete File or Move to marker, or a $' with an escape, or an unquoted glob word that can match the name
-#   and is a command word or keeps 4 or more literal characters (../bin/apply_pat?h, ls; * x; not rm -rf dist/*); in a
-#   heredoc body it is never a command word and counts when it has a / (../bin/*pply_patch*), or is Markdown emphasis whose
-#   text holds apply_ apply- or applyp (*apply_pat*; **Patch**, *apply* pass), or is no emphasis and its literal part holds
-#   "apply" or it has a ? or [ or an inner * (apply_pa*, ap?ly_patch, appl*_patch; a leading-star *ply_patch is a limit).
-#   A hit passes only in the simple form: one read-only
-#   command (grep egrep fgrep rg, git log|show|diff|grep|status|blame|commit -m, cat head tail ls wc find) piped only through
-#   sort uniq cut tr nl wc head tail grep rg; quoted text is opaque there, outside quotes no $ ` \ ; & < > ( ) { } ! or newline;
-#   no assignment first, and no program-running option (git -c -p -O --pag* --ext* --output* --open-files-in-pager* and their
-#   abbreviations, not --oneline; rg --pre -z, find -exec -delete, sort --co*). Exit 2 with
-#   "run patches with the apply_patch tool ... (matched: <what>)". Over-blocking by design (Codex): echo apply_patch, cd x && grep apply_patch .,
-#   grep apply_patch f > out, man apply_patch, FOO=apply_patch make, grep apply_patch $FILE. Limits: a name built at run time (a=apply;
-#   ${a}_patch, $(...) or backticks (also empty), brace expansion, $'apply'$'_patch', 'apply_pat'?h, extglob), a glob that expands to a file whose name is an option (-...), a script file or
-#   interpreter that runs it.
+#   In Codex only (scripts/shell-patch.sh shell_patch_host), a patch handed to the shell is refused, not judged, in every
+#   folder (a scope gate by cwd or by wrapper was bypassed twice), with exit 2 and a message naming the match. BEST
+#   EFFORT, NOT A SECURITY BOUNDARY (SECURITY.md); the rule and its limits are in scripts/shell-patch.sh.
 #   Limit: Codex does send agent_type for subagents, but ro_agent never fires there: Codex agent names are neither
-#   corecrew:* nor the bare checker names (a Codex crew is started by text; task 4 adds a git status check).
+#   corecrew:* nor the bare checker names (a Codex crew is started by text; the Codex chain checks read-only steps with
+#   lib.sh tree-state).
 #   Limit: write_stdin into an open exec session: no evidence that it runs the hook (to be checked live).
 # - Bash: a plain reading for honest mistakes (SECURITY.md, "Threat model": the host's permissions and the git pre-commit
 #   and pre-push hooks are the boundary; deliberate evasion is out of scope). scripts/bashlex-guard-code.awk, on the shared
@@ -93,13 +77,21 @@ SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/scripts/shell-patch.sh" 2>/dev/null || exit 0   # shell_patch_host, shell_patch_refused (Codex)
-# A writer into a pipe whose reader may stop early has its stderr dropped: with SIGPIPE ignored, bash 5's printf
-# builtin and tr report "Broken pipe" to the user (seen on Linux CI).
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
+. "$SELF/scripts/guard-lib.sh" 2>/dev/null || exit 0   # TAB, guard_refuse, guard_lex, guard_patch, ...: both guards share them
 
-tool="$(json_str "$in" tool_name)"
-cwd="$(json_str "$in" cwd)"
+# The input is read once, for every key the hook may need (json_fields: one awk pass).
+{ IFS= read -r -d '' tool; IFS= read -r -d '' cwd; IFS= read -r -d '' cmd; IFS= read -r -d '' file_path
+  IFS= read -r -d '' notebook_path; IFS= read -r -d '' turn_id; IFS= read -r -d '' agent_type
+} < <(json_fields "$in" tool_name cwd command file_path notebook_path turn_id agent_type)
 [ -n "$cwd" ] || exit 0
+# The settings are loaded once, and only where a path needs them (most calls never do). SETTINGS_LOADED is never taken
+# from the environment: a value there would switch the guard off.
+SETTINGS_LOADED=""
+need_settings() {
+  [ -n "$SETTINGS_LOADED" ] && return 0
+  load_settings; SETTINGS_LOADED=1
+}
 
 # is_public <project> <lower-case path relative to the code root> — exit 0 when a public-docs: entry covers it.
 is_public() {
@@ -129,6 +121,7 @@ check_path() {
   abs_l="$(lc "$ABS")"
   # no internal component anywhere in the path: nothing to judge (most targets stop here, without project_of)
   case "/$abs_l/" in */docs/*|*/.claude/*|*/claude.md/*|*/claude.local.md/*|*/agents.md/*) ;; *) return 0 ;; esac
+  need_settings
   proj="$(project_of "$ABS")" || return 0
   # the code root: the project folder in <Projects> taken from the path itself (new layout; so no case
   # clash between folders can switch the guard off), or <Core>/<p>/code for a path inside the Core (old)
@@ -192,17 +185,12 @@ check_path() {
     agents.md) tgt="AGENTS.md" ;;
     */agents.md) tgt="${tgt%/*}/AGENTS.md" ;;
   esac
-  printf '%s\n' "$(msg guard_code_blocked "$shown" "$CORE_DIR/$proj/$tgt")" >&2
-  printf '%s\n' "$(msg guard_code_public "$CORE_DIR/$proj/CLAUDE.md")" >&2
-  exit 2
+  guard_refuse "$(msg guard_code_blocked "$shown" "$CORE_DIR/$proj/$tgt")" "$(msg guard_code_public "$CORE_DIR/$proj/CLAUDE.md")"
 }
 
-# --- The read-only checkers (designer, localizer, security, verifier): their tools leave out Write and
-# Edit, and in Bash they may change nothing but the temp folders. The hook input names the agent
-# (agent_type) inside a subagent, so this holds wherever the agent runs, in a project or not.
-# A temp folder that holds a project (a test sandbox) is still that project.
+# --- The read-only checkers: the second rule of the header.
 ro_agent() {
-  local a; a="$(json_str "$in" agent_type)"
+  local a="$agent_type"
   case "$a" in corecrew:*) a="${a#corecrew:}" ;; *:*) return 1 ;; esac
   case "$a" in designer|localizer|security|verifier) printf '%s\n' "$a" ;; *) return 1 ;; esac
 }
@@ -215,25 +203,17 @@ in_temp() {   # in_temp <absolute path>
   return 1
 }
 if [ "$tool" = Bash ] && agent="$(ro_agent)"; then
-  cmd="$(json_str "$in" command)"
   [ -n "$cmd" ] || exit 0
-  load_settings
-  TAB="$(printf '\t')"
+  need_settings
   # A checker that cannot run refuses: these agents should change nothing, so unknown is no.
-  # (tr's stderr is dropped: an awk that fails early would make it print "write error: Broken pipe", see internal_hit;
-  # spaces become \004 when the command has no \004 byte: the tokenizer then reads a plain word whole, bash-lex.awk Speed)
-  sp=' '; lexsp=0; eot="$(printf '\004')"; case "$cmd" in *"$eot"*) ;; *) sp="$eot"; lexsp=1 ;; esac
-  found="$({ printf '%s' "$cmd"; } 2>/dev/null | LC_ALL=C tr '\n\r ' "$(printf '\002')$sp$sp" 2>/dev/null \
-    | LC_ALL=C awk -v lexsp="$lexsp" -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-readonly.awk" 2>/dev/null)" \
-    || found="X${TAB}a command this check could not read"
+  found="$(guard_lex bashlex-readonly.awk "$cmd")" || found="X${TAB}a command this check could not read"
   while IFS="$TAB" read -r kind a; do
     case "$kind" in
       X) what="$a" ;;
       P) resolve_abs "$a"; in_temp "$ABS" && continue; what="$ABS" ;;
       *) continue ;;
     esac
-    printf '%s\n' "$(msg readonly_agent "$agent" "$what" "${TMPDIR:-/tmp}")" >&2
-    exit 2
+    guard_refuse "$(msg readonly_agent "$agent" "$what" "${TMPDIR:-/tmp}")"
   done <<< "$found"
 fi
 
@@ -244,11 +224,10 @@ case "$tool" in Write|Edit|NotebookEdit|apply_patch|Bash) ;; *) exit 0 ;; esac
 # is cut into components at / \ quotes, blanks and shell punctuation; a component docs, .claude, claude.md,
 # claude.local.md or agents.md (any letter case) is a hit. Used where a patch cannot be read as headers: no
 # public-docs entry or settings.local.json exception applies there, so this errs on the side of blocking.
-# Every reader in these pipelines takes all of its input (sed -n 1p, not grep -m1 or head): the host may run the hook
-# with SIGPIPE ignored, and then a writer whose reader stopped early prints "write error: Broken pipe" to the user.
+# Every reader in these pipelines takes all of its input (pipe noise: scripts/shell-patch.sh).
 internal_hit() {
   local hit
-  hit="$(LC_ALL=C tr '\134\057\042[:space:]\054:;=()<>&|\173\175\140\047' '\n' | LC_ALL=C tr 'A-Z' 'a-z' \
+  hit="$(guard_components | LC_ALL=C tr 'A-Z' 'a-z' \
     | LC_ALL=C grep -xE 'docs|\.claude|claude\.md|claude\.local\.md|agents\.md' | LC_ALL=C sed -n 1p)"
   [ -n "$hit" ] || return 1
   printf '%s\n' "$hit"
@@ -259,17 +238,12 @@ refuse_raw() {
   hit="$(printf '%s\n' "$1" | LC_ALL=C grep -F '***' | internal_hit)" || return 0
   # the message quotes the first "***" line that holds the component (cut to 200 bytes), not the bare component
   line="$(printf '%s\n' "$1" | LC_ALL=C grep -F '***' | LC_ALL=C grep -iF -- "$hit" | LC_ALL=C sed -n 1p | LC_ALL=C cut -c1-200)"
-  printf '%s\n' "$(msg patch_unjudgeable "${line:-$hit}")" >&2
-  exit 2
+  guard_refuse "$(msg patch_unjudgeable "${line:-$hit}")"
 }
-# judge_patch <kind> <path> — one line of patch_paths output (a W line is judged; a C line refuses the patch);
-# $PATCH_X is set for X.
+# judge_patch <kind> <path> — one path of the patch (guard_patch): a W line is judged.
+# shellcheck disable=SC2329  # called by name through guard_patch
 judge_patch() {
-  case "$1" in
-    C) printf '%s\n' "$(msg patch_too_many 100)" >&2; exit 2 ;;
-    X) PATCH_X=1 ;;
-    W) check_path "$2" ;;
-  esac
+  case "$1" in W) check_path "$2" ;; esac
 }
 
 # --- apply_patch (Codex): the paths of the patch text. W lines are judged (Add, Update without a move,
@@ -279,59 +253,44 @@ judge_patch() {
 # raw for an internal path. A reader that is missing or failed (patch_paths status non-zero) refuses the call outright;
 # a reader that ran and printed nothing (a patch naming no file) passes. A text with no string to read passes (exit 0).
 if [ "$tool" = apply_patch ]; then
-  patch="$(json_str "$in" command)"
+  patch="$cmd"
   [ -n "$patch" ] || exit 0
-  load_settings
-  TAB="$(printf '\t')"
-  PATCH_X=""
-  # The reader is missing or failed: nothing can be judged, not even raw (a path may be cwd-relative or hide a TAB),
-  # so the call is refused outright. A reader that ran and printed nothing: no path to judge, pass.
-  found="$(patch_paths "$patch")" || { printf '%s\n' "$(msg patch_no_reader)" >&2; exit 2; }
-  [ -n "$found" ] || exit 0
-  while IFS="$TAB" read -r kind a; do
-    judge_patch "$kind" "$a"
-  done <<< "$found"
+  need_settings
+  guard_patch "$patch" judge_patch
+  case "$?" in 1) guard_refuse "$(msg patch_no_reader)" ;; 2) guard_refuse "$(msg patch_too_many 100)" ;; esac
   [ -z "$PATCH_X" ] || refuse_raw "$patch"
   exit 0
 fi
 
 if [ "$tool" != Bash ]; then
-  key=file_path; [ "$tool" = NotebookEdit ] && key=notebook_path
-  path="$(json_str "$in" "$key")"
+  path="$file_path"; [ "$tool" = NotebookEdit ] && path="$notebook_path"
   [ -n "$path" ] || exit 0
-  load_settings
   check_path "$path"
   exit 0
 fi
 
 # --- Bash: targets of redirects and file commands, found by one awk pass.
-cmd="$(json_str "$in" command)"
 [ -n "$cmd" ] || exit 0
 # A Codex patch applied through the shell is refused, in Codex only (see the header).
-if shell_patch_host "$in" && shell_patch_refused "$cmd"; then printf '%s\n' "$(msg patch_shell "$SHELL_PATCH_HIT")" >&2; exit 2; fi
+if guard_shell_patch "$turn_id" "$cmd"; then guard_refuse "$(msg patch_shell "$SHELL_PATCH_HIT")"; fi
 # Cheap exit: nothing in the command can write a file.
 case "$cmd" in *">"*|*tee*|*touch*|*mkdir*|*cp*|*mv*|*ln*|*install*|*sed*|*perl*) ;; *) exit 0 ;; esac
 
 # The targets: "W <path>" a file written, "D <path>" a directory made, "J <dir> <source>" and "L <dest> <source>"
 # (see scripts/bashlex-guard-code.awk).
-# tr's stderr is dropped: the reader stops early when it is missing or has too many targets (C), and with SIGPIPE
-# ignored tr would then print "write error: Broken pipe" to the user.
-# Spaces become \004 when the command has no \004 byte: the tokenizer then reads a plain word whole (bash-lex.awk, Speed).
-sp=' '; lexsp=0; eot="$(printf '\004')"; case "$cmd" in *"$eot"*) ;; *) sp="$eot"; lexsp=1 ;; esac
-targets="$({ printf '%s' "$cmd"; } 2>/dev/null | LC_ALL=C tr '\n\r ' "$(printf '\002')$sp$sp" 2>/dev/null \
-  | LC_ALL=C awk -v lexsp="$lexsp" -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-guard-code.awk" 2>/dev/null)"
+# The reader stops early when it is missing or has too many targets (C): guard_lex keeps that quiet.
+targets="$(guard_lex bashlex-guard-code.awk "$cmd")"
 [ -n "$targets" ] || exit 0
 NL='
 '
-load_settings
+need_settings
 # A last line C: too many internal-looking targets to judge within the hook timeout. Refuse the whole command, but only
 # in scope: the cwd is in a project, or a target names the folder that holds the Core (the code folders sit beside it).
 if [ "${targets##*"$NL"}" = C ]; then
-  case "$targets" in *"$(dirname "$CORE_DIR")"/*) printf '%s\n' "$(msg guard_code_too_many)" >&2; exit 2 ;; esac
+  case "$targets" in *"$(dirname "$CORE_DIR")"/*) guard_refuse "$(msg guard_code_too_many)" ;; esac
   project_of "$(canon_dir "$cwd")" >/dev/null 2>&1 || exit 0
-  printf '%s\n' "$(msg guard_code_too_many)" >&2; exit 2
+  guard_refuse "$(msg guard_code_too_many)"
 fi
-TAB="$(printf '\t')"
 # into_dir <dest> <source> [mode] — cp, mv, ln into a directory: <dest>/<base name of source> is judged when <dest> is one
 into_dir() {
   local s="$2"

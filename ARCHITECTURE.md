@@ -26,6 +26,7 @@ plugins/corecrew/                 project workflow
                                   lib-host.sh, lib-scaffold.sh, lib-json.sh; and, each for one subcommand
                                   only, lib-codex-profile.sh, lib-role-model.sh, lib-tree-state.sh
     shell-patch.sh                the check for a Codex patch handed to the shell (sourced by both guards)
+    guard-lib.sh                  what both guards share: the refusal, the tokenizer call, the patch reader
     bash-lex.awk                  the one Bash tokenizer, for bashlex-guard-code.awk (the code guard: the
                                   files a command writes), bashlex-guard-secrets.awk (the secrets guard)
                                   and bashlex-readonly.awk (the read-only checker rule)
@@ -112,8 +113,11 @@ hook trust           on install                          after you enable them i
 - **Hooks** (`plugins/corecrew/hooks/hooks.json`) run at session start, before tool calls and at
   stop. They guard secrets and the public code folder, keep one test suite running at a time and
   remind the agent to save. Outside a Core project only the session-start hook (tools refresh and
-  a one-time "Core not set up" hint) and the read-only checker rule act; every other hook exits at once.
-- **Scripts** hold the logic, so hooks stay thin. A script or hook sources `lib.sh`, and `lib.sh`
+  a one-time "Core not set up" hint) and the read-only checker rule act; every other hook passes every call.
+- **Scripts** hold what is shared; a hook holds its own rule. What two hooks, or a hook and a
+  script, share lives in `plugins/corecrew/scripts/` (`lib.sh` and its parts,
+  `plugins/corecrew/scripts/guard-lib.sh`, `plugins/corecrew/scripts/shell-patch.sh`, the awk
+  readers) or in `plugins/corecrew/hooks/messages.sh`. A script or hook sources `lib.sh`, and `lib.sh`
   sources its parts (`lib-*.sh`). The guards read a Bash command with awk, not with a shell: the
   code guard, the secrets guard and the read-only checker rule each with the one tokenizer
   `bash-lex.awk` and their own part (`bashlex-guard-code.awk`, `bashlex-guard-secrets.awk`,
