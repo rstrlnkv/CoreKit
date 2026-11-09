@@ -105,6 +105,12 @@ for pl in $plugins; do
   # one sentence of at most 120 characters, benefit first
   [ "${#desc}" -le 120 ] && pass || fail "$pl description is ${#desc} characters, want 120 at most"
   case "$desc" in *.*.*) fail "$pl description is more than one sentence" ;; *.) pass ;; *) fail "$pl description does not end with a full stop" ;; esac
+  # the README's line 3 is this description (R3-38); coremodel's and coreopinion's line 3 is longer on purpose:
+  # it says what each does in Codex
+  case "$pl" in
+    coremodel|coreopinion) ;;
+    *) assert_eq "$(sed -n 3p "$ROOT/plugins/$pl/README.md")" "$desc" "$pl README.md line 3 vs its manifest description" ;;
+  esac
   # the icon: ./assets/icon.png, named in every manifest, a square PNG of 512 to 2048 px, under 256 KiB
   ic="$ROOT/plugins/$pl/assets/icon.png"
   assert_eq "$(jf "$CJ" icon)" "./assets/icon.png" "$pl icon field"
