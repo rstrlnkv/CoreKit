@@ -815,6 +815,19 @@ sec_cheap() {
   printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"%s/docs/x.md","content":"x"}}' "$C" "$C" \
     | SETTINGS_LOADED=1 bash "$H" >"$OD/out" 2>"$OD/err"; RC=$?; OUT="$(<"$OD/out")"; ERR="$(<"$OD/err")"
   blocked "SETTINGS_LOADED=1 in the environment: Write docs/x.md is still refused" "$C/docs/x.md" "$CORE_DIR/p/docs/x.md"
+  # the same in the new layout with core_dir only in the settings file (CORE_DIR unset, as in Codex): there only
+  # load_settings finds the code folder beside the Core, so a SETTINGS_LOADED taken from the environment would pass it
+  local S3="$OD/settings-only" cfg
+  mkdir -p "$S3/Projects/Core/app" "$S3/Projects/app/src"; : > "$S3/Projects/Core/app/CLAUDE.md"
+  cfg="$S3/settings"; printf 'core_dir: %s\n' "$S3/Projects/Core" > "$cfg"
+  printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"%s/docs/x.md","content":"x"}}' \
+    "$S3/Projects/app" "$S3/Projects/app" \
+    | env -u CORE_DIR -u CLAUDE_PLUGIN_OPTION_CORE_DIR CORECREW_CONFIG="$cfg" SETTINGS_LOADED=1 bash "$H" >"$OD/out" 2>"$OD/err"
+  RC=$?; OUT="$(<"$OD/out")"; ERR="$(<"$OD/err")"
+  assert_eq "$RC" "2" "SETTINGS_LOADED=1, new layout, core_dir only in the settings file: Write docs/x.md is still refused"
+  assert_eq "$OUT" "" "SETTINGS_LOADED=1, new layout: stdout"
+  assert_eq "$ERR" "$(printf 'corecrew: %s is an internal file and must not live in the code folder. Write it to %s instead.\nDocs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in %s.' \
+    "$S3/Projects/app/docs/x.md" "$S3/Projects/Core/app/docs/x.md" "$S3/Projects/Core/app/CLAUDE.md")" "SETTINGS_LOADED=1, new layout: message"
   w='{"session_id":"s","cwd":"'"$C"'","hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"'"$C"'/src/x.py","content":"x"}}'
   printf '%s' "$w" | bash -x "$H" >"$OD/out" 2>"$OD/err"; assert_eq "$?" "0" "bash -x: Write src/x.py passes"
   grep -q 'load_settings' "$OD/err" && fail "a Write of src/x.py loads the settings" || pass
