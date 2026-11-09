@@ -5,6 +5,7 @@ import type { Band, Lang, Level, Mark, Stats } from '../types'
 import { buildPrompt, LEVELS, parseAnswer, type Pick, toLevel } from './classifier'
 import { detectModels, enabledModels, LADDER, MODELS, type ModelKey, requestModel, standIn, toModel } from './models'
 import { decide, decideModel, effortOptions, hostLang, LOCALES, type Mode, MODES, modelOptions, settingLang, texts } from './policy'
+import { BAND_MS, type Held, session } from './session'
 
 const PLUGIN = 'coremodel'
 const band = atom({ plugin: 'coremodel', key: 'band' } as const, null)
@@ -15,59 +16,24 @@ const failure = atom({ plugin: 'coremodel', key: 'failure' } as const, null)
 const NO_STATS: Stats = { picks: { low: 0, medium: 0, high: 0, xhigh: 0, max: 0 }, kept: 0, last: null, marks: 0, models: { haiku: 0, sonnet: 0, opus: 0, fable: 0 } }
 // Classifier failures in a row before the person is told: one is often a passing API hiccup.
 const FAIL_SHOW = 2
-const BAND_MS = 15_000
 // The classifier answers in about 2 s; the whole pick waits CLASSIFY_MS at most, and a second
 // call starts when the first has not answered in HEDGE_MS.
 const CLASSIFY_MS = 8_000
 const HEDGE_MS = 3_000
 
-// Module variables start over on a reload; what must outlive one is in $.state or $.store.
-// Bumped on every prompt, so a pick for an older prompt is dropped.
-let gen = 0
-let nextBand = 1
-// Bumped when the person changes the hold themselves (a pane press, Back): a pick that began
-// earlier is dropped, so its late answer never overrides their newer choice.
-let touched = 0
-// The prompt waiting for its pick at the turn's first request. `turn` is the turn that was
-// running when it was typed (it waits in the queue behind that turn); absent when the chat was idle.
-let held: { text: string; gen: number; lang: Lang; turn?: string } | null = null
-// The chosen level, put on every main-chat request until the person moves the menu. It lives in
-// this chat only: the app's own effort setting is never written. `base` is the menu's level when
-// the hold began.
-let hold: { level: Level; base: string } | null = null
-// The chosen model, held the same way; `base` is the request's own model when the hold began.
-let modelHold: { key: ModelKey; base: string } | null = null
-// The level the last main-chat request ran at.
-let seen: Level | '' = ''
-// The model the last main-chat request named (the person's own unless held).
-let seenModel = ''
-// Models this account refused in this session: never picked again until a new session.
-const unavailable = new Set<ModelKey>()
-// The models the account lists in /config (the Model row), read again before every pick and at a new
-// session; null when the row says nothing usable. Never stored: a model that appears later is seen.
-let listed: ModelKey[] | null = null
-// The menu's own effort as the last main-chat request carried it.
-let asked = ''
-// The language of the words, read at the session start and again on every prompt (see currentLang).
-let lastLang: Lang = 'en'
-// Where the session draws: VS Code draws neither the band nor the footer, so a switch is told in a toast.
-let surface = ''
-// The last silent switch, for /coremodel undo after its band is gone.
-let lastUndo: Band | null = null
-
 /** Reads the /config Model row again; any failure means "no verdict" (nothing is filtered). */
 async function refreshListed($: EngineInterface): Promise<void> {
   try {
     const row = (await $.config.list()).find(r => r.key === 'model')
-    listed = detectModels(row?.options)
+    session.listed = detectModels(row?.options)
   } catch {
-    listed = null
+    session.listed = null
   }
 }
 
 /** The models CoreModel may pick: switched on in the settings, listed by the account, minus those that failed. */
 function allowedModels(options: Readonly<Record<string, unknown>>): ModelKey[] {
-  return enabledModels(options).filter(k => (listed === null || listed.includes(k)) && !unavailable.has(k))
+  return enabledModels(options).filter(k => (session.listed === null || session.listed.includes(k)) && !session.unavailable.has(k))
 }
 
 /** A line in Claude Code's debug log (`claude --debug`); never in the transcript, never a file. */
@@ -107,35 +73,35 @@ async function currentMode($: EngineInterface, options: { mode?: unknown }): Pro
 
 /** Switches to `level` by holding it on this chat's requests. */
 async function applyLevel($: EngineInterface, level: Level, base: string): Promise<void> {
-  hold = { level, base }
+  session.hold = { level, base }
   await syncOverride($)
 }
 
 /** What the drawings read: the held pair, or null when nothing is held. */
 async function syncOverride($: EngineInterface): Promise<void> {
-  const pair = { model: modelHold?.key ?? null, level: hold?.level ?? null }
+  const pair = { model: session.modelHold?.key ?? null, level: session.hold?.level ?? null }
   await update($, override, () => (pair.model || pair.level ? pair : null))
 }
 
 /** Lets go of the held level: the chat runs at the menu's level again. */
 async function releaseLevel($: EngineInterface): Promise<void> {
-  hold = null
+  session.hold = null
   // The pane reads `seen`: after a release it is the menu's level, not the one just let go.
-  seen = toLevel(asked) || seen
+  session.seen = toLevel(session.asked) || session.seen
   await syncOverride($)
 }
 
 /** Lets go of the held model: the chat runs on the person's own model again. */
 async function releaseModel($: EngineInterface): Promise<void> {
-  modelHold = null
+  session.modelHold = null
   await syncOverride($)
 }
 
 /** Lets go of both parts (off, Release, a new session). */
 async function releaseHold($: EngineInterface): Promise<void> {
-  hold = null
-  seen = toLevel(asked) || seen
-  modelHold = null
+  session.hold = null
+  session.seen = toLevel(session.asked) || session.seen
+  session.modelHold = null
   await syncOverride($)
 }
 
@@ -148,10 +114,10 @@ async function releaseHold($: EngineInterface): Promise<void> {
  * starts clean, and keeps the rows its transcript still shows.
  */
 async function newChat($: EngineInterface, fromEngine: boolean): Promise<void> {
-  gen += 1
-  lastUndo = null
-  held = fromEngine && held ? { ...held, gen } : null
-  seen = toLevel(asked)
+  session.gen += 1
+  session.lastUndo = null
+  session.held = fromEngine && session.held ? { ...session.held, gen: session.gen } : null
+  session.seen = toLevel(session.asked)
   await releaseHold($)
   if (fromEngine) await update($, marks, () => ({}))
   await update($, band, () => null)
@@ -177,7 +143,7 @@ async function placeMark($: EngineInterface, change: Mark) {
 
 /** Switches to `key` by holding it on this chat's requests. */
 async function applyModel($: EngineInterface, key: ModelKey, base: string): Promise<void> {
-  modelHold = { key, base }
+  session.modelHold = { key, base }
   await syncOverride($)
 }
 
@@ -207,16 +173,16 @@ function pickOn(options: { pickModel?: unknown }): boolean {
  */
 function chatState(pair: { model: ModelKey | null; level: Level | null } | null, options: { pickModel?: unknown }) {
   const withModel = pickOn(options)
-  const nowModel: ModelKey | '' = withModel ? (pair?.model ?? toModel(seenModel)) : ''
-  const nowLevel: Level | '' = pair?.level ?? seen
-  const defaultModel: ModelKey | '' = withModel && pair?.model ? toModel(seenModel) : ''
-  const defaultLevel: Level | '' = pair?.level ? toLevel(asked) : ''
+  const nowModel: ModelKey | '' = withModel ? (pair?.model ?? toModel(session.seenModel)) : ''
+  const nowLevel: Level | '' = pair?.level ?? session.seen
+  const defaultModel: ModelKey | '' = withModel && pair?.model ? toModel(session.seenModel) : ''
+  const defaultLevel: Level | '' = pair?.level ? toLevel(session.asked) : ''
   return { nowModel, nowLevel, isHeld: !!(pair?.model || pair?.level), defaultModel, defaultLevel }
 }
 
 /** The cost question before a switch to `key` mid-chat; true on the person's yes. */
 async function confirmCost($: EngineInterface, key: ModelKey, nowModel: ModelKey | '', why: string): Promise<boolean> {
-  const t = texts(lastLang)
+  const t = texts(session.lastLang)
   const yes = t.switchToModel(key)
   try {
     const answer = await $.ui.ask(t.costQuestion(key, nowModel, await chatTokens($), why), { options: [yes, nowModel ? t.keepModel(nowModel) : t.cancel], header: t.modelHeader })
@@ -236,9 +202,9 @@ async function clearBand($: EngineInterface, b: Band): Promise<void> {
  * no band, so there it is said in a toast, a silent switch with the undo command.
  */
 async function showBand($: EngineInterface, b: Band) {
-  if (b.undo) lastUndo = b
+  if (b.undo) session.lastUndo = b
   await update($, band, () => b)
-  if (surface === 'vscode') {
+  if (session.surface === 'vscode') {
     const t = texts(b.lang)
     try {
       $.ui.toast(
@@ -336,14 +302,14 @@ function typedLevel(text: string): Level | undefined {
 async function runPick(
   $: EngineInterface,
   options: Readonly<Record<string, unknown>>,
-  h: NonNullable<typeof held>,
+  h: Held,
   now: Level | '',
   base: string,
   nowModel: ModelKey | '',
   baseModel: string,
   hasEffort: boolean,
 ) {
-  const began = touched
+  const began = session.touched
   const mode = await currentMode($, options)
   if (mode === 'off') return
   const t = texts(h.lang)
@@ -368,7 +334,7 @@ async function runPick(
   }
   if (await read($, failure)) await update($, failure, () => null)
   // The person may have turned the plugin off while the classifier ran.
-  const stale = async () => h.gen !== gen || touched !== began || (await currentMode($, options)) === 'off'
+  const stale = async () => h.gen !== session.gen || session.touched !== began || (await currentMode($, options)) === 'off'
   if (await stale()) return
   // A model the plugin may not use (the account lacks it, or its switch is off) gives way to the nearest
   // one it may use, below it first. The reason says so wherever the pick is shown: the questions, the
@@ -400,7 +366,7 @@ async function runPick(
       why: pick.why,
       lang: h.lang,
     }
-    await showBand($, { id: nextBand++, ...suggestion, undo: null, suggest: true })
+    await showBand($, { id: session.nextBand++, ...suggestion, undo: null, suggest: true })
     return
   }
 
@@ -469,7 +435,7 @@ async function runPick(
   await applied($, change)
   // The band is for a silent switch, where it carries the undo; a switch the person agreed to in a
   // dialog is in the transcript row and the footer already.
-  if (parts.model || parts.level) await showBand($, { id: nextBand++, ...change, undo: parts })
+  if (parts.model || parts.level) await showBand($, { id: session.nextBand++, ...change, undo: parts })
 }
 
 /** A prompt left as it was: counted, and its named pick marked as not applied. */
@@ -502,12 +468,12 @@ async function applied($: EngineInterface, change: Mark): Promise<void> {
  * still gets the cost question first; a No there keeps the model and takes the effort.
  */
 async function acceptSuggestion($: EngineInterface, b: Band): Promise<void> {
-  touched += 1
+  session.touched += 1
   await clearBand($, b)
-  const nowModel = modelHold?.key ?? toModel(seenModel)
+  const nowModel = session.modelHold?.key ?? toModel(session.seenModel)
   let modelTo = b.model && b.model !== nowModel ? b.model : null
   if (modelTo && !(await isEmptyChat($)) && !(await confirmCost($, modelTo, nowModel, b.why))) modelTo = null
-  const nowLevel = hold?.level ?? seen
+  const nowLevel = session.hold?.level ?? session.seen
   const levelTo = b.level && b.level !== nowLevel ? b.level : null
   if (!modelTo && !levelTo) return keptPrompt($, true)
   if (modelTo) await applyModel($, modelTo, '')
@@ -525,19 +491,19 @@ async function declineSuggestion($: EngineInterface, b: Band): Promise<void> {
 async function undoChange($: EngineInterface, b: Band): Promise<boolean> {
   const undo = b.undo
   if (!undo) return false
-  touched += 1
+  session.touched += 1
   let done = false
-  if (undo.model && b.model && modelHold?.key === b.model) {
+  if (undo.model && b.model && session.modelHold?.key === b.model) {
     if (undo.model === 'release') await releaseModel($)
-    else await applyModel($, undo.model, modelHold.base)
+    else await applyModel($, undo.model, session.modelHold.base)
     done = true
   }
-  if (undo.level && b.level && hold?.level === b.level) {
+  if (undo.level && b.level && session.hold?.level === b.level) {
     if (undo.level === 'release') await releaseLevel($)
-    else await applyLevel($, undo.level, hold.base)
+    else await applyLevel($, undo.level, session.hold.base)
     done = true
   }
-  if (lastUndo?.id === b.id) lastUndo = null
+  if (session.lastUndo?.id === b.id) session.lastUndo = null
   await clearBand($, b)
   return done
 }
@@ -552,7 +518,7 @@ function undoTarget(b: Band): { model: ModelKey | '' | undefined; level: Level |
 
 /** Sets the mode as `/coremodel <mode>` does; returns the reply. */
 async function setMode($: EngineInterface, options: { mode?: unknown; pickModel?: unknown }, arg: Mode | 'on'): Promise<string> {
-  const t = texts(lastLang)
+  const t = texts(session.lastLang)
   let text: string
   if (arg === 'auto' || arg === 'suggest') {
     await $.store.set('mode', arg)
@@ -580,7 +546,7 @@ async function setMode($: EngineInterface, options: { mode?: unknown; pickModel?
  * goes, and the hold takes the menu's level from the next request as its base.
  */
 async function paneChoice($: EngineInterface, level: Level | null): Promise<void> {
-  touched += 1
+  session.touched += 1
   if (level) await applyLevel($, level, '')
   else await releaseHold($)
   await update($, band, () => null)
@@ -591,8 +557,8 @@ async function paneChoice($: EngineInterface, level: Level | null): Promise<void
  * the press itself is their yes, so no other question follows.
  */
 async function paneModel($: EngineInterface, key: ModelKey): Promise<void> {
-  touched += 1
-  const nowModel = modelHold?.key ?? toModel(seenModel)
+  session.touched += 1
+  const nowModel = session.modelHold?.key ?? toModel(session.seenModel)
   if (key === nowModel) return
   if (!(await isEmptyChat($)) && !(await confirmCost($, key, nowModel, ''))) return
   await applyModel($, key, '')
@@ -626,29 +592,29 @@ export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
     if (e.origin.kind !== 'composer' && e.origin.kind !== 'bridge') {
       // That prompt takes the next turn; an older one waiting is not it.
-      held = null
+      session.held = null
       return next(e)
     }
     const text = e.text.trim()
     if (!text || text.startsWith('/')) {
       // A prompt of ours is not the next turn's any more.
-      held = null
+      session.held = null
       return next(e)
     }
-    gen += 1
-    lastLang = await currentLang($, options)
-    const mine = { text, gen, lang: lastLang, ...(e.turnId ? { turn: e.turnId } : {}) }
-    held = mine
+    session.gen += 1
+    session.lastLang = await currentLang($, options)
+    const mine = { text, gen: session.gen, lang: session.lastLang, ...(e.turnId ? { turn: e.turnId } : {}) }
+    session.held = mine
     const r = await next(e)
     // Refused beneath us: no turn will come of it.
-    if (r.drop !== undefined && held === mine) held = null
+    if (r.drop !== undefined && session.held === mine) session.held = null
     return r
   }).catch(($, e, next) => next(e))
 
   // A turn that ends with a prompt still waiting (blocked, Esc'd before its first request) leaves
   // nothing for the next turn; only a prompt queued behind this very turn stays.
   on('turn.complete', async ($, e, next) => {
-    if (e.agentId === undefined && held && held.turn !== e.turnId) held = null
+    if (e.agentId === undefined && session.held && session.held.turn !== e.turnId) session.held = null
     return next(e)
   })
 
@@ -658,30 +624,30 @@ export const register: Register = (on, options) => {
     // A model without effort carries none; the level part then sleeps.
     const hasEffort = typeof e.effort === 'string'
     if (hasEffort) {
-      asked = e.effort as string
+      session.asked = e.effort as string
       // A level picked in the pane before any request learns the menu's level here.
-      if (hold && hold.base === '') hold = { ...hold, base: asked }
-      if (hold && asked !== hold.base) await releaseLevel($)
+      if (session.hold && session.hold.base === '') session.hold = { ...session.hold, base: session.asked }
+      if (session.hold && session.asked !== session.hold.base) await releaseLevel($)
     }
-    seenModel = e.model
-    if (modelHold && modelHold.base === '') modelHold = { ...modelHold, base: e.model }
+    session.seenModel = e.model
+    if (session.modelHold && session.modelHold.base === '') session.modelHold = { ...session.modelHold, base: e.model }
     // The person chose another model with /model: their choice stands.
-    if (modelHold && e.model !== modelHold.base) await releaseModel($)
-    if (held && e.index === 0) {
-      const h = held
-      held = null
+    if (session.modelHold && e.model !== session.modelHold.base) await releaseModel($)
+    if (session.held && e.index === 0) {
+      const h = session.held
+      session.held = null
       try {
-        await runPick($, options, h, hasEffort ? (hold?.level ?? toLevel(asked)) : '', hasEffort ? asked : '', modelHold?.key ?? toModel(e.model), e.model, hasEffort)
+        await runPick($, options, h, hasEffort ? (session.hold?.level ?? toLevel(session.asked)) : '', hasEffort ? session.asked : '', session.modelHold?.key ?? toModel(e.model), e.model, hasEffort)
       } catch (err) {
         await log($, 'pick', err)
       }
     }
-    const want = hasEffort ? (hold?.level ?? null) : null
-    const was = seen
-    seen = want ?? (toLevel(asked) || seen)
-    if (seen !== was) $.ui.invalidate('ui.render')
+    const want = hasEffort ? (session.hold?.level ?? null) : null
+    const was = session.seen
+    session.seen = want ?? (toLevel(session.asked) || session.seen)
+    if (session.seen !== was) $.ui.invalidate('ui.render')
     // The request's context suffix (`[1m]`) stays on the held model: a long chat must still fit.
-    const model = modelHold ? requestModel(modelHold.key, e.model) : e.model
+    const model = session.modelHold ? requestModel(session.modelHold.key, e.model) : e.model
     if ((!want || want === e.effort) && model === e.model) return yield* next(e)
     return yield* next({ ...e, effort: want ?? e.effort, model })
   })
@@ -690,9 +656,9 @@ export const register: Register = (on, options) => {
   // held one is the one refused. Drop it for this session, once, instead of failing every request.
   on('classic.StopFailure', async ($, e, next) => {
     // A subagent's failure says nothing about the main chat's model.
-    if (e.error === 'model_not_found' && modelHold && e.agent_id === undefined) {
-      const key = modelHold.key
-      unavailable.add(key)
+    if (e.error === 'model_not_found' && session.modelHold && e.agent_id === undefined) {
+      const key = session.modelHold.key
+      session.unavailable.add(key)
       await releaseModel($)
       await log($, 'model', `${MODELS[key].name} is not available: ${e.error_details ?? e.error}`)
       $.ui.invalidate('ui.render')
@@ -709,10 +675,10 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   on('session.start', async ($, e, next) => {
-    surface = e.surface ?? ''
+    session.surface = e.surface ?? ''
     // The language: the plugin's setting, else the host's. A `lang` that 0.7.0 stored is left alone and unread.
-    lastLang = await currentLang($, options)
-    unavailable.clear()
+    session.lastLang = await currentLang($, options)
+    session.unavailable.clear()
     await refreshListed($)
     // A new session, or a reload of this module, starts with no held level: drop what $.state kept.
     await newChat($, false)
@@ -726,7 +692,7 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'coremodel' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
-    const t = texts(lastLang)
+    const t = texts(session.lastLang)
     if (arg === 'auto' || arg === 'suggest' || arg === 'off' || arg === 'on') return { text: await setMode($, options, arg) }
     if (arg === 'panel') {
       const r = await $.ui.open({ id: PLUGIN, title: 'CoreModel' })
@@ -736,18 +702,18 @@ export const register: Register = (on, options) => {
       return { text: r.reason.startsWith('no-surface') ? t.paneNoSurface : t.paneWaiting }
     }
     if (arg === 'undo') {
-      const b = lastUndo
+      const b = session.lastUndo
       if (!b || !(await undoChange($, b))) return { text: t.nothingToUndo }
       const to = undoTarget(b)
       return { text: t.undone(t.pair(to.model, to.level)) }
     }
     if (arg === 'recheck') {
       // Models dropped after model_not_found come back, and the account's list is read again.
-      unavailable.clear()
+      session.unavailable.clear()
       await refreshListed($)
       $.ui.invalidate('ui.render')
       const names = allowedModels(options).map(k => MODELS[k].name)
-      return { text: t.recheck(names, enabledModels(options).length, listed !== null, pickOn(options)) }
+      return { text: t.recheck(names, enabledModels(options).length, session.listed !== null, pickOn(options)) }
     }
     if (arg === 'probe') {
       // A diagnostic, left out of the command's hint: what /config offers, to see whether it lists the
@@ -787,7 +753,7 @@ export const register: Register = (on, options) => {
   // opens and closes the pane (no chat command, so a running turn is not interrupted).
   on('ui.render', { component: 'SessionMode' }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
-    const t = texts(lastLang)
+    const t = texts(session.lastLang)
     const { nowModel, nowLevel, isHeld } = chatState(await read($, override), options)
     const mode = await currentMode($, options)
     // While a model or level is set, both parts are named: the part not set is what the chat last showed.
@@ -808,7 +774,7 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'Pane', requestId: PLUGIN }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
-    const t = texts(lastLang)
+    const t = texts(session.lastLang)
     const mode = await currentMode($, options)
     const { nowModel, nowLevel, isHeld, defaultModel, defaultLevel } = chatState(await read($, override), options)
     const s = await read($, stats)
@@ -871,7 +837,7 @@ export const register: Register = (on, options) => {
             </Box>
           ) : null}
           {fault && fault.count >= FAIL_SHOW ? <Text key="fault" color="warning">{`⚠ ${t.classifierDown(fault.reason)}`}</Text> : null}
-          {[...unavailable].map(m => (
+          {[...session.unavailable].map(m => (
             <Text key={`unavailable-${m}`} color="warning">{`⚠ ${t.unavailableModel(m)}`}</Text>
           ))}
         </Box>
