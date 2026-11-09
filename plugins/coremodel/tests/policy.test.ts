@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Level } from '../types'
 import * as policy from '../hooks/policy'
-import { decide, decideModel, effortOptions, hostLang, modelOptions, texts } from '../hooks/policy'
+import { decide, decideModel, effortOptions, hostLang, LOCALES, modelOptions, settingLang, texts } from '../hooks/policy'
 
 const pick = (level: Level | 'keep') => ({ level, model: '' as const, why: '' })
 
@@ -43,6 +43,33 @@ test('hostLang is ru only when the host setting names Russian', () => {
 // No function decides the language by the text of a prompt: Cyrillic is not Russian.
 test('policy has no language-by-text rule', () => {
   expect('uiLang' in policy).toBe(false)
+})
+
+/** Every key of a locale with the type of its value, nested objects by path: `level.low string`. */
+function shape(x: object, at = ''): string[] {
+  return Object.entries(x).flatMap(([k, v]) =>
+    v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype ? shape(v, `${at}${k}.`) : [`${at}${k} ${typeof v}`],
+  )
+}
+
+test('every locale has exactly the keys of en, with the same value types', () => {
+  const en = shape(texts('en'))
+  for (const lang of Object.keys(LOCALES) as (keyof typeof LOCALES)[]) {
+    const other = shape(texts(lang))
+    // Each list names the keys one locale has and the other lacks, so a failure says which key.
+    expect({ lang, missing: en.filter(k => !other.includes(k)), extra: other.filter(k => !en.includes(k)) }).toEqual({ lang, missing: [], extra: [] })
+  }
+})
+
+test('the language setting names a locale, never a name every object has', () => {
+  for (const v of ['toString', 'constructor', 'de', '', 'auto', undefined, null, 42]) expect(settingLang(v)).toBe(null)
+  expect(settingLang('en')).toBe('en')
+  expect(settingLang('ru')).toBe('ru')
+})
+
+test('each locale but English says which host language names it; English is the fallback', () => {
+  expect(LOCALES.en.hostNames).toBe(null)
+  expect(LOCALES.ru.hostNames instanceof RegExp).toBe(true)
 })
 
 test('texts name the level in each language', () => {

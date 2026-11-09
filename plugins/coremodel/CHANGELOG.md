@@ -7,6 +7,11 @@ full detail.
 
 ## [Unreleased]
 
+### Fixed
+
+- When only the model is held, the pane's "your default" names only the model, as `/coremodel`
+  does (it also named the effort, which was not held).
+
 ## [0.8.0] - 2026-11-09
 
 ### Changed

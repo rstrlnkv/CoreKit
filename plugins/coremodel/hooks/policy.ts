@@ -1,12 +1,14 @@
 // The consent rule and the words the person reads. No calls on `$` here.
-import type { Level } from '../types'
+import type { Lang, Level } from '../types'
 import { LEVELS, type Pick } from './classifier'
 import { en, type Strings } from './locales/en'
 import { ru } from './locales/ru'
 import { LADDER, MODELS, type ModelKey, stronger, switchUsd } from './models'
 
 export type Mode = 'suggest' | 'auto' | 'off'
-export type Lang = 'ru' | 'en'
+
+/** Every locale, English first. A new one is added here, in Lang (types/index.d.ts) and in the manifest's `language` options. */
+export const LOCALES: Record<Lang, Strings> = { en, ru }
 
 /** The modes in the one order every surface shows them; the first is the default. */
 export const MODES: readonly Mode[] = ['auto', 'suggest', 'off']
@@ -29,12 +31,15 @@ export function decide(mode: Mode, now: Level | '', pick: Pick | null): Action {
 
 /**
  * Claude Code's own `language` setting (free text: "russian", "Russian", "ru", "ru-RU", "русский")
- * as a language of ours: Russian when it names Russian, English for any other or none. The text
- * of a prompt never decides: Cyrillic letters are also Ukrainian, Bulgarian, Serbian or Kazakh.
+ * as a language of ours: the first locale whose `hostNames` matches it, English for any other or
+ * none. The text of a prompt never decides: Cyrillic letters are also Ukrainian, Bulgarian, Serbian
+ * or Kazakh.
  */
 export function hostLang(v: unknown): Lang {
   if (typeof v !== 'string') return 'en'
-  return /^(ru|rus|russian|русский)([-_ .].*)?$/.test(v.trim().toLowerCase()) ? 'ru' : 'en'
+  const x = v.trim().toLowerCase()
+  for (const [lang, s] of Object.entries(LOCALES) as [Lang, Strings][]) if (s.hostNames?.test(x)) return lang
+  return 'en'
 }
 
 /** What to do with the model part of a pick. */
@@ -80,12 +85,10 @@ export function effortOptions(pick: Level, now: Level | ''): Level[] {
   return nearest(LEVELS, pick, now, LEVELS)
 }
 
-
-const LOCALES: Record<Lang, Strings> = { en, ru }
-
 /** The plugin's own `language` setting when it names a language of ours; null for `auto` or anything else. */
 export function settingLang(v: unknown): Lang | null {
-  return v === 'en' || v === 'ru' ? v : null
+  // An own key only: `v in LOCALES` would also take 'toString'.
+  return typeof v === 'string' && Object.prototype.hasOwnProperty.call(LOCALES, v) ? (v as Lang) : null
 }
 
 const fmt = (x: number) => String(Math.round(x * 10) / 10)
@@ -105,11 +108,13 @@ export function texts(lang: Lang) {
     const was = m ? pair(fromM, l ? fromL : '') : fromL ? n(fromL) : ''
     return now + (was ? ` (${s.was(was)})` : '') + (why ? ` · ${why}` : '')
   }
+  /** The mode's hint; Auto says less when CoreModel picks the effort only. */
+  const modeHint = (mode: Mode, pickModel: boolean) => (mode === 'auto' && !pickModel ? s.autoEffortHint : s.modeHint[mode])
   return {
     ...s,
     levelName: n,
     modeName: (m: Mode) => s.mode[m],
-    modeHintFor: (m: Mode, pickModel: boolean) => (m === 'auto' && !pickModel ? s.autoEffortHint : s.modeHint[m]),
+    modeHintFor: modeHint,
     pair,
     change,
     /** A transcript row: an arrow up or down, then the change. */
@@ -144,12 +149,12 @@ export function texts(lang: Lang) {
     insteadOfModel: (from: ModelKey, to: ModelKey) => s.insteadOf(name(from), name(to)),
     unavailableModel: (m: ModelKey) => s.unavailable(name(m)),
     modeQuestionFor: (mode: Mode, m: ModelKey | '', l: Level | '') => s.modeQuestion(s.mode[mode], pair(m, l) || s.unknownPair),
-    modeSet: (mode: Mode, pickModel: boolean) => s.modeIs(s.mode[mode], mode === 'auto' && !pickModel ? s.autoEffortHint : s.modeHint[mode]),
+    modeSet: (mode: Mode, pickModel: boolean) => s.modeIs(s.mode[mode], modeHint(mode, pickModel)),
     modeOnFor: (mode: Mode) => s.modeOn(s.mode[mode]),
     /** The /coremodel reply: the mode, what the chat runs at, the commands. */
     status: (mode: Mode, pickModel: boolean, m: ModelKey | '', l: Level | '', held: boolean, yours: string) =>
       [
-        s.modeIs(s.mode[mode], mode === 'auto' && !pickModel ? s.autoEffortHint : s.modeHint[mode]),
+        s.modeIs(s.mode[mode], modeHint(mode, pickModel)),
         held ? s.chatIsSet(pair(m, l) || s.unknownPair, yours) : s.chatIs(pair(m, l) || s.unknownPair),
         s.commands,
       ].join('\n'),

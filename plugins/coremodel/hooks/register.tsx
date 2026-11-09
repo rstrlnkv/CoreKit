@@ -1,10 +1,10 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelCompleteResult, Register, RenderChildren } from 'claude-code'
 
-import type { Band, Level, Mark, Stats } from '../types'
+import type { Band, Lang, Level, Mark, Stats } from '../types'
 import { buildPrompt, LEVELS, parseAnswer, type Pick, toLevel } from './classifier'
 import { detectModels, enabledModels, LADDER, MODELS, type ModelKey, requestModel, standIn, toModel } from './models'
-import { decide, decideModel, effortOptions, hostLang, type Lang, type Mode, MODES, modelOptions, settingLang, texts } from './policy'
+import { decide, decideModel, effortOptions, hostLang, LOCALES, type Mode, MODES, modelOptions, settingLang, texts } from './policy'
 
 const PLUGIN = 'coremodel'
 const band = atom({ plugin: 'coremodel', key: 'band' } as const, null)
@@ -190,6 +190,47 @@ async function chatTokens($: EngineInterface): Promise<number | undefined> {
   }
 }
 
+/** True before Claude's first reply in this chat. */
+async function isEmptyChat($: EngineInterface): Promise<boolean> {
+  return !(await $.session.messages()).some(m => m.role === 'assistant')
+}
+
+/** True unless the plugin setting `pickModel` is off: then CoreModel picks the effort only. */
+function pickOn(options: { pickModel?: unknown }): boolean {
+  return options.pickModel !== 'off'
+}
+
+/**
+ * What the chat runs at, from the held pair: each held part, else what the last request showed.
+ * "Your default" names only the held parts, as the chat's own menu sets them. The model only while
+ * CoreModel picks it.
+ */
+function chatState(pair: { model: ModelKey | null; level: Level | null } | null, options: { pickModel?: unknown }) {
+  const withModel = pickOn(options)
+  const nowModel: ModelKey | '' = withModel ? (pair?.model ?? toModel(seenModel)) : ''
+  const nowLevel: Level | '' = pair?.level ?? seen
+  const defaultModel: ModelKey | '' = withModel && pair?.model ? toModel(seenModel) : ''
+  const defaultLevel: Level | '' = pair?.level ? toLevel(asked) : ''
+  return { nowModel, nowLevel, isHeld: !!(pair?.model || pair?.level), defaultModel, defaultLevel }
+}
+
+/** The cost question before a switch to `key` mid-chat; true on the person's yes. */
+async function confirmCost($: EngineInterface, key: ModelKey, nowModel: ModelKey | '', why: string): Promise<boolean> {
+  const t = texts(lastLang)
+  const yes = t.switchToModel(key)
+  try {
+    const answer = await $.ui.ask(t.costQuestion(key, nowModel, await chatTokens($), why), { options: [yes, nowModel ? t.keepModel(nowModel) : t.cancel], header: t.modelHeader })
+    return answer === yes
+  } catch {
+    return false
+  }
+}
+
+/** Takes `b` down unless a newer band has replaced it. */
+async function clearBand($: EngineInterface, b: Band): Promise<void> {
+  await update($, band, cur => (cur && cur.id === b.id ? null : cur))
+}
+
 /**
  * Puts `b` above the prompt for BAND_MS: a silent switch with its undo, or a suggestion. VS Code draws
  * no band, so there it is said in a toast, a silent switch with the undo command.
@@ -211,7 +252,7 @@ async function showBand($: EngineInterface, b: Band) {
   }
   void (async () => {
     await $.clock.sleep(BAND_MS)
-    await update($, band, cur => (cur && cur.id === b.id ? null : cur))
+    await clearBand($, b)
   })().catch(err => log($, 'band', err))
 }
 
@@ -285,10 +326,10 @@ async function classify($: EngineInterface, text: string, now: Level | '', model
   return pick
 }
 
-/** A level named in typed text, in English or Russian; undefined when it names none. */
+/** A level named in typed text, in any locale; undefined when it names none. */
 function typedLevel(text: string): Level | undefined {
   const x = text.trim().toLowerCase().replace(/[«»"]/g, '')
-  return toLevel(x) || LEVELS.find(l => texts('en').levelName(l).toLowerCase() === x || texts('ru').levelName(l).toLowerCase() === x)
+  return toLevel(x) || LEVELS.find(l => Object.values(LOCALES).some(s => s.level[l].toLowerCase() === x))
 }
 
 /** The pick for one prompt, then the switch, the question, or nothing. */
@@ -307,7 +348,7 @@ async function runPick(
   if (mode === 'off') return
   const t = texts(h.lang)
   try {
-    await $.ui.status(options.pickModel !== 'off' ? t.checking : t.checkingEffort)
+    await $.ui.status(pickOn(options) ? t.checking : t.checkingEffort)
   } catch {
     // The status line is a nicety.
   }
@@ -334,7 +375,7 @@ async function runPick(
   // switch line, the transcript marks and the pane's last pick.
   await refreshListed($)
   const allowed = allowedModels(options)
-  if (pick.model && !allowed.includes(pick.model) && options.pickModel !== 'off') {
+  if (pick.model && !allowed.includes(pick.model) && pickOn(options)) {
     const sub = standIn(pick.model, allowed)
     pick = sub ? { ...pick, model: sub, why: [t.insteadOfModel(pick.model, sub), pick.why].filter(Boolean).join('; ') } : { ...pick, model: '' }
   }
@@ -344,8 +385,8 @@ async function runPick(
   if (pick.level === 'keep') return keptPrompt($, false)
   const level = pick.level
 
-  const isFirst = !(await $.session.messages()).some(m => m.role === 'assistant')
-  const mAction = decideModel({ mode, pickModel: options.pickModel !== 'off', isFirst, now: nowModel, pick: pick.model, allowed })
+  const isFirst = await isEmptyChat($)
+  const mAction = decideModel({ mode, pickModel: pickOn(options), isFirst, now: nowModel, pick: pick.model, allowed })
   // A request with no effort has nowhere to put a level: that part is skipped, not asked or marked.
   const action = hasEffort ? decide(mode, now, pick) : 'none'
 
@@ -438,10 +479,10 @@ async function keptPrompt($: EngineInterface, named: boolean): Promise<void> {
 
 /** An applied switch: the session counts and a row in the transcript. */
 async function applied($: EngineInterface, change: Mark): Promise<void> {
-  const modelTo = change.model ?? null
+  const modelTo = change.model
   const levelTo = change.level
   await count($, s => {
-    const models = { ...NO_STATS.models!, ...s.models }
+    const models = { ...s.models }
     if (modelTo) models[modelTo] += 1
     const picks = levelTo ? { ...s.picks, [levelTo]: s.picks[levelTo] + 1 } : s.picks
     const last = s.last ? { ...s.last, level: levelTo ?? s.last.level, ...(modelTo ? { model: modelTo } : { model: undefined }) } : s.last
@@ -462,19 +503,10 @@ async function applied($: EngineInterface, change: Mark): Promise<void> {
  */
 async function acceptSuggestion($: EngineInterface, b: Band): Promise<void> {
   touched += 1
-  await update($, band, cur => (cur && cur.id === b.id ? null : cur))
+  await clearBand($, b)
   const nowModel = modelHold?.key ?? toModel(seenModel)
   let modelTo = b.model && b.model !== nowModel ? b.model : null
-  if (modelTo && (await $.session.messages()).some(m => m.role === 'assistant')) {
-    const t = texts(lastLang)
-    const yes = t.switchToModel(modelTo)
-    try {
-      const answer = await $.ui.ask(t.costQuestion(modelTo, nowModel, await chatTokens($), b.why), { options: [yes, nowModel ? t.keepModel(nowModel) : t.cancel], header: t.modelHeader })
-      if (answer !== yes) modelTo = null
-    } catch {
-      modelTo = null
-    }
-  }
+  if (modelTo && !(await isEmptyChat($)) && !(await confirmCost($, modelTo, nowModel, b.why))) modelTo = null
   const nowLevel = hold?.level ?? seen
   const levelTo = b.level && b.level !== nowLevel ? b.level : null
   if (!modelTo && !levelTo) return keptPrompt($, true)
@@ -485,7 +517,7 @@ async function acceptSuggestion($: EngineInterface, b: Band): Promise<void> {
 
 /** Keep on a suggestion: nothing changes; the prompt counts as unchanged. */
 async function declineSuggestion($: EngineInterface, b: Band): Promise<void> {
-  await update($, band, cur => (cur && cur.id === b.id ? null : cur))
+  await clearBand($, b)
   await keptPrompt($, true)
 }
 
@@ -506,7 +538,7 @@ async function undoChange($: EngineInterface, b: Band): Promise<boolean> {
     done = true
   }
   if (lastUndo?.id === b.id) lastUndo = null
-  await update($, band, cur => (cur && cur.id === b.id ? null : cur))
+  await clearBand($, b)
   return done
 }
 
@@ -527,7 +559,7 @@ async function setMode($: EngineInterface, options: { mode?: unknown; pickModel?
     await $.store.set('lastMode', arg)
     // A suggestion of the other mode has no place any more.
     await update($, band, cur => (cur?.suggest && arg === 'auto' ? null : cur))
-    text = t.modeSet(arg, options.pickModel !== 'off')
+    text = t.modeSet(arg, pickOn(options))
   } else if (arg === 'off') {
     await $.store.set('mode', 'off')
     await releaseHold($)
@@ -562,17 +594,7 @@ async function paneModel($: EngineInterface, key: ModelKey): Promise<void> {
   touched += 1
   const nowModel = modelHold?.key ?? toModel(seenModel)
   if (key === nowModel) return
-  const isEmpty = !(await $.session.messages()).some(m => m.role === 'assistant')
-  if (!isEmpty) {
-    const t = texts(lastLang)
-    const yes = t.switchToModel(key)
-    try {
-      const answer = await $.ui.ask(t.costQuestion(key, nowModel, await chatTokens($), ''), { options: [yes, nowModel ? t.keepModel(nowModel) : t.cancel], header: t.modelHeader })
-      if (answer !== yes) return
-    } catch {
-      return
-    }
-  }
+  if (!(await isEmptyChat($)) && !(await confirmCost($, key, nowModel, ''))) return
   await applyModel($, key, '')
   await update($, band, () => null)
 }
@@ -725,7 +747,7 @@ export const register: Register = (on, options) => {
       await refreshListed($)
       $.ui.invalidate('ui.render')
       const names = allowedModels(options).map(k => MODELS[k].name)
-      return { text: t.recheck(names, enabledModels(options).length, listed !== null, options.pickModel !== 'off') }
+      return { text: t.recheck(names, enabledModels(options).length, listed !== null, pickOn(options)) }
     }
     if (arg === 'probe') {
       // A diagnostic, left out of the command's hint: what /config offers, to see whether it lists the
@@ -745,11 +767,9 @@ export const register: Register = (on, options) => {
       return { text: t.probeLogged(rows.length) }
     }
     const mode = await currentMode($, options)
-    const level = hold?.level ?? seen
     // pickModel off: the level only, as everywhere else.
-    const pickOn = options.pickModel !== 'off'
-    const model = pickOn ? (modelHold?.key ?? toModel(seenModel)) : ''
-    const yours = t.pair(modelHold && pickOn ? toModel(seenModel) : '', hold ? toLevel(asked) : '')
+    const { nowModel: model, nowLevel: level, isHeld, defaultModel, defaultLevel } = chatState(await read($, override), options)
+    const yours = t.pair(defaultModel, defaultLevel)
     if (!arg) {
       let answer = ''
       try {
@@ -760,7 +780,7 @@ export const register: Register = (on, options) => {
       }
       if ((MODES as readonly string[]).includes(answer)) return { text: await setMode($, options, answer as Mode) }
     }
-    return { text: t.status(mode, pickOn, model, level, !!(hold || modelHold), yours) }
+    return { text: t.status(mode, pickOn(options), model, level, isHeld, yours) }
   })
 
   // The footer slot: the engine's own mode words, then a button that carries CoreModel's state and
@@ -768,12 +788,10 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'SessionMode' }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const t = texts(lastLang)
-    const pair = await read($, override)
+    const { nowModel, nowLevel, isHeld } = chatState(await read($, override), options)
     const mode = await currentMode($, options)
     // While a model or level is set, both parts are named: the part not set is what the chat last showed.
-    const level = pair ? (pair.level ?? seen) : ''
-    const model = pair && options.pickModel !== 'off' ? (pair.model ?? toModel(seenModel)) : ''
-    const state = mode === 'off' ? t.off : t.pair(model, level)
+    const state = mode === 'off' ? t.off : isHeld ? t.pair(nowModel, nowLevel) : ''
     const isUp = (await $.ui.panes()).some(p => p.id === PLUGIN)
     const toggle = async () => {
       if ((await $.ui.panes()).some(p => p.id === PLUGIN)) await $.ui.close({ id: PLUGIN })
@@ -792,24 +810,19 @@ export const register: Register = (on, options) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const t = texts(lastLang)
     const mode = await currentMode($, options)
-    const pair = await read($, override)
-    const heldLevel = pair?.level ?? null
-    const heldModel = pair?.model ?? null
-    const isHeld = !!(heldLevel || heldModel)
+    const { nowModel, nowLevel, isHeld, defaultModel, defaultLevel } = chatState(await read($, override), options)
     const s = await read($, stats)
     const fault = await read($, failure)
     const allowed = allowedModels(options)
     // pickModel off: effort only.
-    const pickOn = options.pickModel !== 'off'
+    const withModel = pickOn(options)
     const act = (what: string, f: () => Promise<unknown>) => () => {
       f().catch(err => log($, what, err))
     }
     // A selected button says so in its words, not by colour alone; the colour stays as a second cue.
     const mark = (label: string, isOn: boolean) => (isOn ? `● ${label}` : label)
-    const nowLevel = heldLevel ?? seen
-    const nowModel = pickOn ? (heldModel ?? toModel(seenModel)) : ''
     const nowPair = t.pair(nowModel, nowLevel)
-    const yours = t.pair(heldModel && pickOn ? toModel(seenModel) : '', toLevel(asked))
+    const yours = t.pair(defaultModel, defaultLevel)
     const caption = captionWidth(t)
     const row = (key: string, label: string, body: RenderChildren) => (
       <Box key={key} flexDirection="row" gap="sm">
@@ -827,15 +840,15 @@ export const register: Register = (on, options) => {
     // The session in one line: models, then efforts, then the prompts left as they were.
     const sessionLine = s
       ? [
-          ...(pickOn && s.models ? LADDER.filter(m => s.models![m] > 0).map(m => `${MODELS[m].name} ${s.models![m]}`) : []),
+          ...(withModel ? LADDER.filter(m => s.models[m] > 0).map(m => `${MODELS[m].name} ${s.models[m]}`) : []),
           ...LEVELS.filter(l => s.picks[l] > 0).map(l => `${t.levelName(l)} ${s.picks[l]}`),
           ...(s.kept > 0 ? [t.unchanged(s.kept)] : []),
         ].join(' · ')
       : ''
     // The last pick, only when it says something the chat does not: it was not applied, or it differs.
     const last = s?.last
-    const lastPair = last ? t.pair(pickOn && last.model ? last.model : '', last.level) : ''
-    const showLast = !!last && (!!last.declined || last.level !== nowLevel || (pickOn && !!last.model && last.model !== nowModel))
+    const lastPair = last ? t.pair(withModel && last.model ? last.model : '', last.level) : ''
+    const showLast = !!last && (!!last.declined || last.level !== nowLevel || (withModel && !!last.model && last.model !== nowModel))
     const lastLine = last ? [lastPair, last.why, last.declined ? t.notApplied : ''].filter(Boolean).join(' · ') : ''
     return (
       <Box flexDirection="column" gap="sm">
@@ -846,7 +859,7 @@ export const register: Register = (on, options) => {
               <Button key={`mode-${m}`} label={mark(t.modeName(m), m === mode)} variant={m === mode ? 'primary' : undefined} onPress={act('mode', () => setMode($, options, m))} />
             ))}
           </Box>
-          <Text dimColor>{t.modeHintFor(mode, pickOn)}</Text>
+          <Text dimColor>{t.modeHintFor(mode, withModel)}</Text>
         </Box>
         {rule('d1')}
         <Box key="now" flexDirection="column" gap="xs">
@@ -862,7 +875,7 @@ export const register: Register = (on, options) => {
             <Text key={`unavailable-${m}`} color="warning">{`⚠ ${t.unavailableModel(m)}`}</Text>
           ))}
         </Box>
-        {pickOn && allowed.length
+        {withModel && allowed.length
           ? row(
               'choose-model',
               t.model,
