@@ -158,8 +158,9 @@ c=$(grep -c '^- demo-app ' "$CORE_DIR/PROJECTS.md"); assert_eq "$c" "1" "PROJECT
 assert_contains "$CORE_DIR/PROJECTS.md" "Test app"
 assert_contains "$CORE_DIR/PROJECTS.md" "- demo-app — Test app — demo-app/"
 
-# --- second run changes nothing
+# --- second run changes nothing (tree_sum skips links: their targets are read separately)
 before=$(tree_sum "$CORE_DIR")
+before_k=$(tree_sum "$K"); before_l="$(readlink "$K/CLAUDE.local.md") $(readlink "$K/AGENTS.md")"
 assert_exit 0 bash "$S" --name demo-app --purpose "Test app"
 echo "$OUT" | grep -qxF 'skipped ../demo-app/AGENTS.md' && pass || fail "second run lacks skipped AGENTS.md: $OUT"
 echo "$OUT" | grep -q '^created' && fail "second run created files" || pass
@@ -171,6 +172,9 @@ echo "$OUT" | grep -qxF 'skipped demo-app/docs/INDEX.md' && pass || fail "second
 echo "$OUT" | grep -v '^skipped' | grep -q . && fail "second run printed a non-skipped line: $OUT" || pass
 after=$(tree_sum "$CORE_DIR")
 assert_eq "$before" "$after" "tree changed on re-run"
+assert_eq "$(tree_sum "$K")" "$before_k" "code folder changed on re-run"
+assert_eq "$(readlink "$K/CLAUDE.local.md") $(readlink "$K/AGENTS.md")" "$before_l" "links changed on re-run"
+[ "$before_l" = "$P/CLAUDE.md $P/CLAUDE.md" ] && pass || fail "links do not point to the private CLAUDE.md: $before_l"
 
 # --- a folder that is not ours blocks the run; nothing is written
 new_sandbox; setup_core
@@ -288,6 +292,27 @@ grep -v '^- cs-app ' "$CORE_DIR/PROJECTS.md" > "$SANDBOX/pm"; mv "$SANDBOX/pm" "
 assert_exit 1 bash "$S" --name cs-app
 assert_eq "$(grep -c '^- cs-app ' "$CORE_DIR/PROJECTS.md")" "0" "PROJECTS.md entry added after a failed code-side step"
 [ -f "$K2/.claude" ] && pass || fail "the .claude file was replaced"
+
+# --- a template that cannot be read: exit 1, no empty page and no temp file left; a rerun creates the page
+if [ "$(id -u)" -eq 0 ]; then
+  skip unreadable-template "running as root"
+else
+  new_sandbox; setup_core
+  cp -R "$PLUGIN" "$SANDBOX/plugin-copy"
+  AT="$SANDBOX/plugin-copy/skills/new-project/templates/docs/architecture.md.tmpl"
+  SC="$SANDBOX/plugin-copy/skills/new-project/scripts/scaffold.sh"
+  chmod 000 "$AT"
+  assert_exit 1 bash "$SC" --name tf-app
+  assert_no_file "$CORE_DIR/tf-app/docs/architecture.md"
+  left="$(find "$CORE_DIR" -name '*.tmp.*' -print)"
+  [ -z "$left" ] && pass || fail "temp files left after a failed write: $left"
+  chmod 644 "$AT"
+  assert_exit 0 bash "$SC" --name tf-app
+  echo "$OUT" | grep -qxF 'created tf-app/docs/architecture.md' && pass || fail "rerun did not create architecture.md: $OUT"
+  [ -s "$CORE_DIR/tf-app/docs/architecture.md" ] && pass || fail "architecture.md is empty after the rerun"
+  assert_exit 0 bash "$SCRIPTS/wiki-check.sh" "$CORE_DIR/tf-app"
+  [ -z "$OUT" ] && pass || fail "wiki-check after the rerun printed: $OUT"
+fi
 
 # the wiki has one place for all worktrees: <Core>/<p>/docs/, which the task skill updates from a
 # worktree too (no "never edit ../docs/ from a worktree" that contradicts it)

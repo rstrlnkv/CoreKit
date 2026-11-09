@@ -31,12 +31,22 @@ echo "$OUT" | grep -q 'No such file' && fail "error output for a missing .gitign
 # still copied and nothing of the user's is overwritten
 if [ "$(id -u)" != 0 ]; then
   G3="$SANDBOX/gen3"; mkdir -p "$G3/ro"; echo x > "$G3/ro/x.txt"; echo ok > "$G3/ok.txt"
+  printf 'build/\n' > "$G3/.gitignore"
   D3="$SANDBOX/d3"; mkdir -p "$D3/ro"; echo keep > "$D3/ro/kept.txt"; chmod a-w "$D3/ro"
   assert_exit 1 bash "$SKILL/scripts/merge-generated.sh" "$G3" "$D3"
   chmod u+w "$D3/ro"
   echo "$OUT" | grep -q 'ro/x.txt' && pass || fail "the failed copy is not named: $OUT"
   echo "$OUT" | grep -q '^merged into' && fail "success claimed after a failed copy: $OUT" || pass
   assert_file "$D3/ok.txt"; assert_no_file "$D3/ro/x.txt"; assert_eq "$(cat "$D3/ro/kept.txt")" "keep" "user file changed"
+  # after the folder is fixed, a rerun copies what was missed; a third run changes nothing
+  assert_exit 0 bash "$SKILL/scripts/merge-generated.sh" "$G3" "$D3"
+  assert_eq "$(cat "$D3/ro/x.txt" 2>/dev/null)" "x" "the rerun did not copy ro/x.txt"
+  before=$(tree_sum "$D3")
+  assert_exit 0 bash "$SKILL/scripts/merge-generated.sh" "$G3" "$D3"
+  echo "$OUT" | grep -v '^skipped ' | grep -vxF "merged into $D3" | grep -q . && fail "third run printed more than skipped and merged lines: $OUT" || pass
+  assert_eq "$(tree_sum "$D3")" "$before" "the third run changed the code folder"
+  assert_eq "$(grep -cxF '# From the stack generator' "$D3/.gitignore")" "1" "the generator block was added again"
+  assert_eq "$(grep -cxF 'build/' "$D3/.gitignore")" "1" "a generator line was added again"
 fi
 # nested .gitignore files are kept, and what they ignore stays ignored
 new_sandbox; setup_core; scaffold_old mg-app; G="$SANDBOX/g"; mkdir -p "$G/android"

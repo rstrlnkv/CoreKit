@@ -9,6 +9,11 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+### Fixed
+
+- A template write that fails leaves no empty file that a rerun would skip: scaffold, adopt and
+  setup-core write each file to a temp file and move it into place.
+
 ## [0.12.0] - 2026-11-09
 
 ### Added
