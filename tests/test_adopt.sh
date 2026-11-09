@@ -58,7 +58,7 @@ refuses() {
 }
 inode() { ls -di "$1" | awk '{ print $1 }'; }
 
-# The sections below each start their own sandbox and share nothing: five groups run side by side
+# The sections below each start their own sandbox and share nothing: six groups run side by side
 # (bg, lib.sh), which keeps the file well under its serial time.
 
 part_new_layout() {
@@ -363,6 +363,22 @@ assert_exit 2 bash "$AD" --from "$F"
 after="$(snap)"
 assert_eq "$after" "$before" "commit failure changed something (existing .gitignore)"
 assert_eq "$(cat "$F/.gitignore")" "build/" ".gitignore not restored"
+
+# --- the rule readers are awk files beside adopt.sh (rule-block.awk, fold-rules.awk); a plugin copy
+# without rule-block.awk stops in the staging phase, before the repo commit, with nothing changed
+assert_file "$SCRIPTS/rule-block.awk"; assert_file "$SCRIPTS/fold-rules.awk"
+grep -qF '/rule-block.awk' "$AD" && pass || fail "adopt.sh does not load rule-block.awk"
+grep -qF '/fold-rules.awk' "$AD" && pass || fail "adopt.sh does not load fold-rules.awk"
+new_sandbox; setup_core
+cp -R "$PLUGIN" "$SANDBOX/plugin-copy"; rm -f "$SANDBOX/plugin-copy/scripts/rule-block.awk"
+F="$SANDBOX/Projects/rd-app"; mkrepo "$F"
+mkdir -p "$F/.claude/rules"; printf 'Rule.\n' > "$F/.claude/rules/r.md"; git -C "$F" add -A && git -C "$F" commit -q -m rule
+before="$(snap)"
+OUT="$(bash "$SANDBOX/plugin-copy/scripts/adopt.sh" --from "$F" 2>&1)"; rc=$?
+assert_eq "$rc" "1" "missing reader exit"
+echo "$OUT" | grep -q "could not read .claude/rules/r.md" && pass || fail "missing reader message: $OUT"
+assert_eq "$(snap)" "$before" "a missing reader changed something"
+assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "temp folder left in the Core (missing reader)"
 }
 bg part_refusals
 
@@ -795,6 +811,59 @@ assert_eq "$rc" "0" "adopt with a failing install-hooks: $(cat "$SANDBOX/err")"
 assert_contains "$SANDBOX/err" "git hooks were not installed; run:"
 }
 bg part_hooks_path
+
+part_late_phases() {
+# --- a failure late in the staging phase (the fold of the rule files, after the copies and the template
+# pages): exit 1 before the repo commit; the repo and the Core are as they were, no temp folder is left
+new_sandbox; setup_core
+F="$SANDBOX/Projects/fold-fail"; mkrepo "$F"
+mkdir -p "$F/.claude/rules"; printf 'Rule.\n' > "$F/.claude/rules/r.md"; git -C "$F" add -A && git -C "$F" commit -q -m rule
+mkdir -p "$SANDBOX/stub"
+cat > "$SANDBOX/stub/awk" <<'STUB'
+#!/bin/sh
+for a in "$@"; do case "$a" in */fold-rules.awk) echo "awk: stub failure" >&2; exit 2 ;; esac; done
+exec /usr/bin/awk "$@"
+STUB
+chmod +x "$SANDBOX/stub/awk"
+before="$(snap)"
+OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$AD" --from "$F" 2>&1)"; rc=$?
+assert_eq "$rc" "1" "fold failure exit"
+echo "$OUT" | grep -qF "adopt: could not fold the rules into CLAUDE.md" && pass || fail "fold failure message: $OUT"
+assert_eq "$(snap)" "$before" "a failed fold changed the repo or the Core"
+assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "temp folder left in the Core (failed fold)"
+assert_eq "$(git -C "$F" log -1 --format=%s)" "rule" "repo commit made although the fold failed"
+assert_no_file "$F/CLAUDE.local.md"
+
+# --- the Core commit fails (the last step that changes anything): the project is in place and nothing is
+# undone; a warning says to commit by hand, exit 0, and that commit then leaves the Core clean
+new_sandbox; setup_core
+F="$SANDBOX/Projects/cc-app"; mkrepo "$F"
+REAL_GIT="$(command -v git)"
+mkdir -p "$SANDBOX/stub"
+cat > "$SANDBOX/stub/git" <<STUB
+#!/bin/sh
+for a in "\$@"; do case "\$a" in "Adopt cc-app") echo "git: stub failure" >&2; exit 1 ;; esac; done
+exec "$REAL_GIT" "\$@"
+STUB
+chmod +x "$SANDBOX/stub/git"
+OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$AD" --from "$F" 2>"$SANDBOX/err")"; rc=$?
+P="$CORE_DIR/cc-app"
+assert_eq "$rc" "0" "Core commit failure exit: $(cat "$SANDBOX/err")"
+assert_contains "$SANDBOX/err" "warning: the Core commit failed; commit cc-app/ and PROJECTS.md in $CORE_DIR yourself"
+assert_eq "$(last_line "$OUT")" "open: $F" "last line (Core commit failed)"
+echo "$OUT" | grep -q "^Core commit:" && fail "report claims a Core commit: $OUT" || pass
+assert_contains "$P/CLAUDE.md" "# Old project"; assert_file "$P/docs/guide.md"; assert_file "$P/.claude/settings.json"
+assert_eq "$(git -C "$F" log -1 --format=%s)" "Move internal Claude files to Core" "repo commit (Core commit failed)"
+assert_eq "$(git -C "$F" status --porcelain)" "" "repo dirty (Core commit failed)"
+assert_eq "$(readlink "$F/CLAUDE.local.md")" "$P/CLAUDE.md" "link (Core commit failed)"
+assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s | grep -c '^Adopt')" "0" "a Core commit was made"
+[ -n "$(git -C "$CORE_DIR" status --porcelain)" ] && pass || fail "the Core has nothing left to commit"
+grep -qxF -- "- cc-app — Adopted existing project — cc-app/" "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md line (Core commit failed): $(cat "$CORE_DIR/PROJECTS.md")"
+assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "temp folder left in the Core (Core commit failed)"
+git -C "$CORE_DIR" add -- cc-app PROJECTS.md && git -C "$CORE_DIR" commit -q -m "Adopt cc-app" && pass || fail "the commit by hand failed"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "Core dirty after the commit by hand"
+}
+bg part_late_phases
 
 bg_wait
 finish

@@ -33,8 +33,11 @@ plugins/corecrew/                 project workflow
     sync-tools.sh                 the scripts copied into the plugin's data folder (tools/)
     install-hooks.sh, git-hooks/  the git hook shims and their installer
     save, undo-step, _locate.sh   one step saved or undone in both repos; _locate.sh finds the repos
-    adopt.sh                      an existing project brought into the layout
+    adopt.sh                      an existing project brought into the layout, in phases (preconditions,
+                                  plan, stage, commit, move, finish); its rule readers are rule-block.awk
+                                  and fold-rules.awk
     wiki-*.sh                     the wiki: pages, index, checks, migration from an older format
+    wiki-check.awk                the checks of one wiki page, run by wiki-check.sh
     check-standard.sh             the checks of one standard file (new-standard)
   reference/                      texts the skills share: wiki.md and knowledge.md (the rules the
                                   agents follow), and these two:
