@@ -7,6 +7,8 @@ full detail.
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-10
+
 ### Fixed
 
 - When only the model is held, the pane's "your default" names only the model, as `/coremodel`
