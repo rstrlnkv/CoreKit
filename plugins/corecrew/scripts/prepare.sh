@@ -55,6 +55,8 @@ link_notes() {
     printf '%s\n' "$(msg agents_link_wrong "$dir/AGENTS.md" "$P/CLAUDE.md")"
   elif [ -e "$P/AGENTS.md" ]; then   # the Core's own AGENTS.md would be hidden by the link
     printf '%s\n' "$(msg agents_in_core "$P/AGENTS.md")"
+  elif [ ! -e "$dir/AGENTS.md" ]; then   # nothing there, yet ln failed (for example a read-only folder)
+    printf '%s\n' "$(msg agents_link_failed "$dir/AGENTS.md" "$P/CLAUDE.md")"
   fi
 }
 
@@ -97,13 +99,14 @@ if [ "$part" = all ] || [ "$part" = project ]; then
     if [ -n "$stale" ]; then
       printf '%s\n' "$(msg old_hooks "$stale" "$ROOT/scripts/install-hooks.sh" "$P")"
     fi
-    # core.hooksPath: git runs the hooks of another folder (husky, lefthook, a global setting), or none when
-    # the value is empty, so the corecrew shims never run there. install-hooks prints the lines to chain them,
-    # but only when it is called; say so here as well, each time, until the setting changes.
+    # core.hooksPath: git runs the hooks of another folder (husky, lefthook, a global setting), so the corecrew
+    # shims never run there: install-hooks prints the lines to chain them. An empty value makes git run no hooks
+    # at all: the setting must go before install-hooks can install them. Said each time, until the setting changes.
     if [ -n "$code" ]; then
       hp=""
       if hp="$(git -C "$code" config --get core.hooksPath 2>/dev/null)"; then
-        printf '%s\n' "$(msg hooks_path "$code" "${hp:-(an empty value: git runs no hooks)}" "$ROOT/scripts/install-hooks.sh" "$P")"
+        if [ -z "$hp" ]; then printf '%s\n' "$(msg hooks_path_empty "$code" "$ROOT/scripts/install-hooks.sh" "$P")"
+        else printf '%s\n' "$(msg hooks_path "$code" "$hp" "$ROOT/scripts/install-hooks.sh" "$P")"; fi
       fi
     fi
   fi

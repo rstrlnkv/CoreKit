@@ -25,8 +25,8 @@
 MSG_LANGS="en ru"
 # shellcheck disable=SC2034  # MSG_KEYS is read by tests/test_hook_messages.sh (every language for every key)
 MSG_KEYS="sync_failed sync_not_ours agents_in_core hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
-session_rules schema_none run_starting layout_note old_hooks hooks_path guard_code_blocked guard_code_public guard_code_too_many patch_too_many patch_unjudgeable patch_no_reader patch_shell secrets_blocked secrets_ask
-local_link_created agents_link_created agents_link_wrong local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind
+session_rules schema_none run_starting layout_note old_hooks hooks_path hooks_path_empty guard_code_blocked guard_code_public guard_code_too_many patch_too_many patch_unjudgeable patch_no_reader patch_shell secrets_blocked secrets_ask
+local_link_created agents_link_created agents_link_wrong agents_link_failed local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind
 readonly_agent settings_invalid_path settings_invalid_value settings_unreadable settings_no_home allowed_attribution allowed_model_profile
 src_env src_option src_file fix_env fix_option fix_file codex_trust codex_profile"
 
@@ -71,6 +71,8 @@ _msg_text() {
     ru:old_hooks) MSG_T='Найдены старые git-хуки от прошлой версии: @1. Замените их командой: bash "@2" "@3"' ;;
     en:hooks_path) MSG_T='corecrew git hooks do not run in @1: core.hooksPath sends git to @2. To chain them from your own hooks, run: bash "@3" "@4" (it prints the lines to add).' ;;
     ru:hooks_path) MSG_T='Git-хуки corecrew не работают в @1: core.hooksPath направляет git в @2. Чтобы подключить их к вашим хукам, выполните: bash "@3" "@4" (команда напечатает строки для добавления).' ;;
+    en:hooks_path_empty) MSG_T='corecrew git hooks do not run in @1: core.hooksPath is set to an empty value, so git runs no hooks there. To install them, first remove the setting: git -C "@1" config --unset core.hooksPath    then run: bash "@2" "@3"' ;;
+    ru:hooks_path_empty) MSG_T='Git-хуки corecrew не работают в @1: core.hooksPath задан пустым, поэтому git не запускает там никаких хуков. Чтобы установить их, сначала удалите эту настройку: git -C "@1" config --unset core.hooksPath    затем выполните: bash "@2" "@3"' ;;
     en:readonly_agent) MSG_T='corecrew: @1 is a read-only checker and must not change anything (@2). Write logs and scratch files under @3; report a needed change for engineer to make.' ;;
     ru:readonly_agent) MSG_T='corecrew: @1 только читает и ничего не меняет (@2). Журналы и черновики пишите в @3; нужное изменение передайте engineer.' ;;
     en:guard_code_blocked) MSG_T='corecrew: @1 is an internal file and must not live in the code folder. Write it to @2 instead.' ;;
@@ -97,6 +99,8 @@ _msg_text() {
     ru:agents_link_created) MSG_T='corecrew: AGENTS.md связан с @1 для инструментов, читающих AGENTS.md' ;;
     en:agents_link_wrong) MSG_T='corecrew: @1 is a link to somewhere other than @2, so tools that read AGENTS.md do not get the private CLAUDE.md. Remove that link, then run: ln -s "@2" "@1"' ;;
     ru:agents_link_wrong) MSG_T='corecrew: @1 — ссылка не на @2, поэтому инструменты, читающие AGENTS.md, не получают приватный CLAUDE.md. Удалите эту ссылку и выполните: ln -s "@2" "@1"' ;;
+    en:agents_link_failed) MSG_T='corecrew: could not create @1, so tools that read AGENTS.md do not get the private CLAUDE.md. Run: ln -s "@2" "@1"' ;;
+    ru:agents_link_failed) MSG_T='corecrew: не удалось создать @1, поэтому инструменты, читающие AGENTS.md, не получают приватный CLAUDE.md. Выполните: ln -s "@2" "@1"' ;;
     en:local_link_wrong) MSG_T='corecrew: @1 exists and is not a link to @2, so the private CLAUDE.md is not loaded. Move that file away, then run: ln -s "@2" "@1"' ;;
     ru:local_link_wrong) MSG_T='corecrew: @1 уже существует и не ведёт на @2, поэтому приватный CLAUDE.md не загружается. Уберите этот файл и выполните: ln -s "@2" "@1"' ;;
     en:local_link_failed) MSG_T='corecrew: could not create @1, so the private CLAUDE.md is not loaded. Run: ln -s "@2" "@1"' ;;

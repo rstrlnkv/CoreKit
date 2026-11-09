@@ -37,9 +37,15 @@ run claude --cwd "$C"
 echo "$OUT" | grep -qF "core.hooksPath" && pass || fail "hooksPath note missing: $OUT"
 echo "$OUT" | grep -qF "$SANDBOX/myhooks" && pass || fail "hooksPath note names the folder: $OUT"
 echo "$OUT" | grep -qF "install-hooks.sh\" \"$P\"" && pass || fail "hooksPath note names the chaining command: $OUT"
+# an empty core.hooksPath: git runs no hooks at all, so the note says to unset it, then to install the shims
 git -C "$C" config core.hooksPath ""
 run claude --cwd "$C"
-echo "$OUT" | grep -qF "core.hooksPath" && pass || fail "empty hooksPath (git runs no hooks) is named: $OUT"
+echo "$OUT" | grep -qF "git -C \"$C\" config --unset core.hooksPath" && pass || fail "empty hooksPath: the note says to unset it: $OUT"
+echo "$OUT" | grep -qF "install-hooks.sh\" \"$P\"" && pass || fail "empty hooksPath: the note names install-hooks: $OUT"
+echo "$OUT" | grep -qF "chain" && fail "empty hooksPath: chaining advice: $OUT" || pass
+CLAUDE_PLUGIN_OPTION_UI_LANGUAGE=ru run claude --cwd "$C"
+echo "$OUT" | grep -qF -- "--unset core.hooksPath" && pass || fail "ru empty hooksPath: the note says to unset it: $OUT"
+echo "$OUT" | grep -qF "an empty value" && fail "ru empty hooksPath: English in the note: $OUT" || pass
 git -C "$C" config --unset core.hooksPath
 run claude --cwd "$C"; assert_eq "$OUT" "" "hooksPath unset: silent again"
 
@@ -124,11 +130,33 @@ echo "$OUT" | grep -qF "$W2/CLAUDE.local.md exists and is not a link" && pass ||
 assert_eq "$(cat "$W2/CLAUDE.local.md")" "mine" "real CLAUDE.local.md kept"
 assert_eq "$(cat "$W2/AGENTS.md")" "mine too" "real AGENTS.md kept"
 [ ! -L "$W2/CLAUDE.local.md" ] && [ ! -L "$W2/AGENTS.md" ] && pass || fail "a real file was replaced by a link"
+echo "$OUT" | grep -qF "AGENTS.md" && fail "a real AGENTS.md is named: $OUT" || pass
 rm -f "$C/CLAUDE.local.md"; printf 'main mine\n' > "$C/CLAUDE.local.md"
 run claude --cwd "$C"
 echo "$OUT" | grep -qF "$C/CLAUDE.local.md exists and is not a link" && pass || fail "main: refused link not reported: $OUT"
 assert_eq "$(cat "$C/CLAUDE.local.md")" "main mine" "real CLAUDE.local.md in the main folder kept"
 rm -f "$C/CLAUDE.local.md"; ln -s "$P/CLAUDE.md" "$C/CLAUDE.local.md"
+
+# --- failure path: both links missing and the code folder not writable: one line for each, exit 0, nothing created
+# (skipped as root, who can write anyway); with the folder writable again a rerun makes both, and the next run is silent
+rm -f "$C/CLAUDE.local.md" "$C/AGENTS.md"; chmod a-w "$C"
+if [ ! -w "$C" ]; then
+  run claude --cwd "$C"
+  assert_eq "$RC" "0" "read-only code folder: exit 0"
+  echo "$OUT" | grep -qF "could not create $C/CLAUDE.local.md" && pass || fail "read-only code folder: no CLAUDE.local.md line: $OUT"
+  assert_eq "$(echo "$OUT" | grep -c 'AGENTS.md')" "1" "read-only code folder: one AGENTS.md line: $OUT"
+  echo "$OUT" | grep -qF "could not create $C/AGENTS.md" && pass || fail "read-only code folder: no AGENTS.md line: $OUT"
+  echo "$OUT" | grep -qF "ln -s \"$P/CLAUDE.md\" \"$C/AGENTS.md\"" && pass || fail "read-only code folder: no fix command: $OUT"
+  [ ! -e "$C/CLAUDE.local.md" ] && [ ! -L "$C/CLAUDE.local.md" ] && [ ! -e "$C/AGENTS.md" ] && [ ! -L "$C/AGENTS.md" ] && pass \
+    || fail "read-only code folder: a link was created"
+  CLAUDE_PLUGIN_OPTION_UI_LANGUAGE=ru run claude --cwd "$C"
+  echo "$OUT" | grep 'AGENTS.md' | grep -qF "could not" && fail "ru AGENTS.md line is English: $OUT" || pass
+fi
+chmod u+w "$C"
+run claude --cwd "$C"
+assert_eq "$(readlink "$C/CLAUDE.local.md")" "$P/CLAUDE.md" "rerun: CLAUDE.local.md link"
+assert_eq "$(readlink "$C/AGENTS.md")" "$P/CLAUDE.md" "rerun: AGENTS.md link"
+run claude --cwd "$C"; assert_eq "$OUT" "" "after the rerun: silent"
 
 # --- layout note and old git hooks (same texts as session-start)
 printf 'schema: 1\n' > "$CORE_DIR/.coredev"
