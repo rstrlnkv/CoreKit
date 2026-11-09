@@ -10,33 +10,23 @@
 #  host     on Codex: the trust note until the hooks are known to have run (the marker session-start writes), and the
 #           sandbox profile note while config.toml names no default_permissions (read as data, never written).
 # Idempotent, silent when everything is current. Output lines are for the person (the model relays them). Exit 0 always.
-SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
-ROOT="${CLAUDE_PLUGIN_ROOT:-$SELF}"
-cwd=""; part=all
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --cwd) [ $# -ge 2 ] || exit 0; cwd="$2"; shift 2 ;;
-    --part) [ $# -ge 2 ] || exit 0; part="$2"; shift 2 ;;
-    *) shift ;;
-  esac
-done
-[ -n "$cwd" ] || cwd="$PWD"
-. "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
-. "$SELF/hooks/messages.sh" 2>/dev/null || exit 0
-load_settings
+# Sourced (hooks/session-start.sh), it only defines prepare_tools, prepare_project <cwd> and prepare_host, which
+# return and never exit (an exit would end the hook); the caller has sourced lib.sh and messages.sh, run
+# load_settings and set ROOT (the plugin root). Run as a command, it does that itself and runs the parts asked for.
 
 # 1. Tools.
-if [ "$part" = all ] || [ "$part" = tools ]; then
+prepare_tools() {
+  local T rc
   T="$(tools_dir)"
-  if [ -n "$T" ]; then
-    bash "$ROOT/scripts/sync-tools.sh" "$ROOT" "$T" >/dev/null 2>&1; rc=$?
-    case "$rc" in
-      0) ;;
-      2) printf '%s\n' "$(msg sync_not_ours "$T")" ;;
-      *) printf '%s\n' "$(msg sync_failed "$T")" ;;
-    esac
-  fi
-fi
+  [ -n "$T" ] || return 0
+  bash "$ROOT/scripts/sync-tools.sh" "$ROOT" "$T" >/dev/null 2>&1; rc=$?
+  case "$rc" in
+    0) ;;
+    2) printf '%s\n' "$(msg sync_not_ours "$T")" ;;
+    *) printf '%s\n' "$(msg sync_failed "$T")" ;;
+  esac
+  return 0
+}
 
 # link_notes <code folder> <Core project folder> — make the two links; say what was made or what is in the way.
 # A real AGENTS.md stays silent (its owner may want it).
@@ -61,7 +51,8 @@ link_notes() {
 }
 
 # 2. The project.
-if [ "$part" = all ] || [ "$part" = project ]; then
+prepare_project() {
+  local cwd="$1" proj P sv old shown code stale h hp
   proj="$(project_of "$cwd")" || proj=""
   if [ -n "$proj" ]; then
     P="$CORE_DIR/$proj"
@@ -110,10 +101,12 @@ if [ "$part" = all ] || [ "$part" = project ]; then
       fi
     fi
   fi
-fi
+  return 0
+}
 
 # 3. The host: Codex does not run the hooks until they are trusted.
-if [ "$part" = all ] || [ "$part" = host ]; then
+prepare_host() {
+  local mk v cfg base
   if [ "$(host)" = codex ]; then
     mk="$(hooks_marker_path)"; v="$(plugin_version "$ROOT")"
     if [ -z "$mk" ] || [ -z "$v" ] || [ "$(cat "$mk" 2>/dev/null)" != "$v" ]; then
@@ -135,5 +128,27 @@ if [ "$part" = all ] || [ "$part" = host ]; then
       printf '%s\n' "$(msg codex_profile "$ROOT/scripts/lib.sh" "$cfg")"
     fi
   fi
+  return 0
+}
+
+# The command: bash prepare.sh [--cwd <dir>] [--part tools|project|host].
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
+  ROOT="${CLAUDE_PLUGIN_ROOT:-$SELF}"
+  cwd=""; part=all
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --cwd) [ $# -ge 2 ] || exit 0; cwd="$2"; shift 2 ;;
+      --part) [ $# -ge 2 ] || exit 0; part="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  [ -n "$cwd" ] || cwd="$PWD"
+  . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
+  . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0
+  load_settings
+  case "$part" in all|tools) prepare_tools ;; esac
+  case "$part" in all|project) prepare_project "$cwd" ;; esac
+  case "$part" in all|host) prepare_host ;; esac
+  exit 0
 fi
-exit 0

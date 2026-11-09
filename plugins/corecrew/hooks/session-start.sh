@@ -1,28 +1,30 @@
 #!/usr/bin/env bash
 # Claude Code SessionStart hook (startup, resume, clear, compact, fork). Stdout becomes context.
-#  1. refreshes the tools copy (scripts/prepare.sh; runs everywhere; it only touches the plugin's own folder);
+#  1. refreshes the tools copy (scripts/prepare.sh prepare_tools; runs everywhere; it only touches the plugin's own folder);
 #  2. Core not set up and the session is not in a project: one hint per machine (marker in state/), shown to the person as a systemMessage;
 #  3. inside a project (<Core>/<project>/ or its code folder beside the Core, worktrees included): project name, docs index, tools, standards,
-#     session rules, then scripts/prepare.sh's layout note, links and old git hooks note. On Codex it also records that the
+#     session rules, then scripts/prepare.sh prepare_project's layout note, links and old git hooks note. On Codex it also records that the
 #     hooks ran (the marker prepare.sh looks for).
 # Outside a project it prints nothing else.
 # Always exits 0: a hook must never block a session.
+# prepare.sh is sourced, not run: its parts are functions that return and never exit, so a failing part
+# (a tools sync that fails, a code folder that cannot be read) cannot end this hook early.
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)"
 ROOT="${CLAUDE_PLUGIN_ROOT:-$SELF}"
 in=""; [ -t 0 ] || in="$(cat)"
 
-# 1. Tools: quiet unless it failed (scripts/prepare.sh --part tools).
-# A failure is reported below: on stdout inside a project, on stderr elsewhere (no context noise).
-syncerr="$(bash "$SELF/scripts/prepare.sh" --part tools 2>&1)"
-
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
+. "$SELF/scripts/prepare.sh" 2>/dev/null || exit 0   # prepare_tools, prepare_project
 # The data folder (state markers): CLAUDE_PLUGIN_DATA, else lib-host.sh default_data_dir (the marketplace read from the plugin
 # root's path, under an absolute HOME or CODEX_HOME); else unknown (empty): no state marker, no save hint. An empty or
 # relative HOME would write to /.claude or <cwd>/<HOME>/.claude. The tools copy (lib.sh tools_dir) follows the same rule.
 DATA="${CLAUDE_PLUGIN_DATA:-}"
 [ -n "$DATA" ] || DATA="$(default_data_dir "$ROOT")"
 load_settings
+# 1. Tools: quiet unless it failed (prepare_tools).
+# A failure is reported below: on stdout inside a project, on stderr elsewhere (no context noise).
+syncerr="$(prepare_tools 2>&1)"
 cwd="$(json_str "$in" cwd)"
 [ -n "$cwd" ] || cwd="$PWD"
 proj="$(project_of "$cwd")"
@@ -85,7 +87,7 @@ noattr=""; [ "$ATTRIBUTION" = forbid ] && noattr=" --no-attribution"
 names=""
 for f in "$CORE_DIR"/standards/*.md; do
   [ -f "$f" ] || continue
-  b="$(basename "$f" .md)"; [ "$b" = README ] && continue
+  b="${f##*/}"; b="${b%.md}"; [ "$b" = README ] && continue   # (the glob gives no bare ".md", where basename would differ)
   names="${names:+$names, }$b"
 done
 printf '%s\n' "$(msg standards "${names:-$(msg standards_none)}")"
@@ -95,6 +97,6 @@ if [ -f "$CORE_DIR/session-rules.md" ]; then
   [ -z "$(tail -c 1 "$CORE_DIR/session-rules.md")" ] || echo   # no final newline: end the line
 fi
 
-# Layout note, the CLAUDE.local.md and AGENTS.md links, the old git hooks note: scripts/prepare.sh.
-bash "$SELF/scripts/prepare.sh" --part project --cwd "$cwd"
+# Layout note, the CLAUDE.local.md and AGENTS.md links, the old git hooks note: scripts/prepare.sh prepare_project.
+prepare_project "$cwd"
 exit 0

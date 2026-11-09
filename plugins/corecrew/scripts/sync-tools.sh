@@ -18,8 +18,9 @@ S="$ROOT/scripts"
 MANIFEST="$ROOT/.claude-plugin/plugin.json"
 
 [ -r "$MANIFEST" ] || { echo "corecrew: $MANIFEST not found; tools not updated." >&2; exit 1; }
-. "$(dirname "$0")/lib.sh" || { echo "corecrew: $(dirname "$0")/lib.sh not found; tools not updated." >&2; exit 1; }
-VER="$(plugin_version "$ROOT")"
+# The version as lib-host.sh plugin_version reads it (the first line whose "version" holds a string), in one sed:
+# this script runs at every session start, and sourcing lib.sh for one value costs more than the rest of a current run.
+VER="$(sed -n '/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/{s//\1/p;q;}' "$MANIFEST" 2>/dev/null)"
 [ -n "$VER" ] || { echo "corecrew: no version in $MANIFEST; tools not updated." >&2; exit 1; }
 
 # The files we copy, relative to the scripts folder (names have no spaces): what save, undo-step and the git hook shims
@@ -31,13 +32,15 @@ for f in $FILES; do
 done
 [ -d "$S/git-hooks" ] || { echo "corecrew: $S/git-hooks not found; tools not updated." >&2; exit 1; }
 for f in "$S"/git-hooks/*; do
-  [ -f "$f" ] && FILES="$FILES git-hooks/$(basename "$f")"
+  [ -f "$f" ] && FILES="$FILES git-hooks/${f##*/}"
 done
+# TP — the folder <tools_dir> is in (what dirname prints, without starting it).
+case "$T" in */*) TP="${T%/*}"; [ -n "$TP" ] || TP=/ ;; *) TP=. ;; esac
 # data_dir — the data folder of the copy (<data>/tools, the layout tools_dir uses), written into it as .data-dir, so a copy
 # run by hand without CLAUDE_PLUGIN_DATA finds itself (lib.sh tools_dir); nothing for a tools folder with another name.
 data_dir() {
-  [ "$(basename "$T")" = tools ] || return 0
-  (cd "$(dirname "$T")" 2>/dev/null && pwd -P)
+  [ "${T##*/}" = tools ] || return 0
+  (cd "$TP" 2>/dev/null && pwd -P)
 }
 # sum_of <dir> — one checksum over those files in <dir> (a missing file changes it too).
 sum_of() {
@@ -47,8 +50,12 @@ sum_of() {
 SUM="$(sum_of "$S")"
 
 # is_current — same version, same content, the copy is intact (a damaged or edited copy is rebuilt), and its .data-dir is right.
+# VERSION is read with read -r and an empty IFS: each line exactly as written, as `sed -n 1p` and `sed -n 2p` print it.
 is_current() {
-  [ -f "$T/VERSION" ] && [ "$(sed -n 1p "$T/VERSION")" = "$VER" ] && [ "$(sed -n 2p "$T/VERSION")" = "$SUM" ] \
+  local v1="" v2=""
+  [ -f "$T/VERSION" ] || return 1
+  { IFS= read -r v1; IFS= read -r v2; } < "$T/VERSION" 2>/dev/null
+  [ "$v1" = "$VER" ] && [ "$v2" = "$SUM" ] \
     && [ "$(sum_of "$T")" = "$SUM" ] && [ "$(cat "$T/.data-dir" 2>/dev/null)" = "$(data_dir)" ]
 }
 if is_current; then echo "tools current $VER"; exit 0; fi
@@ -56,7 +63,7 @@ if is_current; then echo "tools current $VER"; exit 0; fi
 # One swap at a time: several runs can start together (a session start and a skill's prepare). The lock is a folder
 # next to the tools folder holding the owner's pid; a dead owner's lock is taken over. Up to 10 tries of one second,
 # then a clean skip (the run that holds the lock is making the copy).
-mkdir -p "$(dirname "$T")" || exit 1
+mkdir -p "$TP" || exit 1
 LOCK="$T.lock"; got=0; tries=0
 while [ "$tries" -lt 10 ]; do
   if mkdir "$LOCK" 2>/dev/null; then got=1; break; fi
