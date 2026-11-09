@@ -56,7 +56,9 @@ plugins/coremodel/                model and effort picker
   codex/                          hint.sh and hooks.json: the Codex hint
   types/index.d.ts                the plugin's type contract (the host API types are written by
                                   Claude Code into .claude-plugin/types/, which git does not track)
-  tests/                          *.test.ts(x), run by `claude plugin test` through tests/test_coremodel.sh;
+  tests/                          *.test.ts(x), one file per module or surface, run by `claude plugin test`
+                                  through tests/test_coremodel.sh; world.ts is the host beneath them and
+                                  surfaces.tsx what they draw and press;
                                   quality.sh is the manual check of the classifier
 plugins/coreopinion/              second opinion from GPT (Claude Code only)
   skills/second-opinion/          SKILL.md; scripts/: ask-gpt.sh (the Codex run), allowed-files.sh and

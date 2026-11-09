@@ -3,7 +3,8 @@ import type { Engine } from 'claude-code/testing'
 import type { ConfigRow, On } from 'claude-code'
 
 // The world beneath the plugin, answered from memory. `answer` is the classifier's next reply;
-// `reply` the person's answer to the question (null = dismissed); `row` the config menu's effort row.
+// `reply` the person's answer to the question (null = dismissed); `row` the config menu's effort row
+// (none unless a test sets one: only /coremodel probe reads it).
 export type World = {
   answer: string | Error | { isAnswered: false } | Promise<string>
   /**
@@ -79,7 +80,7 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     headers: [],
     tokens: undefined,
     models: [],
-    row: row(),
+    row: null,
     modelRow: null,
     listThrows: false,
     hostLanguage: undefined,
