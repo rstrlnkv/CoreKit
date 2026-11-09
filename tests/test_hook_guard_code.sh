@@ -716,6 +716,13 @@ sec_writers() {
   for c in 'stdbuf -o L tee docs/a.md' 'sudo -k tee docs/a.md' 'exec -a x tee docs/a.md' 'time -o out tee docs/a.md'; do
     sh "$c"; blocked "$c" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
   done
+  # digits right after <&, <<< or << are the word of that redirect, not the descriptor of the next one
+  sh 'cat <&3>docs/a.md';                blocked "cat <&3>docs/a.md" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  sh 'cat <&3 >docs/a.md';               blocked "cat <&3 >docs/a.md" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  sh 'cat 0<&3>CLAUDE.md';               blocked "cat 0<&3>CLAUDE.md" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
+  sh 'printf x <&0>.claude/settings.json'; blocked "printf x <&0>.claude/settings.json" "$C/.claude/settings.json" "$CORE_DIR/p/.claude/settings.json"
+  sh 'cat <<<3>docs/a.md';               blocked "cat <<<3>docs/a.md" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  run_bash 'cat <<3>docs/a.md\nx\n3';    blocked "cat <<3>docs/a.md (heredoc delimiter 3)" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
   # a command with a \004 byte of its own is read byte by byte (lexsp=0): still judged
   sh "echo x$(printf '\004')y > docs/a.md"; blocked "a command with a \\004 byte" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
   # a link source spelled with a variable is unknown: the link itself is still judged where it lands
@@ -739,7 +746,7 @@ sec_writers() {
            'install -m 755 build/app bin/app' 'install -d .claude' 'npm install' 'brew install docs' 'pip install -r docs/req.txt' \
            'make install DESTDIR=docs' 'echo cp a CLAUDE.md' 'grep -rn "tee docs" .' 'ls -la > src/listing.txt' \
            'sudo -k tee src/a.md' 'stdbuf -o L tee src/out.txt' 'exec -a x tee src/b.txt' 'time -o out tee src/c.txt' \
-           'cat 0<in > src/a'; do
+           'cat 0<in > src/a' 'cat <&3 >src/x' 'cat <&3>src/x'; do
     sh "$c"; hook_ok "Bash passes: $c"
   done
   # LIMIT (ADR 009): what the plain reading does not follow; each passes and is listed in the guard-code.sh header

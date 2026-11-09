@@ -152,8 +152,9 @@ function stmt_end(s) {
   cmd = ""; na = 0; wrapped = 0; wname = ""; wskip = 0; wdur = 0; want_redir = 0; want_in = 0; rwredir = 0; skip_next = 0; want_hd = 0
 }
 # fdword — a redirect starts: a word of digits right before it (2>, 0<) is the descriptor, not an argument.
-# Not when the word is itself the target of a redirect still waiting for one (2>&1<file: 1 is the target).
-function fdword() { if (inword && !hasq && !wbad && !want_redir && !want_in && word ~ /^[0-9]+$/) { inword = 0; word = ""; wx = ""; wl = 0 } else endword() }
+# Not when the word is itself the word of a redirect still waiting for one (2>&1<file: 1 is the target;
+# <&3>file: 3 is the descriptor duplicated; <<<3 and <<3: the here-string and the heredoc delimiter).
+function fdword() { if (inword && !hasq && !wbad && !want_redir && !want_in && !skip_next && !want_hd && word ~ /^[0-9]+$/) { inword = 0; word = ""; wx = ""; wl = 0 } else endword() }
 # enqueue(text) — a command line to lex after the main pass (at most 50; none when the hook set nofollow)
 function enqueue(t) { if (nq < 50 && !nofollow) Q[++nq] = t }
 # subst_queue(w) — w has a $(...) or backtick substitution from inside double quotes: each body is queued as a

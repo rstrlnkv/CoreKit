@@ -383,7 +383,11 @@ b 'cat <<< "$(cat .env)"' '.env'
 b 'x="$(cat .env)" y=1' '.env'
 b 'cat <> .env' '.env'
 b 'exec 3<> .env' '.env'
-b 'cat notes.txt 3<.env' '.env'           # a descriptor number before < : the file is still read
+b 'cat notes.txt 3<.env' '.env'
+b 'cat <&0<.env' '.env'                    # digits after <& are its word, not the descriptor of the next <
+b 'cat 0<&3<.env' '.env'
+b 'cat <&0 <.env' '.env'
+b 'cat <<<0<.env' '.env'           # a descriptor number before < : the file is still read
 b 'rsync -av .env host:/tmp/' '.env'
 b 'rsync -av a .env.local host:/tmp/' '.env.local'
 b 'grep -A 2 TOKEN .env' '.env'
@@ -452,7 +456,8 @@ p 'grep -rn "\.env" src'
 p 'rg --files -g "*.ts"'
 p 'cp .env.example .env'
 p 'cp .env.example .env.local'
-p 'cp .env.example .env 0</dev/null'      # 0< is a descriptor, not an argument of cp
+p 'cp .env.example .env 0</dev/null'
+p 'cat <&3 >out.txt'      # 0< is a descriptor, not an argument of cp
 p 'cp -v .env.example .env && echo done'
 p 'scp a host:.env'
 p 'git add .env.example'
