@@ -125,6 +125,78 @@ bg_wait() {
   done
 }
 
+# Speed is judged by CPU time, not wall time: load on the machine (other test files, -j) raises the wall time of a
+# run, not its CPU time. A check that times a real wait (a sleep, a lock, a timeout) stays on wall time.
+# cpu_run <cmd...> — runs cmd in this shell, so what it sets (RC, OUT, ERR) and its exit code survive. CPU_MS = the
+# user+sys time of this shell and of the children it waited for, in ms (the delta of `times`, both lines). The
+# `times` output goes to a file under the section's OD, never through $(...).
+cpu_run() {
+  local _cr_f="${OD:-$TEST_TMP}/cpu-run" _cr_rc _cr_a
+  times > "$_cr_f.a"
+  "$@"; _cr_rc=$?
+  times > "$_cr_f.b"
+  _cpu_file "$_cr_f.a"; _cr_a=$_CPU_T; _cpu_file "$_cr_f.b"; CPU_MS=$((_CPU_T - _cr_a))
+  return $_cr_rc
+}
+# _cpu_file <file> — _CPU_T = the sum, in ms, of the four times in a `times` output ("0m1.234s 0m0.010s", two lines)
+_cpu_file() {
+  local a b c d t m s i f
+  { read -r a b; read -r c d; } < "$1"
+  _CPU_T=0
+  for t in "$a" "$b" "$c" "$d"; do
+    m="${t%%m*}"; s="${t#*m}"; s="${s%s}"; s="${s/,/.}"   # some locales print a decimal comma
+    i="${s%%.*}"; f="${s#*.}"; [ "$f" = "$s" ] && f=""
+    f="${f}000"; f="${f:0:3}"
+    _CPU_T=$((_CPU_T + 10#${m:-0} * 60000 + 10#${i:-0} * 1000 + 10#$f))
+  done
+}
+# assert_linear <label> <ratio> <cmd n> <cmd 4n> — the CPU time of <cmd 4n> is at most <ratio> times that of <cmd n>
+# (each command line is run with eval, twice; the faster run counts). Four times the input costs about 3 to 4 times
+# the CPU in a linear reader (its fixed start cost lowers the ratio) and 16 times in a quadratic one; a ratio of
+# about 6 tells them apart. Size n so that the reader's own work dominates the start cost (at least 25k words).
+assert_linear() {
+  local _al_a _al_b
+  cpu_run eval "$3"; _al_a=$CPU_MS; cpu_run eval "$3"; [ "$CPU_MS" -lt "$_al_a" ] && _al_a=$CPU_MS
+  cpu_run eval "$4"; _al_b=$CPU_MS; cpu_run eval "$4"; [ "$CPU_MS" -lt "$_al_b" ] && _al_b=$CPU_MS
+  [ "$_al_a" -gt 0 ] || _al_a=1
+  [ "$_al_b" -le $(($2 * _al_a)) ] && pass \
+    || fail "$1: not linear: 4 times the input took $_al_b ms of CPU against $_al_a ms (more than $2 times)"
+}
+
+# exec_shims — builds, once per file, the folder EXEC_SHIMS: a logging shim for every program on PATH (the first folder
+# that has a name wins, as in a PATH lookup). A shim appends its name to $EXEC_LOG and execs the real program by its
+# path, so the PATH it passes on still starts with the shims. Call it once, before the bg sections that count.
+exec_shims() {
+  EXEC_SHIMS="$TEST_TMP/exec-shims"
+  [ -d "$EXEC_SHIMS" ] && return 0
+  local tmp dir f n
+  tmp="$(mktemp -d "$TEST_TMP/shims.XXXXXX")" || return 1
+  local IFS=:
+  for dir in $PATH; do
+    case "$dir" in /*) [ -d "$dir" ] || continue ;; *) continue ;; esac
+    for f in "$dir"/*; do
+      n="${f##*/}"
+      case "$f" in *\'*) continue ;; esac   # a quote in a name: not shimmed
+      [ -x "$f" ] && [ ! -d "$f" ] && [ ! -e "$tmp/$n" ] || continue
+      printf '#!/bin/sh\n[ -z "$EXEC_LOG" ] || printf "%%s\\n" %s >> "$EXEC_LOG"\nexec %s "$@"\n' "'$n'" "'$f'" > "$tmp/$n"
+    done
+  done
+  chmod +x "$tmp"/* && mv "$tmp" "$EXEC_SHIMS"
+}
+# count_execs <cmd...> — runs cmd in this shell with the shims first on PATH. EXECS = the programs it started through
+# PATH, nested ones included; EXEC_LOG = their names, one per line. A program run by its full path, or under a PATH
+# the command sets itself, is not counted. Returns cmd's exit code.
+count_execs() {
+  exec_shims || return 1
+  local _ce_path="$PATH" _ce_rc _ce_l
+  EXEC_LOG="${OD:-$TEST_TMP}/execs.log"; : > "$EXEC_LOG"; export EXEC_LOG
+  PATH="$EXEC_SHIMS:$PATH"
+  "$@"; _ce_rc=$?
+  PATH="$_ce_path"
+  EXECS=0; while IFS= read -r _ce_l; do EXECS=$((EXECS + 1)); done < "$EXEC_LOG"
+  return $_ce_rc
+}
+
 # fake <cwd> <argv0> — starts a fake test run for hooks/one-suite.sh: a `sleep 120` renamed to <argv0> (exec -a)
 # whose working folder is <cwd>. Its pid goes in FAKE_PID and in FAKES. It returns once ps shows the new name
 # (it polls every 0.1 s, up to 5 s), so a hook run right after it can see the run. The hook holds a call only
