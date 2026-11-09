@@ -16,11 +16,31 @@ paths_in() {
     | LC_ALL=C sed -E 's/^[^a-z]//' | LC_ALL=C grep -v '[*<>$]' | LC_ALL=C sort -u
 }
 
+# The documents, one glob a line; "optional" marks a glob that may match nothing (the translations).
+# run.sh runs this file from tests/, so every glob expands under the root it is given, never the cwd.
+DOC_GLOBS='README.md
+README.*.md optional
+SECURITY.md
+ARCHITECTURE.md
+CONTRIBUTING.md
+plugins/*/README.md
+plugins/*/README.*.md optional
+docs/*.md
+.github/*.md
+.github/ISSUE_TEMPLATE/*.md'
+# docs_of <root> <glob> — the files of <glob> under <root>, relative to it
+docs_of() {
+  local f
+  # shellcheck disable=SC2086 # $2 is a glob on purpose; the root is quoted, so its own characters stay literal
+  for f in "$1"/$2; do [ -f "$f" ] && printf '%s\n' "${f#"$1"/}"; done
+}
 docs=""
-for d in README.md README.*.md SECURITY.md ARCHITECTURE.md CONTRIBUTING.md plugins/*/README.md plugins/*/README.*.md docs/*.md \
-  .github/*.md .github/ISSUE_TEMPLATE/*.md; do
-  [ -f "$ROOT/$d" ] && docs="$docs $d"
-done
+while read -r g opt; do
+  got="$(docs_of "$ROOT" "$g")"
+  # a required glob that finds nothing has stopped expanding (or its files moved): nothing of it would be checked
+  [ -n "$got" ] || [ "$opt" = optional ] && pass || fail "the document glob $g finds no file under the repo root"
+  docs="$docs $got"
+done <<< "$DOC_GLOBS"
 for doc in README.md SECURITY.md ARCHITECTURE.md CONTRIBUTING.md plugins/corecrew/README.md plugins/coremodel/README.md plugins/coreopinion/README.md; do
   assert_file "$ROOT/$doc"
 done
@@ -174,6 +194,15 @@ assert_contains "$ROOT/.github/pull_request_template.md" 'commit-subjects'
 
 # the self-check: a made-up path is caught, a real one is not, placeholders are skipped
 new_sandbox
+# every document glob, the optional ones too, expands under the root it is given and not under the cwd:
+# a tree with one file per glob (and a space in its path) gives each glob exactly that file
+DR="$SANDBOX/doc root"
+mkdir -p "$DR/plugins/p" "$DR/docs" "$DR/.github/ISSUE_TEMPLATE"
+for f in README.md README.de.md SECURITY.md ARCHITECTURE.md CONTRIBUTING.md plugins/p/README.md \
+  plugins/p/README.de.md docs/a.md .github/b.md .github/ISSUE_TEMPLATE/c.md; do : > "$DR/$f"; done
+got=""; while read -r g _; do got="$got$(docs_of "$DR" "$g" | tr '\n' ' ')"; done <<< "$DOC_GLOBS"
+assert_eq "$got" "README.md README.de.md SECURITY.md ARCHITECTURE.md CONTRIBUTING.md plugins/p/README.md plugins/p/README.de.md docs/a.md .github/b.md .github/ISSUE_TEMPLATE/c.md " \
+  "each document glob expands under the given root"
 # a moved heading leaves no tree to read: that must fail, not pass with nothing checked
 sed 's/^## Where things live$/## Where things are/' "$ROOT/ARCHITECTURE.md" > "$SANDBOX/ARCHITECTURE.md"
 ( FAILS=0; check_tree "$SANDBOX/ARCHITECTURE.md" >/dev/null; [ "$FAILS" -gt 0 ] ) \
