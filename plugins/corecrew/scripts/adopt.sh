@@ -19,7 +19,8 @@
 #                                letter case (old layout)
 #   two folders differ only in case: <A>, <B>
 #   leftover staged copy of <name>: <Core>/.adopt.<name>.XXXXXX (...)   (new layout: an earlier adopt stopped after
-#       staging; the line says how to recover: revert the repo commit if it was made, remove the folder, rerun)
+#       staging; the line says how to recover: revert the repo commit, named by its hash, unless there is none or
+#       it is reverted already; remove the folder; rerun)
 #   Core is not set up
 #   CLAUDE.local.md exists in <folder>: move it away first (...)    (a file, or a link elsewhere)
 #   not found: <path>                  a --public-docs path that is not in the repo
@@ -223,11 +224,19 @@ preconditions() {
     CLASH="$(code_dir_of "$NAME" 2>&1 >/dev/null)"; [ $? -ne 3 ] || refuse "$CLASH"
     # A staged copy left by an earlier adopt of this project (its move into the Core failed, or the run was
     # killed): another run would stage the template pages over the user's lost ones. Names carry no glob
-    # characters (valid_project_name), and .adopt.<name>.* never matches another project's folder.
+    # characters (valid_project_name), and .adopt.<name>.* never matches another project's folder. The recovery
+    # names the repo commit by its hash (the user may have committed since); a revert of it ("This reverts
+    # commit <hash>") means only the leftover is left to remove.
     for d in "$CORE_DIR/.adopt.$NAME".*/p; do
       [ -d "$d" ] || continue
       d="${d%/p}"
-      refuse "leftover staged copy of $NAME: $d (an earlier adopt stopped); if the last commit in $FROM is \"Move internal Claude files to Core\", undo it with git -C \"$FROM\" revert --no-edit HEAD; then remove $d and run adopt again"
+      mc="$(git -C "$FROM" log -1 --format=%H --grep='^Move internal Claude files to Core$' 2>/dev/null)"
+      if [ -z "$mc" ]; then
+        refuse "leftover staged copy of $NAME: $d (an earlier adopt stopped before its repo commit); remove $d and run adopt again"
+      elif [ -n "$(git -C "$FROM" log -1 --format=%H -F --grep="This reverts commit $mc" 2>/dev/null)" ]; then
+        refuse "leftover staged copy of $NAME: $d (an earlier adopt stopped; its repo commit is undone); remove $d and run adopt again"
+      fi
+      refuse "leftover staged copy of $NAME: $d (an earlier adopt stopped); undo its repo commit with git -C \"$FROM\" revert --no-edit $mc, then remove $d and run adopt again"
     done
   else
     K="$PROJECTS_DIR/$NAME"   # the code folder after the move
