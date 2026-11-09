@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# wiki-check.sh: one good wiki, one broken fixture per check, drift with --changed, edge cases.
+# wiki-check.sh: one good wiki, one broken variant of it per check, drift with --changed, edge cases.
 source "$(dirname "$0")/lib.sh"
 new_sandbox
 W="$SCRIPTS/wiki-check.sh"
@@ -26,23 +26,107 @@ cd "$ROOT" || exit 1
 # Copy a fixture and regenerate its INDEX.md (the title of the INDEX holds the folder name).
 clone() { cp -R "$FX/$1" "$2"; bash "$SCRIPTS/wiki-index.sh" "$2" >/dev/null 2>&1; }
 
-# One broken fixture per check.
-check wiki-bad-1 "wiki-check: features/login.md: missing front matter field status
+# The broken wikis: each is wiki-good with one defect, built here and named after it.
+# variant <name>: copy wiki-good to $FX/<name> and set V to it. edit_page <page> <sed args...> edits
+# a page of V; page <page> writes one from stdin; reindex regenerates V's INDEX.md.
+variant() { V="$FX/$1"; cp -R "$FX/wiki-good" "$V"; }
+edit_page() { local p="$V/docs/$1"; shift; sed "$@" "$p" > "$SANDBOX/v.tmp" && mv "$SANDBOX/v.tmp" "$p"; }
+page() { cat > "$V/docs/$1"; }
+reindex() { bash "$SCRIPTS/wiki-index.sh" "$V" >/dev/null 2>&1; }
+
+variant missing-fields; edit_page features/login.md -e '/^status:/d' -e '/^updated:/d'; reindex
+variant stale-index; reindex                  # a page added after INDEX.md was generated
+page features/orphan.md <<'EOF'
+---
+type: feature
+status: draft
+description: A page nobody regenerated the INDEX for.
+files: []
+related: []
+updated: 2026-11-03
+---
+
+# Orphan
+
+## Notes
+
+Not in INDEX.md.
+EOF
+variant broken-links
+printf '\n## Broken things\n\nA [missing page](nope.md), a [[gone|page that is not there]] and [[architecture#No such heading]],\nand with an alias [[login#Nowhere|see there]].\n' >> "$V/docs/architecture.md"; reindex
+variant duplicate-heading
+printf '\n## Components\n\nListed twice by mistake.\n' >> "$V/docs/architecture.md"; reindex
+# Over 8 KB without ## headings: 90 filler lines replace the sections, so the #Flow links go too.
+variant long-page; edit_page features/login.md '14,$d'
+i=0; while [ $i -lt 90 ]; do
+  echo "Line $i of a long page that has no second-level headings, so a reader cannot jump to the part they need."
+  i=$((i+1)); done >> "$V/docs/features/login.md"
+edit_page architecture.md -e 's/\[\[login#Flow\]\]/[[login]]/' -e 's/\[\[features\/login#Flow|/[[features\/login|/'; reindex
+# Not broken: a quoted directory entry in a block list, for the drift checks below.
+variant drift-quoted-dir; edit_page features/login.md 's/^  - src\/login\.sh$/&\
+  - "src\/auth\/"/'; reindex
+variant unclosed-front-matter; edit_page features/login.md '10{/^---$/d;}'; reindex
+variant bad-values
+edit_page architecture.md 's/^status: active$/status: wip/'
+edit_page decisions/001-stack.md 's/^updated: .*/updated: 06.11.2026/'
+edit_page features/login.md 's/^type: feature$/type: widget/'
+page features/long.md <<'EOF'
+---
+type: feature
+status: active
+description: abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcd
+files: []
+related: []
+updated: 2026-11-03
+---
+
+# Long
+
+## Notes
+
+The description above is 81 characters.
+EOF
+reindex
+# A decision with the file name of a feature page; architecture.md names the feature by its path.
+variant duplicate-name; edit_page architecture.md 's/\[\[login/[[features\/login/g'
+page decisions/login.md <<'EOF'
+---
+type: decision
+status: active
+description: A decision that happens to share the file name of a feature page.
+files: []
+related: []
+updated: 2026-11-03
+---
+
+# Login decision
+
+## Decision
+
+Names are unique within a project, so this is a defect.
+EOF
+reindex
+variant markdown-links
+edit_page architecture.md 's/\[\[login#Flow\]\]/[the login page](features\/login.md#flow)/'
+edit_page features/login.md 's/\[\[architecture#Components|components\]\]/[components](..\/architecture.md#components)/'; reindex
+
+# One broken variant per check.
+check missing-fields "wiki-check: features/login.md: missing front matter field status
 wiki-check: features/login.md: missing front matter field updated"
-check wiki-bad-2 "wiki-check: INDEX.md: INDEX.md stale"        # a page added after INDEX.md was generated
-check wiki-bad-3 "wiki-check: architecture.md: broken link nope.md
+check stale-index "wiki-check: INDEX.md: INDEX.md stale"        # a page added after INDEX.md was generated
+check broken-links "wiki-check: architecture.md: broken link nope.md
 wiki-check: architecture.md: broken wikilink [[gone]]
 wiki-check: architecture.md: broken wikilink [[architecture#No such heading]]
 wiki-check: architecture.md: broken wikilink [[login#Nowhere]]"      # target as written, alias dropped
-check wiki-bad-4 "wiki-check: architecture.md: duplicate heading Components"
-check wiki-bad-5 "wiki-check: features/login.md: page over 8 KB without ## headings"
-check wiki-bad-7 "wiki-check: features/login.md: unclosed front matter"
-check wiki-bad-8 "wiki-check: architecture.md: bad status: wip
+check duplicate-heading "wiki-check: architecture.md: duplicate heading Components"
+check long-page "wiki-check: features/login.md: page over 8 KB without ## headings"
+check unclosed-front-matter "wiki-check: features/login.md: unclosed front matter"
+check bad-values "wiki-check: architecture.md: bad status: wip
 wiki-check: decisions/001-stack.md: bad updated: 06.11.2026
 wiki-check: features/login.md: bad type: widget
 wiki-check: features/long.md: description over 80 chars"
-check wiki-bad-9 "wiki-check: features/login.md: duplicate page name login"   # reported on the later page
-check wiki-bad-10 "wiki-check: architecture.md: use a wikilink: features/login.md#flow
+check duplicate-name "wiki-check: features/login.md: duplicate page name login"   # reported on the later page
+check markdown-links "wiki-check: architecture.md: use a wikilink: features/login.md#flow
 wiki-check: features/login.md: use a wikilink: ../architecture.md#components"
 
 # Removed checks stay gone: no title field, no map-membership checks, no section references.
@@ -88,9 +172,9 @@ assert_exit 0 bash "$W" "$FX/wiki-good"
 assert_eq "$OUT" "" "wiki-good stays silent with the unknown-field check"
 
 # Problem prefixes, exactly as the verifier and release read them.
-assert_exit 1 bash "$W" "$FX/wiki-bad-3"
+assert_exit 1 bash "$W" "$FX/broken-links"
 assert_contains <(printf '%s' "$OUT") "wiki-check: architecture.md: broken link "
-assert_exit 1 bash "$W" "$FX/wiki-bad-1"
+assert_exit 1 bash "$W" "$FX/missing-fields"
 assert_contains <(printf '%s' "$OUT") ": missing front matter field "
 
 # A hand-edited or missing INDEX.md is stale too.
@@ -170,13 +254,13 @@ assert_eq "$OUT" "" "CRLF good wiki prints nothing"
 clone wiki-edge "$SANDBOX/crlf-edge"; crlf "$SANDBOX/crlf-edge"
 assert_exit 0 bash "$W" "$SANDBOX/crlf-edge"
 assert_eq "$OUT" "" "CRLF edge wiki prints nothing"
-clone wiki-bad-3 "$SANDBOX/crlf-bad3"; crlf "$SANDBOX/crlf-bad3"
+clone broken-links "$SANDBOX/crlf-bad3"; crlf "$SANDBOX/crlf-bad3"
 assert_exit 1 bash "$W" "$SANDBOX/crlf-bad3"
 assert_eq "$OUT" "wiki-check: architecture.md: broken link nope.md
 wiki-check: architecture.md: broken wikilink [[gone]]
 wiki-check: architecture.md: broken wikilink [[architecture#No such heading]]
 wiki-check: architecture.md: broken wikilink [[login#Nowhere]]" "CRLF same problems"
-clone wiki-bad-8 "$SANDBOX/crlf-bad8"; crlf "$SANDBOX/crlf-bad8"
+clone bad-values "$SANDBOX/crlf-bad8"; crlf "$SANDBOX/crlf-bad8"
 assert_exit 1 bash "$W" "$SANDBOX/crlf-bad8"
 assert_eq "$OUT" "wiki-check: architecture.md: bad status: wip
 wiki-check: decisions/001-stack.md: bad updated: 06.11.2026
@@ -193,7 +277,7 @@ check wiki-good "wiki-check: architecture.md: drift: src/lib/util.sh changed, pa
 check wiki-good "$DRIFT
 wiki-check: features/login.md: drift: src/login.sh changed, page not updated" \
   --changed src/app.sh src/login.sh docs/decisions/001-stack.md
-check wiki-bad-6 "wiki-check: features/login.md: drift: src/auth/token.sh changed, page not updated" \
+check drift-quoted-dir "wiki-check: features/login.md: drift: src/auth/token.sh changed, page not updated" \
   --changed src/auth/token.sh                                # quoted dir entry, block list
 # Passing the page too (either path form) clears the drift.
 assert_exit 0 bash "$W" "$FX/wiki-good" --changed src/app.sh docs/architecture.md
@@ -315,7 +399,7 @@ assert_exit 1 bash "$W" "$SANDBOX/my project"
 assert_eq "$OUT" "wiki-check: architecture.md: broken link missing one.md" "spaced target reported whole"
 
 # A big page is fine when it has ## headings.
-clone wiki-bad-5 "$SANDBOX/big"
+clone long-page "$SANDBOX/big"
 printf '\n## Part\n\nText.\n' >> "$SANDBOX/big/docs/features/login.md"
 assert_exit 0 bash "$W" "$SANDBOX/big"
 

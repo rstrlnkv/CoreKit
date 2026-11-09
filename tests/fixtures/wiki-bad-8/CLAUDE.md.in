@@ -1,7 +1,0 @@
-# Demo
-
-Demo project. Read [the map](docs/INDEX.md) first, then one page.
-
-- Structure: [[architecture#Components]] (CLAUDE.md is checked for Markdown links only)
-- Components in Markdown form: [components](docs/architecture.md#components)
-- Why this stack: [[001-stack]]
