@@ -77,3 +77,22 @@ hook_refused_patch() {
 proj() { bash "$SCRIPTS/lib.sh" project-of "$1" 2>/dev/null; }
 # wt_of <path> — "<rc> <worktree root> <main checkout>" as lib.sh's worktree_of sets them
 wt_of() { ( . "$SCRIPTS/lib.sh"; WT_ROOT=""; WT_MAIN=""; worktree_of "$1"; rc=$?; echo "$rc $WT_ROOT $WT_MAIN" ); }
+
+# poll <tenths> <cmd...> — runs cmd every 0.1 s until it succeeds, at most <tenths> more times; 1 when it never did
+poll() { local n="$1"; shift; while ! "$@"; do [ "$n" -gt 0 ] || return 1; n=$((n - 1)); sleep 0.1; done; }
+
+# codex_hooks_list <cwd> <out> — asks the real `codex app-server` (CODEX_HOME from new_sandbox) which hooks it loads for
+# <cwd> (request hooks/list). <out> gets the answer split before each hook: line 1 the head, then one line per hook
+# starting {"key":"<plugin>@<marketplace>:..., the last one followed by "warnings":[...],"errors":[...]; stderr goes to
+# <out>.err. Stdin stays open until the answer is written (polled, up to 10 s); 1 when none came.
+codex_hooks_list() {
+  local raw="$2.raw"
+  printf '%s\n' '{"id":1,"method":"initialize","params":{"clientInfo":{"name":"t","version":"1"}}}' '{"method":"initialized"}' \
+    "{\"id\":2,\"method\":\"hooks/list\",\"params\":{\"cwds\":[\"$(json_esc "$1")\"]}}" > "$2.req"
+  : > "$raw"
+  # shellcheck disable=SC2094  # the poll reads the answer codex writes, on purpose
+  (cat "$2.req"; poll 100 grep -q '"id":2' "$raw") | codex --disable remote_plugin app-server --listen stdio:// > "$raw" 2> "$2.err"
+  grep '"id":2' "$raw" | sed 's/{"key":/\
+&/g' > "$2"
+  [ -s "$2" ]
+}
