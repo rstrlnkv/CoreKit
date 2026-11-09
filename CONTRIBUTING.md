@@ -46,11 +46,37 @@ of the plugins, the tests and `scripts/`. Run it on the files you changed before
 Trigger evals (does a skill start when it should) make real model calls and are not part of the
 run: `claude plugin eval plugins/corecrew --ablation none --no-publish`.
 
+### Test fixtures
+
+`tests/fixtures/` holds the inputs and expected outputs the tests compare against.
+`tests/test_docs_paths.sh` fails when a fixture is missing from this list or from every test.
+
+- `standard-*.md`: Core standards for `check-standard.sh`; `standard-good.md` passes, each
+  `standard-bad-*.md` breaks one rule (`tests/test_new_standard.sh`).
+- `wiki-good/` and `wiki-edge/`: a project wiki that `wiki-check.sh` passes, and its edge cases
+  (`tests/test_wiki_check.sh`). `wiki-index/` and `wiki-index-fresh/`: input for `wiki-index.sh`,
+  with and without a generated index (`tests/test_wiki_index.sh`). `wiki-old/` and
+  `wiki-old.expected/`: a wiki in the old format and the byte-for-byte result of `wiki-migrate.sh`
+  (`tests/test_wiki_migrate.sh`, `tests/test_adopt.sh`).
+- `codex/`: Codex hook payloads (JSON); a test replaces `@CWD@` with its folder. They are synthetic
+  (the field names of the Codex rust-v0.166.0 structs) until real payloads are captured.
+- `session-start-golden.txt`: the pinned output of `plugins/corecrew/hooks/session-start.sh`,
+  with `@SB@` for the sandbox and `@PL@` for the plugin folder
+  (`tests/test_session_start_golden.sh`). Regenerate it only on purpose:
+  `GOLDEN_WRITE=1 bash tests/test_session_start_golden.sh`.
+
+A fixture keeps a `CLAUDE.md` as `CLAUDE.md.in`, because this repo's `.gitignore` ignores every
+`CLAUDE.md`. `copy_fixture` in `tests/lib.sh` copies a fixture and renames the file back.
+
 ## Rules for a change
 
 - **Test first.** Write a failing test in `tests/`, watch it fail, then write the code. A bug fix
   starts with a test that reproduces the bug. For skill and agent texts, test their structure and
   contracts (front matter, sizes, paths that exist, names that match), not single phrases.
+- **Sizes.** `tests/test_sizes.sh` holds one table of size limits: lines, words or the longest line,
+  per kind of file (skills, references, agents, shell, awk, TypeScript, tests), with the tight
+  limits of single files and the named exceptions above the defaults. A file over its limit is
+  split; raise a limit only with a reason in its row.
 - **Portable bash.** Scripts must run on macOS bash 3.2 with BSD tools. Write to a temp file and
   `mv` it instead of editing in place. No `jq`: read JSON with `grep`, `sed` or `awk`. Quote paths;
   they may contain spaces. `tests/test_portability.sh` lists the forbidden constructs and enforces

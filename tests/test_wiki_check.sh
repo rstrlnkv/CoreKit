@@ -502,7 +502,6 @@ assert_exit 2 bash "$W" "$FX/codewiki" --code "$CR/src/app.sh"
 
 # Rules file and docs.
 assert_file "$PLUGIN/reference/wiki.md"
-[ "$(wc -l < "$PLUGIN/reference/wiki.md")" -le 80 ] && pass || fail "reference/wiki.md over 80 lines"
 assert_contains "$PLUGIN/reference/wiki.md" "git -C <Core> diff --name-only HEAD -- <project>/docs"
 assert_contains "$PLUGIN/reference/wiki.md" "git -C <Core> ls-files --others --exclude-standard -- <project>/docs"
 finish
