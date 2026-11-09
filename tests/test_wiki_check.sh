@@ -504,6 +504,19 @@ check codenorm "$NORM_MISSING
 wiki-check: features/login.md: drift: src/dot.sh changed, page not updated
 wiki-check: features/login.md: drift: src/double.sh changed, page not updated" \
   --code "$CN" --changed src/dot.sh src/double.sh src/abs.sh outside.sh ../outside.sh
+# The code root as an entry (./ or .) is the root folder in both loops: it exists, and like any folder entry it
+# covers every file under it, so any changed code path drifts.
+clone codewiki "$FX/coderoot"
+sed 's/^  - src\/login\.sh$/&\
+  - .\//' "$FX/coderoot/docs/features/login.md" > "$SANDBOX/s.tmp" && mv "$SANDBOX/s.tmp" "$FX/coderoot/docs/features/login.md"
+sed 's/^files: \[src\/app\.sh, src\/lib\/\]$/files: [src\/app.sh, src\/lib\/, .]/' "$FX/coderoot/docs/architecture.md" > "$SANDBOX/s.tmp" \
+  && mv "$SANDBOX/s.tmp" "$FX/coderoot/docs/architecture.md"
+assert_contains "$FX/coderoot/docs/features/login.md" '  - ./'
+assert_contains "$FX/coderoot/docs/architecture.md" 'files: [src/app.sh, src/lib/, .]'
+assert_exit 0 bash "$W" "$FX/coderoot" --code "$CR"
+assert_eq "$OUT" "" "the code root entry exists"
+check coderoot "wiki-check: architecture.md: drift: deep/new.sh changed, page not updated
+wiki-check: features/login.md: drift: deep/new.sh changed, page not updated" --code "$CR" --changed deep/new.sh
 assert_exit 0 bash "$W" "$FX/codewiki"
 # Draft pages list files they will create; history pages list files that may be gone: neither is checked.
 clone codewiki "$SANDBOX/codedraft"

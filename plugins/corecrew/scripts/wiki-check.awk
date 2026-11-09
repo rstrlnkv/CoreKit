@@ -233,7 +233,8 @@ END {
     # files: entries. Active pages must name paths that exist (--code); done and superseded pages
     # are history: no drift, no existence check; draft pages may name files still to be created.
     # Both loops read an entry as norm() gives it; an absolute one, or one that climbs out of the code
-    # root, is no code path: missing here, and never a drift below.
+    # root, is no code path: missing here, and never a drift below. The code root itself (./ or .) is the
+    # root folder: it exists, and any changed code path drifts.
     st = unq(val["status"])
     if (code != "" && st == "active")
       for (i = 1; i <= nf; i++) {
@@ -244,7 +245,7 @@ END {
       for (i = 1; i <= nf; i++) {
         f = flist[i]
         dir = (f ~ /\/$/)
-        f = norm(f); if (dir) f = f "/"
+        f = norm(f); if (f == "") dir = 1; else if (dir) f = f "/"
         if (dir) { for (k = 1; k <= nc; k++) if (index(codechg[k], f) == 1) drift(codechg[k]) }
         else if (f in codeset) drift(f)
       }
