@@ -138,6 +138,19 @@ n="$(wc -l < "$SANDBOX/git.log" | tr -d ' ')"
 [ "$n" -le 13 ] && pass || fail "git calls in a dirty, already reminded project: $n (at most 13): $(sed 's/^-C [^ ]* //' "$SANDBOX/git.log" | tr '\n' '|')"
 rm -f "$C/state-a.txt" "$C/state-future.txt"; (cd "$C" && bash "$SCRIPTS/save" "s-state2") >/dev/null 2>&1
 
+# a TMPDIR inside the code repo, not ignored: the hook leaves no file there that its own untracked list would see,
+# so an unchanged tree is reminded once, not at every stop
+mkdir -p "$C/.tmp"; echo t > "$C/tmp-new.txt"
+for _ in 1 2 3; do input "$C" false | TMPDIR="$C/.tmp" bash "$H" >/dev/null 2>&1; printf '%s ' "$?"; done > "$SANDBOX/rcs"
+assert_eq "$(cat "$SANDBOX/rcs")" "2 0 0 " "TMPDIR in the repo: three stops on an unchanged tree"
+assert_eq "$(ls -A "$C/.tmp")" "" "TMPDIR in the repo: the hook left a file there"
+# no temp file can be made (mktemp fails): the same outcome
+mkdir -p "$SANDBOX/nomktemp"; printf '#!/bin/sh\nexit 1\n' > "$SANDBOX/nomktemp/mktemp"; chmod +x "$SANDBOX/nomktemp/mktemp"
+echo u >> "$C/tmp-new.txt"
+for _ in 1 2 3; do input "$C" false | PATH="$SANDBOX/nomktemp:$PATH" bash "$H" >/dev/null 2>&1; printf '%s ' "$?"; done > "$SANDBOX/rcs"
+assert_eq "$(cat "$SANDBOX/rcs")" "2 0 0 " "no temp file: three stops on an unchanged tree"
+rm -rf "$C/.tmp" "$C/tmp-new.txt"; (cd "$C" && bash "$SCRIPTS/save" "s-tmp") >/dev/null 2>&1
+
 # Codex Stop payloads (fixtures built from the rust-v0.166.0 structs): same rules, and an exit 2 carries a
 # non-empty stderr (Codex treats exit 2 with an empty one as a failed hook, not a block)
 FX="$ROOT/tests/fixtures/codex"

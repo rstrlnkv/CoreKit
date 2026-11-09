@@ -27,7 +27,7 @@ dirty=""
 if [ -n "$CORE_ST" ]; then
   if [ -n "$dirty" ]; then dirty="both"; else dirty="docs"; fi
 fi
-STATE="$(git -C "$CODE" rev-parse --absolute-git-dir)/new-project-stop-remind"
+GD="$(git -C "$CODE" rev-parse --absolute-git-dir)"; STATE="$GD/new-project-stop-remind"
 [ -z "$dirty" ] && { rm -f "$STATE"; exit 0; }
 
 # Untracked files are fingerprinted by name, size and time, never by content (a large untracked file
@@ -45,8 +45,10 @@ untracked() {
   done
 }
 # The untracked list is made once, into a temp file, and read by the sum and both newer_than calls; when no temp
-# file can be made, each of them makes the list again (as before).
-UT="$(mktemp "${TMPDIR:-/tmp}/corecrew-stop.XXXXXX" 2>/dev/null)" || UT=""
+# file can be made, each of them makes the list again (as before). The temp file sits in the code repo's git folder,
+# next to the state file: no untracked list sees it there (a TMPDIR inside a watched path would put its random name
+# into the sum, and the reminder would repeat at every stop).
+UT="$(mktemp "$GD/corecrew-stop.XXXXXX" 2>/dev/null)" || UT=""
 if [ -n "$UT" ]; then trap 'rm -f "$UT"' EXIT; untracked > "$UT"; fi
 ut() { if [ -n "$UT" ]; then cat -- "$UT"; else untracked; fi; }
 # newer_than <file> — the untracked paths changed after <file> was written, one per line.
