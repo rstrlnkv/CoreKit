@@ -109,7 +109,7 @@ Nothing stays behind: the run script removes its temp folder after each run. If 
 `sandbox.excludedCommands` entry for `ask-gpt.sh` to your Claude Code settings, remove it too. If
 Codex installed it through the marketplace, `codex plugin remove coreopinion@corekit` removes it there.
 
-## Build from source
+## Development
 
 ```bash
 bash tests/test_coreopinion.sh              # the manifest, the skill, its run script and docs

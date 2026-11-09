@@ -31,7 +31,7 @@ In Codex: `codex plugin marketplace upgrade corekit`, then trust the hook again 
 | The pane | The footer button opens a pane with the mode, what the chat runs at, Model and Effort buttons and the session in one line |
 | Your menus stay put | The pick is put on the requests of this chat only; your model and effort settings are never written |
 | Account-aware | Reads the models your account can use and never picks one it lacks |
-| Languages | English and Russian, by Claude Code's `language` setting or by coremodel's own |
+| Languages | English and Russian, by Claude Code's `language` setting or by coremodel's own; corecrew's `ui_language` does not change it (corecrew has its own) |
 
 The two picks are independent: a polite email is Haiku at Low, a contract risk review is Opus at
 High, a whole app built alone is Fable at Extra high. Approvals such as "yes", "go on" or "да,
@@ -195,7 +195,7 @@ switch with /model if the current one differs". You switch yourself with `/model
 model and effort settings were never changed, so nothing needs undoing. For Codex, remove the
 `codex_hint` line from `~/.config/coremodel/settings` if you added it.
 
-## Build from source
+## Development
 
 ```bash
 bash tests/test_coremodel.sh                          # validate the manifest and module, run the plugin's tests

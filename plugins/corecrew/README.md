@@ -1,10 +1,14 @@
 # CoreCrew
 
-Run every project the same way. `corecrew` starts a new app from a short interview, runs each task
-through a crew of agents (an engineer writes, a tester and read-only checkers review), and keeps
-your standards, lessons and each project's internal docs in one private git repo of your own, the
-Core. The code of each project lives in its own repo beside the Core, so publishing the code never
-publishes your internal notes. It works in Claude Code and in the Codex CLI.
+Run every project the same way: start from an interview, work with a crew of agents, keep the docs in a private repo.
+
+![platform](https://img.shields.io/badge/platform-Claude%20Code%202.1.271%2B%20%7C%20Codex%20CLI-lightgrey) ![release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcorecrew%2F.claude-plugin%2Fplugin.json&query=%24.version&label=release) ![licence](https://img.shields.io/github/license/rstrlnkv/CoreKit)
+
+`corecrew` starts a new app from a short interview, runs each task through a crew of agents (an
+engineer writes, a tester and read-only checkers review), and keeps your standards, lessons and
+each project's internal docs in one private git repo of your own, the Core. The code of each
+project lives in its own repo beside the Core, so publishing the code never publishes your internal
+notes. It works in Claude Code and in the Codex CLI.
 
 ## Install
 
@@ -99,6 +103,16 @@ Coming from `coredev` (0.2.x) or `corekit` (0.1.x): follow
 
 ## Features
 
+| Feature | What it does |
+|---|---|
+| [`new-project`](#new-project) | Interviews you, compares stacks, records the decisions in the Core and scaffolds the code repo |
+| `task` | Runs a task through the crew of agents and ends with a report and one commit; also prepares a release and adopts an existing project |
+| `ship` | Releases the current branch: pushes it after your yes, tags it and publishes a GitHub release after a second yes |
+| `new-standard` | Helps you write a standard of your own into the Core |
+| [The guards](#what-the-hooks-do) | Hooks refuse to read secrets and to write internal files into the code folder; git hooks keep internal files out of commits and pushes |
+| Save and undo | `save` commits one step in the code repo and the Core together; `undo-step` reverts the last one in both |
+| [The settings](#settings) | The Core folder, attribution, the crew's models and the language of the hook messages |
+
 ### Words used here
 
 | Word | Meaning |
@@ -189,6 +203,13 @@ The Core's pre-push hook refuses to push unless the Core's GitHub repo is privat
 | `codex_model_<role>` | `<model> [<effort>]` or `inherit` | — | Codex only: the same for one role (`engineer`, `tester`, ...), over `codex_model` |
 | `coremodel_mode` | see the [coremodel README](../coremodel/README.md#codex) | — | Read only by coremodel's Codex hint, from the settings file; corecrew ignores it |
 
+`ui_language` covers only the messages of corecrew's own scripts: the hooks and the checks a skill
+runs when it starts. It does not follow Claude Code's `language` setting. The skills talk to you in
+your language whatever `ui_language` says (from your Claude settings or instructions, else the
+language you write in). For Russian messages set `ui_language` to `ru`: at install time with
+`--config ui_language=ru` ([Install](#claude-code)), in `/plugin` → Installed → corecrew →
+Configure options, or in the settings file below. coremodel has a `language` setting of its own.
+
 In Claude Code the settings are plugin options (`/plugin` → Installed → corecrew → Configure
 options). Without an options screen (Codex, or a command-line install) they live in
 `~/.config/corecrew/settings`, or in the file named by `CORECREW_CONFIG`: one `key: value` per line,
@@ -216,6 +237,12 @@ the same way, except `ui_language`, which falls back to `en` silently.
   to check that a new project's name is free, to check that the Core repo is private before a push,
   and to publish a GitHub release.
 - **Stack tools** (Flutter, Xcode, Node, Rust, uv) only for the stack you pick; `new-project` checks them.
+- **Permissions:** the hooks refuse some reads and writes ([What the hooks do](#what-the-hooks-do)).
+  `new-project` and `/corecrew:task adopt` write `.claude/settings.local.json` into the code folder
+  with `permissions.additionalDirectories` set to the project's folder in the Core
+  (`<Core>/<name>`), so Claude can reach the project's private files from the code folder. An
+  existing file is left as it is; adopt then names the entry to add. corecrew's `.gitignore` lines
+  keep the file out of commits.
 
 ### What it runs and sends
 
