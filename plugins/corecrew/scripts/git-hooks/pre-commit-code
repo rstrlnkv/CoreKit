@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # corecrew git hook: blocks committing internal Claude files and secrets to the code repo.
-PATTERNS="$(dirname "$0")/blocked-patterns"
-if [ ! -r "$PATTERNS" ]; then
-  echo "Blocked: $PATTERNS is missing, so internal files can't be checked. Start Claude Code once with corecrew enabled to refresh the tools." >&2
-  exit 1
-fi
-bad=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR | grep -iE -f "$PATTERNS" | grep -viE '(^|/)\.env\.(example|sample|template)$')
+# blocked-patterns lists what is refused, allowed-patterns the exceptions (.env.example and the like); a missing list
+# fails closed, and blank lines of the exceptions are dropped (grep reads an empty pattern as "matches every path").
+PATTERNS="$(dirname "$0")/blocked-patterns"; ALLOWED="$(dirname "$0")/allowed-patterns"
+for f in "$PATTERNS" "$ALLOWED"; do
+  if [ ! -r "$f" ]; then
+    echo "Blocked: $f is missing, so internal files can't be checked. Start a new session of the assistant that installed these hooks (Claude Code or Codex) with corecrew enabled to refresh the tools." >&2
+    exit 1
+  fi
+done
+bad=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR | grep -iE -f "$PATTERNS" | grep -viE -f <(grep -v '^[[:space:]]*$' "$ALLOWED"))
 if [ -n "$bad" ]; then
   echo "Commit blocked: these files must not be in the code repository:" >&2
   echo "$bad" | sed 's/^/  - /' >&2

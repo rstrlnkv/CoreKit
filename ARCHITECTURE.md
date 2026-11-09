@@ -122,8 +122,9 @@ hook trust           on install                          after you enable them i
   reinstalling them.
 - **Git hooks** (`scripts/git-hooks/`) are shims installed by `install-hooks.sh` into the code repo
   (pre-commit, pre-push) and into the Core (pre-push: the GitHub repo must be private). The code
-  repo hooks refuse what `scripts/git-hooks/blocked-patterns` lists: `CLAUDE.md`, `CLAUDE.local.md`
-  and `AGENTS.md` in any folder, `/.claude/` and `/docs/superpowers/` at the root only, `.env` and `.env.*`
+  repo hooks refuse what `scripts/git-hooks/blocked-patterns` lists, except what `allowed-patterns` lists
+  (the `.env` templates): `CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` in any folder, `/.claude/`
+  and `/docs/superpowers/` at the root only, `.env` and `.env.*`
   (not `.envrc`, `.env.example`, `.env.sample` or `.env.template`), `*.pem` and `*.key`.
 - **The Core.** The private repo (`~/Projects/Core` by default) holds the standards, knowledge and
   each project's `CLAUDE.md` and `docs/` wiki. The code lives in its own repo beside it; a

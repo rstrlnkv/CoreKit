@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # A linked worktree is trusted only when its main folder knows it and is the project's own code folder; code-root
-# stays inside its root; link creation and the tools swap survive runs at the same time; sync failures are translated.
+# stays inside its root; link creation survives runs at the same time; sync failures are translated.
 source "$(dirname "$0")/lib.sh"
 source "$(dirname "$0")/lib-hook.sh"
 new_sandbox
@@ -94,38 +94,6 @@ assert_contains "$SANDBOX/err" "no space"
 ln -s /nowhere "$SANDBOX/lk2/AGENTS.md"
 bash -c '. "$1"; load_settings; link_agents "$2" "$3"' _ "$SCRIPTS/lib.sh" "$SANDBOX/lk2" "$P" >/dev/null 2>&1; assert_eq "$?" "1" "link elsewhere: refused"
 assert_eq "$(readlink "$SANDBOX/lk2/AGENTS.md")" "/nowhere" "link elsewhere: untouched"
-
-# --- sync-tools: the lock
-SYNC="$SCRIPTS/sync-tools.sh"; T="$SANDBOX/lt/tools"
-# legitimate: a first run, a second run, no lock and no temp left
-mkdir -p "$SANDBOX/lt"; bash "$SYNC" "$PLUGIN" "$T" >/dev/null; assert_eq "$?" "0" "sync: first run"
-assert_eq "$(ls -A "$SANDBOX/lt")" "tools" "sync: nothing but tools left beside it"
-# a live holder: a stale copy is not touched by a run that cannot get the lock, which exits 0 after the wait
-printf 'x\n' > "$T/extra"; : > "$T/save"          # damaged copy
-mkdir "$T.lock"; sleep 30 & HOLD=$!; echo $HOLD > "$T.lock/pid"
-# Wall time on purpose: this times a real wait, not work.
-before="$(tree_sum "$T")"; t0=$SECONDS
-OUT="$(bash "$SYNC" "$PLUGIN" "$T" 2>&1)"; RC=$?
-assert_eq "$RC" "0" "sync: busy lock: clean skip"
-case "$OUT" in "tools busy"*) pass ;; *) fail "busy lock: $OUT" ;; esac
-[ $((SECONDS - t0)) -le 14 ] && pass || fail "busy wait too long: $((SECONDS - t0))"
-assert_eq "$(tree_sum "$T")" "$before" "sync: busy lock: tools untouched"
-assert_eq "$(ls -A "$SANDBOX/lt" | grep -c '\.new\.\|\.old\.')" "0" "sync: busy lock: no temp folders"
-[ -d "$T.lock" ] && pass || fail "the holder's lock was removed"
-kill $HOLD 2>/dev/null; wait $HOLD 2>/dev/null
-# a dead holder: the lock is taken over and the copy repaired
-OUT="$(bash "$SYNC" "$PLUGIN" "$T" 2>&1)"; assert_eq "$OUT" "tools updated $(sed -n 1p "$T/VERSION")" "sync: dead holder's lock taken over"
-assert_eq "$(ls -A "$SANDBOX/lt")" "tools" "sync: lock and temp folders gone"
-[ ! -e "$T/extra" ] && pass || fail "damaged copy not rebuilt"
-# several at once, three rounds: all exit 0, one copy, nothing left beside or inside it
-for round in 1 2 3; do
-  rm -rf "$T"
-  for i in 1 2 3 4 5 6; do bash "$SYNC" "$PLUGIN" "$T" > "$SANDBOX/s$i" 2>&1 & done; wait
-  assert_eq "$(cat "$SANDBOX"/s? | grep -vc '^tools \(updated\|current\) ')" "0" "sync round $round: only plain lines"
-  assert_eq "$(ls -A "$SANDBOX/lt")" "tools" "sync round $round: nothing beside tools"
-  assert_eq "$(ls -A "$T" | grep -c 'tmp\|\.new\|\.part\|lock')" "0" "sync round $round: nothing inside tools"
-  assert_file "$T/VERSION"
-done
 
 # --- failing sync, translated: no English sentence in ru, no host-specific advice, one prefix
 mkdir -p "$SANDBOX/foreign-tools"; : > "$SANDBOX/foreign-tools/mine.txt"

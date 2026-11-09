@@ -107,7 +107,7 @@ fi
 # comes first, so the user learns where the code goes even when the Core push fails (a hook refused it,
 # the remote is gone); a failed push still exits 1 and leaves both commits as they are.
 if [ $PUSH -eq 1 ]; then
-  echo "code not pushed: the code leaves only through corecrew's ship (/corecrew:ship)"
+  echo "code not pushed: the code leaves only through corecrew's ship skill"
   if git -C "$CORE" remote get-url origin >/dev/null 2>&1; then
     git -C "$CORE" push -q -u origin HEAD && echo "pushed $(basename "$CORE")" || { echo "Push failed: $CORE" >&2; exit 1; }
   else

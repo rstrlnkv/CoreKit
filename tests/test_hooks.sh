@@ -47,7 +47,9 @@ echo x > "$C/cfg/.env.prod"; git -C "$C" add -f cfg/.env.prod; git -C "$C" commi
 git -C "$C" push -q origin main 2>/dev/null && fail "push of cfg/.env.prod allowed" || pass
 git -C "$C" reset -q --hard HEAD~1
 echo x > "$C/CLAUDE.md"; git -C "$C" add -f CLAUDE.md; git -C "$C" commit -q --no-verify -m sneaky
-git -C "$C" push -q origin main 2>/dev/null && fail "push of CLAUDE.md allowed" || pass
+git -C "$C" push -q origin main 2>"$SANDBOX/push.err" && fail "push of CLAUDE.md allowed" || pass
+# the advice fits both hosts
+assert_contains "$SANDBOX/push.err" "Remove them from history before pushing (ask your assistant to help)."
 
 # Core pre-push: privacy check via gh
 STUB="$SANDBOX/stub"; mkdir -p "$STUB"
@@ -83,9 +85,21 @@ echo x > "$C/ok.txt"; git -C "$C" add ok.txt
 OUT=$(git -C "$C" commit -m t 2>&1); rc=$?
 [ $rc -ne 0 ] && pass || fail "commit allowed with tools file missing"
 echo "$OUT" | grep -q 'is missing' && pass || fail "no 'is missing' message: $OUT"
-echo "$OUT" | grep -q 'Start Claude Code once with corecrew enabled' && pass || fail "no fix hint: $OUT"
+# the shim names the host that installed it (COREKIT_HOST in tests, else the plugin's place on disk)
+echo "$OUT" | grep -qF 'Start a Claude Code session with corecrew enabled, or remove this hook' && pass || fail "no fix hint: $OUT"
 echo "$OUT" | grep -qF "rm \"$C/.git/hooks/pre-commit\"" && pass || fail "no rm hint: $OUT"
 mv "$SANDBOX/pcc" "$COREDEV_TOOLS/git-hooks/pre-commit-code"; git -C "$C" reset -q; rm -f "$C/ok.txt"
+# installed from Codex, the shim names Codex
+COREKIT_HOST=codex bash "$SCRIPTS/install-hooks.sh" "$P" >/dev/null 2>&1
+assert_contains "$C/.git/hooks/pre-commit" "Start a Codex session with corecrew enabled, or remove this hook"
+assert_not_contains "$C/.git/hooks/pre-commit" "Claude Code"
+mv "$COREDEV_TOOLS/git-hooks/pre-commit-code" "$SANDBOX/pcc"
+echo x > "$C/ok.txt"; git -C "$C" add ok.txt
+OUT=$(git -C "$C" commit -m t 2>&1) && fail "commit allowed with tools file missing (Codex shim)" || pass
+echo "$OUT" | grep -qF 'Start a Codex session with corecrew enabled' && pass || fail "no Codex fix hint: $OUT"
+mv "$SANDBOX/pcc" "$COREDEV_TOOLS/git-hooks/pre-commit-code"; git -C "$C" reset -q; rm -f "$C/ok.txt"
+COREKIT_HOST=claude bash "$SCRIPTS/install-hooks.sh" "$P" >/dev/null 2>&1
+assert_contains "$C/.git/hooks/pre-commit" "Start a Claude Code session with corecrew enabled"
 
 # an old 0.1.x hook (marker "new-project hook") is replaced by a shim
 printf '#!/bin/sh\n# new-project hook: OLDBODY\nexit 0\n' > "$C/.git/hooks/pre-commit"
@@ -159,6 +173,96 @@ for bad in "папка/CLAUDE.md" "é/.env" Claude.md .ENV; do
 done
 mv "$COREDEV_TOOLS/git-hooks/blocked-patterns" "$SANDBOX/bp"
 try_commit src/ok.txt && fail "missing patterns file must fail closed" || pass
+# the fix names no single host: the static hook cannot know which one installed it
+mkdir -p "$C/src"; echo x > "$C/src/ok.txt"; git -C "$C" add src/ok.txt
+OUT=$(git -C "$C" commit -q -m t 2>&1); git -C "$C" reset -q; rm -rf "${C:?}/src"
+echo "$OUT" | grep -qF "Start a new session of the assistant that installed these hooks (Claude Code or Codex) with corecrew enabled to refresh the tools." \
+  && pass || fail "missing patterns: no host-neutral fix: $OUT"
 mv "$SANDBOX/bp" "$COREDEV_TOOLS/git-hooks/blocked-patterns"
+# the exception list: a missing one fails closed too; a blank line in it (which grep would read as "matches every path")
+# lets nothing through
+AP="$COREDEV_TOOLS/git-hooks/allowed-patterns"
+assert_file "$AP"
+mv "$AP" "$SANDBOX/ap"
+try_commit src/ok.txt && fail "missing allowed-patterns must fail closed" || pass
+mv "$SANDBOX/ap" "$AP"
+cp "$AP" "$SANDBOX/ap.keep"; { printf '\n'; cat "$SANDBOX/ap.keep"; printf '  \n\n'; } > "$AP"
+try_commit .env && fail "a blank line in allowed-patterns let .env through" || pass
+rm -rf "${C:?}/.env"
+try_commit .env.example && pass || fail "a blank line in allowed-patterns blocked .env.example"
+cp "$SANDBOX/ap.keep" "$AP"
+
+# --- One list. The hooks (blocked-patterns minus allowed-patterns) and templates/code/gitignore-common agree on every
+# sample path of the Internal and Secrets sections, through both real hook bodies of the plugin. One difference is on
+# purpose (Decision 26 a): a nested .claude/ folder is ignored by .gitignore and blocked by neither hook (ADR 009 and
+# guard-code treat only the root .claude/ as private). Case is pinned: the hooks match case-insensitively, so
+# check-ignore runs with core.ignorecase=true on every OS. Paths are staged without files (no case clash on disk).
+GIC="$SKILL/templates/code/gitignore-common"; GHK="$SCRIPTS/git-hooks"
+TB="$SANDBOX/one list"; git init -q "$TB"; cp "$GIC" "$TB/.gitignore"
+NESTED="sub/.claude/settings.json"
+SAMPLES="CLAUDE.md
+sub/CLAUDE.md
+CLAUDE.local.md
+deep/er/CLAUDE.local.md
+c1/Claude.md
+AGENTS.md
+sub/AGENTS.md
+a1/agents.md
+.claude/settings.json
+.Claude/x.json
+docs/superpowers/plan.md
+sub/docs/superpowers/plan.md
+docs/README.md
+MYAGENTS.md
+AGENTS.md.bak
+.env
+sub/.env
+e1/.ENV
+.env.local
+cfg/.env.prod
+.env.example
+.env.sample
+.env.template
+sub/.env.sample
+e2/.ENV.EXAMPLE
+.env.example.bak
+.envrc
+a.pem
+k.key
+sub/server.KEY
+x.pem.bak
+src/main.dart
+$NESTED"
+# (a root commit first: pre-push-code checks no root commit, its diff-tree lists nothing for one)
+git -C "$TB" -c user.name=t -c user.email=t@t commit -q --allow-empty --no-verify -m root
+EMPTY="$(git -C "$TB" hash-object -w --stdin </dev/null)"
+printf '%s\n' "$SAMPLES" | while IFS= read -r p; do git -C "$TB" update-index --add --cacheinfo "100644,$EMPTY,$p"; done
+listed() { sed -n 's/^  - //p'; }   # the "  - <path>" lines a hook prints
+IGN="$(printf '%s\n' "$SAMPLES" | git -C "$TB" -c core.ignorecase=true -c core.quotePath=false check-ignore --no-index --stdin)"
+PC="$( (cd "$TB" && bash "$GHK/pre-commit-code") 2>&1 >/dev/null | listed)"
+git -C "$TB" -c user.name=t -c user.email=t@t commit -q --no-verify -m samples
+PP="$( (cd "$TB" && printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" 0000000000000000000000000000000000000000 \
+  | bash "$GHK/pre-push-code" origin "$SANDBOX/none.git") 2>&1 >/dev/null | listed)"
+[ -n "$IGN" ] && [ -n "$PC" ] && [ -n "$PP" ] && pass || fail "one list: a side printed nothing (ignored: $IGN; pre-commit: $PC; pre-push: $PP)"
+has() { printf '%s\n' "$1" | grep -qxF -e "$2"; }
+printf '%s\n' "$SAMPLES" > "$SANDBOX/samples"
+while IFS= read -r p; do
+  if has "$IGN" "$p"; then i=1; else i=0; fi
+  if has "$PC" "$p"; then c=1; else c=0; fi
+  if has "$PP" "$p"; then u=1; else u=0; fi
+  if [ "$p" = "$NESTED" ]; then
+    assert_eq "$i$c$u" "100" "one list: a nested .claude/ is ignored by .gitignore and blocked by neither hook"
+  else
+    assert_eq "$i$c$u" "$i$i$i" "one list: .gitignore, pre-commit and pre-push disagree on $p (ignored, pre-commit, pre-push)"
+  fi
+done < "$SANDBOX/samples"
+# adopt adds to an existing .gitignore only the lines its filter takes: every Internal line and every .env line
+ADOPT_CASE="$(sed -n 's/^ *case "\$l" in \(CLAUDE\*|[^)]*\)) ;; \*) continue ;; esac$/\1/p' "$SCRIPTS/adopt.sh")"
+[ -n "$ADOPT_CASE" ] && pass || fail "adopt.sh: the .gitignore filter line was not found"
+eval "adopt_takes() { case \"\$1\" in $ADOPT_CASE) return 0 ;; esac; return 1; }"
+awk '/^# Internal/ { s = 1; next } /^# Secrets/ { s = 2; next } /^#/ || /^$/ { s = 0 } s == 1 || (s == 2 && /^!?\.env/)' "$GIC" \
+  > "$SANDBOX/adopt-lines"
+assert_eq "$(grep -c . "$SANDBOX/adopt-lines")" "10" "gitignore-common: Internal and .env lines counted"
+while IFS= read -r l; do adopt_takes "$l" && pass || fail "adopt's filter misses the gitignore-common line $l"; done < "$SANDBOX/adopt-lines"
 
 finish
