@@ -9,6 +9,8 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-09
+
 ### Added
 
 - `prepare` (and so session start) says when `core.hooksPath` keeps the corecrew git hooks from
