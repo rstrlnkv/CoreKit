@@ -298,6 +298,14 @@ mkdir "$SANDBOX/stub"
 printf '#!/bin/sh\necho boom\nexit 2\n' > "$SANDBOX/stub/awk"; chmod +x "$SANDBOX/stub/awk"
 assert_exit 2 env PATH="$SANDBOX/stub:$PATH" bash "$W" "$FX/wiki-good"
 assert_contains <(printf '%s' "$OUT") "wiki-check: internal error"
+# The checks are one awk program in scripts/wiki-check.awk, loaded from the script's own folder (not
+# written to the temp folder on each run); a plugin copy without it is an error too, never green.
+assert_file "$SCRIPTS/wiki-check.awk"
+grep -qF '/wiki-check.awk' "$W" && pass || fail "wiki-check.sh does not load wiki-check.awk from its own folder"
+grep -q "<<'AWKEOF'" "$W" && fail "wiki-check.sh still holds an inline awk program" || pass
+cp -R "$PLUGIN" "$SANDBOX/plugin-copy"; rm -f "$SANDBOX/plugin-copy/scripts/wiki-check.awk"
+assert_exit 2 bash "$SANDBOX/plugin-copy/scripts/wiki-check.sh" "$FX/wiki-good"
+assert_contains <(printf '%s' "$OUT") "wiki-check: internal error"
 
 # A project path with spaces, copied from the fixture.
 clone wiki-good "$SANDBOX/my project"
