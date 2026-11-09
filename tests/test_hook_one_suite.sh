@@ -209,13 +209,10 @@ rm -rf "$ONE_SUITE_TURN"
 
 # --- a long command line is read whole. With no terminal (CI, a hook with no tty) procps-ng ps cuts args to
 # 80 columns unless it is given -ww; BSD ps then reads the whole line anyway. The test word of this gradle run
-# sits past column 200, and the hook must still see it. The run is started here, not with fake: fake reads
-# args without -ww. PS80 holds a ps that cuts as procps does, so the check fails on macOS too.
+# sits past column 200, and the hook must still see it. PS80 holds a ps that cuts as procps does, so the check fails on
+# macOS too.
 LP="onesuite-long-$$"; LONG="$LP/gradlew $(printf '%0200d' 0 | tr 0 x) test"
-bash -c 'cd "$1" && exec -a "$2" sleep 120' _ "$C" "$LONG" >/dev/null 2>&1 & long=$!
-disown "$long" 2>/dev/null; FAKES="$FAKES $long"
-i=0; while [ $i -lt 50 ]; do case "$(ps -ww -p "$long" -o args= 2>/dev/null)" in "$LONG"*) break ;; esac; sleep 0.1; i=$((i + 1)); done
-[ $i -lt 50 ] && pass || fail "the long run did not start in 5 s"
+fake "$C" "$LONG"; long=$FAKE_PID; pass
 PS80="$SANDBOX/ps80"; mkdir -p "$PS80"
 cat > "$PS80/ps" <<EOF
 #!/bin/sh

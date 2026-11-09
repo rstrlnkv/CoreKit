@@ -3,14 +3,14 @@
 # moves out of it into scripts/prepare.sh. Golden file: tests/fixtures/session-start-golden.txt
 # (regenerate on purpose with GOLDEN_WRITE=1; sandbox paths are shown as @SB@, the plugin folder as @PL@).
 source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib-hook.sh"
 new_sandbox
 H="$HOOKS/session-start.sh"
 export CLAUDE_PLUGIN_ROOT="$PLUGIN" COREKIT_HOST=claude
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
-input() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"SessionStart","source":"startup"}' "$1"; }
 G="$ROOT/tests/fixtures/session-start-golden.txt"; ACT="$SANDBOX/actual.txt"
 case_run() {   # case_run <label> <cwd> — stdout and stderr, exit code
-  { echo "== $1"; input "$2" | bash "$H" 2>&1; echo "rc=$?"; } >> "$SANDBOX/raw.txt"
+  { echo "== $1"; hook_event claude SessionStart "$2" source=startup | bash "$H" 2>&1; echo "rc=$?"; } >> "$SANDBOX/raw.txt"
 }
 mkdir -p "$SANDBOX/elsewhere"
 case_run "no core" "$SANDBOX/elsewhere"

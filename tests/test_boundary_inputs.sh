@@ -3,7 +3,7 @@
 #  - a settings file of exactly 64 KB is read, 64 KB + 1 is not (one warning);
 #  - HOME="/" (absolute, but the root): core-dir does not crash and prints no path under //.
 # HOME="/" for the guards is in test_hook_guard_code.sh and test_hook_guard_secrets.sh; the TAB/CR patch paths
-# against the real Codex parser are in test_patch_paths.sh.
+# against the real Codex parser are in test_codex_patch_parity.sh.
 source "$(dirname "$0")/lib.sh"
 new_sandbox
 LIB="$SCRIPTS/lib.sh"

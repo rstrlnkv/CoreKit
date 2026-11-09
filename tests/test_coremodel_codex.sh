@@ -9,6 +9,7 @@
 # to the plugin root), seen through the app-server request `hooks/list` (sourcePath, key, eventName).
 # HINT_SH=<path> runs the behaviour checks against another copy of hint.sh (used to mutate copies).
 source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib-hook.sh"
 new_sandbox
 # Processes are found by the pids the stub writes, never by name: another suite running at the same time has
 # stubs with the same command line. OURS holds the pids of a check in progress; they are stopped when the file exits
@@ -146,8 +147,8 @@ run_hint() {
   { printf "%s" "$in"; } 2>/dev/null | env PATH="$p" COREMODEL_CONFIG="$ON_SF" "$@" /bin/bash "$HINT" > "$SANDBOX/out" 2> "$SANDBOX/err"; RC=$?
 }
 ncalls() { [ -f "$CALLS" ] && wc -l < "$CALLS" | tr -d ' ' || echo 0; }
-# event <prompt> — the hook's stdin JSON for a prompt that needs no escaping
-event() { printf '{"hook_event_name":"UserPromptSubmit","session_id":"s1","cwd":"/tmp","prompt":"%s"}' "$1"; }
+# event <prompt> — the hook's stdin JSON for a prompt (Codex's shape, tests/lib-hook.sh)
+event() { hook_event codex UserPromptSubmit /tmp prompt="$1"; }
 silent() { # silent <label> — exit 0, nothing on stdout
   assert_eq "$RC" "0" "$1: exit 0"
   assert_eq "$(cat "$SANDBOX/out")" "" "$1: no stdout"
@@ -274,7 +275,7 @@ run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_CONFIG= COR
 silent "off via CORECREW_CONFIG"; assert_eq "$(ncalls)" "0" "off via CORECREW_CONFIG: codex not called"
 
 # the current model: silent when it is the pick or a stronger one
-mevent() { printf '{"hook_event_name":"UserPromptSubmit","model":"%s","prompt":"%s"}' "$1" "$2"; }
+mevent() { hook_event codex UserPromptSubmit /tmp model="$1" prompt="$2"; }   # mevent <model> <prompt>
 answer '{"why":"x","level":"high","model":"opus"}'
 run_hint "$PATHSTUB" "$(mevent gpt-6-astra 'fix the flaky login test')"
 silent "on the strongest model"; assert_eq "$(ncalls)" "0" "on the strongest model: codex not called"
@@ -373,7 +374,7 @@ assert_not_contains "$SANDBOX/argv.txt" 'fix the flaky login test'
 assert_contains "$STDIN" 'fix the flaky login test'
 assert_eq "$(tail -1 "$SANDBOX/argv.txt")" "-" "prompt read from stdin (last argument -)"
 # a 1 MB prompt with many \n escapes
-awk 'BEGIN{printf "{\"hook_event_name\":\"UserPromptSubmit\",\"prompt\":\""; for(i=0;i<100000;i++) printf "line%d\\n", i; printf "\"}"}' > "$SANDBOX/big.json"
+hook_event codex UserPromptSubmit /tmp rawprompt="$(awk 'BEGIN { for (i = 0; i < 100000; i++) printf "line%d\\n", i }')" > "$SANDBOX/big.json"
 rm -f "$CALLS"; cpu_run env PATH="$PATHSTUB" COREMODEL_CONFIG="$ON_SF" /bin/bash "$HINT" < "$SANDBOX/big.json" > "$SANDBOX/out" 2>/dev/null; RC=$?
 assert_eq "$RC" "0" "1 MB prompt: exit 0"
 # CPU time (cpu_run, tests/lib.sh), which load on the machine does not raise
