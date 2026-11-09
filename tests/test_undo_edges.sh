@@ -249,4 +249,25 @@ git -C "$C" log -1 --format=%B | grep -qxF "Undo-Of: $FC" && pass || fail "the c
 git -C "$CORE_DIR" log -1 --format=%B | grep -qxF "Undo-Of: $FC" && pass || fail "the docs step was not undone"
 no_revert_left
 
+# failure path the rollback cannot undo: the failing Core hook first commits in the code repo, so the
+# code HEAD is no longer the Undo commit and undo-step cannot move it back. It must not claim that
+# nothing was changed: it exits non-zero, names the code Undo commit it kept and how to take it back,
+# and the Core is still put back as it was.
+echo two > "$C/fc2.txt"; echo two > "$P/docs/fc2.md"; bash "$SAVE" "fc2 step" >/dev/null 2>&1
+printf '#!/bin/sh\nenv -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE git -C "%s" commit -q --no-verify --allow-empty -m moved\nexit 1\n' "$C" > "$HOOK"
+chmod +x "$HOOK"
+core_before="$(snap_tree "$P/docs"; git -C "$CORE_DIR" status --porcelain)"; core_head=$(git -C "$CORE_DIR" rev-parse HEAD)
+OUT=$(bash "$UNDO" 2>&1); rc=$?
+rm -f "$HOOK"
+[ "$rc" != 0 ] && pass || fail "a half-undone step exited 0: $OUT"
+echo "$OUT" | grep -qi 'nothing was changed' && fail "a half-undone step claims nothing was changed: $OUT" || pass
+assert_eq "$(git -C "$C" log -1 --format=%s)" "moved" "the hook's code commit is not on top"
+KEPT=$(git -C "$C" rev-parse HEAD~1)
+git -C "$C" log -1 --format=%s "$KEPT" | grep -q '^Undo step' && pass || fail "no code Undo commit under the hook's commit"
+echo "$OUT" | grep -qF "$KEPT" && pass || fail "the message does not name the kept Undo commit $KEPT: $OUT"
+echo "$OUT" | grep -qF "git -C '$C' revert" && pass || fail "the message does not say how to take the commit back: $OUT"
+assert_eq "$(git -C "$CORE_DIR" rev-parse HEAD)" "$core_head" "the Core HEAD moved"
+assert_eq "$(snap_tree "$P/docs"; git -C "$CORE_DIR" status --porcelain)" "$core_before" "the Core docs were not put back"
+git -C "$CORE_DIR" rev-parse -q --verify REVERT_HEAD >/dev/null && fail "revert left in progress in the Core" || pass
+
 finish

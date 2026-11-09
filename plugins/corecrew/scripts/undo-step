@@ -125,16 +125,19 @@ changed_of() { git -C "$(repo_of "$1")" diff-index --cached --name-only -z "$(pr
 # changed, and exits 1. A repo whose Undo commit is already made (COMMITTED: <repo>=<sha> words) first
 # gets its HEAD moved back to the commit before it, only if HEAD is still that Undo commit. That can be
 # only the code repo, committed first and fully clean before (checked above). The Core is never reset:
-# its paths are put back one by one, so other projects' staged files stay.
+# its paths are put back one by one, so other projects' staged files stay. When that HEAD moved after
+# the Undo commit (a hook committed meanwhile), the commit stays: then the message says the step is
+# only partly undone, names the commit and how to take it back, and never says nothing was changed.
 started=""; COMMITTED=""
 roll_back() {
-  local w r p pre m
+  local w r p pre m kept=""
   for w in $started; do
     r=$(repo_of "$w"); pre=$(pre_of "$w")
     for m in $COMMITTED; do
       [ "${m%%=*}" = "$w" ] || continue
-      git -C "$r" update-ref -m "undo-step: roll back" HEAD "$(old_of "$w")" "${m#*=}" || {
-        echo "undo-step: the HEAD of $r moved; its Undo commit ${m#*=} stays." >&2; continue 2; }
+      git -C "$r" update-ref -m "undo-step: roll back" HEAD "$(old_of "$w")" "${m#*=}" 2>/dev/null || {
+        kept="$kept${m#*=} $r
+"; continue 2; }
     done
     while IFS= read -r p; do
       [ -n "$p" ] || continue
@@ -149,7 +152,13 @@ roll_back() {
   done
   # deepest first; rmdir leaves a folder that is not empty
   printf '%s' "$NEWDIRS" | sort -r | while IFS= read -r d; do [ -n "$d" ] && rmdir "$d" 2>/dev/null; done
-  echo "Could not undo step $ID: $1. Nothing was changed." >&2
+  if [ -z "$kept" ]; then echo "Could not undo step $ID: $1. Nothing was changed." >&2; exit 1; fi
+  echo "Could not undo step $ID: $1. The step is only partly undone:" >&2
+  printf '%s' "$kept" | while read -r m r; do
+    echo "  $r keeps its Undo commit $m: its HEAD moved after that commit (a hook or another git command), so undo-step did not take it back." >&2
+    echo "  To keep the step as saved, take that commit back: git -C '$r' revert --no-edit $m" >&2
+  done
+  echo "  Everything else was put back as it was. Or fix the cause above and undo the rest of the step by hand." >&2
   exit 1
 }
 for w in code core; do
