@@ -50,8 +50,10 @@ cstep="$(printf '%s\n' "$suite" | awk '/- name: Install the codex CLI/{f=1; prin
 case "$cstep" in *"if: runner.os == 'macOS'"*) pass ;; *) fail "the codex install step runs on macOS only" ;; esac
 case "$suite" in *'CODEX_VERSION:'*) pass ;; *) fail "the codex version is pinned in env (CODEX_VERSION)" ;; esac
 case "$suite" in *'@openai/codex@${CODEX_VERSION}'*) pass ;; *) fail "the codex install uses CODEX_VERSION" ;; esac
-case "$run" in *'codex (or python3 )?not on PATH|codex debug models --bundled failed'*) pass ;;
-  *) fail "the suite step fails on a codex skip (grep -E for: codex (or python3 )?not on PATH|codex debug models --bundled failed)" ;; esac
+# (two asserts, one per alternative of the grep -E pattern: test_isolation.sh would read a "|" before the word
+# codex as a run of the codex CLI)
+case "$run" in *"grep -E 'codex (or python3 )?not on PATH"*) pass ;; *) fail "the suite step fails on a codex skip (grep -E for: codex (or python3 )?not on PATH)" ;; esac
+case "$run" in *'codex debug models --bundled failed'"' "*) pass ;; *) fail "the suite step fails on test_codex_chain.sh's catalog skip: 'codex debug models --bundled failed'" ;; esac
 case "$run" in *'RUNNER_OS'*'macOS'*) pass ;; *) fail "the codex skip check is gated on macOS (RUNNER_OS)" ;; esac
 
 # The commit-subjects job: the whole history is fetched, the range is passed through env (never ${{ }} inside run:),
