@@ -3,6 +3,8 @@
 # the project's code folder and the file it really writes is named; the guards must judge that same file.
 # Found by comparing patch-paths.awk with the real parser: Codex deletes TAB and CR inside a path (ADR 004 says
 # "paths are verbatim"), so `do<TAB>cs/a.md` really writes docs/a.md while the guards saw `do<TAB>cs/a.md`.
+# Also a TAB or CR at the start or end of a path, and CR-only line ends (the paths patch-paths.awk reads are in
+# test_patch_paths.sh).
 # Skipped when `codex` is not installed. CODEX_HOME and HOME are the sandbox (new_sandbox).
 source "$(dirname "$0")/lib.sh"
 if ! command -v codex >/dev/null 2>&1; then skip codex-patch-parity "codex not on PATH"; finish; fi
@@ -58,4 +60,20 @@ parity guard-secrets "Move source .env with a CR" src/x "$B${nl}*** Update File:
 parity guard-secrets "absolute ~/.ssh with a TAB" "$HOME/.ssh/k" "$B${nl}*** Add File: $HOME/.ss${TAB}h/k${nl}+k${nl}$E"
 twin   guard-secrets "TAB in a harmless name" src/ab.c "$B${nl}*** Add File: src/a${TAB}b.c${nl}+x${nl}$E"
 twin   guard-secrets ".env.example with a TAB" .env.example "$B${nl}*** Add File: .env.exam${TAB}ple${nl}+K=${nl}$E"
+
+# a TAB or a CR at the start or the end of a path: the real parser trims it (Rust trim()) and writes the file,
+# so the guards must refuse the patch (they trim the path the same way)
+parity guard-code "TAB at the start"  docs/a.md "$B${nl}*** Add File: ${TAB}docs/a.md${nl}+x${nl}$E"
+parity guard-code "TAB at the end"    docs/a.md "$B${nl}*** Add File: docs/a.md${TAB}${nl}+x${nl}$E"
+parity guard-code "CR at the end"     docs/a.md "$B${nl}*** Add File: docs/a.md${CR}${nl}+x${nl}$E"
+parity guard-code "CR at the start"   docs/a.md "$B${nl}*** Add File: ${CR}docs/a.md${nl}+x${nl}$E"
+parity guard-code "Move to TAB end"   docs/m.md "$B${nl}*** Update File: src/m.txt${nl}*** Move to: docs/m.md${TAB}${nl}@@${nl}-one${nl}+two${nl}$E"
+parity guard-secrets "TAB at the start .env.new" .env.new "$B${nl}*** Add File: ${TAB}.env.new${nl}+K=1${nl}$E"
+parity guard-secrets "TAB at the end .env.new"   .env.new "$B${nl}*** Add File: .env.new${TAB}${nl}+K=1${nl}$E"
+# CR-only line endings: what the real parser does, the guards must do too (refuse when it writes an internal file)
+cr_only="${B}${CR}*** Add File: docs/a.md${CR}+x${CR}${E}"
+reset; real "$cr_only"; rr="$RC_REAL"; wrote=0; [ -f "$C/docs/a.md" ] && wrote=1
+reset; hook guard-code "$cr_only"; rc=$?
+if [ "$wrote" = 1 ]; then assert_eq "$rc" "2" "CR-only patch: the real parser wrote docs/a.md, guard-code must refuse"
+else assert_eq "$rc" "2" "CR-only patch the real parser rejects (rc $rr): guard-code fails closed"; fi
 finish
