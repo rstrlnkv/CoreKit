@@ -203,6 +203,13 @@ The Core's pre-push hook refuses to push unless the Core's GitHub repo is privat
 | `codex_model_<role>` | `<model> [<effort>]` or `inherit` | — | Codex only: the same for one role (`engineer`, `tester`, ...), over `codex_model` |
 | `coremodel_mode` | see the [coremodel README](../coremodel/README.md#codex) | — | Read only by coremodel's Codex hint, from the settings file; corecrew ignores it |
 
+`ui_language` covers only the messages of corecrew's own scripts: the hooks and the checks a skill
+runs when it starts. It does not follow Claude Code's `language` setting. The skills talk to you in
+your language whatever `ui_language` says (from your Claude settings or instructions, else the
+language you write in). For Russian messages set `ui_language` to `ru`: at install time with
+`--config ui_language=ru` ([Install](#claude-code)), in `/plugin` → Installed → corecrew →
+Configure options, or in the settings file below. coremodel has a `language` setting of its own.
+
 In Claude Code the settings are plugin options (`/plugin` → Installed → corecrew → Configure
 options). Without an options screen (Codex, or a command-line install) they live in
 `~/.config/corecrew/settings`, or in the file named by `CORECREW_CONFIG`: one `key: value` per line,
