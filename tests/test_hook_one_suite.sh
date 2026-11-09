@@ -501,10 +501,12 @@ case "$NT" in
   *)
     mkdir -p "$NT/Core/app/code"; : > "$NT/Core/app/CLAUDE.md"
     fake "$NT/Core/app/code" "$FAKE"; dummy=$FAKE_PID
-    # a runner spelled through a \u escape (npm test = npm test) is still a run
-    CORE_DIR="$NT/Core" run_hook 'npm test' "$NT/Core/app/code"
+    # a runner spelled through a \u escape (npm \u0074est = npm test) is still a run: the payload and the
+    # cwd hold no "test", so only the prefilter's escape branch lets it through
+    CORE_DIR="$NT/Core" run_hook 'npm \u0074est' "$NT/Core/app/code"
     assert_eq "$RC" "2" "a runner spelled through a \\u escape is still recognised"
-    CORE_DIR="$NT/Core" run_hook 'n\pm test' "$NT/Core/app/code"
+    if payload 'npm \u0074est' "$NT/Core/app/code" | grep -qi 'test'; then fail "the \\u case payload holds \"test\""; else pass; fi
+    CORE_DIR="$NT/Core" run_hook 'n\pm \u0074est' "$NT/Core/app/code"
     assert_eq "$RC" "2" "an unknown escape and a \\u escape: still recognised"
     # quoted text and (( )) are cut before the match, so they can join a runner word: bash runs go te''st as go test
     for c in "go te''st" 'swift te\"\"st' 'go te((1))st'; do
