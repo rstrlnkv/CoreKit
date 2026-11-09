@@ -128,8 +128,10 @@ Each hook rule, by host (the test file holds the cases of both hosts):
   verifier agents are read-only: in Claude Code a hook refuses their writes.
 - **Hooks** (`plugins/corecrew/hooks/hooks.json`) run at session start, before tool calls and at
   stop. They guard secrets and the public code folder, keep one test suite running at a time and
-  remind the agent to save. Outside a Core project only the session-start hook (tools refresh and
-  a one-time "Core not set up" hint) and the read-only checker rule act; every other hook passes every call.
+  remind the agent to save. Outside a Core project the session-start hook (tools refresh and a
+  one-time "Core not set up" hint) acts in both hosts. Claude Code also runs the read-only checker
+  rule there, and in Codex guard-code refuses a patch handed to the shell (the rule-by-host table
+  under Hosts). Every other hook passes every call.
 - **Scripts** hold what is shared; a hook holds its own rule. What two hooks, or a hook and a
   script, share lives in `plugins/corecrew/scripts/` (`lib.sh` and its parts,
   `plugins/corecrew/scripts/guard-lib.sh`, `plugins/corecrew/scripts/shell-patch.sh`, the awk
