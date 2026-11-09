@@ -15,7 +15,7 @@
 # file in the main checkout (for a git worktree). It is gitignored. One "<kind> <term>" per line,
 # "#" starts a comment; the term is matched as a whole word, ignoring case:
 #   name <term>       anywhere (full-name variants, user names)
-#   standard <term>   in plugins/*/skills, agents and reference (the owner's own standard files)
+#   standard <term>   in plugins/*/skills, agents, reference and templates (the owner's own standard files)
 #   archive <term>    anywhere (names of old projects)
 # Without the file these checks are skipped (a SKIP line).
 source "$(dirname "$0")/lib.sh"
@@ -103,7 +103,7 @@ scan_repo() {
     esac
     [ -s "$kind_file.name" ] && lines "a personal name from the local terms list" "$rel" -iwF -f "$kind_file.name" "$f"
     case "$rel" in
-      plugins/*/skills/*|plugins/*/agents/*|plugins/*/reference/*)
+      plugins/*/skills/*|plugins/*/agents/*|plugins/*/reference/*|plugins/*/templates/*)
         [ -s "$kind_file.standard" ] && lines "owner standard file name" "$rel" -iwF -f "$kind_file.standard" "$f" ;;
     esac
     [ -s "$kind_file.archive" ] && lines "archive project name" "$rel" -iwF -f "$kind_file.archive" "$f"
@@ -158,8 +158,9 @@ printf 'plan 3c, task 4\n' > "$R/tests/plan.sh"            # allowed: tests are 
 printf 'by Quentin Zarbo\n' > "$R/plugins/p/hooks/n.sh"    # hit: a personal name
 printf 'zarbo was here\n' > "$R/docs/n.md"                 # hit: names are flagged in docs/ too
 printf 'see house-style.md\n' > "$SK/std.md"               # hit: owner standard
+mkdir -p "$R/plugins/p/templates"; printf 'see house-style.md\n' > "$R/plugins/p/templates/t.md"   # hit: owner standard in a plugin-level template
 printf 'see house-style.md\n' > "$R/skills/s/std.md"       # fine: not the plugins/*/skills layout
-printf 'see house-style.md\n' > "$R/docs/ok2.md"           # allowed: outside skills/agents/reference
+printf 'see house-style.md\n' > "$R/docs/ok2.md"           # allowed: outside skills/agents/reference/templates
 printf 'a Grimlock chart\n' > "$SK/old.md"                 # hit: archive name
 printf 'a grimlocked door\n' > "$SK/fine.md"               # fine: not a whole word
 printf 'Grimlock game\n' > "$R/docs/ok3.md"                # hit: docs/ too
@@ -184,6 +185,7 @@ plugins/p/skills/s/leak-win.md:1: absolute home path (/Users/, /home/ or C:\User
 plugins/p/skills/s/mail.md:1: email address
 plugins/p/skills/s/old.md:1: archive project name
 plugins/p/skills/s/std.md:1: owner standard file name
+plugins/p/templates/t.md:1: owner standard file name
 tests/SECURITY.md:1: owner handle outside manifests, READMEs, LICENSE, CHANGELOGs, SECURITY, ARCHITECTURE, CONTRIBUTING, docs
 tests/a b.sh:1: absolute home path (/Users/, /home/ or C:\Users\)
 tests/leak-path.sh:1: absolute home path (/Users/, /home/ or C:\Users\)
