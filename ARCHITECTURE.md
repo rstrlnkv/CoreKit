@@ -114,7 +114,10 @@ hook trust           on install                          after you enable them i
   stop. They guard secrets and the public code folder, keep one test suite running at a time and
   remind the agent to save. Outside a Core project only the session-start hook (tools refresh and
   a one-time "Core not set up" hint) and the read-only checker rule act; every other hook passes every call.
-- **Scripts** hold the logic, so hooks stay thin. A script or hook sources `lib.sh`, and `lib.sh`
+- **Scripts** hold what is shared; a hook holds its own rule. What two hooks, or a hook and a
+  script, share lives in `plugins/corecrew/scripts/` (`lib.sh` and its parts,
+  `plugins/corecrew/scripts/guard-lib.sh`, `plugins/corecrew/scripts/shell-patch.sh`, the awk
+  readers) or in `plugins/corecrew/hooks/messages.sh`. A script or hook sources `lib.sh`, and `lib.sh`
   sources its parts (`lib-*.sh`). The guards read a Bash command with awk, not with a shell: the
   code guard, the secrets guard and the read-only checker rule each with the one tokenizer
   `bash-lex.awk` and their own part (`bashlex-guard-code.awk`, `bashlex-guard-secrets.awk`,
