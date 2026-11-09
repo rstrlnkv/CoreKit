@@ -18,8 +18,6 @@ OURS=""
 # shellcheck disable=SC2086  # a list of pids
 stop_ours() { [ -z "$OURS" ] || kill $OURS 2>/dev/null; OURS=""; }
 at_exit stop_ours
-# poll <tenths> <cmd...> — runs cmd every 0.1 s until it succeeds, at most <tenths> more times; 1 when it never did
-poll() { local n="$1"; shift; while ! "$@"; do [ "$n" -gt 0 ] || return 1; n=$((n - 1)); sleep 0.1; done; }
 # gone <pid> — the process is not running (not a child of this shell: a child stays a zombie until waited for)
 gone() { ! kill -0 "$1" 2>/dev/null; }
 # DECOY is another suite's stub sleep: the same command line, started by this file. decoy_kept <label> — it was not
@@ -88,14 +86,8 @@ if command -v codex >/dev/null 2>&1; then
   inst="$CODEX_HOME/plugins/cache/corekit/coremodel/$ver"
   assert_file "$inst/codex/hint.sh"
   assert_file "$inst/.codex-plugin/plugin.json"
-  req="$SANDBOX/req.jsonl"
-  printf '%s\n' '{"id":1,"method":"initialize","params":{"clientInfo":{"name":"t","version":"1"}}}' '{"method":"initialized"}' \
-    "{\"id\":2,\"method\":\"hooks/list\",\"params\":{\"cwds\":[\"$SANDBOX/work\"]}}" > "$req"
-  # stdin stays open until the answer to request 2 is written (polled, up to 10 s)
-  answered() { grep -q '"id":2' "$SANDBOX/hooks-list.out" 2>/dev/null; }
-  (cat "$req"; poll 100 answered) | codex --disable remote_plugin app-server --listen stdio:// > "$SANDBOX/hooks-list.out" 2> "$SANDBOX/hooks-list.err"
-  grep '"id":2' "$SANDBOX/hooks-list.out" | sed 's/{"key":/\
-&/g' | grep '^{"key":"coremodel@' > "$SANDBOX/hooks.lines"
+  codex_hooks_list "$SANDBOX/work" "$SANDBOX/hooks-list.out" && pass || fail "hooks/list: no answer in 10 s: $(head -3 "$SANDBOX/hooks-list.out.err")"
+  grep '^{"key":"coremodel@' "$SANDBOX/hooks-list.out" > "$SANDBOX/hooks.lines"
   assert_eq "$(wc -l < "$SANDBOX/hooks.lines" | tr -d ' ')" "1" "Codex lists exactly one coremodel hook"
   assert_contains "$SANDBOX/hooks.lines" '"key":"coremodel@corekit:codex/hooks.json:user_prompt_submit:0:0"'
   assert_contains "$SANDBOX/hooks.lines" '"eventName":"userPromptSubmit"'

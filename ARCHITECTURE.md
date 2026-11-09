@@ -69,7 +69,8 @@ scripts/commit-subjects.sh        the check of this repo's own commit subjects (
 scripts/make-test-coredev.sh      builds test-coredev, the hand-made project for an end-to-end try of /corecrew:task
 tests/                            bash tests, run by tests/run.sh; lib.sh gives each test a sandbox
                                   and the shared helpers (snap_tree: the one "nothing changed" snapshot);
-                                  lib-hook.sh holds the hook-test helpers and builds hook input (hook_event)
+                                  lib-hook.sh holds the hook-test helpers, builds hook input (hook_event)
+                                  and asks a real Codex which hooks it loads (codex_hooks_list)
 docs/                             the upgrade guide (migration-0.3.md) and icon sources (icons/)
 ```
 
