@@ -38,6 +38,7 @@ plugins/corecrew/                 project workflow
                                   and fold-rules.awk
     wiki-*.sh                     the wiki: pages, index, checks, migration from an older format
     wiki-check.awk                the checks of one wiki page, run by wiki-check.sh
+    wiki-migrate.awk              one page converted to the current format, run by wiki-migrate.sh
     check-standard.sh             the checks of one standard file (new-standard)
   reference/                      texts the skills share: wiki.md and knowledge.md (the rules the
                                   agents follow), and these two:

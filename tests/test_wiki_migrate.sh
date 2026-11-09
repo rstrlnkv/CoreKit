@@ -453,4 +453,16 @@ assert_eq "$ERR" "" "untyped wiki: stderr"
 printf '%s\n' "$OUT" | grep -qxF "warning: notes: set type" && pass || fail "untyped wiki: no set type warning: $OUT"
 assert_file "$SANDBOX/ut/p/docs/INDEX.md"
 
+# --- the converter is one awk program in scripts/wiki-migrate.awk, loaded from the script's own folder; a plugin
+# copy without it stops before the swap with nothing changed
+assert_file "$SCRIPTS/wiki-migrate.awk"
+grep -qF '/wiki-migrate.awk' "$WM" && pass || fail "wiki-migrate.sh does not load wiki-migrate.awk from its own folder"
+new_sandbox
+mkproj "$SANDBOX/na"; before="$(tree_sum "$P")"
+cp -R "$PLUGIN" "$SANDBOX/plugin-copy"; rm -f "$SANDBOX/plugin-copy/scripts/wiki-migrate.awk"
+OUT="$(bash "$SANDBOX/plugin-copy/scripts/wiki-migrate.sh" "$P" 2>"$SANDBOX/err")"; RC=$?
+assert_eq "$RC" "1" "no wiki-migrate.awk: exit"
+assert_contains "$SANDBOX/err" "nothing was changed"
+assert_eq "$(tree_sum "$P")" "$before" "no wiki-migrate.awk: the project changed"
+
 finish
