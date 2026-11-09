@@ -13,6 +13,8 @@ plugins/corecrew/                 project workflow
   .codex-plugin/plugin.json       Codex manifest: the same name, version and description, Codex listing fields
   assets/icon.png                 the plugin icon (SVG source in docs/icons/)
   skills/                         new-project, task, ship, new-standard (SKILL.md + references/)
+    new-project/scripts/          scaffold.sh, merge-generated.sh, preflight.sh (scaffold.sh and
+                                  preflight.sh source scripts/lib.sh)
     */agents/openai.yaml          Codex: keeps task, ship and new-standard out of implicit invocation
     task/references/codex.md      Codex: the task chain with Codex subagents
     task/references/architect-explorer.md  the architect and explorer roles when feature-dev is
@@ -42,11 +44,14 @@ plugins/corecrew/                 project workflow
     wiki-*.sh                     the wiki: pages, index, checks, migration from an older format
     wiki-check.awk                the checks of one wiki page, run by wiki-check.sh
     wiki-migrate.awk              one page converted to the current format, run by wiki-migrate.sh
-    check-standard.sh             the checks of one standard file (new-standard)
+    check-standard.sh             the checks of one standard file (new-standard): a script only one
+                                  skill uses may stay here when the skill reaches it through `<scripts>`
   reference/                      texts the skills share: wiki.md and knowledge.md (the rules the
                                   agents follow), and these two:
     codex-host.md                 the Codex host reference that every skill follows in Codex
     older-formats.md              how a project made by an older version is brought up to date
+  templates/                      what new-project, adopt, setup-core and wiki-migrate copy or fill in:
+                                  CLAUDE.md.tmpl, code/, core/, docs/
   evals/                          trigger evals
 plugins/coremodel/                model and effort picker
   hooks/                          the Claude Code module (TypeScript): register.tsx wires the hooks;
