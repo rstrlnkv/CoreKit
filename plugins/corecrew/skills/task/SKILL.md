@@ -129,7 +129,7 @@ attribution value resolved at Start" instead of placeholders:
    `wiki-index: no page has a type; run wiki-migrate.sh first`, the wiki is in an older format:
    follow `<plugin>/reference/older-formats.md`, section Wiki without types (the user's "ok", the
    migration and its own commit). Without that "ok", stop the chain. Then, in any case, run
-   `bash "<scripts>/wiki-check.sh" "<Core>/<project>"` once and note its lines as the **baseline**,
+   `bash "<scripts>/wiki-check.sh" "<Core>/<project>" --code "<code root>"` once and note its lines as the **baseline**,
    like the base commits: the wiki problems that were there before this chain. The verifier brief
    and release postcondition 3 use it.
 7. **Base commits.** Record `git rev-parse HEAD` in the code root and in `<Core>`: these are the

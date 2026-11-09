@@ -20,7 +20,8 @@ The first line of every brief, exactly. `<path>` is `fix`, `full`, `question`, `
 4. **Check** — the command to run for this step: the touched modules' tests, or the project's
    `check:` line when this is the final run.
 5. **Plugin paths** (engineer and verifier only) — `<plugin>/reference/wiki.md` and
-   `<plugin>/scripts/wiki-index.sh` and `<plugin>/scripts/wiki-check.sh`, with `<plugin>` the absolute path resolved at Start; an agent
+   `<plugin>/scripts/wiki-index.sh` and `<plugin>/scripts/wiki-check.sh`, with `<plugin>` the absolute path resolved at Start,
+   and the absolute code root (SKILL.md Start, **Project**) for `wiki-check.sh --code`; an agent
    cannot find them by itself. A verifier brief also lists the `wiki-check:` lines of the Start
    baseline (SKILL.md Start, **Wiki**), pasted whole, or says "baseline: none".
 6. **Budget** — an agent that hits the hard cap of 60 turns returns no report at all, so say:

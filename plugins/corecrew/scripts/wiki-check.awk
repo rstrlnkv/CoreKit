@@ -1,7 +1,7 @@
 # scripts/wiki-check.awk — the checks of one wiki page or CLAUDE.md, for wiki-check.sh (which lists the
 # checks and their messages in its header):
 #   LC_ALL=C WC_MODE=page|claude WC_REL=<file shown> WC_PROJ=<project dir> WC_FDIR=<dir of the file,
-#     project-relative> WC_SIZE=<bytes> WC_CHANGED=<file> WC_PAGES=<file> WC_FILES=<file> \
+#     project-relative> WC_SIZE=<bytes> WC_CODE=<code root or ""> WC_CHANGED=<file> WC_PAGES=<file> WC_FILES=<file> \
 #     awk -f wiki-check.awk <file>
 # WC_CHANGED holds "C <code path>" / "P <docs-relative page>" lines (--changed), WC_PAGES the wiki pages
 # (docs-relative), WC_FILES every file under docs/. Prints "wiki-check: <WC_REL>: <problem>" per
@@ -13,6 +13,7 @@ function unq(s) { if (length(s) >= 2 && (s ~ /^".*"$/ || s ~ /^'.*'$/)) s = subs
 function shq(s) { gsub(/'/, "'\\''", s); return "'" s "'" }
 function report(file, msg) { print "wiki-check: " file ": " msg }
 function exists(p) { return system("test -e " shq(p)) == 0 }
+function isdir(p) { return system("test -d " shq(p)) == 0 }
 function base(p) { sub(/.*\//, "", p); return p }
 # Heading text: the rest of the line, closing hashes ("## Closed ##") dropped.
 function htext(s) { s = trim(s); sub(/[ \t]+#+$/, "", s); return trim(s) }
@@ -176,7 +177,7 @@ function scanlinks(s,   i, e, rest, tgt, t) {
 
 BEGIN {
   mode = ENVIRON["WC_MODE"]; rel = ENVIRON["WC_REL"]; proj = ENVIRON["WC_PROJ"]; docs = proj "/docs"
-  fdir = ENVIRON["WC_FDIR"]; size = ENVIRON["WC_SIZE"] + 0
+  fdir = ENVIRON["WC_FDIR"]; size = ENVIRON["WC_SIZE"] + 0; code = ENVIRON["WC_CODE"]
   changedf = ENVIRON["WC_CHANGED"]; pagesf = ENVIRON["WC_PAGES"]; filesf = ENVIRON["WC_FILES"]
   split("brief architecture decision feature spec plan glossary", a, " "); for (i in a) oktype[a[i]] = 1
   split("draft active done superseded", a, " "); for (i in a) okstatus[a[i]] = 1
@@ -229,12 +230,20 @@ END {
     }
     for (i = 1; i <= nunk; i++) report(rel, "unknown front matter field " unk[i])
     if (size > 8192 && h2 == 0) report(rel, "page over 8 KB without ## headings")
-    if (!(rel in pagechg)) {
+    # files: entries. Active pages must name paths that exist (--code); done and superseded pages
+    # are history: no drift, no existence check; draft pages may name files still to be created.
+    st = unq(val["status"])
+    if (code != "" && st == "active")
       for (i = 1; i <= nf; i++) {
         f = flist[i]
-        isdir = (f ~ /\/$/)
-        f = norm(f); if (isdir) f = f "/"
-        if (isdir) { for (k = 1; k <= nc; k++) if (index(codechg[k], f) == 1) drift(codechg[k]) }
+        if (f ~ /\/$/ ? !isdir(code "/" f) : !exists(code "/" f)) report(rel, "missing file " f)
+      }
+    if (st != "done" && st != "superseded" && !(rel in pagechg)) {
+      for (i = 1; i <= nf; i++) {
+        f = flist[i]
+        dir = (f ~ /\/$/)
+        f = norm(f); if (dir) f = f "/"
+        if (dir) { for (k = 1; k <= nc; k++) if (index(codechg[k], f) == 1) drift(codechg[k]) }
         else if (f in codeset) drift(f)
       }
     }

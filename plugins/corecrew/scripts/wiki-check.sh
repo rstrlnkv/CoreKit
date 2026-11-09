@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # wiki-check.sh — deterministic wiki checks (rules in reference/wiki.md).
 #
-# Usage: wiki-check.sh <project_dir> [--changed <path>...]
+# Usage: wiki-check.sh <project_dir> [--code <dir>] [--changed <path>...]
 #   <project_dir>  the Core project folder <Core>/<name>: CLAUDE.md, docs/ (map docs/INDEX.md).
 #                  The code lives elsewhere (beside the Core, or in the old layout in code/).
+#   --code <dir>   the code root: every files: entry of an active page must exist there.
 #
 # Wiki pages are what wiki-pages.sh lists (docs/**/*.md except INDEX.md, knowledge/, standards/,
 # superpowers/, .obsidian/). A page's name is its file name without ".md".
@@ -26,7 +27,8 @@
 #   duplicate heading <h>                      the same "## " heading twice in one page
 #   page over 8 KB without ## headings
 #   INDEX.md stale                             on INDEX.md: "wiki-index.sh --check" fails
-#   drift: <code path> changed, page not updated      (only with --changed)
+#   drift: <code path> changed, page not updated      (only with --changed; not on done or superseded pages)
+#   missing file <path>                        (only with --code) a files: entry of an active page is not there
 # Two lines stand alone: "wiki-check: INDEX.md: missing" (there is no docs/INDEX.md; the other
 # checks still run) and "wiki-check: docs: missing docs/ directory" (exit 1, nothing else checked).
 # <file> is relative to docs/ ("features/login.md"); CLAUDE.md is printed as "../CLAUDE.md".
@@ -45,15 +47,27 @@
 # outside the project's code and docs and is ignored.
 # A page's files: entries match a changed path exactly, or by prefix when the entry ends in "/".
 #
+# --code <dir>: each files: entry of a page with status active is tested in the working tree of the
+# code root, a folder entry (ending in "/") with -d, any other with -e. Draft pages list files they
+# will create and done or superseded pages are history: neither is tested. The working tree is what
+# counts, so a gitignored file that is absent there (CLAUDE.local.md in a fresh worktree) is missing.
+#
 # Exit: 0 green, 1 problems found, 2 usage or internal error (e.g. awk failed: never "green"). Portable bash 3.2 + BSD awk.
 # The checks themselves are one awk program, scripts/wiki-check.awk, run once per file.
 
 set -u
 
-usage() { echo "usage: wiki-check.sh <project_dir> [--changed <path>...]" >&2; exit 2; }
+usage() { echo "usage: wiki-check.sh <project_dir> [--code <dir>] [--changed <path>...]" >&2; exit 2; }
 
 [ $# -ge 1 ] || usage
 PROJ="$1"; shift
+CODE=""
+if [ "${1-}" = "--code" ]; then
+  { [ $# -ge 2 ] && [ -n "$2" ] && [ "$2" != "--changed" ]; } || usage
+  CODE="$2"; shift 2
+  [ -d "$CODE" ] || { echo "wiki-check: $CODE: not a directory" >&2; exit 2; }
+  CODE="$(cd "$CODE" && pwd)"
+fi
 HAVE_CHANGED=0
 if [ $# -gt 0 ]; then
   [ "$1" = "--changed" ] || usage
@@ -94,7 +108,7 @@ CHECK_AWK="$HERE/wiki-check.awk"
 
 # run_awk <mode> <display name> <file> <dir of file relative to project>
 run_awk() {
-  LC_ALL=C WC_MODE="$1" WC_REL="$2" WC_PROJ="$PROJ" WC_FDIR="$4" WC_SIZE="$(wc -c < "$3" | tr -d ' ')" \
+  LC_ALL=C WC_MODE="$1" WC_REL="$2" WC_PROJ="$PROJ" WC_FDIR="$4" WC_SIZE="$(wc -c < "$3" | tr -d ' ')" WC_CODE="$CODE" \
   WC_CHANGED="$T/changed" WC_PAGES="$T/pages" WC_FILES="$T/files" awk -f "$CHECK_AWK" "$3"
 }
 
