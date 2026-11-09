@@ -155,7 +155,7 @@ OD="$SANDBOX"
 gate() { run_hook "$HOOKS/$1" "$(hook_event "${4:-codex}" PreToolUse "$3" tool=Bash command="$2")"; } # gate <hook> <cmd> <cwd> [claude]
 gate_named() { # gate_named <label> <match> — the shell-patch refusal, and the message names the match
   hook_refused_patch "$1"
-  case "$ERR" in *"$2"*) pass ;; *) fail "$1: the message does not name [$2]: $ERR" ;; esac
+  case "$ERR" in *"(matched: $2)"*) pass ;; *) fail "$1: the message does not name [$2]: $ERR" ;; esac
 }
 everyday=( 'wc -l a/* b/* 2>/dev/null | tail -1' 'cd x && ls scripts/* && cat .claude-plugin/marketplace.json' \
   'rm -rf dist/* && npm run build' 'cp assets/* public/' 'chmod +x bin/*' 'du -sh * | sort -h' \
