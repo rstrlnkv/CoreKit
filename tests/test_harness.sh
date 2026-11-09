@@ -187,7 +187,8 @@ chmod -R u+rwx "$RT"; rm -rf "$RT"
 # --- snap_tree: two snapshots with no change are identical; each change below alters the snapshot, and undoing it
 # gives the first snapshot back. The repo is nested, as a code repo sits under a sandbox.
 S="$SANDBOX/snap"; G="$S/a repo"; mkdir -p "$G/sub"
-git init -q "$G"; echo one > "$G/f"; ln -s f "$G/l"; git -C "$G" add -A; git -C "$G" commit -q -m one
+git init -q "$G"; echo one > "$G/f"; ln -s f "$G/l"; printf 'ign\n' > "$G/.gitignore"; ln -s f "$G/ign"
+git -C "$G" add -A; git -C "$G" commit -q -m one
 echo two > "$G/f"; git -C "$G" commit -q -am two
 S0="$(snap_tree "$S")"
 assert_eq "$(snap_tree "$S")" "$S0" "snap_tree: no change, same snapshot"
@@ -197,6 +198,12 @@ changed() {
   eval "$3"; assert_eq "$(snap_tree "$S")" "$S0" "snap_tree after undoing: $1"
 }
 changed "a retargeted link" 'ln -sfn sub "$G/l"' 'ln -sfn f "$G/l"'
+# each of the next three alters only one part: an ignored link only its target, a commit of the same tree only HEAD,
+# an index-only change only the status
+changed "a retargeted ignored link" 'ln -sfn sub "$G/ign"' 'ln -sfn f "$G/ign"'
+H0="$(git -C "$G" rev-parse HEAD)"; C="$(git -C "$G" commit-tree "$H0^{tree}" -p "$H0" -m same)"
+changed "HEAD moved to a commit of the same tree" 'git -C "$G" reset -q --soft "$C"' 'git -C "$G" reset -q --soft "$H0"'
+changed "an index-only change" 'git -C "$G" rm -q --cached f' 'git -C "$G" add f'
 changed "an empty folder" 'mkdir "$S/empty"' 'rmdir "$S/empty"'
 changed ".git/REVERT_HEAD" 'git -C "$G" rev-parse HEAD > "$G/.git/REVERT_HEAD"' 'rm "$G/.git/REVERT_HEAD"'
 changed ".git/index.lock" ': > "$G/.git/index.lock"' 'rm "$G/.git/index.lock"'

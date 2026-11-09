@@ -111,10 +111,11 @@ sync_tools() { bash "$SCRIPTS/sync-tools.sh" "$PLUGIN" "$COREDEV_TOOLS" >/dev/nu
 # (NUL-separated, so names with spaces or non-ASCII characters are summed too.)
 tree_sum() { (cd "$1" && find . -type f -not -path '*/.git/*' -print0 | xargs -0 cksum | LC_ALL=C sort -k3); }
 
-# snap_tree <dir>... — everything a refusal or a failed step must not change, as text to compare. For each dir: the
+# snap_tree <dir>... — what a refusal or a failed step must leave as it was, as text to compare. For each dir: the
 # file sums (tree_sum), every path with its type (d, f, l, ? for another kind) and a link's target, and for each git
 # repo under it (a .git folder or file) its branch, HEAD, `status --porcelain` and which of REVERT_HEAD, MERGE_HEAD,
-# CHERRY_PICK_HEAD and index.lock exist. Read errors (an unreadable folder) are left out.
+# CHERRY_PICK_HEAD and index.lock exist. Read errors (an unreadable folder) are left out. Not covered: modes of
+# untracked files and folders, refs other than HEAD, git config and .git/hooks; a test that needs them checks them itself.
 snap_tree() {
   local d
   for d in "$@"; do
