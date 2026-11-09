@@ -103,6 +103,7 @@ assert_eq "$(ls -A "$SANDBOX/lt")" "tools" "sync: nothing but tools left beside 
 # a live holder: a stale copy is not touched by a run that cannot get the lock, which exits 0 after the wait
 printf 'x\n' > "$T/extra"; : > "$T/save"          # damaged copy
 mkdir "$T.lock"; sleep 30 & HOLD=$!; echo $HOLD > "$T.lock/pid"
+# Wall time on purpose: this times a real wait, not work.
 before="$(tree_sum "$T")"; t0=$SECONDS
 OUT="$(bash "$SYNC" "$PLUGIN" "$T" 2>&1)"; RC=$?
 assert_eq "$RC" "0" "sync: busy lock: clean skip"

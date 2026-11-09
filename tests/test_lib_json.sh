@@ -45,31 +45,39 @@ done
 json_str '{"cwd":"x"}' >/dev/null 2>&1; assert_eq "$?" "0" "no key argument"
 # a large payload (a Write of a big file) with escapes is scanned quickly
 big="$(awk 'BEGIN{for(i=0;i<3000;i++) printf "line %d with \\\"quotes\\\" and \\n escapes padding padding\\n", i}')"
-start=$SECONDS
 doc="{\"content\":\"$big\",\"cwd\":\"/after/big\"}"
-assert_eq "$(json_str "$doc" cwd)" "/after/big" "key after a large value"
-[ $((SECONDS - start)) -le 5 ] && pass || fail "json_str too slow on a large payload"
+cpu_run json_str "$doc" cwd > "$TEST_TMP/got"
+assert_eq "$(<"$TEST_TMP/got")" "/after/big" "key after a large value"
+[ "$CPU_MS" -le 5000 ] && pass || fail "json_str too slow on a large payload: $CPU_MS ms of CPU"
 
-# Linear time: decoding a 600 KB value with many escapes and scanning past a 1 MB payload.
+# Linear time: decoding a 600 KB value with many escapes and scanning past a 1 MB payload. The limits are on CPU time
+# (cpu_run, tests/lib.sh), which load on the machine does not raise.
 chunk='abc \"q\" \\ \u0430 \n padding padding'
 exp_chunk="$(printf 'abc "q" \\ а \n padding padding')"
 big="$chunk"; want="$exp_chunk"
 for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do big="$big$big"; want="$want$want"; done
 doc="{\"content\":\"$big\",\"cwd\":\"/after/600k\"}"
-t0=$(date +%s); got="$(json_str "$doc" content)"; t1=$(date +%s)
+cpu_run json_str "$doc" content > "$TEST_TMP/got"; got="$(<"$TEST_TMP/got")"
 [ "$got" = "$want" ] && pass || fail "decoded 600 KB value differs (${#got} bytes vs ${#want})"
-echo "  timing: decode of $((${#big} / 1000)) KB value: $((t1 - t0)) s"
-[ $((t1 - t0)) -le 2 ] && pass || fail "decode of a 600 KB value took $((t1 - t0)) s"
+echo "  timing: decode of $((${#big} / 1000)) KB value: $CPU_MS ms of CPU"
+[ "$CPU_MS" -le 2000 ] && pass || fail "decode of a 600 KB value took $CPU_MS ms of CPU"
 big="$big$big"; doc="{\"content\":\"$big\",\"x\":1,\"cwd\":\"/after/1m\"}"
-t0=$(date +%s); got="$(json_str "$doc" cwd)"; t1=$(date +%s)
+cpu_run json_str "$doc" cwd > "$TEST_TMP/got"; got="$(<"$TEST_TMP/got")"
 assert_eq "$got" "/after/1m" "key after a 1 MB value"
-echo "  timing: scan past $((${#big} / 1000)) KB: $((t1 - t0)) s"
-[ $((t1 - t0)) -le 2 ] && pass || fail "scan past 1 MB took $((t1 - t0)) s"
+echo "  timing: scan past $((${#big} / 1000)) KB: $CPU_MS ms of CPU"
+[ "$CPU_MS" -le 2000 ] && pass || fail "scan past 1 MB took $CPU_MS ms of CPU"
 # many small tokens (a long pretty-printed document) are scanned in linear time too
 many="$(awk 'BEGIN{printf "{\n"; for(i=0;i<40000;i++) printf "  \"k%d\": \"v%d\",\n", i, i; printf "  \"cwd\": \"/after/many\"\n}\n"}')"
-t0=$(date +%s); got="$(json_str "$many" cwd)"; t1=$(date +%s)
+cpu_run json_str "$many" cwd > "$TEST_TMP/got"; got="$(<"$TEST_TMP/got")"
 assert_eq "$got" "/after/many" "key after 80000 tokens"
-[ $((t1 - t0)) -le 2 ] && pass || fail "scan past 80000 tokens took $((t1 - t0)) s"
+[ "$CPU_MS" -le 2000 ] && pass || fail "scan past 80000 tokens took $CPU_MS ms of CPU"
+# growth: decoding four times the value costs about four times the CPU (a quadratic decoder would cost 16 times)
+big="$chunk"; for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13; do big="$big$big"; done   # about 300 KB
+# shellcheck disable=SC2034  # read by the command lines assert_linear evals
+J1="{\"content\":\"$big\",\"cwd\":\"/x\"}"
+# shellcheck disable=SC2034  # (as above)
+J4="{\"content\":\"$big$big$big$big\",\"cwd\":\"/x\"}"
+assert_linear "json_str: a 300 KB value against a 1.2 MB one" 6 'json_str "$J1" content > /dev/null' 'json_str "$J4" content > /dev/null'
 # adversarial: a value that is all escaped quotes / all escaped backslashes
 adv="$(awk 'BEGIN{for(i=0;i<50000;i++) printf "%s", "\\" "\""}')"
 doc="{\"a\":\"$adv\",\"cwd\":\"/ok\"}"
@@ -137,10 +145,10 @@ else
 fi
 # a long run of escaped backslashes is scanned in linear time
 bs="$(awk 'BEGIN{for(i=0;i<50000;i++) printf "\\\\"}')"
-start=$SECONDS
 doc="{\"content\":\"${bs}a\\\"b\",\"cwd\":\"/after/bs\"}"
-assert_eq "$(json_str "$doc" cwd)" "/after/bs" "key after a long backslash run"
-[ $((SECONDS - start)) -le 2 ] && pass || fail "json_str quadratic on a backslash run"
+cpu_run json_str "$doc" cwd > "$TEST_TMP/got"
+assert_eq "$(<"$TEST_TMP/got")" "/after/bs" "key after a long backslash run"
+[ "$CPU_MS" -le 2000 ] && pass || fail "json_str quadratic on a backslash run: $CPU_MS ms of CPU"
 # a raw newline in a value (invalid JSON) survives and does not start an escape
 assert_eq "$(json_str "$(printf '{"cwd":"a\nb"}')" cwd)" "$(printf 'a\nb')" "raw newline kept"
 
