@@ -113,7 +113,7 @@ hook trust           on install                          after you enable them i
 - **Hooks** (`plugins/corecrew/hooks/hooks.json`) run at session start, before tool calls and at
   stop. They guard secrets and the public code folder, keep one test suite running at a time and
   remind the agent to save. Outside a Core project only the session-start hook (tools refresh and
-  a one-time "Core not set up" hint) and the read-only checker rule act; every other hook exits at once.
+  a one-time "Core not set up" hint) and the read-only checker rule act; every other hook passes every call.
 - **Scripts** hold the logic, so hooks stay thin. A script or hook sources `lib.sh`, and `lib.sh`
   sources its parts (`lib-*.sh`). The guards read a Bash command with awk, not with a shell: the
   code guard, the secrets guard and the read-only checker rule each with the one tokenizer

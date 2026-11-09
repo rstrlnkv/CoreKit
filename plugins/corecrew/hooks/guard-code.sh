@@ -80,9 +80,18 @@ in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 . "$SELF/scripts/guard-lib.sh" 2>/dev/null || exit 0   # TAB, guard_refuse, guard_lex, guard_patch, ...: both guards share them
 
-tool="$(json_str "$in" tool_name)"
-cwd="$(json_str "$in" cwd)"
+# The input is read once, for every key the hook may need (json_fields: one awk pass).
+{ IFS= read -r -d '' tool; IFS= read -r -d '' cwd; IFS= read -r -d '' cmd; IFS= read -r -d '' file_path
+  IFS= read -r -d '' notebook_path; IFS= read -r -d '' turn_id; IFS= read -r -d '' agent_type
+} < <(json_fields "$in" tool_name cwd command file_path notebook_path turn_id agent_type)
 [ -n "$cwd" ] || exit 0
+# The settings are loaded once, and only where a path needs them (most calls never do). SETTINGS_LOADED is never taken
+# from the environment: a value there would switch the guard off.
+SETTINGS_LOADED=""
+need_settings() {
+  [ -n "$SETTINGS_LOADED" ] && return 0
+  load_settings; SETTINGS_LOADED=1
+}
 
 # is_public <project> <lower-case path relative to the code root> — exit 0 when a public-docs: entry covers it.
 is_public() {
@@ -112,6 +121,7 @@ check_path() {
   abs_l="$(lc "$ABS")"
   # no internal component anywhere in the path: nothing to judge (most targets stop here, without project_of)
   case "/$abs_l/" in */docs/*|*/.claude/*|*/claude.md/*|*/claude.local.md/*|*/agents.md/*) ;; *) return 0 ;; esac
+  need_settings
   proj="$(project_of "$ABS")" || return 0
   # the code root: the project folder in <Projects> taken from the path itself (new layout; so no case
   # clash between folders can switch the guard off), or <Core>/<p>/code for a path inside the Core (old)
@@ -180,7 +190,7 @@ check_path() {
 
 # --- The read-only checkers: the second rule of the header.
 ro_agent() {
-  local a; a="$(json_str "$in" agent_type)"
+  local a="$agent_type"
   case "$a" in corecrew:*) a="${a#corecrew:}" ;; *:*) return 1 ;; esac
   case "$a" in designer|localizer|security|verifier) printf '%s\n' "$a" ;; *) return 1 ;; esac
 }
@@ -193,9 +203,8 @@ in_temp() {   # in_temp <absolute path>
   return 1
 }
 if [ "$tool" = Bash ] && agent="$(ro_agent)"; then
-  cmd="$(json_str "$in" command)"
   [ -n "$cmd" ] || exit 0
-  load_settings
+  need_settings
   # A checker that cannot run refuses: these agents should change nothing, so unknown is no.
   found="$(guard_lex bashlex-readonly.awk "$cmd")" || found="X${TAB}a command this check could not read"
   while IFS="$TAB" read -r kind a; do
@@ -244,9 +253,9 @@ judge_patch() {
 # raw for an internal path. A reader that is missing or failed (patch_paths status non-zero) refuses the call outright;
 # a reader that ran and printed nothing (a patch naming no file) passes. A text with no string to read passes (exit 0).
 if [ "$tool" = apply_patch ]; then
-  patch="$(json_str "$in" command)"
+  patch="$cmd"
   [ -n "$patch" ] || exit 0
-  load_settings
+  need_settings
   guard_patch "$patch" judge_patch
   case "$?" in 1) guard_refuse "$(msg patch_no_reader)" ;; 2) guard_refuse "$(msg patch_too_many 100)" ;; esac
   [ -z "$PATCH_X" ] || refuse_raw "$patch"
@@ -254,19 +263,16 @@ if [ "$tool" = apply_patch ]; then
 fi
 
 if [ "$tool" != Bash ]; then
-  key=file_path; [ "$tool" = NotebookEdit ] && key=notebook_path
-  path="$(json_str "$in" "$key")"
+  path="$file_path"; [ "$tool" = NotebookEdit ] && path="$notebook_path"
   [ -n "$path" ] || exit 0
-  load_settings
   check_path "$path"
   exit 0
 fi
 
 # --- Bash: targets of redirects and file commands, found by one awk pass.
-cmd="$(json_str "$in" command)"
 [ -n "$cmd" ] || exit 0
 # A Codex patch applied through the shell is refused, in Codex only (see the header).
-if guard_shell_patch "$in" "$cmd"; then guard_refuse "$(msg patch_shell "$SHELL_PATCH_HIT")"; fi
+if guard_shell_patch "$turn_id" "$cmd"; then guard_refuse "$(msg patch_shell "$SHELL_PATCH_HIT")"; fi
 # Cheap exit: nothing in the command can write a file.
 case "$cmd" in *">"*|*tee*|*touch*|*mkdir*|*cp*|*mv*|*ln*|*install*|*sed*|*perl*) ;; *) exit 0 ;; esac
 
@@ -277,7 +283,7 @@ targets="$(guard_lex bashlex-guard-code.awk "$cmd")"
 [ -n "$targets" ] || exit 0
 NL='
 '
-load_settings
+need_settings
 # A last line C: too many internal-looking targets to judge within the hook timeout. Refuse the whole command, but only
 # in scope: the cwd is in a project, or a target names the folder that holds the Core (the code folders sit beside it).
 if [ "${targets##*"$NL"}" = C ]; then

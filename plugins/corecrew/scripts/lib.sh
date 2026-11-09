@@ -13,7 +13,7 @@
 #   lib-layout.sh    project_of worktree_of code_root_of code_dir_of layout_of valid_project_name
 #   lib-host.sh      codex_home host tools_dir hooks_marker_path plugin_version
 #   lib-scaffold.sh  rel_core render put mkdir_p git_init put_project_docs link_* projects_entry projects_upsert
-#   lib-json.sh      json_str (the hook JSON reader; its awk program is inline, so file tools need no awk file)
+#   lib-json.sh      json_str json_fields (the hook JSON readers; their awk program is inline, so file tools need no awk file)
 # Three subcommands source their own file when run: lib-codex-profile.sh, lib-role-model.sh, lib-tree-state.sh.
 # The guards' shell-patch check is scripts/shell-patch.sh and their shared code scripts/guard-lib.sh (neither is part of lib.sh). sync-tools.sh copies every part
 # into the tools copy (save, undo-step and install-hooks source lib.sh there).

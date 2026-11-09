@@ -807,6 +807,28 @@ sec_cap() {
 }
 bg sec_cap
 
+# --- The cheap cases first: the settings are loaded only where a path needs them, and never taken as loaded from the
+# environment (SETTINGS_LOADED there would switch the guard off). count_execs (tests/lib.sh) counts the programs a call
+# starts; run_hook's own bash is one of them.
+sec_cheap() {
+  local w
+  printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"%s/docs/x.md","content":"x"}}' "$C" "$C" \
+    | SETTINGS_LOADED=1 bash "$H" >"$OD/out" 2>"$OD/err"; RC=$?; OUT="$(<"$OD/out")"; ERR="$(<"$OD/err")"
+  blocked "SETTINGS_LOADED=1 in the environment: Write docs/x.md is still refused" "$C/docs/x.md" "$CORE_DIR/p/docs/x.md"
+  w='{"session_id":"s","cwd":"'"$C"'","hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"'"$C"'/src/x.py","content":"x"}}'
+  printf '%s' "$w" | bash -x "$H" >"$OD/out" 2>"$OD/err"; assert_eq "$?" "0" "bash -x: Write src/x.py passes"
+  grep -q 'load_settings' "$OD/err" && fail "a Write of src/x.py loads the settings" || pass
+  run_file Write "$C/src/x.py"; hook_ok "cheap case: Write src/x.py passes"
+  run_file Write "$SANDBOX/elsewhere/x.py" "$SANDBOX/elsewhere"; hook_ok "cheap case: Write outside a project passes"
+  count_execs run_hook "$H" "$w"; hook_ok "counted: Write src/x.py"
+  echo "  programs: Write src/x.py: $EXECS ($(tr '\n' ' ' < "$EXEC_LOG"))"
+  [ "$EXECS" -le 8 ] && pass || fail "a Write of src/x.py starts $EXECS programs (at most 8): $(tr '\n' ' ' < "$EXEC_LOG")"
+  count_execs run_bash 'git status'; hook_ok "counted: git status"
+  echo "  programs: git status: $EXECS ($(tr '\n' ' ' < "$EXEC_LOG"))"
+  assert_eq "$(grep -vxE 'bash|dirname' "$EXEC_LOG" | LC_ALL=C sort | tr '\n' ' ')" "awk cat " "git status starts only cat, one awk and dirname"
+}
+bg sec_cheap
+
 bg_wait
 
 finish

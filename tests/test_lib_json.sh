@@ -5,6 +5,11 @@ new_sandbox
 . "$SCRIPTS/lib.sh"
 
 # --- json_str
+# Every document a json_str case below reads is kept (NUL-separated), so that json_fields is compared with json_str on all
+# of them at the end of this section.
+JCORPUS="$TEST_TMP/json-corpus"; : > "$JCORPUS"
+eval "_json_str_lib() $(declare -f json_str | tail -n +2)"
+json_str() { printf '%s\0' "${1:-}" >> "$JCORPUS"; _json_str_lib "$@"; }
 assert_eq "$(json_str '{"cwd":"/a/b"}' cwd)" "/a/b" "plain value"
 assert_eq "$(json_str '{"cwd":"/a/\"q\"/b"}' cwd)" '/a/"q"/b' "escaped quote"
 assert_eq "$(json_str '{"cwd":"C:\\x\\y"}' cwd)" 'C:\x\y' "escaped backslash"
@@ -88,6 +93,45 @@ assert_eq "$(json_str "$doc" cwd)" "/ok2" "scan past escaped backslashes"
 assert_eq "$(json_str '{"a":"x\"y\\","cwd":"/ok3"}' cwd)" "/ok3" "quote parity"
 assert_eq "$(json_str '{"a":"x\\\"y","cwd":"/ok4"}' cwd)" "/ok4" "quote parity, odd run"
 assert_eq "$(json_str '{"a":"x\\\"y\\\\"}' a)" 'x\"y\\' "decode: escaped backslash then escaped quote"
+
+# --- json_fields: one pass, the value json_str gives for each key, in the order of the keys, NUL-terminated, trailing
+# newlines dropped as $(...) drops them. Compared with json_str on every document above, plus hook inputs of both hosts.
+eval "json_str() $(declare -f _json_str_lib | tail -n +2)"
+nl='
+'
+for d in '{"session_id":"s","transcript_path":"/t.jsonl","cwd":"/p","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"git status"},"tool_use_id":"toolu_1"}' \
+  '{"session_id":"s","turn_id":"turn-1","transcript_path":null,"cwd":"/p","hook_event_name":"PreToolUse","model":"gpt-5","tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\n*** Add File: docs/a.md\n+x\n*** End Patch\n"},"tool_use_id":"call_1"}' \
+  '{"cwd":"/p","agent_type":"corecrew:verifier","tool_name":"Bash","tool_input":{"command":"cat <<EOF\nx\n\nEOF\n\n\n"}}' \
+  '{"cwd":"/p","tool_name":"Write","tool_input":{"file_path":"/p/src/x.py","content":"\"cwd\": \"/fake\"\n"}}' \
+  '{"cwd":5,"tool_name":"Read","tool_input":{"file_path":null,"cwd":"/later","file_path":"/p/.env"}}' \
+  "{\"cwd\":\"/p\",${nl}\"tool_name\" :${nl} \"Glob\",\"tool_input\":{\"pattern\":\"**/.env\",\"path\":\"~\"}}" \
+  '{"tool_name":"Bash","tool_input":{"command":"\n\n"},"cwd":"\u000a/p\u000a"}' '{"command":"a\\nb\\"}' '{"command":"x\"' '{"a":"b"'; do
+  printf '%s\0' "$d" >> "$JCORPUS"
+done
+keys="cwd tool_name command file_path path turn_id agent_type a b content"
+n=0; diffs=""
+while IFS= read -r -d '' doc; do
+  n=$((n + 1))
+  # shellcheck disable=SC2086  # the keys are words
+  { for k in $keys cwd; do IFS= read -r -d '' "jf_$k"; done; } < <(json_fields "$doc" $keys cwd)
+  ks="$keys"; [ "${#doc}" -le 65536 ] || ks="cwd content command"   # a large document: the keys it has (time)
+  for k in $ks; do
+    v="jf_$k"; [ "${!v}" = "$(json_str "$doc" "$k")" ] || diffs="$diffs doc$n:$k"
+  done
+done < "$JCORPUS"
+[ "$n" -ge 60 ] && pass || fail "json_fields corpus has only $n documents"
+assert_eq "$diffs" "" "json_fields differs from json_str ($n documents)"
+assert_eq "$(json_fields '{"a":"x"}' a b c | tr -cd '\000' | wc -c | tr -d ' ')" "3" "one NUL per key"
+assert_eq "$(json_fields 'garbage' a b | tr -cd '\000' | wc -c | tr -d ' ')" "2" "one NUL per key, malformed input"
+assert_eq "$(json_fields '{"a":"x\n\n"}' a | od -An -c | tr -d ' \n')" 'x\0' "trailing newlines dropped"
+assert_eq "$(json_fields '{"a":"x\n\ny"}' a | od -An -c | tr -d ' \n')" 'x\n\ny\0' "inner newlines kept"
+json_fields '{"a":"x"}' >/dev/null 2>&1; assert_eq "$?" "0" "no key argument"
+# one pass: a 1 MB command is read once for all the keys, in linear time
+# shellcheck disable=SC2034  # read by the command lines assert_linear evals
+F1="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$big\"},\"cwd\":\"/x\"}"
+# shellcheck disable=SC2034  # (as above)
+F4="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$big$big$big$big\"},\"cwd\":\"/x\"}"
+assert_linear "json_fields: a 300 KB command against a 1.2 MB one" 6 'json_fields "$F1" tool_name cwd command turn_id > /dev/null' 'json_fields "$F4" tool_name cwd command turn_id > /dev/null'
 
 # --- project_of
 unset CORE_DIR

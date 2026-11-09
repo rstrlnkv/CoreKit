@@ -855,6 +855,38 @@ sec_bypass() {
 }
 bg sec_bypass
 
+# --- The cheap cases first: a call that cannot name a secret never loads the settings, and the refusals that do not go
+# through die (no reader, too many paths, a shell patch) keep the project gate: outside a project they pass, silently.
+sec_cheap() {
+  local X="$SANDBOX/elsewhere" PL="$SANDBOX/plugin-nopatch" big
+  printf '%s' "$(hook_event claude PreToolUse "$C" tool=Bash command='git status')" | bash -x "$H" >"$OD/out" 2>"$OD/err"
+  assert_eq "$?" "0" "bash -x: git status passes"
+  grep -q 'load_settings' "$OD/err" && fail "git status loads the settings" || pass
+  printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"%s/src/x.py"}}' "$C" "$C" \
+    | bash -x "$H" >"$OD/out" 2>"$OD/err"; assert_eq "$?" "0" "bash -x: Read src/x.py passes"
+  grep -q 'load_settings' "$OD/err" && fail "a Read of src/x.py loads the settings" || pass
+  run_bash 'git status'; hook_ok "cheap case: git status passes"
+  printf '%s' "$(hook_event claude PreToolUse "$X" tool=Bash command='cat .env')" | IN_PROJECT=1 bash "$H" >"$OD/out" 2>"$OD/err"
+  RC=$?; OUT="$(<"$OD/out")"; ERR="$(<"$OD/err")"; hook_ok "IN_PROJECT=1 in the environment: cat .env outside a project passes"
+  run_file Read "$C/src/x.py"; hook_ok "cheap case: Read src/x.py passes"
+  run_bash 'cat src/x.py'; hook_ok "cheap case: a command with a dot passes"
+  run_hook "$H" "$(hook_event codex PreToolUse "$C" tool=Bash command='git status')"; hook_ok "cheap case: git status passes in Codex"
+  # patch_shell
+  run_hook "$H" "$(hook_event codex PreToolUse "$X" tool=Bash command='apply_patch x')"; hook_ok "patch_shell outside a project: passes"
+  run_hook "$H" "$(hook_event codex PreToolUse "$C" tool=Bash command='apply_patch x')"; hook_refused_patch "patch_shell in a project: refused"
+  # patch_too_many
+  big="$(LC_ALL=C awk 'BEGIN { printf "*** Begin Patch\\n"; for (i = 0; i < 120; i++) printf "*** Add File: src/f%d\\n+x\\n", i; printf "*** End Patch" }')"
+  run_hook "$H" "$(hook_event codex PreToolUse "$X" tool=apply_patch rawcmd="$big")"; hook_ok "patch_too_many outside a project: passes"
+  run_hook "$H" "$(hook_event codex PreToolUse "$C" tool=apply_patch rawcmd="$big")"; hook_blocked_any "patch_too_many in a project: refused"
+  # patch_no_reader: a plugin copy without patch-paths.awk
+  mkdir -p "$PL/hooks" "$PL/scripts"
+  cp "$HOOKS/guard-secrets.sh" "$HOOKS/messages.sh" "$PL/hooks/"; cp "$SCRIPTS"/*.sh "$PL/scripts/"
+  big='*** Begin Patch\n*** Add File: src/a\n+x\n*** End Patch'
+  run_hook "$PL/hooks/guard-secrets.sh" "$(hook_event codex PreToolUse "$X" tool=apply_patch rawcmd="$big")"; hook_ok "patch_no_reader outside a project: passes"
+  run_hook "$PL/hooks/guard-secrets.sh" "$(hook_event codex PreToolUse "$C" tool=apply_patch rawcmd="$big")"; hook_blocked_any "patch_no_reader in a project: refused"
+}
+bg sec_cheap
+
 bg_wait
 
 finish

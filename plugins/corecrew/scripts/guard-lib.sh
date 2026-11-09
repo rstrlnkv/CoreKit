@@ -11,7 +11,7 @@ guard_refuse() {
   exit 2
 }
 
-# guard_shell_patch <hook input> <command> — exit 0 when the command is a Codex patch handed to the shell, which the
+# guard_shell_patch <turn_id> <command> — exit 0 when the command is a Codex patch handed to the shell, which the
 # guards refuse (scripts/shell-patch.sh: shell_patch_host, then shell_patch_refused, which sets SHELL_PATCH_HIT).
 guard_shell_patch() {
   shell_patch_host "$1" && shell_patch_refused "$2"

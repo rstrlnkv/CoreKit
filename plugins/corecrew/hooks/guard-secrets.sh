@@ -71,8 +71,8 @@
 #   the Bash path fails open (silently); the file tools are still judged. If awk is there but fails, the
 #   hook fails closed when the command has a secret-looking string.
 # - Inert outside a project (<Core>/<project>/
-#   or its code folder beside the Core): cwd missing or not in a project -> exit 0 at once (so ~/.ssh is
-#   open when Claude works outside a project). No network, no git.
+#   or its code folder beside the Core): with the cwd missing or not in a project, every call passes (exit 0; so ~/.ssh
+#   is open when Claude works outside a project). No network, no git.
 #
 # Fail closed (the one hook that does): the input is odd when a path key the tool needs cannot be read
 # as a clean string (truncated JSON, a number, an array, an object, null, a key spelled with an escape);
@@ -91,14 +91,31 @@ in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 . "$SELF/scripts/guard-lib.sh" 2>/dev/null || exit 0   # TAB, guard_refuse, guard_lex, guard_patch, ...: both guards share them
 
-tool="$(json_str "$in" tool_name)"
+# The input is read once, for every key the hook may need (json_fields: one awk pass). The j_<key> values of the file
+# tools are read by name in the loop over $req and $opt below.
+# shellcheck disable=SC2034
+{ IFS= read -r -d '' tool; IFS= read -r -d '' cwd; IFS= read -r -d '' cmd; IFS= read -r -d '' j_file_path
+  IFS= read -r -d '' j_notebook_path; IFS= read -r -d '' j_path; IFS= read -r -d '' j_glob; IFS= read -r -d '' j_pattern
+  IFS= read -r -d '' turn_id
+} < <(json_fields "$in" tool_name cwd command file_path notebook_path path glob pattern turn_id)
 case "$tool" in Read|Edit|Write|NotebookEdit|Grep|Glob|apply_patch|Bash) ;; *) exit 0 ;; esac
-cwd="$(json_str "$in" cwd)"
 [ -n "$cwd" ] || exit 0
-load_settings
-project_of "$cwd" >/dev/null || exit 0
+
+# in_project — the project gate: secrets are judged only in a project, so outside one every call passes (exit 0).
+# load_settings runs before project_of, so a core_dir that lives only in the settings file counts. It runs right before
+# a refusal (die and the other exits 2 below), not first: a call with nothing secret-looking needs no settings. It loads
+# them once (load_settings is not idempotent: a symlinked core_dir becomes canonical); IN_PROJECT is never taken from the
+# environment, where it would switch the gate off.
+IN_PROJECT=""
+in_project() {
+  [ -n "$IN_PROJECT" ] && return 0
+  load_settings
+  project_of "$cwd" >/dev/null || exit 0
+  IN_PROJECT=1
+}
 
 die() {
+  in_project
   guard_refuse "$(msg secrets_blocked "$1")" "$(msg secrets_ask)"
 }
 
@@ -183,7 +200,7 @@ judge_patch() {
 
 # --- apply_patch (Codex): the paths written or moved are judged like a file tool's; a delete passes.
 if [ "$tool" = apply_patch ]; then
-  patch="$(json_str "$in" command)"
+  patch="$cmd"
   if [ -z "$patch" ]; then
     # no string to read (missing, empty, not a string): only the "***" header lines of the raw text count
     hit="$({ printf '%s' "$in"; } 2>/dev/null | sed 's/\\n/\
@@ -192,7 +209,7 @@ if [ "$tool" = apply_patch ]; then
   fi
   # the reader is missing or failed: nothing can be judged (a name may hide a TAB), refuse; ran with no output: pass
   guard_patch "$patch" judge_patch
-  case "$?" in 1) guard_refuse "$(msg patch_no_reader)" ;; 2) guard_refuse "$(msg patch_too_many 100)" ;; esac
+  case "$?" in 1) in_project; guard_refuse "$(msg patch_no_reader)" ;; 2) in_project; guard_refuse "$(msg patch_too_many 100)" ;; esac
   if [ -n "$PATCH_X" ]; then
     hit="$(printf '%s\n' "$patch" | LC_ALL=C grep -F '***' | raw_hit)" && die "$hit"
   fi
@@ -201,16 +218,16 @@ fi
 
 # --- Bash: the candidates found by one awk pass, judged here.
 if [ "$tool" = Bash ]; then
-  cmd="$(json_str "$in" command)"
   if [ -z "$cmd" ]; then
     hit="$({ printf '%s' "$in"; } 2>/dev/null | raw_hit)" && die "$hit"
     exit 0
   fi
   # A Codex patch handed to the shell is refused, in Codex only (see the header).
-  if guard_shell_patch "$in" "$cmd"; then guard_refuse "$(msg patch_shell "$SHELL_PATCH_HIT")"; fi
+  if guard_shell_patch "$turn_id" "$cmd"; then in_project; guard_refuse "$(msg patch_shell "$SHELL_PATCH_HIT")"; fi
   # Cheap exit: a secret path has a dot in it (.env, .ssh; quotes or a backslash in the name are
-  # removed by the lexer, so the raw text is not searched for ".env"). Everything else is lexed.
+  # removed by the lexer, so the raw text is not searched for ".env"). Everything else is lexed, in a project only.
   case "$cmd" in *.*) ;; *) exit 0 ;; esac
+  in_project
   [ -r "$SELF/scripts/bash-lex.awk" ] && [ -r "$SELF/scripts/bashlex-guard-secrets.awk" ] || exit 0
   targets="$(guard_lex bashlex-guard-secrets.awk "$cmd")"
   # awk itself failed: the command is unknown, so a secret-looking string in it is refused
@@ -240,7 +257,7 @@ esac
 hint=""
 printf '%s' "$in" 2>/dev/null | LC_ALL=C grep -qiE '\.env|\.ssh' && hint=1
 for key in $req $opt; do
-  v="$(json_str "$in" "$key")"
+  v="j_$key"; v="${!v}"
   if [ -n "$v" ]; then
     if is_secret "$v"; then die "$v"; fi
   fi
@@ -266,8 +283,8 @@ done
 # path and glob together: Grep path + glob, Glob path + pattern
 jp=""; jg=""
 case "$tool" in
-  Grep) jp="$(json_str "$in" path)"; jg="$(json_str "$in" glob)" ;;
-  Glob) jp="$(json_str "$in" path)"; jg="$(json_str "$in" pattern)" ;;
+  Grep) jp="$j_path"; jg="$j_glob" ;;
+  Glob) jp="$j_path"; jg="$j_pattern" ;;
 esac
 if [ -n "$jp" ] && [ -n "$jg" ]; then
   case "$jg" in "!"*|/*|"~"*|'$HOME'*|'${HOME}'*) ;; *)
