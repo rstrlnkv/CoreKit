@@ -15,7 +15,7 @@
 # "#" starts a comment; the term is matched as a whole word, ignoring case:
 #   name <term>       anywhere (full-name variants, user names)
 #   standard <term>   in plugins/*/skills, agents and reference (the owner's own standard files)
-#   archive <term>    outside docs/specs and docs/plans (names of old projects)
+#   archive <term>    anywhere (names of old projects)
 # Without the file these checks are skipped (a SKIP line).
 source "$(dirname "$0")/lib.sh"
 # The real Core must be found before new_sandbox swaps HOME and CORE_DIR. It is only read. Under run.sh, HOME is
@@ -31,9 +31,6 @@ new_sandbox
 SELF="tests/test_no_personal.sh"
 # Words that are also part of this repo's own vocabulary: never a "personal" project name.
 GENERIC='core corekit corecrew coremodel coreopinion test-coredev demo test tests example examples sample project projects code docs todo hello world'
-# Files that still cite the private spec; their streams remove the references (refactor plan, PUB-9).
-# Listed here they are skipped (a SKIP line); delete an entry once its file is clean.
-SPEC_PENDING=''
 
 # project_names <PROJECTS.md> — one name per line, from list items "- <name> — <purpose> — <path>".
 # Drops names under 4 characters and generic words. Names are only ever written to a file.
@@ -83,10 +80,7 @@ scan_repo() {
     [ "$rel" = "$SELF" ] && continue
     [ -f "$f" ] || continue
     is_binary "$f" && continue
-    case "$rel" in
-      docs/specs/*|docs/plans/*|CHANGELOG.md|plugins/*/CHANGELOG.md) ;;
-      *) lines 'absolute home path (/Users/, /home/ or C:\Users\)' "$rel" -iE '/Users/|/home/|[a-z]:[\\/]Users[\\/]' "$f" ;;
-    esac
+    lines 'absolute home path (/Users/, /home/ or C:\Users\)' "$rel" -iE '/Users/|/home/|[a-z]:[\\/]Users[\\/]' "$f"
     emails "$rel" "$f"
     case "$rel" in
       .claude-plugin/*.json|LICENSE|CHANGELOG.md|SECURITY.md|ARCHITECTURE.md|CONTRIBUTING.md|README.md|README.*.md|docs/*) ;;
@@ -95,10 +89,7 @@ scan_repo() {
     esac
     case "$rel" in
       docs/*) ;;
-      *) case " $SPEC_PENDING " in
-           *" $rel "*) ;;
-           *) lines "reference to the private spec" "$rel" -E 'spec section|spec §|spec D[0-9]' "$f" ;;
-         esac ;;
+      *) lines "reference to the private spec" "$rel" -E 'spec section|spec §|spec D[0-9]' "$f" ;;
     esac
     # a shipped file may not cite a private ADR ("ADR 009"); a template's "ADR 001" heading is the user's own record
     case "$rel" in
@@ -110,10 +101,7 @@ scan_repo() {
       plugins/*/skills/*|plugins/*/agents/*|plugins/*/reference/*)
         [ -s "$kind_file.standard" ] && lines "owner standard file name" "$rel" -iwF -f "$kind_file.standard" "$f" ;;
     esac
-    case "$rel" in
-      docs/specs/*|docs/plans/*) ;;
-      *) [ -s "$kind_file.archive" ] && lines "archive project name" "$rel" -iwF -f "$kind_file.archive" "$f" ;;
-    esac
+    [ -s "$kind_file.archive" ] && lines "archive project name" "$rel" -iwF -f "$kind_file.archive" "$f"
     case "$rel" in
       docs/*) ;;
       *) [ -s "$names" ] && lines "a project name from PROJECTS.md" "$rel" -iwF -f "$names" "$f" ;;
@@ -126,7 +114,7 @@ scan_repo() {
 # The handle and the terms are made up here; the real ones never appear in this file.
 R="$SANDBOX/repo"
 SK="$R/plugins/p/skills/s"
-mkdir -p "$R/docs/specs" "$R/docs/plans" "$SK" "$R/tests" "$R/.claude-plugin" "$R/skills/s"
+mkdir -p "$R/docs" "$SK" "$R/tests" "$R/.claude-plugin" "$R/skills/s"
 git -C "$R" init -q
 FT="$SANDBOX/fake-terms"
 printf '# fake terms\nname Quentin Zarbo\nname Zarbo\nstandard house-style.md\narchive Grimlock\n\n' > "$FT"
@@ -134,9 +122,7 @@ H=/Users; U="$H/someone/x"; V="/ho""me/someone"; W='C:\Users\someone'    # built
 printf 'path %s\n' "$U" > "$R/tests/leak-path.sh"          # hit: home path
 printf 'path %s\n' "$V" > "$SK/leak-home.md"               # hit: home path
 printf 'path %s\n' "$W" > "$SK/leak-win.md"                # hit: Windows home path
-printf 'path %s\n' "$U" > "$R/docs/specs/ok.md"            # allowed: specs
-printf 'path %s\n' "$U" > "$R/docs/plans/ok.md"            # allowed: plans
-printf 'path %s\n' "$U" > "$R/CHANGELOG.md"                # allowed: changelog
+printf 'path %s\n' "$U" > "$R/CHANGELOG.md"                # hit: a CHANGELOG is scanned too
 printf 'mail me@mail.test\n' > "$SK/mail.md"               # hit: email
 printf 'a@example.com git@github.com:x/y n@users.noreply.github.com noreply@vendor.test\n' > "$SK/mail-ok.md"   # allowed emails
 printf 'owner zhandle\n' > "$SK/handle.md"                 # hit: handle
@@ -153,7 +139,7 @@ mkdir -p "$R/plugins/p/.claude-plugin" "$R/plugins/p/.codex-plugin" "$R/plugins/
 printf '{"owner":"zhandle"}\n' > "$R/plugins/p/.claude-plugin/plugin.json"   # allowed: a plugin's manifest
 printf '{"owner":"zhandle"}\n' > "$R/plugins/p/.codex-plugin/plugin.json"   # allowed: a plugin's Codex manifest
 printf 'owner zhandle\n' > "$R/plugins/p/README.md"        # allowed: a plugin's README
-printf 'owner zhandle\n' > "$R/plugins/p/CHANGELOG.md"     # allowed: a plugin's CHANGELOG
+printf 'owner zhandle\npath %s\n' "$U" > "$R/plugins/p/CHANGELOG.md"   # handle allowed; line 2 hit: home path
 printf 'owner zhandle\n' > "$R/plugins/p/hooks/h.ts"       # hit: a plugin's code
 printf 'see spec section 4\n' > "$R/plugins/p/hooks/s.sh"  # hit: private spec
 printf 'see spec §4.2 and spec D17\n' > "$R/tests/spec.sh" # hit once: private spec
@@ -168,15 +154,16 @@ printf 'see house-style.md\n' > "$R/skills/s/std.md"       # fine: not the plugi
 printf 'see house-style.md\n' > "$R/docs/ok2.md"           # allowed: outside skills/agents/reference
 printf 'a Grimlock chart\n' > "$SK/old.md"                 # hit: archive name
 printf 'a grimlocked door\n' > "$SK/fine.md"               # fine: not a whole word
-printf 'Grimlock notes\n' > "$R/docs/plans/old.md"         # allowed: plans
-printf 'Grimlock game\n' > "$R/docs/ok3.md"                # hit: docs/ is not specs/plans
+printf 'Grimlock game\n' > "$R/docs/ok3.md"                # hit: docs/ too
 printf 'x\000%s\n' "$U" > "$SK/blob.bin"                   # skipped: binary
 printf 'path %s\n' "$U" > "$R/tests/a b.sh"                # hit: name with a space
 git -C "$R" add -A >/dev/null
 printf 'path %s\n' "$U" > "$R/untracked.sh"                # not tracked: not scanned
 hits="$(scan_repo "$R" "" zhandle "$FT" | LC_ALL=C sort)"
-want='docs/n.md:1: a personal name from the local terms list
+want='CHANGELOG.md:1: absolute home path (/Users/, /home/ or C:\Users\)
+docs/n.md:1: a personal name from the local terms list
 docs/ok3.md:1: archive project name
+plugins/p/CHANGELOG.md:2: absolute home path (/Users/, /home/ or C:\Users\)
 plugins/p/hooks/adr.sh:1: reference to a private ADR
 plugins/p/hooks/h.ts:1: owner handle outside manifests, READMEs, LICENSE, CHANGELOGs, SECURITY, ARCHITECTURE, CONTRIBUTING, docs
 plugins/p/hooks/n.sh:1: a personal name from the local terms list
@@ -239,11 +226,6 @@ if [ -f "$TERMS" ]; then
 else
   skip personal-terms "no tests/personal-terms.local"
 fi
-for f in $SPEC_PENDING; do
-  if [ -f "$ROOT/$f" ] && grep -qE 'spec section|spec §|spec D[0-9]' "$ROOT/$f"; then
-    skip "private-spec $f" "it still cites the private spec (pending, PUB-9)"
-  fi
-done
 scan_repo "$ROOT" "$SANDBOX/real-names" "$HANDLE" "$TERMS" > "$SANDBOX/real-hits"
 [ -s "$SANDBOX/real-hits" ] && fail "personal data in tracked files: $(tr '\n' ' ' < "$SANDBOX/real-hits")" || pass
 finish
