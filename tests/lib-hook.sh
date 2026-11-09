@@ -85,13 +85,19 @@ poll() { local n="$1"; shift; while ! "$@"; do [ "$n" -gt 0 ] || return 1; n=$((
 # <cwd> (request hooks/list). <out> gets the answer split before each hook: line 1 the head, then one line per hook
 # starting {"key":"<plugin>@<marketplace>:..., the last one followed by "warnings":[...],"errors":[...]; stderr goes to
 # <out>.err. Stdin stays open until the answer is written (polled, up to 10 s); 1 when none came.
+# No request leaves the machine: at start the app-server syncs the curated plugin list (git and HTTPS to GitHub and
+# chatgpt.com) whatever the flags say, so every proxy variable points at a closed local port (127.0.0.1:9) and each
+# request fails there. The featured-plugin prefetch is switched off, as cx does it. RUST_LOG=warn writes those failures to <out>.err, where a test can see which requests were tried.
 codex_hooks_list() {
   local raw="$2.raw"
   printf '%s\n' '{"id":1,"method":"initialize","params":{"clientInfo":{"name":"t","version":"1"}}}' '{"method":"initialized"}' \
     "{\"id\":2,\"method\":\"hooks/list\",\"params\":{\"cwds\":[\"$(json_esc "$1")\"]}}" > "$2.req"
   : > "$raw"
   # shellcheck disable=SC2094  # the poll reads the answer codex writes, on purpose
-  (cat "$2.req"; poll 100 grep -q '"id":2' "$raw") | codex --disable remote_plugin app-server --listen stdio:// > "$raw" 2> "$2.err"
+  (cat "$2.req"; poll 100 grep -q '"id":2' "$raw") | env RUST_LOG=warn NO_PROXY= no_proxy= \
+    HTTPS_PROXY=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9 ALL_PROXY=http://127.0.0.1:9 \
+    https_proxy=http://127.0.0.1:9 http_proxy=http://127.0.0.1:9 all_proxy=http://127.0.0.1:9 \
+    codex --disable remote_plugin --disable plugin_discovery_prefetch app-server --listen stdio:// > "$raw" 2> "$2.err"
   grep '"id":2' "$raw" | sed 's/{"key":/\
 &/g' > "$2"
   [ -s "$2" ]
