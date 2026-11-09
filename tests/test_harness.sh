@@ -156,6 +156,17 @@ assert_eq "$(caches)" "2" "another identity: a cache of its own"
 finish
 EOF
 one x_cache.sh; assert_eq "$RC" "0" "core cache: $OUT"
+# core_cache_key: the same inputs give the same key; each part of the key, changed alone, gives a new one
+K0="$(core_cache_key)"
+assert_eq "$(core_cache_key)" "$K0" "core_cache_key: the same inputs, the same key"
+key_differs() { [ -n "$2" ] && [ "$2" != "$K0" ] && pass || fail "core_cache_key ignores $1"; }
+key_differs "PATH" "$(PATH="$SANDBOX/fake git:$PATH" core_cache_key)"
+[ "$(umask)" = 0077 ] && U=022 || U=077
+key_differs "umask" "$(umask "$U"; core_cache_key)"
+key_differs "SCRIPTS" "$(SCRIPTS="$SANDBOX/other scripts" core_cache_key)"
+key_differs "a GIT_* variable" "$(export GIT_COMMITTER_DATE=2000-01-01T00:00:00; core_cache_key)"
+GC="$SANDBOX/global gitconfig"; printf '[init]\n\tdefaultBranch = a\n' > "$GC"; K0="$(GIT_CONFIG_GLOBAL="$GC" core_cache_key)"
+printf '[init]\n\tdefaultBranch = b\n' > "$GC"; key_differs "the global git config" "$(GIT_CONFIG_GLOBAL="$GC" core_cache_key)"
 chmod -R u+rwx "$RT"; rm -rf "$RT"; mkdir -p "$RT"
 
 # --- run.sh: a filter, one line with the time per file, quiet passing files, the skip list after the result
@@ -192,6 +203,19 @@ run nothing-matches; [ "$RC" != 0 ] && pass || fail "a filter that matches no fi
 run -j 4
 assert_eq "$RC" "1" "-j 4: exit 1"
 assert_eq "$(norm)" "$SERIAL" "-j 4 output equals the serial output"
+
+# -j N hands xargs the files largest first ("n file", ties by n), so a slow file does not start last. A logging xargs
+# ahead on PATH sees what run.sh feeds it; the alphabetical order and the sizes differ on purpose.
+XL="$SANDBOX/xargs log"; mkdir -p "$XL"
+printf '#!/bin/sh\ntee "%s/in" | "%s" "$@"\n' "$XL" "$(command -v xargs)" > "$XL/xargs"; chmod +x "$XL/xargs"
+pad() { awk -v n="$1" 'BEGIN { for (i = 0; i < n; i++) print "# pad" }'; }
+fake test_ord_a.sh 'pass; finish'
+fake test_ord_b.sh "$(pad 300; echo 'pass; finish')"
+fake test_ord_c.sh "$(pad 100; echo 'pass; finish')"
+OUT="$(cd "$T" && PATH="$XL:$PATH" TMPDIR="$RT" bash run.sh -j 2 ord 2>&1)"; RC=$?
+assert_eq "$RC" "0" "-j 2 ord: exit 0 :: $OUT"
+assert_eq "$(cat "$XL/in" 2>/dev/null)" "$(printf '2 test_ord_b.sh\n3 test_ord_c.sh\n1 test_ord_a.sh')" "-j: the largest file first"
+rm -f "$T"/test_ord_*.sh
 
 # one throwaway root (TEST-3): HOME, XDG, CODEX_HOME, git config and TMPDIR under it, each file its own, removed at the end
 run env
@@ -231,6 +255,7 @@ chmod -R u+rwx "$RT"; rm -rf "$RT"
 # --- snap_tree: two snapshots with no change are identical; each change below alters the snapshot, and undoing it
 # gives the first snapshot back. The repo is nested, as a code repo sits under a sandbox.
 S="$SANDBOX/snap"; G="$S/a repo"; mkdir -p "$G/sub"
+echo one > "$S/plain"   # outside any repo: only the file sums see its content
 git init -q "$G"; echo one > "$G/f"; ln -s f "$G/l"; printf 'ign\n' > "$G/.gitignore"; ln -s f "$G/ign"
 git -C "$G" add -A; git -C "$G" commit -q -m one
 echo two > "$G/f"; git -C "$G" commit -q -am two
@@ -251,6 +276,8 @@ C="$(git -C "$G" commit-tree "$H0^{tree}" -p "$H0" -m same)"
 changed "HEAD moved to a commit of the same tree" 'git -C "$G" reset -q --soft "$C"' 'git -C "$G" reset -q --soft "$H0"'
 changed "an index-only change" 'git -C "$G" rm -q --cached f' 'git -C "$G" add f'
 changed "an empty folder" 'mkdir "$S/empty"' 'rmdir "$S/empty"'
+# the same size, the same path, no repo: only the file sums (tree_sum) see a change of content
+changed "the content of a file outside a repo" 'echo two > "$S/plain"' 'echo one > "$S/plain"'
 changed ".git/REVERT_HEAD" 'git -C "$G" rev-parse HEAD > "$G/.git/REVERT_HEAD"' 'rm "$G/.git/REVERT_HEAD"'
 changed ".git/index.lock" ': > "$G/.git/index.lock"' 'rm "$G/.git/index.lock"'
 # shellcheck disable=SC2034  # read in the eval string of changed

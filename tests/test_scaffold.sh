@@ -325,6 +325,32 @@ echo "$OUT" | grep -qxF 'created README.md' && pass || fail "setup-core did not 
 left="$(find "$CORE_DIR" "$SANDBOX/dots" -name '*.tmp.*' -print)"
 [ -z "$left" ] && pass || fail "temp files left after writing through a link: $left"
 
+# --- a link loop at a destination (README.md -> README.md) and a chain of more than 16 links: setup-core exits 1,
+# names the file, and changes nothing; a rerun after the link is fixed creates the page. A chain of 16 links works.
+new_sandbox; setup_core
+rm "$CORE_DIR/README.md"; ln -s README.md "$CORE_DIR/README.md"
+# chain <n> — README.md and the links of $SANDBOX/chain: <n> links in all, the last one pointing to nothing
+chain() {
+  local i=1; rm -rf "$SANDBOX/chain" "$CORE_DIR/README.md"; mkdir -p "$SANDBOX/chain"
+  ln -s "$SANDBOX/chain/1" "$CORE_DIR/README.md"
+  while [ "$i" -lt "$1" ]; do ln -s "$SANDBOX/chain/$((i + 1))" "$SANDBOX/chain/$i"; i=$((i + 1)); done
+}
+# bad_link <label> — setup-core refuses the link at README.md with a message that names it and changes nothing
+bad_link() {
+  local before; before="$(snap_tree "$CORE_DIR" "$SANDBOX/chain")"
+  assert_exit 1 bash "$SCRIPTS/setup-core.sh" "$CORE_DIR"
+  echo "$OUT" | grep -qF "$CORE_DIR/README.md" && pass || fail "$1: the message does not name README.md: $OUT"
+  assert_eq "$(snap_tree "$CORE_DIR" "$SANDBOX/chain")" "$before" "$1: setup-core changed something"
+}
+bad_link "a link loop"
+chain 17; bad_link "a chain of 17 links"
+chain 16
+assert_exit 0 bash "$SCRIPTS/setup-core.sh" "$CORE_DIR"
+[ -s "$SANDBOX/chain/16" ] && pass || fail "a chain of 16 links: the page was not written at its end: $OUT"
+rm -rf "$SANDBOX/chain" "$CORE_DIR/README.md"
+assert_exit 0 bash "$SCRIPTS/setup-core.sh" "$CORE_DIR"
+echo "$OUT" | grep -qxF 'created README.md' && pass || fail "the rerun after the fix did not create README.md: $OUT"
+
 # the wiki has one place for all worktrees: <Core>/<p>/docs/, which the task skill updates from a
 # worktree too (no "never edit ../docs/ from a worktree" that contradicts it)
 T="$PLUGIN/templates/CLAUDE.md.tmpl"
