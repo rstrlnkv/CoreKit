@@ -27,7 +27,6 @@ check standard-bad-section.md "check-standard: missing section Why"
 check standard-bad-order.md "check-standard: sections out of order"
 check standard-bad-nocheck.md "check-standard: rule 2 has no check
 check-standard: check 3 is malformed (want \"<command> → <expected>\" or \"no guard — <risk>\")"
-check standard-bad-long.md "check-standard: over 120 lines"
 
 # Usage errors are exit 2, never "green".
 assert_exit 2 bash "$C"
@@ -58,6 +57,11 @@ assert_eq "$OUT" "check-standard: missing section Exceptions" "fenced heading ig
 { cat "$FX/standard-good.md"; i=0; while [ $i -lt 92 ]; do echo "- l$i"; i=$((i+1)); done; } > "$E/l120.md"
 assert_eq "$(wc -l < "$E/l120.md" | tr -d ' ')" 120 "fixture length"
 assert_exit 0 bash "$C" "$E/l120.md"
+# 121 lines is one too many.
+{ cat "$FX/standard-good.md"; i=0; while [ $i -lt 93 ]; do echo "- l$i"; i=$((i+1)); done; } > "$E/l121.md"
+assert_eq "$(wc -l < "$E/l121.md" | tr -d ' ')" 121 "fixture length"
+assert_exit 1 bash "$C" "$E/l121.md"
+assert_eq "$OUT" "check-standard: over 120 lines" "l121 output"
 # All seven roles are accepted.
 sed 's/^applies-to:.*/applies-to: [engineer, tester, security, verifier, localizer, designer, release]/' \
   "$FX/standard-good.md" > "$E/roles.md"
