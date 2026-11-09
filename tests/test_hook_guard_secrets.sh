@@ -748,33 +748,27 @@ sec_codex() {
   patch "$B${nl}$(printf '\343\200\200')*** Add File: .env${nl}+x${nl}$E"; blocked "codex U+3000-indented header" ".env"
   patch "$B${nl}*** Add File: a${nl}+x${nl}$(printf '\302\240')*** Add File: .env${nl}$E"; blocked "codex NBSP header after an Add body" ".env"
   patch "$B${nl}*** Add File: src/a.swift${nl}+x${nl}junk *** Add File: .env${nl}$E"; blocked "codex junk before a .env header (X)" ".env"
-  # A patch handed to the shell is refused with one message (each of these was a bypass of the old judging)
-  local SM="corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked" P
+  # A patch handed to the shell is refused with one message. Both hooks call the same function in one line
+  # (scripts/shell-patch.sh); its cases are in test_shell_patch.sh and the hook-level matrix (both hooks, both cwds,
+  # both hosts) in test_shell_patch_exec.sh.
+  local SM="corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked" c
   refused() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; case "$ERR" in "$SM"*) pass ;; *) fail "$1: message: $ERR" ;; esac; }
   fx pre-bash-applypatch-heredoc; refused "codex Bash apply_patch heredoc"
   fx pre-bash-applypatch-quotedarg; refused "codex Bash apply_patch quoted arg"
   fx pre-bash-applypatch-cd; refused "codex Bash cd sub && apply_patch"
   patch "apply_patch <<'EOF'${nl}$B${nl}*** Add File: .env${nl}+k${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash heredoc apply_patch .env"
   patch "apply_patch <<'EOF'${nl}$B${nl}*** Add File: src/a.swift${nl}+k${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash a harmless heredoc patch"
-  for P in "cd sub && " "cd . && " "cd - && " "cd nonexistent; " "( cd sub ); " "popd; " "cd ~/.ssh && " "cd \$OLDPWD && " "echo cd; "; do
-    patch "${P}apply_patch <<'EOF'${nl}$B${nl}*** Add File: authorized_keys${nl}+k${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash prefix [$P]"
-  done
-  for P in ".e''nv" "\$X" "\$(printf .e)nv" '.e${Z}nv' '`echo .env`' '.e\nv'; do
-    patch "X=.env; apply_patch <<EOF${nl}$B${nl}*** Add File: $P${nl}+x${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash unquoted heredoc, path $P"
-  done
-  patch "apply_patch <<EOF${nl}$B${nl}*** Add File: src/a${nl}\$(printf '*** Add File: .env')${nl}${E}${nl}EOF" "$C" Bash; refused "codex Bash \$(...) in a heredoc body forging a header"
-  patch "apply_patch \$'$B\\n*** Add File: .env\\n+x\\n$E'" "$C" Bash; refused "codex Bash one-line patch naming .env"
-  patch "printf '%s\\n' '$B' '*** Add File: .env' '+x' '$E' | apply_patch" "$C" Bash; refused "codex Bash printf-piped patch naming .env"
-  patch "cat p.txt | apply_patch" "$C" Bash; refused "codex Bash cat p.txt | apply_patch"
-  patch "echo '*** Begin Pat''ch' | apply_patch" "$C" Bash; refused "codex Bash quote-split Begin Patch into apply_patch"
-  for P in applypatch apply-patch /usr/local/bin/apply_patch "sudo apply_patch" "xargs apply_patch" "alias ap=apply_patch; ap" "F=apply_patch; \$F" "bash -c apply_patch"; do
-    patch "$P <<'EOF'${nl}x${nl}EOF" "$C" Bash; refused "codex Bash spelling [$P]"
-  done
-  patch "git commit -m \"$B${nl}*** Add File: .env\"" "$C" Bash; ok "a multi-line commit message that quotes a patch header is quoted text and passes"
+  patch "apply_patch <<'EOF'${nl}$B${nl}*** Add File: .env${nl}+k${nl}${E}${nl}EOF" "$SANDBOX/elsewhere" Bash; ok "codex Bash heredoc apply_patch outside a project: inert"
   bigjson 5000 Bash; run_json "$(<"$OD/big.json")"; refused "codex Bash 5000 paths are refused as a shell patch"
-  # twins: talking about apply_patch or a patch, and reading, is not applying one
-  for P in "grep -rn apply_patch src" "rg 'apply_patch' tests" "rg '\\*\\*\\* Begin Patch' tests" "git log --grep=apply_patch" "git commit -m \"fix apply_patch docs\"" "git commit -m \"apply_patch notes: .env.example is fine\"" "echo '$B' | wc -l" "cat src/a.swift" "ls apply_patch_notes"; do
-    patch "$P" "$C" Bash; ok "codex Bash twin [$P] passes"
+  # everyday commands pass in both hosts (a wildcard argument is no command); the input shapes of Claude Code and Codex
+  local everyday=( 'wc -l a/* b/* 2>/dev/null | tail -1' 'cd x && ls scripts/* && cat .claude-plugin/marketplace.json' \
+    'rm -rf dist/* && npm run build' 'cp assets/* public/' 'chmod +x bin/*' \
+    "cat > f.js <<'EOF'${nl}const y = a * b;${nl}EOF${nl}node f.js" \
+    "git commit -m \"\$(cat <<'EOF'${nl}Fix things${nl}${nl}* bullet one${nl}* bullet two${nl}EOF${nl})\"" \
+    "gh pr create --title x --body \"\$(cat <<'EOF'${nl}## Summary${nl}* item${nl}EOF${nl})\"" )
+  for c in "${everyday[@]}"; do
+    run_bash "$c"; ok "claude Bash [$c] passes"
+    patch "$c" "$C" Bash; ok "codex Bash [$c] passes"
   done
   # the apply_patch TOOL still edits src/ files
   patch "$B${nl}*** Update File: src/a.swift${nl}@@${nl}-a${nl}+b${nl}*** Add File: src/b.swift${nl}+x${nl}$E"; ok "codex apply_patch tool on src/ files passes"
@@ -798,40 +792,6 @@ sec_settings_only() {
   [ "$RC" = 0 ] && pass || fail "settings-only core_dir: reader twin rc=$RC"
 }
 bg sec_settings_only
-
-# --- the shell-patch refusal runs only in Codex (install path, or Codex's turn_id in the input); in Claude Code everyday
-# glob commands and the word apply_patch pass, in a project and outside; in Codex wildcard arguments pass and real
-# shell patches are refused with the match named
-sec_host_gate() {
-  local O="$OD/not a project" c h nl=$'\n'
-  local SM="corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked"
-  mkdir -p "$O"
-  cl() { run_json "$(printf '{"session_id":"s","transcript_path":"/t.jsonl","cwd":"%s","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"},"tool_use_id":"toolu_1"}' "$2" "$(jesc "$1")")"; }
-  cx() { run_json "$(printf '{"session_id":"s","turn_id":"turn-1","transcript_path":null,"cwd":"%s","hook_event_name":"PreToolUse","model":"gpt-5","permission_mode":"default","tool_name":"Bash","tool_input":{"command":"%s"},"tool_use_id":"call_1"}' "$2" "$(jesc "$1")")"; }
-  named() {
-    assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"
-    case "$ERR" in "$SM"*"$2"*) pass ;; *) fail "$1: message lacks the refusal or [$2]: $ERR" ;; esac
-  }
-  local everyday=( 'wc -l a/* b/* 2>/dev/null | tail -1' 'cd x && ls scripts/* && cat .claude-plugin/marketplace.json' \
-    'rm -rf dist/* && npm run build' 'cp assets/* public/' 'chmod +x bin/*' \
-    "cat > f.js <<'EOF'${nl}const y = a * b;${nl}EOF${nl}node f.js" \
-    "git commit -m \"\$(cat <<'EOF'${nl}Fix things${nl}${nl}* bullet one${nl}* bullet two${nl}EOF${nl})\"" \
-    "gh pr create --title x --body \"\$(cat <<'EOF'${nl}## Summary${nl}* item${nl}EOF${nl})\"" )
-  for c in "${everyday[@]}"; do
-    for h in "$O" "$C"; do
-      cl "$c" "$h"; ok "claude Bash [$c] in $h passes"
-      cx "$c" "$h"; ok "codex Bash [$c] in $h passes"
-    done
-  done
-  for c in 'cd src && grep -rn apply_patch .' 'apply_patch x' 'cat p | apply_patch'; do
-    cl "$c" "$C"; ok "claude Bash [$c] in a project passes"
-  done
-  cx "apply_patch <<'EOF'${nl}*** Begin Patch${nl}*** Add File: .env${nl}+k${nl}*** End Patch${nl}EOF" "$C"; named "codex heredoc apply_patch" "apply_patch"
-  cx 'cd bin && ./app*y_patch x' "$C"; named "codex glob command" "./app*y_patch"
-  cx 'ls; * x' "$C"; named "codex bare wildcard as a command" "*"
-  COREKIT_HOST=codex cl 'cat p | apply_patch' "$C"; named "host codex without turn_id" "apply_patch"
-}
-bg sec_host_gate
 
 
 # Bash: quotes and backslashes inside a secret name, globs, wrapper options, zip -x, HOME unset, a core_dir that is

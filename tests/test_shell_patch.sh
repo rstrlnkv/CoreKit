@@ -395,6 +395,65 @@ done
 passes "find . -name apply_patch -print" "find -name apply_patch"
 passes "find . -iname 'apply_patch*'" "find -iname quoted glob"
 
+# --- shell_patch_host: the refusal runs in Codex only, where the plugin lies under CODEX_HOME (COREKIT_HOST stands in for
+# it) or the hook input carries Codex's turn_id. A raw input on purpose: these cases test the reading of turn_id.
+cl_in='{"session_id":"s","transcript_path":"/t.jsonl","cwd":"/p","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"apply_patch"},"tool_use_id":"toolu_1"}'
+cx_in='{"session_id":"s","turn_id":"turn-1","transcript_path":null,"cwd":"/p","hook_event_name":"PreToolUse","model":"gpt-5","permission_mode":"default","tool_name":"Bash","tool_input":{"command":"apply_patch"},"tool_use_id":"call_1"}'
+( unset COREKIT_HOST; shell_patch_host "$cl_in" ) && fail "shell_patch_host: Claude Code's input, no host set: Codex" || pass
+( unset COREKIT_HOST; shell_patch_host "$cx_in" ) && pass || fail "shell_patch_host: Codex's turn_id, no host set: not Codex"
+( export COREKIT_HOST=claude; shell_patch_host "$cl_in" ) && fail "shell_patch_host: COREKIT_HOST=claude, Claude Code's input: Codex" || pass
+( export COREKIT_HOST=claude; shell_patch_host "$cx_in" ) && pass || fail "shell_patch_host: the turn_id says Codex even when the host does not"
+( export COREKIT_HOST=codex; shell_patch_host "$cl_in" ) && pass || fail "shell_patch_host: COREKIT_HOST=codex, Claude Code's input: not Codex"
+( export COREKIT_HOST=codex; shell_patch_host "$cx_in" ) && pass || fail "shell_patch_host: COREKIT_HOST=codex, Codex's input: not Codex"
+( unset COREKIT_HOST; shell_patch_host '{"session_id":"s","cwd":"/p","tool_input":{"command":"x \"turn_id\":\"t\""}}' ) \
+  && fail "shell_patch_host: a turn_id inside the command is read as the input's" || pass
+( unset COREKIT_HOST; shell_patch_host '' ) && fail "shell_patch_host: no input: Codex" || pass
+
+# --- everyday commands pass in Codex: a wildcard argument is no command (the list the guard files ran at hook level)
+for c in 'wc -l a/* b/* 2>/dev/null | tail -1' 'cd x && ls scripts/* && cat .claude-plugin/marketplace.json' \
+  'rm -rf dist/* && npm run build' 'cp assets/* public/' 'chmod +x bin/*' 'du -sh * | sort -h' \
+  "cat > f.js <<'EOF'${nl}const y = a * b;${nl}console.log(\"*\", 'it''s');${nl}EOF${nl}node f.js" \
+  "cat > f.js <<'EOF'${nl}const y = a * b;${nl}EOF${nl}node f.js" \
+  "git commit -m \"\$(cat <<'EOF'${nl}Fix things${nl}${nl}* bullet one${nl}* bullet two${nl}EOF${nl})\"" \
+  "gh pr create --title x --body \"\$(cat <<'EOF'${nl}## Summary${nl}* item${nl}EOF${nl})\"" \
+  "case \"\$a\" in${nl}  *.md) echo md ;;${nl}  *) echo other ;;${nl}esac" 'echo $(( $(wc -l < f) * 2 ))'; do
+  passes "$c" "an everyday command in Codex"
+done
+
+# --- the shell patches the guard files once ran in each hook (both hooks call shell_patch_refused in one line; the
+# hook-level matrix is in test_shell_patch_exec.sh): a prefix, a path the shell builds, a spelling, a reader twin
+B='*** Begin Patch'; E='*** End Patch'; D=docs/a.md
+for P in "cd src && " "cd . && " "cd && " "cd \$X && " "cd - && " "cd nonexistent; " "( cd src ); " "popd; " "pushd src && " \
+  "cd \$OLDPWD && " "echo cd; " "git log --grep='cd'; " "cd ~/.ssh && "; do
+  refused "${P}apply_patch <<'EOF'${nl}$B${nl}*** Add File: $D${nl}+x${nl}${E}${nl}EOF" "a prefix [$P]"
+done
+for P in "do''cs/a.md" "\$X" "\$(printf docs)/a.md" 'd${Z}ocs/a.md' '`echo docs`/a.md' 'docs\/a.md' \
+  ".e''nv" "\$(printf .e)nv" '.e${Z}nv' '`echo .env`' '.e\nv'; do
+  refused "X=docs; apply_patch <<EOF${nl}$B${nl}*** Add File: $P${nl}+x${nl}${E}${nl}EOF" "an unquoted heredoc, path $P"
+done
+for P in applypatch apply-patch /usr/local/bin/apply_patch "sudo apply_patch" "env X=1 apply_patch" "FOO=1 apply_patch" \
+  "time apply_patch" "command apply_patch" "xargs apply_patch" "xargs -0 -n1 apply_patch" "alias ap=apply_patch; ap" \
+  "F=apply_patch; \$F" "eval apply_patch" "bash -c apply_patch" "sh -c 'cat p | apply_patch'"; do
+  refused "$P <<'EOF'${nl}x${nl}EOF" "a spelling [$P]"
+done
+for c in "apply_patch <<'EOF'${nl}$B${nl}*** Add File: ~/$D${nl}+x${nl}${E}${nl}EOF" "cd /p/code && apply_patch <<'EOF'${nl}x${nl}EOF" \
+  "c''d /p/code && apply_patch" "env -C /p/code apply_patch" "apply_patch \"\$(cat p)\"" "/p/code/bin/apply_patch" \
+  "apply_patch <<EOF${nl}$B${nl}*** Add File: src/a${nl}\$(printf '*** Add File: $D')${nl}${E}${nl}EOF" \
+  "apply_patch \$'$B\\n*** Add File: CLAUDE.md\\n+x\\n$E'" "printf '%s\\n' '$B' '*** Add File: $D' '+x' '$E' | apply_patch" \
+  "printf '%s\\n' '$B' '*** Add File: src/a.swift' '+x' '$E' | apply_patch" \
+  "apply_patch \"\$(printf '$B\\n*** Add File: .claude/rules/x.md\\n$E')\"" "apply_patch \"\$(cat p.txt)\"" "apply_patch < p.txt" \
+  "echo '*** Begin Pat''ch' | apply_patch" "cat > src/fixture.txt <<'EOF'${nl}$B${nl}*** Add File: $D${nl}$E${nl}EOF" \
+  "cat > src/fixture.txt <<'EOF'${nl}$B${nl}*** Add File: $D${nl}$E${nl}EOF${nl}sh src/fixture.txt" \
+  'echo apply_patch > src/notes.txt' 'sed s/a/apply_patch/ f' 'git -c core.x=1 log --grep=apply_patch'; do
+  refused "$c" "a shell patch the guards refused"
+done
+for c in "grep -rn apply_patch src" "grep -rn apply_patch src | head" "rg 'apply_patch' tests" "rg '\\*\\*\\* Begin Patch' tests" \
+  "git log --grep apply-patch" "git commit -m \"fix apply_patch docs\"" "git commit -m 'applypatch: Begin Patch notes'" \
+  "git commit -m \"apply_patch notes: .env.example is fine\"" "echo '$B' | wc -l" "ls apply_patch_notes" \
+  "git commit -m \"$B${nl}*** Add File: src/a.swift\"" "git commit -m \"$B${nl}*** Add File: .env\""; do
+  passes "$c" "a reader twin the guards passed"
+done
+
 # --- the rule needs no file of the plugin
 SELF="$SANDBOX/nowhere"
 refused 'apply_patch' "no scripts dir: bare word"

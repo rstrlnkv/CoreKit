@@ -15,10 +15,10 @@ chmod +x "$BIN/apply_patch"
 ( cd "$W" && git init -q . && git config user.email t@t && git config user.name t \
   && printf 'one\n' > f.txt && git add f.txt && git commit -qm "apply_patch note" ) >/dev/null 2>&1
 
-json() { # json <cmd> [claude] — a Codex Bash PreToolUse event (turn_id) with the command escaped; "claude": Claude Code's shape
+json() { # json <cmd> [claude] [cwd] — a Codex Bash PreToolUse event (turn_id) with the command escaped; "claude": Claude Code's shape
   local c t='"turn_id":"turn-1",'; c="$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | LC_ALL=C awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }')"
   [ "${2:-}" = claude ] && t=""
-  printf '{"session_id":"s",%s"cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"}}' "$t" "$CORE_DIR/p/code" "$c"
+  printf '{"session_id":"s",%s"cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"}}' "$t" "${3:-$CORE_DIR/p/code}" "$c"
 }
 hook_rc() { json "$2" "${3:-}" | bash "$HOOKS/$1" >/dev/null 2>&1; echo $?; }
 ran_fake() { # ran_fake <cmd> — run it for real with the fake first on PATH; 0 when the fake started
@@ -146,6 +146,57 @@ for c in "apply_patch x" "${bypass[0]}" "cd $BIN && ./app*y_patch x" 'rm -rf dis
   for h in guard-code.sh guard-secrets.sh; do
     rc="$(hook_rc "$h" "$c" claude)"
     [ "$rc" = 0 ] && pass || fail "claude $h rc=$rc (want 0) for: ${c:0:120}"
+  done
+done
+# --- the host gate (scripts/shell-patch.sh shell_patch_host), through both hooks, outside a project and inside one: the
+# refusal runs only in Codex, where the plugin lies under CODEX_HOME (COREKIT_HOST stands in for it) or the input
+# carries Codex's turn_id. Claude Code has no apply_patch tool, so there everyday glob commands, and even the word
+# apply_patch, pass. In Codex a wildcard argument passes, and a real shell patch is refused with the match named
+# (guard-secrets only inside a project: outside one it judges nothing).
+C="$CORE_DIR/p/code"; O="$SANDBOX/not a project"; mkdir -p "$O"
+SM="corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked"
+gate() { # gate <hook> <cmd> <cwd> [claude] — RC, OUT, ERR; SIGPIPE ignored, as GitHub's runners often start a hook
+  ( trap '' PIPE; json "$2" "${4:-}" "$3" | bash "$HOOKS/$1" ) >"$SANDBOX/out" 2>"$SANDBOX/err"; RC=$?
+  OUT="$(<"$SANDBOX/out")"; ERR="$(<"$SANDBOX/err")"
+}
+gate_ok() { assert_eq "$RC" "0" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_eq "$ERR" "" "$1: stderr"; }
+gate_named() { # gate_named <label> <match> — exit 2, the message starts with the refusal and names the match
+  assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"
+  case "$ERR" in "$SM"*) pass ;; *) fail "$1: message: $ERR" ;; esac
+  case "$ERR" in *"$2"*) pass ;; *) fail "$1: the message does not name [$2]: $ERR" ;; esac
+}
+everyday=( 'wc -l a/* b/* 2>/dev/null | tail -1' 'cd x && ls scripts/* && cat .claude-plugin/marketplace.json' \
+  'rm -rf dist/* && npm run build' 'cp assets/* public/' 'chmod +x bin/*' 'du -sh * | sort -h' \
+  "cat > f.js <<'EOF'${nl}const y = a * b;${nl}console.log(\"*\", 'it''s');${nl}EOF${nl}node f.js" \
+  "cat > f.js <<'EOF'${nl}const y = a * b;${nl}EOF${nl}node f.js" \
+  "git commit -m \"\$(cat <<'EOF'${nl}Fix things${nl}${nl}* bullet one${nl}* bullet two${nl}EOF${nl})\"" \
+  "gh pr create --title x --body \"\$(cat <<'EOF'${nl}## Summary${nl}* item${nl}EOF${nl})\"" \
+  "case \"\$a\" in${nl}  *.md) echo md ;;${nl}  *) echo other ;;${nl}esac" 'echo $(( $(wc -l < f) * 2 ))' )
+# Claude Code: the word, and a shell line that would run a program named apply_patch, are the person's own business
+claude_pass=( 'cd src && grep -rn apply_patch .' 'echo apply_patch > notes.txt' 'apply_patch x' '../bin/apply_pat?h x' 'cat p | apply_patch' )
+# Codex: <command> and the match its refusal names
+codex_named=( "apply_patch <<'EOF'${nl}*** Begin Patch${nl}*** Add File: src/a${nl}+x${nl}*** End Patch${nl}EOF" apply_patch \
+  "apply_patch <<'EOF'${nl}*** Begin Patch${nl}*** Add File: .env${nl}+k${nl}*** End Patch${nl}EOF" apply_patch \
+  'cd bin && ./app*y_patch x' './app*y_patch' 'ls && * x' '*' 'ls; * x' '*' \
+  'sudo ../bin/apply_pat?h x 2>/dev/null' '../bin/apply_pat?h' "bash <<EOF${nl}cd src && apply_patch x${nl}EOF" apply_patch )
+for h in guard-code.sh guard-secrets.sh; do
+  for d in "$O" "$C"; do
+    for c in "${everyday[@]}"; do
+      gate "$h" "$c" "$d" claude; gate_ok "$h: claude Bash [$c] in $d passes"
+      gate "$h" "$c" "$d"; gate_ok "$h: codex Bash [$c] in $d passes (a wildcard argument is no command)"
+    done
+    for c in "${claude_pass[@]}"; do gate "$h" "$c" "$d" claude; gate_ok "$h: claude Bash [$c] in $d passes"; done
+    # gate_refused <label> <match> — guard-code refuses in every folder; guard-secrets is inert outside a project
+    gate_refused() { if [ "$h$d" = "guard-secrets.sh$O" ]; then gate_ok "$1: guard-secrets is inert outside a project"; else gate_named "$@"; fi; }
+    i=0
+    while [ $i -lt ${#codex_named[@]} ]; do
+      gate "$h" "${codex_named[$i]}" "$d"; gate_refused "$h: codex Bash [${codex_named[$i]}] in $d" "${codex_named[$((i + 1))]}"
+      i=$((i + 2))
+    done
+    # the install path alone says Codex (COREKIT_HOST stands in for it): a Claude-shaped input is refused there too
+    COREKIT_HOST=codex gate "$h" 'cat p | apply_patch' "$d" claude; gate_refused "$h: host codex without turn_id in $d" "apply_patch"
+    COREKIT_HOST=claude gate "$h" 'cat p | apply_patch' "$d" claude; gate_ok "$h: host claude without turn_id in $d passes"
+    COREKIT_HOST=claude gate "$h" 'cat p | apply_patch' "$d"; gate_refused "$h: turn_id says Codex even when the path does not, in $d" "apply_patch"
   done
 done
 finish
