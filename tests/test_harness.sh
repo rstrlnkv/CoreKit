@@ -48,6 +48,28 @@ OUT="$(cd "$T" && KEEP_SANDBOX=1 TMPDIR="$RT" bash x_sb1.sh 2>&1)"
 assert_eq "$(left)" "1" "KEEP_SANDBOX=1 keeps the sandboxes"; has "kept:" "KEEP_SANDBOX=1"
 chmod -R u+rwx "$RT"; rm -rf "$RT"; mkdir -p "$RT"
 
+# --- at_exit: a file's own cleanup runs from lib.sh's one EXIT trap, in order, after finish or a plain exit (whose
+# code stays); the sandboxes are still removed, or kept under KEEP_SANDBOX=1; the fake runs are stopped
+export AT_MARK="$SANDBOX/at-ran"
+fake x_at.sh 'new_sandbox; at_exit "echo one >> \"\$AT_MARK\""; at_exit "echo two >> \"\$AT_MARK\""; pass; finish'
+rm -f "$AT_MARK"; one x_at.sh
+assert_eq "$RC" "0" "at_exit: exit 0"; assert_eq "$(tr '\n' ' ' < "$AT_MARK" 2>/dev/null)" "one two " "at_exit: both commands ran, in order"
+assert_eq "$(left)" "0" "at_exit: sandbox left after finish"
+fake x_at2.sh 'new_sandbox; at_exit "echo ran >> \"\$AT_MARK\""; exit 3'
+rm -f "$AT_MARK"; one x_at2.sh
+assert_eq "$RC" "3" "at_exit: a plain exit keeps its code"; assert_eq "$(cat "$AT_MARK" 2>/dev/null)" "ran" "at_exit: ran after a plain exit"
+assert_eq "$(left)" "0" "at_exit: sandbox left after a plain exit"
+rm -f "$AT_MARK"; OUT="$(cd "$T" && KEEP_SANDBOX=1 TMPDIR="$RT" bash x_at.sh 2>&1)"
+assert_eq "$(tr '\n' ' ' < "$AT_MARK" 2>/dev/null)" "one two " "at_exit under KEEP_SANDBOX=1: the cleanup ran"
+assert_eq "$(left)" "1" "at_exit under KEEP_SANDBOX=1: the sandbox is kept"; has "kept:" "at_exit under KEEP_SANDBOX=1"
+[ -n "$(find "$RT" -mindepth 2 -maxdepth 2 -name 'sb.*')" ] && pass || fail "at_exit under KEEP_SANDBOX=1: the kept folder holds no sb.*"
+chmod -R u+rwx "$RT"; rm -rf "$RT"; mkdir -p "$RT"
+fake x_fk.sh 'new_sandbox; fake "$SANDBOX" "harness-fake-run-$$"; echo "$FAKE_PID" > "$AT_MARK"; pass; exit 0'
+rm -f "$AT_MARK"; one x_fk.sh; fpid="$(cat "$AT_MARK" 2>/dev/null)"
+i=0; while [ -n "$fpid" ] && kill -0 "$fpid" 2>/dev/null && [ $i -lt 20 ]; do sleep 0.1; i=$((i + 1)); done
+[ -n "$fpid" ] && ! kill -0 "$fpid" 2>/dev/null && pass || { fail "a fake run outlived its file (pid ${fpid:-none})"; [ -z "$fpid" ] || kill "$fpid" 2>/dev/null; }
+assert_eq "$(left)" "0" "fake runs: sandbox left"
+
 # --- cpu_run, assert_linear and count_execs: speed is judged by CPU time, which load on the machine does not raise
 # cpu_run runs the command in this shell: what it sets (RC, OUT, ERR) and its exit code survive. CPU_MS counts the
 # children and the shell itself, not the time spent waiting.

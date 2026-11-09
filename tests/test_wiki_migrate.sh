@@ -47,7 +47,7 @@ WC="$SCRIPTS/wiki-check.sh"
 WI="$SCRIPTS/wiki-index.sh"
 # The fixtures keep CLAUDE.md as CLAUDE.md.in (a tracked CLAUDE.md is gitignored in this repo):
 # work on copies with the real name, outside the per-section sandboxes.
-FXT="$(mktemp -d "${TMPDIR:-/tmp}/wm-fixtures.XXXXXX")"; trap 'rm -rf "$FXT"' EXIT
+FXT="$(mktemp -d "${TMPDIR:-/tmp}/wm-fixtures.XXXXXX")"; at_exit 'rm -rf "$FXT"'
 cp -R "$ROOT/tests/fixtures/wiki-old" "$ROOT/tests/fixtures/wiki-old.expected" "$FXT/"
 for f in "$FXT"/*/CLAUDE.md.in; do mv "$f" "${f%.in}"; done
 FXO="$FXT/wiki-old"

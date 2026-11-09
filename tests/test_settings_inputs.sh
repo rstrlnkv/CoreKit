@@ -7,7 +7,6 @@
 #  - an empty HOME turns the default core_dir ~/Projects/Core into /Projects/Core at the filesystem root.
 source "$(dirname "$0")/lib.sh"
 new_sandbox
-trap 'rm -rf "$SANDBOX"' EXIT
 LIB="$SCRIPTS/lib.sh"
 unset CORE_DIR CLAUDE_PLUGIN_OPTION_CORE_DIR CLAUDE_PLUGIN_OPTION_ATTRIBUTION CLAUDE_PLUGIN_OPTION_MODEL_PROFILE CLAUDE_PLUGIN_OPTION_UI_LANGUAGE CORECREW_CONFIG
 export HOME="$SANDBOX/home"; mkdir -p "$HOME"

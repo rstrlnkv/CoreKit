@@ -5,7 +5,6 @@
 source "$(dirname "$0")/lib.sh"
 new_sandbox
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR COREKIT_HOST
-trap 'chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
 setup_core
 bash "$SKILL/scripts/scaffold.sh" --name edge >/dev/null
 PR="$(dirname "$CORE_DIR")"; C="$PR/edge"; P="$CORE_DIR/edge"

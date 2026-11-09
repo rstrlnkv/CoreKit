@@ -11,12 +11,12 @@
 source "$(dirname "$0")/lib.sh"
 new_sandbox
 # Processes are found by the pids the stub writes, never by name: another suite running at the same time has
-# stubs with the same command line. OURS holds the pids of a check in progress; the EXIT trap stops them, then
-# removes the sandboxes as lib.sh's own trap does.
+# stubs with the same command line. OURS holds the pids of a check in progress; they are stopped when the file exits
+# (at_exit, before lib.sh removes the sandboxes).
 OURS=""
 # shellcheck disable=SC2086  # a list of pids
 stop_ours() { [ -z "$OURS" ] || kill $OURS 2>/dev/null; OURS=""; }
-trap 'stop_ours; remove_sandboxes' EXIT
+at_exit stop_ours
 # poll <tenths> <cmd...> — runs cmd every 0.1 s until it succeeds, at most <tenths> more times; 1 when it never did
 poll() { local n="$1"; shift; while ! "$@"; do [ "$n" -gt 0 ] || return 1; n=$((n - 1)); sleep 0.1; done; }
 # gone <pid> — the process is not running (not a child of this shell: a child stays a zombie until waited for)

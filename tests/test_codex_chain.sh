@@ -2,7 +2,6 @@
 # Codex task chain (port task 4): lib.sh role-model, core-writable, tree-state, and the Codex docs of the task skill.
 source "$(dirname "$0")/lib.sh"
 new_sandbox
-trap 'chmod -R u+w "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
 LIB="$SCRIPTS/lib.sh"
 TASK="$PLUGIN/skills/task"
 

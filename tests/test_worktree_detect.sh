@@ -4,7 +4,6 @@
 source "$(dirname "$0")/lib.sh"
 new_sandbox
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
-trap 'chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
 setup_core
 bash "$SKILL/scripts/scaffold.sh" --name wtapp >/dev/null
 PR="$(dirname "$CORE_DIR")"; C="$PR/wtapp"
@@ -43,7 +42,6 @@ printf '{"session_id":"x","cwd":"%s","hook_event_name":"Stop","stop_hook_active"
 assert_eq "$?" "2" "stop-remind is active in the worktree"
 rm -f "$W/new.txt" "$W/.env"
 # one-suite: a run is on, a test command is refused in the worktree
-trap 'stop_fakes; chmod -R u+rwx "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
 FAKE="onesuite-fake-run-$$"; fake "$W" "$FAKE"; dummy=$FAKE_PID
 printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"swift test","description":"r"}}' "$W" \
   | ONE_SUITE_PROCS="$FAKE" ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0 ONE_SUITE_TURN="$SANDBOX/turn" bash "$HOOKS/one-suite.sh" >/dev/null 2>&1

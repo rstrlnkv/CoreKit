@@ -4,7 +4,6 @@
 # without `codex`.
 source "$(dirname "$0")/lib.sh"
 new_sandbox
-trap 'rm -rf "$SANDBOX"' EXIT
 FRAG="$SANDBOX/frag.toml"
 bash "$SCRIPTS/lib.sh" codex-profile > "$FRAG"; assert_eq "$?" "0" "codex-profile exits 0"
 # every non-comment line is blank, key = value or a [table]

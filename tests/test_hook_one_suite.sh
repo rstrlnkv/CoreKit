@@ -18,7 +18,7 @@ export ONE_SUITE_PROCS="$FAKE"
 export ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=0 ONE_SUITE_TURN="$SANDBOX/turn"
 dummy=""   # fake and stop (tests/lib.sh) start and end the fake runs
 PTMP="$(cd -P /tmp && pwd)"; NOTOWNED="$PTMP/onesuite-turn-$$"   # see "a state folder not owned by this user"
-trap 'stop_fakes; rm -rf "$NOTOWNED"' EXIT
+at_exit 'rm -rf "$NOTOWNED"'   # the fake runs are stopped by lib.sh's EXIT trap
 
 # payload <json-escaped command> [cwd] [description]
 payload() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"%s"}}' "${2-$C}" "$1" "${3:-run}"; }

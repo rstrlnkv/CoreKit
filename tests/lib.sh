@@ -34,6 +34,8 @@ assert_exit() {
 
 # Every sandbox of this file lives in one temp folder, removed when the file exits (by finish, or by the
 # EXIT trap when the file exits another way). KEEP_SANDBOX=1 keeps it and prints its path.
+# The EXIT trap is lib.sh's alone: it stops the fake runs, runs the file's at_exit commands, then removes the
+# sandboxes. A test file never sets its own EXIT trap (it would lose the kept sandbox): it calls at_exit.
 TEST_TMP="$(mktemp -d "${TMPDIR:-/tmp}/np-test.XXXXXX")" || { echo "lib.sh: cannot make a temp folder" >&2; exit 1; }
 TEST_TMP="$(cd -P "$TEST_TMP" && pwd)"
 remove_sandboxes() {
@@ -43,7 +45,16 @@ remove_sandboxes() {
   fi
   chmod -R u+rwx "$TEST_TMP" 2>/dev/null; rm -rf "$TEST_TMP"
 }
-trap remove_sandboxes EXIT
+# at_exit <command> — a command line (run with eval) for the file's own cleanup when it exits, after the earlier ones
+AT_EXIT=""
+at_exit() { AT_EXIT="$AT_EXIT$1
+"; }
+# exit_cleanup — what the EXIT trap and finish run; the at_exit commands run once
+exit_cleanup() {
+  local c="$AT_EXIT"; AT_EXIT=""
+  stop_fakes; [ -z "$c" ] || eval "$c"; remove_sandboxes
+}
+trap exit_cleanup EXIT
 
 # Fresh sandbox: exports CORE_DIR inside a new temp dir; git identity for commits; HOME, XDG and
 # git config isolated (see below).
@@ -218,18 +229,18 @@ stop() {
   kill "$@" 2>/dev/null
   for p in "$@"; do i=0; while kill -0 "$p" 2>/dev/null && [ $i -lt 20 ]; do sleep 0.1; i=$((i + 1)); done; done
 }
-# stop_fakes — kills every fake run this file started. A file that calls fake calls this in its EXIT trap.
+# stop_fakes — kills every fake run this file started (lib.sh's EXIT trap calls it; it does nothing when there is none)
 stop_fakes() {
   [ -n "${FAKES:-}" ] || return 0
   # shellcheck disable=SC2086  # a list of pids
   kill $FAKES 2>/dev/null; FAKES=""
 }
 
-# finish — prints the counts, removes the sandboxes and exits: 0 when nothing failed, else 1.
-# It exits, so a file's own EXIT trap (which replaces the one above) cannot leave sandboxes behind.
+# finish — prints the counts, runs exit_cleanup (fake runs, at_exit, sandboxes) and exits: 0 when nothing failed, else 1.
+# It cleans up itself, so even an EXIT trap set over lib.sh's cannot leave sandboxes behind.
 finish() {
   echo "$(basename "$0"): $PASSES passed, $FAILS failed"
-  remove_sandboxes
+  exit_cleanup
   [ "$FAILS" -eq 0 ] && exit 0
   exit 1
 }
