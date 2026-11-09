@@ -40,7 +40,7 @@ miss="$(printf '%s\n' $miss | grep -vxE '\*\[tT\]oken\*|\*TOKEN\*|\*\[sS\]ecret\
 set +f
 assert_eq "$miss" "" "every secret pattern of the review profile is denied, but the four broad token and secret globs"
 
-if ! command -v codex >/dev/null 2>&1; then echo "SKIP codex-profile: codex not on PATH (sandbox checks)"; finish; exit $?; fi
+if ! command -v codex >/dev/null 2>&1; then skip codex-profile "codex not on PATH (sandbox checks)"; finish; fi
 # the profile writes the temp folder (and git needs its config in a place it can read), so the fake home must not sit in the one the sandbox sees
 H="$SANDBOX/home"; mkdir -p "$SANDBOX/tmp"; export TMPDIR="$SANDBOX/tmp"; cp "$GIT_CONFIG_GLOBAL" "$TMPDIR/gitconfig"; export GIT_CONFIG_GLOBAL="$TMPDIR/gitconfig"; mkdir -p "$CODEX_HOME" "$H/.ssh" "$SANDBOX/w/src"
 cp "$FRAG" "$CODEX_HOME/config.toml"

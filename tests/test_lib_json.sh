@@ -133,7 +133,7 @@ if [ -d "$SANDBOX/cs/A" ]; then
   assert_eq "$(project_of "$SANDBOX/CaseCore/Ядро/MyApp/code")" "MyApp" "cwd as on disk"
   assert_eq "$(project_of "$SANDBOX/CASECORE/ЯДРО/myapp/code")" "MyApp" "cwd in other case"
 else
-  echo "  note: case-sensitive volume, letter-case test skipped"; pass
+  skip "letter case" "case-sensitive volume"; pass
 fi
 # a long run of escaped backslashes is scanned in linear time
 bs="$(awk 'BEGIN{for(i=0;i<50000;i++) printf "\\\\"}')"

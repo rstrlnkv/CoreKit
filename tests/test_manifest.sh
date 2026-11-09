@@ -219,7 +219,7 @@ case "$suite_to" in ''|*[!0-9]*) fail "one-suite has no timeout in hooks.json" ;
 if command -v python3 >/dev/null 2>&1; then
   assert_exit 0 python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$H"
 else
-  echo "  note: python3 not found, JSON well-formedness of hooks.json not checked"
+  skip hooks-json "python3 not on PATH; JSON well-formedness of hooks.json not checked"
 fi
 assert_no_file "$ROOT/install.sh"; assert_no_file "$ROOT/tests/test_install.sh"
 assert_not_contains "$ROOT/README.md" 'install.sh'; assert_not_contains "$CR" 'install.sh'

@@ -301,7 +301,7 @@ if [ "$(id -u)" != 0 ]; then
   run "$P"; chmod 644 "$P/docs/features/login.md"; fails "unreadable page"
   same_tree "$P" "$FXO" "after the failures the project is the fixture"
 else
-  echo "  note: running as root, permission failures skipped"
+  skip "permission failures" "running as root"
 fi
 
 # --- multi-line description, pipe in a link text, empty updated: (git history: 2026-05-06)
@@ -362,7 +362,7 @@ STUB
   [ -n "$ERR" ] && pass || fail "second mv fails: nothing on stderr"
   assert_eq "$(snap_all "$P")" "$before" "second mv fails: docs/ not restored"
 else
-  echo "  note: running as root, mv-stub tests skipped"
+  skip "mv-stub tests" "running as root"
 fi
 
 # --- a project folder named "old": the staging copy must not collide with the script's own "old" folder

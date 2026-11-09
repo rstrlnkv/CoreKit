@@ -243,7 +243,7 @@ if [ "$(ls "$SANDBOX/Projects" | grep -ci '^clash$')" -eq 2 ]; then
   [ "$rc" -ne 0 ] && pass || fail "install-hooks with a case clash exited 0"
   assert_contains "$SANDBOX/out" "two folders differ only in case"
 else
-  echo "  note: case-insensitive disk, install-hooks case-clash check skipped"
+  skip "install-hooks case clash" "case-insensitive disk"
 fi
 
 # a git repo beside the Core that is not a project
