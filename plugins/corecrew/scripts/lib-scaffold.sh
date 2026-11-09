@@ -156,3 +156,28 @@ projects_entry() {
     echo "created PROJECTS.md entry"
   fi
 }
+
+# projects_upsert <name> <purpose> <entry> <purpose_set> — the name's PROJECTS.md line: when there is one, its entry
+# (the text after the last " — ") becomes <entry>, and with <purpose_set> 1 the whole line becomes
+# "- <name> — <purpose> — <entry>"; prints "updated PROJECTS.md entry". Else the line is added by projects_entry,
+# silently. Written to a temp file and moved into place; exit 1 when the write fails (PROJECTS.md as it was).
+# With DRY=1 nothing is written ("would update PROJECTS.md entry" for an update).
+projects_upsert() {
+  local f="$CORE_DIR/PROJECTS.md" tmp
+  if [ -f "$f" ] && grep -q "^- $1 " "$f"; then
+    if [ "${DRY:-0}" -eq 1 ]; then echo "would update PROJECTS.md entry"; return 0; fi
+    tmp="$f.tmp.$$"
+    if N="$1" E="$3" PU="$2" PS="$4" LC_ALL=C awk 'BEGIN { pre = "- " ENVIRON["N"] " "; sep = " — " }
+        !done && index($0, pre) == 1 {
+          s = $0; last = 0; off = 0
+          while ((i = index(s, sep)) > 0) { last = off + i; off += i; s = substr(s, i + 1) }
+          if (ENVIRON["PS"] == "1") $0 = "- " ENVIRON["N"] sep ENVIRON["PU"] sep ENVIRON["E"]
+          else $0 = (last > 0 ? substr($0, 1, last - 1) : $0) sep ENVIRON["E"]
+          done = 1 }
+        { print }' "$f" > "$tmp" && mv "$tmp" "$f"; then
+      echo "updated PROJECTS.md entry"
+    else rm -f "$tmp"; return 1; fi
+  else
+    projects_entry "$1" "$2" "$3" >/dev/null
+  fi
+}
