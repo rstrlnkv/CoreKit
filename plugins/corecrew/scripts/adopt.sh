@@ -75,7 +75,7 @@
 # scripts/rule-block.awk and scripts/fold-rules.awk.
 set -u
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-TPL="$ROOT_DIR/skills/new-project/templates"
+TPL="$ROOT_DIR/templates"
 . "$ROOT_DIR/scripts/lib.sh"
 export GIT_LITERAL_PATHSPECS=1   # file names are never patterns
 

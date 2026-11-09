@@ -13,7 +13,7 @@
 # user's name and email; if not, the run stops first with the commands to set them.
 set -u
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-TPL="$ROOT_DIR/skills/new-project/templates/core"
+TPL="$ROOT_DIR/templates/core"
 . "$ROOT_DIR/scripts/lib.sh"
 DRY=0; ARG=""
 while [ $# -gt 0 ]; do

@@ -53,9 +53,15 @@ FXO="$FXT/wiki-old"
 FXE="$FXT/wiki-old.expected"
 # The vault files wiki-migrate creates are the templates' own (one source, not a copy in the fixture).
 mkdir -p "$FXE/docs/.obsidian"
-cp "$SKILL/templates/docs/wiki.base" "$FXE/docs/wiki.base"
-cp "$SKILL/templates/docs/obsidian-app.json" "$FXE/docs/.obsidian/app.json"
-cp "$SKILL/templates/docs/obsidian-gitignore" "$FXE/docs/.obsidian/.gitignore"
+cp "$PLUGIN/templates/docs/wiki.base" "$FXE/docs/wiki.base"
+cp "$PLUGIN/templates/docs/obsidian-app.json" "$FXE/docs/.obsidian/app.json"
+cp "$PLUGIN/templates/docs/obsidian-gitignore" "$FXE/docs/.obsidian/.gitignore"
+# Those vault files are listed twice: in project_docs_manifest (lib-scaffold.sh, what new-project and adopt
+# create) and in wiki-migrate.sh's `for pair` list. The two lists name the same files.
+vault_manifest="$( (. "$SCRIPTS/lib-scaffold.sh"; project_docs_manifest) | grep -E '^docs/(wiki\.base|obsidian-)')"
+vault_migrate="$(sed -n 's/^for pair in \(.*\); do$/\1/p' "$WM" | grep -oE '"[^"]*"' | tr -d '"' | sed 's#^#docs/#; s#|#|docs/#')"
+[ -n "$vault_migrate" ] && pass || fail "no 'for pair in' list in wiki-migrate.sh"
+assert_eq "$vault_migrate" "$vault_manifest" "wiki-migrate's vault files match project_docs_manifest"
 
 WANT_OUT="updated docs/architecture.md
 updated docs/brief.md
@@ -418,7 +424,7 @@ for m in --dry-run ""; do
   cmp -s "$P/CLAUDE.md" "$SANDBOX/cm.orig" && pass || fail "CLAUDE.md ${m:-real}: CLAUDE.md was edited"
 done
 # a CLAUDE.md made from the current template: no warning
-mkproj "$SANDBOX/cm7"; cp "$PLUGIN/skills/new-project/templates/CLAUDE.md.tmpl" "$P/CLAUDE.md"
+mkproj "$SANDBOX/cm7"; cp "$PLUGIN/templates/CLAUDE.md.tmpl" "$P/CLAUDE.md"
 run "$P" --dry-run
 printf '%s\n' "$OUT" | grep -q '^warning: CLAUDE.md' && fail "a 0.7 CLAUDE.md is warned about: $(printf '%s\n' "$OUT" | grep CLAUDE.md)" || pass
 

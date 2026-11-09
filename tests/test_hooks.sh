@@ -242,7 +242,7 @@ cp "$SANDBOX/ap.keep" "$AP"
 # purpose (Decision 26 a): a nested .claude/ folder is ignored by .gitignore and blocked by neither hook (ADR 009 and
 # guard-code treat only the root .claude/ as private). Case is pinned: the hooks match case-insensitively, so
 # check-ignore runs with core.ignorecase=true on every OS. Paths are staged without files (no case clash on disk).
-GIC="$SKILL/templates/code/gitignore-common"; GHK="$SCRIPTS/git-hooks"
+GIC="$PLUGIN/templates/code/gitignore-common"; GHK="$SCRIPTS/git-hooks"
 TB="$SANDBOX/one list"; git init -q "$TB"; cp "$GIC" "$TB/.gitignore"
 NESTED="sub/.claude/settings.json"
 SAMPLES="CLAUDE.md

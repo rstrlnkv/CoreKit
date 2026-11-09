@@ -41,7 +41,7 @@
 # .obsidian is a symlink); 2 usage error.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
-TPL="$HERE/../skills/new-project/templates/docs"
+TPL="$HERE/../templates/docs"
 usage() { echo "usage: wiki-migrate.sh <project_dir> [--dry-run]" >&2; exit 2; }
 dry=0; proj=""; seen=0
 for a in "$@"; do

@@ -197,7 +197,9 @@ assert_no_file "$ROOT/install.sh"; assert_no_file "$ROOT/tests/test_install.sh"
 assert_not_contains "$ROOT/README.md" 'install.sh'; assert_not_contains "$CR" 'install.sh'
 assert_contains "$ROOT/README.md" '2.1.271'
 assert_contains "$ROOT/README.md" '/plugin install feature-dev@claude-plugins-official'
-T="$PLUGIN/skills/new-project/templates"
+T="$PLUGIN/templates"
+assert_dir "$T"   # shared by new-project, adopt, setup-core and wiki-migrate, so not inside a skill
+assert_eq "$(find "$PLUGIN/skills" -type d -name templates)" "" "no templates folder inside a skill"
 assert_not_contains "$T/code/settings.local.json.tmpl" '"hooks"'
 assert_contains "$T/code/settings.local.json.tmpl" '"additionalDirectories"'
 assert_not_contains "$T/CLAUDE.md.tmpl" '/bin/'

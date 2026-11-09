@@ -7,8 +7,8 @@
 # Env: CORE_DIR overrides the plugin option core_dir (CLAUDE_PLUGIN_OPTION_CORE_DIR); see scripts/lib.sh
 set -u
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-TPL="$SKILL_DIR/templates"
 ROOT_DIR="$(cd "$SKILL_DIR/../.." && pwd)"
+TPL="$ROOT_DIR/templates"
 . "$ROOT_DIR/scripts/lib.sh"
 load_settings
 NAME=""; PURPOSE="TODO: one or two sentences."; DRY=0
