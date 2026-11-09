@@ -31,14 +31,13 @@ assert_contains "$SK" 'Version:'
 assert_contains "$SK" 'Open:'
 
 # The branch to ship into is resolved, never assumed: no command names `main` itself.
-section() { awk -v n="$2" '$0 == "## " n {f=1; next} /^## /{f=0} f' "$1"; }
-st="$(section "$SK" Start)"
+st="$(md_section "$SK" Start)"
 case "$st" in *'git symbolic-ref --short refs/remotes/origin/HEAD'*'init.defaultBranch'*'ask the user'*) pass ;; *) fail "Start resolves <main>: origin/HEAD, then init.defaultBranch, else ask" ;; esac
 hard="$(grep -nE '(^|[ `"])main\.\.|\.\.\.?main\b|origin main\b|merge main\b|refs/heads/main\b|:main\b|ff-only main\b|On `main`' "$SK")"
 assert_eq "$hard" "" "no command or step hard-codes the branch main"
 grep -q '^description:.*into main' "$SK" && fail "the description still promises main" || pass
 # Tag and GitHub release: after the push, on the user's own yes, never moved or forced.
-steps="$(section "$SK" Steps)"
+steps="$(md_section "$SK" Steps)"
 np="$(printf '%s\n' "$steps" | grep -n 'git push origin <main>' | head -1 | cut -d: -f1)"
 nt="$(printf '%s\n' "$steps" | grep -n 'git tag -a' | head -1 | cut -d: -f1)"
 nr="$(printf '%s\n' "$steps" | grep -n 'gh release create' | head -1 | cut -d: -f1)"

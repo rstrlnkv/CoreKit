@@ -137,25 +137,24 @@ assert_contains "$K" 'symptom → cause → guard'
 assert_contains "$K" 'Knowledge line:'
 [ "$(wc -l < "$K")" -le 80 ] && pass || fail "knowledge.md over 80 lines"
 # REV-5: one list of lines, no sections inside a role file, no families, no cap on the role file.
-section() { awk -v n="$2" '$0 == "## " n {f=1; next} /^## /{f=0} f' "$1"; }
 assert_eq "$(grep '^## ' "$K" | tr '\n' '|')" "## Two levels|## A role file|## The line|## Who writes it|" "knowledge.md sections"
 for s in 'Families' '80 lines' 'How proof is made here' 'Where things are' 'What has broken here' 'What you must not do here'; do
   assert_not_contains "$K" "$s"
 done
-section "$K" 'A role file' | grep -qiF 'no sections' && pass || fail "knowledge.md: a role file still has sections"
-section "$K" 'A role file' | grep -qiF 'no size limit' && pass || fail "knowledge.md: a role file still has a cap"
+md_section "$K" 'A role file' | grep -qiF 'no sections' && pass || fail "knowledge.md: a role file still has sections"
+md_section "$K" 'A role file' | grep -qiF 'no size limit' && pass || fail "knowledge.md: a role file still has a cap"
 # the level: this project by default; all projects when the lesson recurs, or when the user calls it general; then a standard
 grep -F '| This project |' "$K" | grep -qF 'default' && pass || fail "knowledge.md: this project is not the default level"
-section "$K" 'Who writes it' | grep -qF 'recur' && pass || fail "knowledge.md: no recurrence rule"
-section "$K" 'Who writes it' | grep -qF '/corecrew:new-standard' && pass || fail "knowledge.md: no standard offer"
-section "$K" 'Who writes it' | grep -qiF 'general' && pass || fail "knowledge.md: the user cannot choose all projects for a general lesson"
+md_section "$K" 'Who writes it' | grep -qF 'recur' && pass || fail "knowledge.md: no recurrence rule"
+md_section "$K" 'Who writes it' | grep -qF '/corecrew:new-standard' && pass || fail "knowledge.md: no standard offer"
+md_section "$K" 'Who writes it' | grep -qiF 'general' && pass || fail "knowledge.md: the user cannot choose all projects for a general lesson"
 # the arrow: → is canonical; -> written by hand reads the same (here and in new-standard's detection)
-section "$K" 'The line' | grep -qF -- '`->`' && pass || fail "knowledge.md: -> is not accepted"
+md_section "$K" 'The line' | grep -qF -- '`->`' && pass || fail "knowledge.md: -> is not accepted"
 assert_contains "$SK" '`->`'
 # older files keep their sections; the older form is described once, in older-formats.md
-section "$K" 'A role file' | grep -qF 'older-formats.md' && pass || fail "knowledge.md does not point at the older form"
+md_section "$K" 'A role file' | grep -qF 'older-formats.md' && pass || fail "knowledge.md does not point at the older form"
 O="$PLUGIN/reference/older-formats.md"
-section "$O" 'Knowledge with sections' | grep -qF '## What has broken here' && pass || fail "older-formats.md: no Knowledge with sections"
-section "$O" 'Knowledge with sections' | grep -qF 'never' && pass || fail "older-formats.md: task may restructure an older knowledge file"
+md_section "$O" 'Knowledge with sections' | grep -qF '## What has broken here' && pass || fail "older-formats.md: no Knowledge with sections"
+md_section "$O" 'Knowledge with sections' | grep -qF 'never' && pass || fail "older-formats.md: task may restructure an older knowledge file"
 
 finish

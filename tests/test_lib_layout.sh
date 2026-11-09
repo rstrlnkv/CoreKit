@@ -112,7 +112,6 @@ done
 # (or a tab) is refused before any commit, both repos left as they were: save and undo-step hand git the Core paths as
 # one space-separated line (CORE_PATHS), so such a name would split and leave a step half-saved.
 new_sandbox; setup_core; sync_tools; P="$SANDBOX/Projects"
-cnt() { git -C "$1" rev-list --count HEAD 2>/dev/null || echo 0; }
 mkproj() {  # mkproj <Core project folder> <code folder>: a new-layout project
   mkdir -p "$CORE_DIR/$1" "$P/$2"; echo "# $1" > "$CORE_DIR/$1/CLAUDE.md"
   git -C "$P/$2" init -q; ln -s "$CORE_DIR/$1/CLAUDE.md" "$P/$2/CLAUDE.local.md"
@@ -136,12 +135,12 @@ for C in "$P/Uni проект" "$CORE_DIR/my app/code"; do
   d="$(dirname "$C")"; [ "$C" = "$P/Uni проект" ] && d="$CORE_DIR/uni проект"
   echo c1 > "$C/c.txt"; git -C "$C" add c.txt && git -C "$C" commit -qm "by hand"
   echo c2 > "$C/c.txt"; echo d1 > "$d/d.md"
-  nc="$(cnt "$C")"; nd="$(cnt "$CORE_DIR")"; sc="$(git -C "$C" status --porcelain)"; sd="$(git -C "$CORE_DIR" status --porcelain)"
+  nc="$(commit_count "$C")"; nd="$(commit_count "$CORE_DIR")"; sc="$(git -C "$C" status --porcelain)"; sd="$(git -C "$CORE_DIR" status --porcelain)"
   OUT="$(cd "$C" && bash "$SCRIPTS/save" "spaced" 2>&1)" && fail "save of a name with a space did not refuse: $OUT" || pass
   echo "$OUT" | grep -q "saved code" && fail "save committed the code of a name with a space: $OUT" || pass
   OUT="$(cd "$C" && bash "$SCRIPTS/undo-step" 2>&1)" && fail "undo-step of a name with a space did not refuse: $OUT" || pass
-  assert_eq "$(cnt "$C")" "$nc" "code commits after a refused save/undo ($C)"
-  assert_eq "$(cnt "$CORE_DIR")" "$nd" "Core commits after a refused save/undo ($C)"
+  assert_eq "$(commit_count "$C")" "$nc" "code commits after a refused save/undo ($C)"
+  assert_eq "$(commit_count "$CORE_DIR")" "$nd" "Core commits after a refused save/undo ($C)"
   assert_eq "$(git -C "$C" status --porcelain)" "$sc" "code tree after a refused save/undo ($C)"
   assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "$sd" "Core tree after a refused save/undo ($C)"
   assert_eq "$(cat "$C/c.txt")" "c2" "code file after a refused save/undo ($C)"

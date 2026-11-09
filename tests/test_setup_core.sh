@@ -148,16 +148,13 @@ assert_no_file "$SANDBOX/gh.log"
 
 # --- no git identity: plain message, exit 1, nothing created; with an identity it works
 new_sandbox
-noid() { env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL \
-  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null HOME="$SANDBOX/nohome" \
-  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.useConfigOnly GIT_CONFIG_VALUE_0=true "$@"; }
-assert_exit 1 noid bash "$SC" "$CORE_DIR"
+assert_exit 1 no_git_identity bash "$SC" "$CORE_DIR"
 echo "$OUT" | grep -q 'user.name' && echo "$OUT" | grep -q 'user.email' && pass || fail "no hint about git identity: $OUT"
 assert_no_file "$CORE_DIR"
 assert_exit 0 bash "$SC" "$CORE_DIR"
 assert_eq "$(git -C "$CORE_DIR" rev-list --count HEAD)" "1" "commit after identity was set"
 # nothing to create: no identity needed
-assert_exit 0 noid bash "$SC" "$CORE_DIR"
+assert_exit 0 no_git_identity bash "$SC" "$CORE_DIR"
 
 # --- the commit fails (a failing pre-commit hook): files exist, exit 1; the next run commits them
 new_sandbox

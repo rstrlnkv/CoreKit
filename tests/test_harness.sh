@@ -204,6 +204,17 @@ H="$(git -C "$G" rev-parse HEAD)"
 changed "git reset --soft HEAD~1" 'git -C "$G" reset -q --soft HEAD~1' 'git -C "$G" reset -q --soft "$H"'
 snap_tree "$SANDBOX/no such folder" | grep -q . && pass || fail "snap_tree prints nothing for a missing folder"
 
+# --- md_section, md_section_has, commit_count, no_git_identity
+printf '# T\n## A\none\n### A.1\ntwo\n## B\nthree\n' > "$S/doc.md"
+assert_eq "$(md_section "$S/doc.md" A)" "$(printf 'one\n### A.1\ntwo')" "md_section: the body down to the next ## heading"
+mkdir -p "$RT"; fake x_sec.sh "md_section_has \"$S/doc.md\" B three; md_section_has \"$S/doc.md\" B one; finish"
+one x_sec.sh; has "FAIL: doc.md section 'B' lacks: one"; has "1 passed, 1 failed" "md_section_has"
+assert_eq "$(commit_count "$G")" "2" "commit_count of a repo"
+assert_eq "$(commit_count "$S")" "0" "commit_count of a folder with no repo"
+git init -q "$S/r2"; echo x > "$S/r2/f"; git -C "$S/r2" add f
+OUT="$(no_git_identity git -C "$S/r2" commit -q -m x 2>&1)" && fail "no_git_identity: a commit had an identity" || has "user.email" "no_git_identity"
+assert_eq "$(commit_count "$S/r2")" "0" "commit_count of a repo with no commit"
+
 # --- skips go through skip (SKIP-1, TEST-7): no test file has an old-style `echo "SKIP ..."` or `echo "  note: ..."`
 # line, which run.sh lists only when its words happen to match. The echo must start a command (the fixture above
 # that writes such a line into a fake file, and a comment that quotes one, are not matches).

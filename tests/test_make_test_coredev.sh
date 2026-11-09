@@ -105,10 +105,7 @@ assert_eq "$(cat "$CORE_DIR/notes.txt")" "keep" "notes.txt"
 
 # --- no git identity: plain message, exit 1, nothing created
 new_sandbox; setup_core
-noid() { env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL \
-  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null HOME="$SANDBOX/nohome" \
-  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.useConfigOnly GIT_CONFIG_VALUE_0=true "$@"; }
-assert_exit 1 noid bash "$B" "$CORE_DIR"
+assert_exit 1 no_git_identity bash "$B" "$CORE_DIR"
 echo "$OUT" | grep -q 'user.name' && pass || fail "no hint about git identity: $OUT"
 assert_no_file "$CORE_DIR/test-coredev"
 assert_no_file "$SANDBOX/Projects/test-coredev"

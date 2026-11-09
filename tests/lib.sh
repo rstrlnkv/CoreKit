@@ -25,6 +25,19 @@ assert_not_contains() {
   else pass; fi
 }
 assert_eq() { [ "$1" = "$2" ] && pass || fail "${3:-values differ}: '$1' != '$2'"; }
+# md_section <file> <name> — the body of "## <name>" down to the next "## " heading (### headings stay in it)
+md_section() { awk -v n="$2" '$0 == "## " n {f=1; next} /^## /{f=0} f' "$1"; }
+# md_section_has <file> <name> <text> — that body contains the text (a fixed string)
+md_section_has() { md_section "$1" "$2" | grep -qF -- "$3" && pass || fail "$(basename "$1") section '$2' lacks: $3"; }
+# commit_count <repo> — the number of commits on HEAD; 0 when there is no repo or no commit
+commit_count() { git -C "$1" rev-list --count HEAD 2>/dev/null || echo 0; }
+# no_git_identity <cmd...> — runs cmd with no git identity anywhere: no identity variables, no global or system
+# config, a HOME with no config in it, and user.useConfigOnly so git does not guess one from the host name
+no_git_identity() {
+  env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL \
+    GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null HOME="$SANDBOX/nohome" \
+    GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.useConfigOnly GIT_CONFIG_VALUE_0=true "$@"
+}
 # assert_exit <code> <cmd...> — runs cmd, output saved in $OUT
 assert_exit() {
   local want="$1"; shift
