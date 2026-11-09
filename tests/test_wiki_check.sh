@@ -411,6 +411,8 @@ assert_contains <(printf '%s' "$OUT") "wiki-check: INDEX.md: "
 assert_exit 2 bash "$W"
 assert_exit 2 bash "$W" "$FX/wiki-good" src/app.sh
 assert_exit 2 bash "$W" "$SANDBOX/does-not-exist"
+# --code after --changed would be read as a changed path and the existence check skipped: a usage error
+assert_exit 2 bash "$W" "$FX/wiki-good" --changed src/app.sh --code "$SANDBOX"
 mkdir "$SANDBOX/nodocs"
 assert_exit 1 bash "$W" "$SANDBOX/nodocs"
 

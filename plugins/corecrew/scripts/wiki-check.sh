@@ -72,6 +72,7 @@ HAVE_CHANGED=0
 if [ $# -gt 0 ]; then
   [ "$1" = "--changed" ] || usage
   HAVE_CHANGED=1; shift
+  for a in "$@"; do [ "$a" != "--code" ] || usage; done   # --code goes before --changed
 fi
 [ -d "$PROJ" ] || { echo "wiki-check: $PROJ: not a directory" >&2; exit 2; }
 PROJ="$(cd "$PROJ" && pwd)"
