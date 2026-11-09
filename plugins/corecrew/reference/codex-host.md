@@ -52,7 +52,8 @@ approval to leave the sandbox (escalated permissions), and let the user approve 
 Approval applies to one step. When it is not possible (a non-interactive `codex exec`), only the step
 that needs it stops: do every other step that does not need its result as usual; report the stopped
 step, and any step that needed its result, as not done and why. In
-`task` that is the commit: the chain runs to the end, the files stay uncommitted, and the report says
+`task` only the commit stops: the chain runs to the end, even when you expect no approval, the files
+stay uncommitted, and the report says
 `Commit: stopped — Codex sandbox keeps .git read-only`. Never look for a way around the sandbox.
 `save` printing `save: git could not write ...` means it ran inside the sandbox: run it again with
 approval.
