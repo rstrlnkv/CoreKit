@@ -389,13 +389,10 @@ decoy_kept SIGTERM   # the others are gone or were killed above
 # the limit is clamped to 20 s
 if grep -qE 'to=20' "$HINT" && grep -q -- '-gt 20' "$HINT"; then pass; else fail "COREMODEL_HINT_TIMEOUT is not clamped to 20"; fi
 
-# ---- D. portability scan covers the new script ----
-echo "  -- D. portability"
+# ---- D. hint.sh is a bash script (tests/test_portability.sh scans it) ----
+echo "  -- D. hint.sh is a bash script"
 assert_file "$CM/codex/hint.sh"
 if [ -f "$CM/codex/hint.sh" ]; then
   head -1 "$CM/codex/hint.sh" | grep -qE '^#!.*bash' && pass || fail "hint.sh starts with a bash shebang"
-  # test_portability.sh finds every .sh under plugins/ by find; its self-check lists the same way
-  (cd "$ROOT" && find skills scripts hooks tests plugins -type f 2>/dev/null) | grep -qx 'plugins/coremodel/codex/hint.sh' && pass || fail "portability scan list misses hint.sh"
-  grep -qE 'sed[[:space:]]+-i|mapfile|readarray|grep[[:space:]]+-P|declare[[:space:]]+-A|local[[:space:]]+-n|\$\{[A-Za-z_]+(,,|\^\^)|\|[&]|date[[:space:]]+-d|readlink[[:space:]]+-f|\bjq\b' "$CM/codex/hint.sh" && fail "hint.sh uses a non-portable construct or jq" || pass
 fi
 finish

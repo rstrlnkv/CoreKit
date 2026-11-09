@@ -90,6 +90,7 @@ codex_hooks_list() {
   printf '%s\n' '{"id":1,"method":"initialize","params":{"clientInfo":{"name":"t","version":"1"}}}' '{"method":"initialized"}' \
     "{\"id\":2,\"method\":\"hooks/list\",\"params\":{\"cwds\":[\"$(json_esc "$1")\"]}}" > "$2.req"
   : > "$raw"
+  # shellcheck disable=SC2094  # the poll reads the answer codex writes, on purpose
   (cat "$2.req"; poll 100 grep -q '"id":2' "$raw") | codex --disable remote_plugin app-server --listen stdio:// > "$raw" 2> "$2.err"
   grep '"id":2' "$raw" | sed 's/{"key":/\
 &/g' > "$2"
