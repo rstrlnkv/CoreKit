@@ -39,6 +39,9 @@ commit log has the full detail.
   orphan branch whose first commit (made with `--no-verify`) holds `CLAUDE.md`, `AGENTS.md`, `.env`
   or a key is blocked. A forced push over a remote tip this repo never fetched is checked as well,
   and a push whose commits git cannot list is blocked instead of passing unchecked.
+- undo-step is all-or-nothing when a commit fails: when a pre-commit hook refuses the Undo commit,
+  or a repo has no git identity or a stale `index.lock`, it exits 1 with "Nothing was changed" and
+  the cause, and leaves both repos as they were.
 
 ## [0.12.0] - 2026-11-09
 

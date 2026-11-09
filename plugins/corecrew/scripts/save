@@ -32,26 +32,9 @@ if [ ! -x "$MAIN/.git/hooks/pre-commit" ] || [ ! -x "$MAIN/.git/hooks/pre-push" 
 fi
 
 # Both repos must be able to commit before the code commit is made, so a step is not left half saved
-# for a reason known in advance: a git identity, a writable git folder, no index.lock. The Core is
-# checked only when it has this step's docs to commit: a code-only step does not need it (its identity
-# may be set per repo and missing there). With CDPATH set, cd can print the folder it went to; the cd
-# here ignores CDPATH and prints nothing.
-can_commit() {
-  local r="$1" gd common
-  gd=$(git -C "$r" rev-parse --absolute-git-dir 2>/dev/null) &&
-    common=$(cd "$r" && CDPATH='' cd -- "$(git rev-parse --git-common-dir)" >/dev/null && pwd) || {
-    echo "save: $r is not a readable git repo; nothing saved." >&2; return 1; }
-  if [ ! -w "$gd" ] || [ ! -w "$common" ] || [ ! -w "$common/objects" ]; then
-    echo "save: git could not write $r/.git (read-only? in Codex allow the commit when asked); nothing saved." >&2; return 1
-  fi
-  if [ -e "$gd/index.lock" ]; then
-    echo "save: $gd/index.lock exists: another git command is running in $r, or one crashed. Wait for it, or remove that file if no git command is running; nothing saved." >&2
-    return 1
-  fi
-  if ! git -C "$r" var GIT_AUTHOR_IDENT >/dev/null 2>&1 || ! git -C "$r" var GIT_COMMITTER_IDENT >/dev/null 2>&1; then
-    echo "save: git has no user identity in $r (set user.name and user.email); nothing saved." >&2; return 1
-  fi
-}
+# for a reason known in advance (can_commit in _locate.sh). The Core is checked only when it has this
+# step's docs to commit: a code-only step does not need it (its identity may be set per repo and
+# missing there).
 # CORE_DIRTY: the Core has changes under CORE_PATHS (a status that fails counts as changes, so the
 # check below says what is wrong).
 # shellcheck disable=SC2086
@@ -60,8 +43,8 @@ CORE_DIRTY=$(git -C "$CORE" status --porcelain -- $CORE_PATHS 2>/dev/null) || CO
 if [ -z "$MSG" ] && { [ -n "$(git -C "$CODE" status --porcelain 2>/dev/null)" ] || [ -n "$CORE_DIRTY" ]; }; then
   echo 'save: there are changes to save; give them a message: save "<message>" --push' >&2; exit 2
 fi
-can_commit "$CODE" || exit 1
-[ -z "$CORE_DIRTY" ] || can_commit "$CORE" || exit 1
+can_commit "$CODE" save "nothing saved" || exit 1
+[ -z "$CORE_DIRTY" ] || can_commit "$CORE" save "nothing saved" || exit 1
 
 # Step-Id = <time>-<NN>-<random>. NN counts this project's steps within one second, so undo-step can
 # order them (commit times have one-second resolution); the random part (process id and $RANDOM)

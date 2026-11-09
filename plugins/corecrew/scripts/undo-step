@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Undoes the last saved step of THIS project (or the given Step-Id) in both repos with
-# git revert. History is kept. All-or-nothing: on a conflict nothing is changed.
+# git revert. History is kept. All-or-nothing: on a conflict or a failed commit nothing is changed.
 # The Core is shared: only the step's own paths are touched, so other projects' staged or unsaved
 # Core files stay as they are and never go into the Undo commit.
 # Usage: undo-step [STEP_ID]
@@ -82,6 +82,12 @@ for w in code core; do
   done
 done
 
+# Every repo the undo commits in must be able to commit, before anything changes.
+for w in code core; do
+  [ -n "$(commits_of "$w" "$ID")" ] || continue
+  can_commit "$(repo_of "$w")" undo-step "nothing was changed" || exit 1
+done
+
 # Every path the step changed must be clean, and a path the undo would bring back must not hold a
 # local (ignored) file: git would overwrite it, and an aborted undo removes what the revert made.
 NEWDIRS=""
@@ -109,15 +115,27 @@ done
 PRE_CODE=$(git -C "$CODE" write-tree 2>/dev/null) && PRE_CORE=$(git -C "$CORE" write-tree 2>/dev/null) || {
   echo "Could not undo step $ID: a repo has unresolved merge conflicts. Resolve them first." >&2; exit 1; }
 pre_of() { [ "$1" = code ] && echo "$PRE_CODE" || echo "$PRE_CORE"; }
+OLD_CODE=$(git -C "$CODE" rev-parse -q --verify HEAD); OLD_CORE=$(git -C "$CORE" rev-parse -q --verify HEAD)
+old_of() { [ "$1" = code ] && echo "$OLD_CODE" || echo "$OLD_CORE"; }
 # changed_of <code|core> — the index paths the revert changed, one per line.
 changed_of() { git -C "$(repo_of "$1")" diff-index --cached --name-only -z "$(pre_of "$1")" | tr '\0' '\n'; }
 
 # Phase 1: apply all reverts without committing; on any conflict put back only what the revert touched.
-started=""
-abort_all() {
-  local w r p pre
+# roll_back <cause> — puts back what the undo changed in each repo it started in, says why nothing was
+# changed, and exits 1. A repo whose Undo commit is already made (COMMITTED: <repo>=<sha> words) first
+# gets its HEAD moved back to the commit before it, only if HEAD is still that Undo commit. That can be
+# only the code repo, committed first and fully clean before (checked above). The Core is never reset:
+# its paths are put back one by one, so other projects' staged files stay.
+started=""; COMMITTED=""
+roll_back() {
+  local w r p pre m
   for w in $started; do
     r=$(repo_of "$w"); pre=$(pre_of "$w")
+    for m in $COMMITTED; do
+      [ "${m%%=*}" = "$w" ] || continue
+      git -C "$r" update-ref -m "undo-step: roll back" HEAD "$(old_of "$w")" "${m#*=}" || {
+        echo "undo-step: the HEAD of $r moved; its Undo commit ${m#*=} stays." >&2; continue 2; }
+    done
     while IFS= read -r p; do
       [ -n "$p" ] || continue
       if git -C "$r" cat-file -e "$pre:$p" 2>/dev/null; then
@@ -131,18 +149,21 @@ abort_all() {
   done
   # deepest first; rmdir leaves a folder that is not empty
   printf '%s' "$NEWDIRS" | sort -r | while IFS= read -r d; do [ -n "$d" ] && rmdir "$d" 2>/dev/null; done
-  echo "Could not undo step $ID: it conflicts with later changes. Nothing was changed." >&2
+  echo "Could not undo step $ID: $1. Nothing was changed." >&2
   exit 1
 }
 for w in code core; do
   for c in $(commits_of "$w" "$ID"); do
     case " $started " in *" $w "*) ;; *) started="$started $w" ;; esac
-    git -C "$(repo_of "$w")" revert --no-commit "$c" >/dev/null 2>&1 || abort_all
+    git -C "$(repo_of "$w")" revert --no-commit "$c" >/dev/null 2>&1 || roll_back "it conflicts with later changes"
   done
 done
 [ -n "$started" ] || { echo "Nothing to undo for step $ID."; exit 0; }
 
-# Phase 2: in each repo, commit only the paths the revert changed; other staged files stay staged.
+# Phase 2: in each repo, commit only the paths the revert changed; other staged files stay staged. A
+# commit can still fail (a pre-commit hook refuses it): then both repos are rolled back. The lines are
+# printed once every commit is made.
+said=""
 for w in $started; do
   r=$(repo_of "$w")
   set --
@@ -152,6 +173,10 @@ for w in $started; do
   # the Core commit names the project, like save's: an undo of a shared-only step stays this project's
   trailer="Undo-Of: $ID"; [ "$w" = core ] && trailer="$trailer
 Project: $NAME"
-  GIT_LITERAL_PATHSPECS=1 git -C "$r" commit -q -m "Undo step $ID: $subj" -m "$trailer" -- "$@"
-  echo "reverted $([ "$w" = core ] && echo docs || echo code) ($subj)"
+  GIT_LITERAL_PATHSPECS=1 git -C "$r" commit -q -m "Undo step $ID: $subj" -m "$trailer" -- "$@" ||
+    roll_back "the commit in $r failed (see above)"
+  COMMITTED="$COMMITTED $w=$(git -C "$r" rev-parse HEAD)"
+  said="${said}reverted $([ "$w" = core ] && echo docs || echo code) ($subj)
+"
 done
+printf '%s' "$said"

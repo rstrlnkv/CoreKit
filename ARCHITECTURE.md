@@ -33,6 +33,7 @@ plugins/corecrew/                 project workflow
     sync-tools.sh                 the scripts copied into the plugin's data folder (tools/)
     install-hooks.sh, git-hooks/  the git hook shims and their installer
     save, undo-step, _locate.sh   one step saved or undone in both repos; _locate.sh finds the repos
+                                  and checks that each can commit
     adopt.sh                      an existing project brought into the layout, in phases (preconditions,
                                   plan, stage, commit, move, finish); its rule readers are rule-block.awk
                                   and fold-rules.awk
