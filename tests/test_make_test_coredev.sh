@@ -4,9 +4,6 @@ source "$(dirname "$0")/lib.sh"
 B="$ROOT/scripts/make-test-coredev.sh"
 WC="$SCRIPTS/wiki-check.sh"
 
-# state <dir> — everything a refusal must not change: files, HEAD, status
-state() { tree_sum "$1"; git -C "$1" rev-parse HEAD 2>&1; git -C "$1" status --porcelain 2>&1; }
-
 # --- success
 new_sandbox; setup_core
 P="$CORE_DIR/test-coredev"; C="$SANDBOX/Projects/test-coredev"
@@ -62,10 +59,10 @@ assert_contains "$C/.git/hooks/pre-push" "corecrew hook shim"
 assert_contains "$CORE_DIR/.git/hooks/pre-push" "corecrew hook shim"
 
 # --- second run: refused, exit 2, one plain line, nothing changed
-before="$(state "$CORE_DIR"; state "$C")"
+before="$(snap_tree "$CORE_DIR" "$C")"
 assert_exit 2 bash "$B" "$CORE_DIR"
 assert_eq "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "1" "refusal is one line: $OUT"
-after="$(state "$CORE_DIR"; state "$C")"
+after="$(snap_tree "$CORE_DIR" "$C")"
 assert_eq "$after" "$before" "second run changed something"
 
 # --- a Core that is not set up: refused, nothing created
@@ -85,9 +82,9 @@ assert_no_file "$SANDBOX/Projects/test-coredev"
 # --- a folder beside the Core in the way: refused, exit 2, nothing changed
 new_sandbox; setup_core
 mkdir -p "$SANDBOX/Projects/test-coredev"; echo mine > "$SANDBOX/Projects/test-coredev/x"
-before="$(state "$CORE_DIR")"
+before="$(snap_tree "$CORE_DIR")"
 assert_exit 2 bash "$B" "$CORE_DIR"
-assert_eq "$(state "$CORE_DIR")" "$before" "Core changed on refusal"
+assert_eq "$(snap_tree "$CORE_DIR")" "$before" "Core changed on refusal"
 assert_no_file "$CORE_DIR/test-coredev"
 assert_eq "$(ls "$SANDBOX/Projects/test-coredev")" "x" "foreign folder touched"
 

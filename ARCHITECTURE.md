@@ -59,6 +59,7 @@ plugins/coreopinion/              second opinion from GPT (Claude Code only)
 scripts/commit-subjects.sh        the check of this repo's own commit subjects (CI job and optional commit-msg hook)
 scripts/make-test-coredev.sh      builds test-coredev, the hand-made project for an end-to-end try of /corecrew:task
 tests/                            bash tests, run by tests/run.sh; lib.sh gives each test a sandbox
+                                  and the shared helpers (snap_tree: the one "nothing changed" snapshot)
 docs/                             the upgrade guide (migration-0.3.md) and icon sources (icons/)
 ```
 

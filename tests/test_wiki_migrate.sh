@@ -96,8 +96,6 @@ gitify() {
 }
 # run <project> [args] — stdout in OUT, stderr in ERR, exit code in RC
 run() { local p="$1"; shift; OUT="$(bash "$WM" "$p" "$@" 2>"$SANDBOX/err")"; RC=$?; ERR="$(cat "$SANDBOX/err")"; }
-# snap_all <dir> — file checksums plus the list of every path (dirs included, .git left out)
-snap_all() { tree_sum "$1" 2>/dev/null; (cd "$1" && find . -not -path '*/.git/*' -not -name .git | LC_ALL=C sort); }
 same_tree() { # <dir> <expected dir> <label>
   local a b; a="$(tree_sum "$1")"; b="$(tree_sum "$2")"
   if [ "$a" = "$b" ]; then pass; else fail "$3: tree differs from $2:$(diff <(printf '%s\n' "$a") <(printf '%s\n' "$b") | head -20)"; fi
@@ -115,10 +113,10 @@ same_tree "$P" "$FXO" "usage errors changed the project"
 # --- the migration, in a git repo (the dates are the commit dates)
 new_sandbox
 CORE="$SANDBOX/core"; mkproj "$CORE"; gitify "$CORE" || fail "could not build the git fixture"
-before="$(snap_all "$P")"
+before="$(snap_tree "$P")"
 run "$P" --dry-run
 assert_eq "$RC" "0" "dry-run exit"
-assert_eq "$(snap_all "$P")" "$before" "--dry-run changed the project"
+assert_eq "$(snap_tree "$P")" "$before" "--dry-run changed the project"
 echo "$OUT" | grep -qF "docs/brief.md" && pass || fail "--dry-run output does not name docs/brief.md: $OUT"
 echo "$OUT" | grep -qxF "warning: n: set type" && pass || fail "--dry-run output lacks the warnings: $OUT"
 assert_eq "$(git -C "$CORE" status --porcelain)" "" "--dry-run dirtied the repo"
@@ -142,15 +140,15 @@ assert_eq "$(tail -c 1 "$P/docs/notes/n.md" | od -An -c | tr -d ' ')" "]" "n.md 
 assert_eq "$(cat "$P/docs/features/export.md")" "$(cat "$FXO/docs/features/export.md")" "already-new page"
 
 # second run: nothing changes
-after1="$(snap_all "$P")"
+after1="$(snap_tree "$P")"
 run "$P"
 assert_eq "$RC" "0" "second run exit"
-assert_eq "$(snap_all "$P")" "$after1" "second run changed the project"
+assert_eq "$(snap_tree "$P")" "$after1" "second run changed the project"
 echo "$OUT" | grep -qE '^(moved|updated|created) ' && fail "second run reports changes: $OUT" || pass
 # the anchor links are converted by now, so their "anchor dropped" warnings do not repeat
 assert_eq "$(printf '%s\n' "$OUT" | grep '^warning:')" "$(printf '%s\n' "$WANT_OUT" | grep '^warning:' | grep -v 'anchor #')" "second run warnings"
 run "$P" --dry-run; assert_eq "$RC" "0" "second --dry-run exit"
-assert_eq "$(snap_all "$P")" "$after1" "second --dry-run changed the project"
+assert_eq "$(snap_tree "$P")" "$after1" "second --dry-run changed the project"
 
 # --- fields outside the six: stage: of a brief moves to ## Progress, anything else stays and is warned about
 # mkpage <file> <front matter lines...> — one page: front matter from the arguments, body "# T", "", "Text."
@@ -216,20 +214,20 @@ assert_eq "$(tail -n 4 "$SANDBOX/xc/p/docs/brief.md")" "Text.
 ## Progress
 Stage: interviewed" "Progress section at the end"
 grep -q '^stage:' "$SANDBOX/xc/p/docs/brief.md" && fail "stage: left in the front matter" || pass
-after_c="$(snap_all "$SANDBOX/xc/p")"
+after_c="$(snap_tree "$SANDBOX/xc/p")"
 run "$SANDBOX/xc/p"
 assert_eq "$RC" "0" "stage: second run exit"
 printf '%s\n' "$OUT" | grep -q '^updated ' && fail "second run reports updates: $OUT" || pass
-assert_eq "$(snap_all "$SANDBOX/xc/p")" "$after_c" "second run changed the project"
+assert_eq "$(snap_tree "$SANDBOX/xc/p")" "$after_c" "second run changed the project"
 # (d) a dry run changes no files
 new_sandbox
 mkdir -p "$SANDBOX/xd/p/docs/features"
 mkpage "$SANDBOX/xd/p/docs/brief.md" 'title: Brief' 'type: brief' 'status: active' 'description: D.' 'stage: interviewed' 'files: []' 'related: []' 'updated: 2026-01-01'
 mkpage "$SANDBOX/xd/p/docs/features/x.md" 'title: X' 'tags: x' 'description: D.' 'status: active' 'files: []' 'related: []' 'updated: 2026-01-01'
-before_d="$(snap_all "$SANDBOX/xd/p")"
+before_d="$(snap_tree "$SANDBOX/xd/p")"
 run "$SANDBOX/xd/p" --dry-run
 assert_eq "$RC" "0" "extra fields dry run: exit"
-assert_eq "$(snap_all "$SANDBOX/xd/p")" "$before_d" "extra fields dry run changed files"
+assert_eq "$(snap_tree "$SANDBOX/xd/p")" "$before_d" "extra fields dry run changed files"
 printf '%s\n' "$OUT" | grep -qxF "warning: x: extra front matter field tags" && pass || fail "dry run: no warning for tags: $OUT"
 
 # --- outside git: updated = today
@@ -274,7 +272,7 @@ cmp -s "$P/docs/features/broken.md" "$SANDBOX/broken.orig" && pass || fail "uncl
 fails() { # <label> — expects RC=1, one non-empty stderr, project unchanged; the repo stays clean
   assert_eq "$RC" "1" "$1: exit"
   [ -n "$ERR" ] && pass || fail "$1: nothing on stderr"
-  assert_eq "$(snap_all "$P")" "$before" "$1: project changed"
+  assert_eq "$(snap_tree "$P")" "$before" "$1: project changed"
   assert_eq "$(git -C "$CORE" status --porcelain)" "$cstat" "$1: repo status changed"
   echo "$OUT" | grep -qE '^(moved|updated|created) ' && fail "$1: reported changes on stdout: $OUT" || pass
 }
@@ -282,18 +280,18 @@ fails() { # <label> — expects RC=1, one non-empty stderr, project unchanged; t
 new_sandbox
 CORE="$SANDBOX/core"; mkproj "$CORE"; gitify "$CORE"
 mkdir "$P/docs/specs"; printf '# Mine\n' > "$P/docs/specs/a.md"; chmod 555 "$P/docs/specs"
-before="$(snap_all "$P")"; cstat="$(git -C "$CORE" status --porcelain)"
+before="$(snap_tree "$P")"; cstat="$(git -C "$CORE" status --porcelain)"
 run "$P"; fails "specs/a.md exists (read-only dir)"
 chmod 755 "$P/docs/specs"
 # the same with a writable plans/ holding b.md
 rm -rf "$P/docs/specs"; mkdir "$P/docs/plans"; printf '# Mine\n' > "$P/docs/plans/b.md"
-before="$(snap_all "$P")"; cstat="$(git -C "$CORE" status --porcelain)"
+before="$(snap_tree "$P")"; cstat="$(git -C "$CORE" status --porcelain)"
 run "$P"; fails "plans/b.md exists"
 assert_eq "$(cat "$P/docs/plans/b.md")" "# Mine" "the existing plan was overwritten"
 rm -rf "$P/docs/plans"
 if [ "$(id -u)" != 0 ]; then
   # the temp folder cannot be created (mktemp in the read-only project folder fails first)
-  before="$(snap_all "$P")"; cstat="$(git -C "$CORE" status --porcelain)"
+  before="$(snap_tree "$P")"; cstat="$(git -C "$CORE" status --porcelain)"
   chmod 555 "$P"
   run "$P"; chmod 755 "$P"; fails "read-only project folder"
   # a page cannot be read
@@ -356,11 +354,11 @@ case "\$2" in
 esac
 exec "$REALMV" "\$@"
 STUB
-  mkproj "$SANDBOX/rb"; before="$(snap_all "$P")"
+  mkproj "$SANDBOX/rb"; before="$(snap_tree "$P")"
   OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$SANDBOX/plug/scripts/wiki-migrate.sh" "$P" 2>"$SANDBOX/err")"; RC=$?; ERR="$(cat "$SANDBOX/err")"
   assert_eq "$RC" "1" "second mv fails: exit"
   [ -n "$ERR" ] && pass || fail "second mv fails: nothing on stderr"
-  assert_eq "$(snap_all "$P")" "$before" "second mv fails: docs/ not restored"
+  assert_eq "$(snap_tree "$P")" "$before" "second mv fails: docs/ not restored"
 else
   skip "mv-stub tests" "running as root"
 fi
@@ -380,26 +378,26 @@ bash "$WI" "$P" --check >/dev/null 2>&1 && pass || fail "project named old: INDE
 new_sandbox
 mkproj "$SANDBOX/ln"; EXT="$SANDBOX/ext"; mkdir "$EXT"
 mv "$P/docs/superpowers" "$EXT/superpowers"; ln -s "$EXT/superpowers" "$P/docs/superpowers"
-ext_before="$(tree_sum "$EXT")"; docs_before="$(snap_all "$P")"
+ext_before="$(tree_sum "$EXT")"; docs_before="$(snap_tree "$P")"
 [ -n "$(find "$EXT/superpowers" -type f)" ] && pass || fail "the link target holds no files (nothing to test)"
 for m in --dry-run ""; do
   run "$P" $m
   assert_eq "$RC" "1" "superpowers link ${m:-real}: exit"
   assert_eq "$ERR" "wiki-migrate: docs/superpowers is a symlink; nothing was changed" "superpowers link ${m:-real}: message"
   assert_eq "$(tree_sum "$EXT")" "$ext_before" "superpowers link ${m:-real}: the link target changed"
-  assert_eq "$(snap_all "$P")" "$docs_before" "superpowers link ${m:-real}: the project changed"
+  assert_eq "$(snap_tree "$P")" "$docs_before" "superpowers link ${m:-real}: the project changed"
   assert_eq "$OUT" "" "superpowers link ${m:-real}: stdout"
 done
 # the other folders, each a link to an outside folder
 for l in superpowers/specs superpowers/plans specs plans .obsidian; do
   q="$SANDBOX/l-$(echo "$l" | tr '/.' '__')"; mkproj "$q"; X="$q-target"; mkdir -p "$X"
   if [ -d "$P/docs/$l" ]; then mv "$P/docs/$l" "$X/t"; else mkdir "$X/t"; printf 'x\n' > "$X/t/keep.md"; fi
-  ln -s "$X/t" "$P/docs/$l"; xb="$(tree_sum "$X")"; pb="$(snap_all "$P")"
+  ln -s "$X/t" "$P/docs/$l"; xb="$(tree_sum "$X")"; pb="$(snap_tree "$P")"
   run "$P" --dry-run
   assert_eq "$RC" "1" "docs/$l link: exit"
   assert_eq "$ERR" "wiki-migrate: docs/$l is a symlink; nothing was changed" "docs/$l link: message"
   assert_eq "$(tree_sum "$X")" "$xb" "docs/$l link: target changed"
-  assert_eq "$(snap_all "$P")" "$pb" "docs/$l link: project changed"
+  assert_eq "$(snap_tree "$P")" "$pb" "docs/$l link: project changed"
 done
 
 # --- I2: 0.6 lines in CLAUDE.md are reported (dry run and real run), never edited

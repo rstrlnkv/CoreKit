@@ -98,6 +98,35 @@ sync_tools() { bash "$SCRIPTS/sync-tools.sh" "$PLUGIN" "$COREDEV_TOOLS" >/dev/nu
 # (NUL-separated, so names with spaces or non-ASCII characters are summed too.)
 tree_sum() { (cd "$1" && find . -type f -not -path '*/.git/*' -print0 | xargs -0 cksum | LC_ALL=C sort -k3); }
 
+# snap_tree <dir>... — everything a refusal or a failed step must not change, as text to compare. For each dir: the
+# file sums (tree_sum), every path with its type (d, f, l, ? for another kind) and a link's target, and for each git
+# repo under it (a .git folder or file) its branch, HEAD, `status --porcelain` and which of REVERT_HEAD, MERGE_HEAD,
+# CHERRY_PICK_HEAD and index.lock exist. Read errors (an unreadable folder) are left out.
+snap_tree() {
+  local d
+  for d in "$@"; do
+    printf '== %s\n' "$d"
+    [ -d "$d" ] || { echo "no folder"; continue; }
+    tree_sum "$d" 2>/dev/null
+    (cd "$d" && find . -name .git -prune -print -o -print 2>/dev/null | LC_ALL=C sort | while IFS= read -r p; do
+      if [ -L "$p" ]; then printf 'l %s -> %s\n' "$p" "$(readlink "$p")"
+      elif [ -d "$p" ]; then printf 'd %s\n' "$p"
+      elif [ -f "$p" ]; then printf 'f %s\n' "$p"
+      else printf '? %s\n' "$p"; fi
+    done
+    find . -name .git -prune -print 2>/dev/null | LC_ALL=C sort | while IFS= read -r g; do
+      r="${g%/.git}"; printf 'repo %s\n' "$r"
+      git -C "$r" symbolic-ref -q HEAD 2>&1; git -C "$r" rev-parse -q --verify HEAD 2>&1
+      git -C "$r" status --porcelain 2>&1
+      git -C "$r" rev-parse --git-path REVERT_HEAD --git-path MERGE_HEAD --git-path CHERRY_PICK_HEAD \
+        --git-path index.lock 2>/dev/null | while IFS= read -r m; do
+        case "$m" in /*) ;; *) m="$r/$m" ;; esac
+        [ ! -e "$m" ] || printf 'has %s\n' "${m##*/}"
+      done
+    done)
+  done
+}
+
 # path_without <tool>... — prints a PATH (one new folder in the sandbox) with a link to every command of the current
 # PATH except the named tools; the first folder that has a name wins, as in a PATH lookup. "/usr/bin:/bin" does not
 # hide a tool: a Linux runner keeps gh in /usr/bin beside git.

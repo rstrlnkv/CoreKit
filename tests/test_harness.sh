@@ -184,6 +184,26 @@ OUT="$(cd "$T" && KEEP_SANDBOX=1 TMPDIR="$RT" bash run.sh env 2>&1)"; has "kept:
 assert_eq "$(left)" "1" "run.sh KEEP_SANDBOX=1 keeps its root"
 chmod -R u+rwx "$RT"; rm -rf "$RT"
 
+# --- snap_tree: two snapshots with no change are identical; each change below alters the snapshot, and undoing it
+# gives the first snapshot back. The repo is nested, as a code repo sits under a sandbox.
+S="$SANDBOX/snap"; G="$S/a repo"; mkdir -p "$G/sub"
+git init -q "$G"; echo one > "$G/f"; ln -s f "$G/l"; git -C "$G" add -A; git -C "$G" commit -q -m one
+echo two > "$G/f"; git -C "$G" commit -q -am two
+S0="$(snap_tree "$S")"
+assert_eq "$(snap_tree "$S")" "$S0" "snap_tree: no change, same snapshot"
+# changed <label> <change> <undo> — the change alters the snapshot; the undo restores it
+changed() {
+  eval "$2"; [ "$(snap_tree "$S")" != "$S0" ] && pass || fail "snap_tree misses: $1"
+  eval "$3"; assert_eq "$(snap_tree "$S")" "$S0" "snap_tree after undoing: $1"
+}
+changed "a retargeted link" 'ln -sfn sub "$G/l"' 'ln -sfn f "$G/l"'
+changed "an empty folder" 'mkdir "$S/empty"' 'rmdir "$S/empty"'
+changed ".git/REVERT_HEAD" 'git -C "$G" rev-parse HEAD > "$G/.git/REVERT_HEAD"' 'rm "$G/.git/REVERT_HEAD"'
+changed ".git/index.lock" ': > "$G/.git/index.lock"' 'rm "$G/.git/index.lock"'
+H="$(git -C "$G" rev-parse HEAD)"
+changed "git reset --soft HEAD~1" 'git -C "$G" reset -q --soft HEAD~1' 'git -C "$G" reset -q --soft "$H"'
+snap_tree "$SANDBOX/no such folder" | grep -q . && pass || fail "snap_tree prints nothing for a missing folder"
+
 # --- skips go through skip (SKIP-1, TEST-7): no test file has an old-style `echo "SKIP ..."` or `echo "  note: ..."`
 # line, which run.sh lists only when its words happen to match. The echo must start a command (the fixture above
 # that writes such a line into a fake file, and a comment that quotes one, are not matches).

@@ -34,7 +34,6 @@ scaffold_old u-app; P="$CORE_DIR/u-app"; C="$P/code"; K="$CORE_DIR/knowledge"
 cd "$C" || exit 1
 bash "$SAVE" init >/dev/null 2>&1
 step_id() { git -C "$1" log -1 --format=%B | sed -n 's/^Step-Id: //p'; }
-state() { git -C "$C" status --porcelain; git -C "$CORE_DIR" status --porcelain; tree_sum "$C"; tree_sum "$CORE_DIR"; }
 no_revert_left() { local r; for r in "$C" "$CORE_DIR"; do
   git -C "$r" rev-parse -q --verify REVERT_HEAD >/dev/null && fail "revert left in progress in $r" || pass; done; }
 echo two > "$C/two.txt"; echo two > "$P/docs/f.md"; bash "$SAVE" two >/dev/null 2>&1; TWO=$(step_id "$C")
@@ -45,10 +44,10 @@ echo loose > "$CORE_DIR/other/loose.md"; echo edited >> "$CORE_DIR/edge-app/CLAU
 
 # failure path: a conflicting undo (code revert applied, Core revert conflicts) leaves both repos
 # exactly as they were, the other project's staged file included
-before=$(state)
+before=$(snap_tree "$C" "$CORE_DIR")
 assert_exit 1 bash "$UNDO" "$TWO"
 echo "$OUT" | grep -q 'conflicts' && pass || fail "no conflict message: $OUT"
-assert_eq "$(state)" "$before" "a failed undo changed the repos"
+assert_eq "$(snap_tree "$C" "$CORE_DIR")" "$before" "a failed undo changed the repos"
 assert_eq "$(git -C "$CORE_DIR" diff --cached --name-only)" "other/notes.md" "another project's staged file lost"
 no_revert_left
 
@@ -65,10 +64,10 @@ no_revert_left
 
 # unsaved changes in a shared Core file the step could include block the undo
 echo unsaved > "$K/unsaved.md"
-before=$(state)
+before=$(snap_tree "$C" "$CORE_DIR")
 assert_exit 1 bash "$UNDO"
 echo "$OUT" | grep -q 'Unsaved changes' && pass || fail "no unsaved-changes message: $OUT"
-assert_eq "$(state)" "$before" "a refused undo changed the repos"
+assert_eq "$(snap_tree "$C" "$CORE_DIR")" "$before" "a refused undo changed the repos"
 rm -f "$K/unsaved.md"
 
 # a step with code and a shared Core file (knowledge/) is undone in full
@@ -100,9 +99,9 @@ echo a1 > "$C/a1.txt"; bash "$SAVE" "A step" >/dev/null 2>&1
 (cd "$E" && echo b1 > b1.txt && echo b > "$K/b.md" && bash "$SAVE" "B step") >/dev/null 2>&1
 BID=$(step_id "$CORE_DIR")
 assert_eq "$(git -C "$CORE_DIR" show --name-only --format= HEAD)" "knowledge/b.md" "B's Core commit is not shared-only"
-before=$(state)
+before=$(snap_tree "$C" "$CORE_DIR")
 assert_exit 0 bash "$UNDO" "$BID"
-assert_eq "$(state)" "$before" "another project's shared-only step was touched"
+assert_eq "$(snap_tree "$C" "$CORE_DIR")" "$before" "another project's shared-only step was touched"
 assert_exit 0 bash "$UNDO"
 assert_no_file "$C/a1.txt"; assert_file "$K/b.md"; assert_file "$E/b1.txt"
 (cd "$E" && bash "$UNDO") >/dev/null 2>&1
@@ -137,9 +136,9 @@ assert_eq "$(cat "$C/s.txt")" "x" "renamed file not undone"; assert_no_file "$C/
 echo x > "$C/r2.txt"; echo q1 > "$C/q.txt"; bash "$SAVE" c1 >/dev/null 2>&1
 echo y > "$C/r2.txt"; echo q2 > "$C/q.txt"; bash "$SAVE" c2 >/dev/null 2>&1; C2=$(step_id "$C")
 git -C "$C" mv r2.txt s2.txt; echo q3 > "$C/q.txt"; bash "$SAVE" c3 >/dev/null 2>&1
-before=$(state)
+before=$(snap_tree "$C" "$CORE_DIR")
 assert_exit 1 bash "$UNDO" "$C2"
-assert_eq "$(state)" "$before" "a failed undo changed a renamed file"
+assert_eq "$(snap_tree "$C" "$CORE_DIR")" "$before" "a failed undo changed a renamed file"
 no_revert_left
 
 # failure path: folders the revert created for a file it brought back are removed again
@@ -153,9 +152,9 @@ assert_no_file "$C/gone"; no_revert_left
 echo 1 > "$C/g.txt"; bash "$SAVE" g1 >/dev/null 2>&1
 echo 2 > "$C/g.txt"; bash "$SAVE" g2 >/dev/null 2>&1; G2=$(step_id "$C")
 rm "$C/g.txt"; bash "$SAVE" g3 >/dev/null 2>&1
-before=$(state)
+before=$(snap_tree "$C" "$CORE_DIR")
 assert_exit 1 bash "$UNDO" "$G2"
-assert_eq "$(state)" "$before" "a failed modify/delete undo changed the repos"
+assert_eq "$(snap_tree "$C" "$CORE_DIR")" "$before" "a failed modify/delete undo changed the repos"
 assert_no_file "$C/g.txt"; no_revert_left
 
 # an ignored local file where the undo would bring a saved file back is never overwritten

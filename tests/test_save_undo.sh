@@ -334,7 +334,6 @@ assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "save after the fixes: no Core commit
 git -C "$CORE_DIR" config user.useConfigOnly true
 noid_save() { (cd "$C" && env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL \
   bash "$SAVE" "$1") > "$SANDBOX/out" 2>&1; }
-trees() { git -C "$C" status --porcelain; git -C "$CORE_DIR" status --porcelain; tree_sum "$C"; tree_sum "$CORE_DIR"; }
 echo "code only" > "$C/noid.txt"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
 noid_save "Code only, no Core identity"; rc=$?
 assert_eq "$rc" "0" "a code-only step was refused for the Core's identity: $(cat "$SANDBOX/out")"
@@ -342,13 +341,13 @@ assert_eq "$(cnt "$C")" "$((nc+1))" "code-only step with no Core identity: no co
 assert_eq "$(cnt "$CORE_DIR")" "$nd" "code-only step made a Core commit"
 assert_eq "$(git -C "$C" log -1 --format=%s)" "Code only, no Core identity"
 echo "noid 2" > "$C/noid.txt"; echo "noid" >> "$P/docs/brief.md"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
-before=$(trees)
+before=$(snap_tree "$C" "$CORE_DIR")
 noid_save "Docs, no Core identity"; rc=$?
 [ "$rc" != 0 ] && pass || fail "a step with docs saved with no identity in the Core"
 assert_contains "$SANDBOX/out" "identity"; assert_contains "$SANDBOX/out" "nothing saved"
 assert_eq "$(cnt "$C")" "$nc" "code commit made although the Core cannot commit the docs"
 assert_eq "$(cnt "$CORE_DIR")" "$nd" "Core commit made with no identity"
-assert_eq "$(trees)" "$before" "a refused save changed a tree"
+assert_eq "$(snap_tree "$C" "$CORE_DIR")" "$before" "a refused save changed a tree"
 git -C "$CORE_DIR" config --unset user.useConfigOnly
 (cd "$C" && bash "$SAVE" "Docs with identity") >/dev/null 2>&1
 assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "save with the Core identity back: no Core commit"
