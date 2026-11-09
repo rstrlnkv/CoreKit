@@ -58,9 +58,10 @@ commit log has the full detail.
 - wiki-check `--code` reads a `files:` entry as the drift check does: an absolute entry
   (`/src/x`) or one that climbs out of the code root (`src/../../x`) is reported as a missing
   file instead of passing while it could never drift.
-- setup-core, scaffold and adopt name the file when a link at a file they create loops
+- setup-core and scaffold name the file when a link at a file they create loops
   (`README.md -> README.md`) or is a chain of more than 16 links, and say to fix or remove it;
-  before, setup-core stopped with exit 1 and no message. Nothing is written.
+  before, they stopped with exit 1 and no message. The link is left as it is; files made before it
+  stay, and a rerun after the fix completes.
 
 ## [0.12.0] - 2026-11-09
 
