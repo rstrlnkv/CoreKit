@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# scripts/patch-paths.awk and lib.sh patch_paths: the file paths of a Codex apply_patch text.
+# scripts/patch-paths.awk and guard-lib.sh patch_paths: the file paths of a Codex apply_patch text.
 # Output "<kind>\t<path>": W written (Add, Update without Move, Move destination), S Move source,
 # D Delete, X unreadable (no Begin Patch, or an unknown *** line in a hunk position).
 # The same paths against the real Codex parser (a TAB or CR in a path, CR-only line ends): test_codex_patch_parity.sh.
 source "$(dirname "$0")/lib.sh"
 new_sandbox
 . "$SCRIPTS/lib.sh"
+. "$SCRIPTS/guard-lib.sh"
 SELF="$PLUGIN"
 
 # pp <text> — the adapter output with the TAB shown as '>'

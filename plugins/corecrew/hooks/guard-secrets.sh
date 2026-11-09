@@ -89,6 +89,7 @@ in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/scripts/shell-patch.sh" 2>/dev/null || exit 0   # shell_patch_host, shell_patch_refused (Codex)
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
+. "$SELF/scripts/guard-lib.sh" 2>/dev/null || exit 0   # TAB, guard_refuse, guard_lex, guard_patch, ...: both guards share them
 
 tool="$(json_str "$in" tool_name)"
 case "$tool" in Read|Edit|Write|NotebookEdit|Grep|Glob|apply_patch|Bash) ;; *) exit 0 ;; esac
@@ -98,8 +99,7 @@ load_settings
 project_of "$cwd" >/dev/null || exit 0
 
 die() {
-  printf '%s\n%s\n' "$(msg secrets_blocked "$1")" "$(msg secrets_ask)" >&2
-  exit 2
+  guard_refuse "$(msg secrets_blocked "$1")" "$(msg secrets_ask)"
 }
 
 # is_secret_name <name> — exit 0 for .env, .env.<x> (x not example, sample, template) and a name that
@@ -168,17 +168,22 @@ is_secret() {
 raw_hit() {
   local t hit
   t="$(cat)"
-  hit="$({ printf '%s' "$t"; } 2>/dev/null | LC_ALL=C tr '\134\057\042[:space:]\054:;=()<>&|\173\175\140\047' '\n' \
+  hit="$({ printf '%s' "$t"; } 2>/dev/null | guard_components \
     | LC_ALL=C grep -iE '^\.env([*?]|\.|$)' | LC_ALL=C grep -viE '^\.env\.(example|sample|template)$' | LC_ALL=C sed -n 1p)"
   if [ -n "$hit" ]; then printf '%s' "$hit"; return 0; fi
   if printf '%s' "$t" 2>/dev/null | LC_ALL=C grep -qiE '/\.ssh([/"\\]|$)'; then printf '.ssh'; return 0; fi
   return 1
 }
 
+# judge_patch <kind> <path> — one path of the patch (guard_patch): the file written (W) and the source of a move (S).
+# shellcheck disable=SC2329  # called by name through guard_patch
+judge_patch() {
+  case "$1" in W|S) if is_secret "$2"; then die "$2"; fi ;; esac
+}
+
 # --- apply_patch (Codex): the paths written or moved are judged like a file tool's; a delete passes.
 if [ "$tool" = apply_patch ]; then
   patch="$(json_str "$in" command)"
-  TAB="$(printf '\t')"
   if [ -z "$patch" ]; then
     # no string to read (missing, empty, not a string): only the "***" header lines of the raw text count
     hit="$({ printf '%s' "$in"; } 2>/dev/null | sed 's/\\n/\
@@ -186,17 +191,9 @@ if [ "$tool" = apply_patch ]; then
     exit 0
   fi
   # the reader is missing or failed: nothing can be judged (a name may hide a TAB), refuse; ran with no output: pass
-  found="$(patch_paths "$patch")" || { printf '%s\n' "$(msg patch_no_reader)" >&2; exit 2; }
-  [ -n "$found" ] || exit 0
-  unreadable=""
-  while IFS="$TAB" read -r kind a; do
-    case "$kind" in
-      C) printf '%s\n' "$(msg patch_too_many 100)" >&2; exit 2 ;;
-      W|S) if is_secret "$a"; then die "$a"; fi ;;
-      X) unreadable=1 ;;
-    esac
-  done <<< "$found"
-  if [ -n "$unreadable" ]; then
+  guard_patch "$patch" judge_patch
+  case "$?" in 1) guard_refuse "$(msg patch_no_reader)" ;; 2) guard_refuse "$(msg patch_too_many 100)" ;; esac
+  if [ -n "$PATCH_X" ]; then
     hit="$(printf '%s\n' "$patch" | LC_ALL=C grep -F '***' | raw_hit)" && die "$hit"
   fi
   exit 0
@@ -210,18 +207,15 @@ if [ "$tool" = Bash ]; then
     exit 0
   fi
   # A Codex patch handed to the shell is refused, in Codex only (see the header).
-  if shell_patch_host "$in" && shell_patch_refused "$cmd"; then printf '%s\n' "$(msg patch_shell "$SHELL_PATCH_HIT")" >&2; exit 2; fi
+  if guard_shell_patch "$in" "$cmd"; then guard_refuse "$(msg patch_shell "$SHELL_PATCH_HIT")"; fi
   # Cheap exit: a secret path has a dot in it (.env, .ssh; quotes or a backslash in the name are
   # removed by the lexer, so the raw text is not searched for ".env"). Everything else is lexed.
   case "$cmd" in *.*) ;; *) exit 0 ;; esac
   [ -r "$SELF/scripts/bash-lex.awk" ] && [ -r "$SELF/scripts/bashlex-guard-secrets.awk" ] || exit 0
-  # spaces become \004 when the command has no \004 byte: the tokenizer then reads a plain word whole (scripts/bash-lex.awk, Speed)
-  sp=' '; lexsp=0; eot="$(printf '\004')"; case "$cmd" in *"$eot"*) ;; *) sp="$eot"; lexsp=1 ;; esac
-  targets="$({ printf '%s' "$cmd"; } 2>/dev/null | LC_ALL=C tr '\n\r ' "$(printf '\002')$sp$sp" 2>/dev/null | LC_ALL=C awk -v lexsp="$lexsp" -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-guard-secrets.awk" 2>/dev/null)"
+  targets="$(guard_lex bashlex-guard-secrets.awk "$cmd")"
   # awk itself failed: the command is unknown, so a secret-looking string in it is refused
   if [ "$?" -ne 0 ]; then hit="$({ printf '%s' "$cmd"; } 2>/dev/null | raw_hit)" && die "$hit"; exit 0; fi
   [ -n "$targets" ] || exit 0
-  TAB="$(printf '\t')"
   stopped=""
   while IFS="$TAB" read -r kind a unk judged; do
     if [ "$kind" = X ]; then stopped=1; continue; fi

@@ -26,6 +26,7 @@ plugins/corecrew/                 project workflow
                                   lib-host.sh, lib-scaffold.sh, lib-json.sh; and, each for one subcommand
                                   only, lib-codex-profile.sh, lib-role-model.sh, lib-tree-state.sh
     shell-patch.sh                the check for a Codex patch handed to the shell (sourced by both guards)
+    guard-lib.sh                  what both guards share: the refusal, the tokenizer call, the patch reader
     bash-lex.awk                  the one Bash tokenizer, for bashlex-guard-code.awk (the code guard: the
                                   files a command writes), bashlex-guard-secrets.awk (the secrets guard)
                                   and bashlex-readonly.awk (the read-only checker rule)

@@ -177,7 +177,7 @@ n="$(wc -l < "$LIB" | tr -d ' ')"
 [ "$n" -le 250 ] && pass || fail "lib.sh is $n lines; its helpers belong in its parts"
 HELPERS="expand_home canon_dir coredev_get core_ready coredev_set opt_value settings_file_path _sf_load _sf_get _setting_valid
   _nl_trim expand_home_r canon_dir_r _basename_r _dirname_r _coredev_get_r _sfp_r _sf_get_r
-  _resolve_setting _settings_file_check resolve_setting _core_raw load_settings json_str patch_paths
+  _resolve_setting _settings_file_check resolve_setting _core_raw load_settings json_str
   _project_of_path worktree_of project_of wt_is_main_of code_root_of code_dir_of layout_of valid_project_name lc norm_path
   resolve_abs codex_home host tools_dir hooks_marker_path plugin_version rel_core esc render put mkdir_p git_init
   project_docs_manifest put_project_docs link_file_to_claude link_local_claude link_agents projects_entry projects_upsert"
@@ -186,6 +186,9 @@ missing="$( ( . "$LIB"; for fn in $HELPERS; do type "$fn" >/dev/null 2>&1 || ech
 assert_eq "$missing" "" "helpers not defined after sourcing lib.sh"
 # shellcheck disable=SC1090
 assert_eq "$( ( . "$LIB"; type shell_patch_refused >/dev/null 2>&1 && echo defined ) )" "" "shell_patch_refused is in lib.sh"
+# the guards' shared code is scripts/guard-lib.sh, which only the two guards source
+# shellcheck disable=SC1090
+assert_eq "$( ( . "$LIB"; type patch_paths >/dev/null 2>&1 && echo defined ) )" "" "patch_paths is in lib.sh"
 # sourced through a relative path from another folder, then used after a cd: the parts are still found
 OUT="$(cd "$PLUGIN" && . scripts/lib.sh && cd / && json_str '{"a":"b"}' a && echo && valid_project_name foo && echo ok)"
 assert_eq "$OUT" "$(printf 'b\nok')" "lib.sh sourced by a relative path, used after a cd"
