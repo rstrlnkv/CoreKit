@@ -9,6 +9,11 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+### Changed
+
+- wiki-check: pages with status done or superseded no longer report drift; with `--code`, an active
+  page whose `files:` names a missing path is reported, and task's release blocks on it.
+
 ### Deprecated
 
 - The older formats in `reference/older-formats.md` (a wiki without types, a brief with a stage

@@ -146,6 +146,15 @@ grep -qiE 'old layout[^.]*warning|warning[^.]*old layout' "$ADO" && pass || fail
 if grep -rlF 'md-structure-design' "$PLUGIN" >/dev/null 2>&1; then
   for f in $(grep -rlF 'md-structure-design' "$PLUGIN"); do fail "$f names the private spec path md-structure-design"; done
 else pass; fi
+# R3-34: every wiki-check run of the chain checks the files: paths against the code root (--code):
+# the Start baseline, release, engineer and verifier; the brief hands the code root to both agents.
+printf '%s\n' "$st" | grep -qF 'wiki-check.sh" "<Core>/<project>" --code "<code root>"' && pass || fail "SKILL.md Start: the baseline wiki-check lacks --code \"<code root>\""
+for f in "$REL" "$ENG" "$VER" "$WK"; do
+  grep 'wiki-check' "$f" | grep -qF -- '--code' && pass || fail "$(basename "$f"): no wiki-check line names --code"
+done
+grep -qF 'wiki-check.sh <project_dir> [--code <dir>] [--changed <path>...]' "$WK" && pass || fail "wiki.md usage line lacks --code"
+b5="$(awk '/^5\. \*\*Plugin paths\*\*/ {f=1} /^6\. / {f=0} f' "$PLUGIN/skills/task/references/brief.md")"
+printf '%s\n' "$b5" | grep -qF 'code root' && pass || fail "brief.md item 5 does not give the code root"
 # all six agents call INDEX.md the generated map
 for f in "$PLUGIN"/agents/*.md; do
   grep -F 'docs/INDEX.md' "$f" | grep -qi 'generated' && pass || fail "$(basename "$f") does not call docs/INDEX.md the generated map"

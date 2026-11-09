@@ -19,7 +19,7 @@ Every page starts with all six fields, in this order; these six are all, any oth
 - `type`: `brief`, `architecture`, `decision`, `feature`, `spec`, `plan` or `glossary`.
 - `status`: `draft`, `active`, `done` or `superseded`.
 - `description`: one line, at most 80 characters (surrounding quotes do not count).
-- `files`: code paths relative to the code root; a path ending in `/` is a folder; `[]` for none.
+- `files`: code paths relative to the code root that exist (add a new file when it is created); a path ending in `/` is a folder; `[]` for none.
 - `related`: other pages as `[[name]]` links; `[]` for none.
 - `updated`: `YYYY-MM-DD`, the last content change.
 
@@ -42,11 +42,11 @@ each: `[[name]] description`. Pages with status `done` or `superseded` are count
 
 ## Who keeps it true
 
-- engineer is the only author of wiki edits. When a change touches a code file, engineer updates
-  every page whose `files:` lists it (content and `updated`), writes a decision file for a new
-  decision, then runs `wiki-index.sh`.
-- verifier runs `wiki-check.sh`; release runs `wiki-index.sh`, then `wiki-check.sh`, and refuses
-  to commit while it is red. `docs/knowledge/` and `docs/standards/` are outside these rules.
+- engineer is the only author of wiki edits. When a change touches a code file, engineer updates every
+  page whose `files:` lists it (content and `updated`), writes a decision file for a new decision, then runs
+  `wiki-index.sh`. Pages with status `done` or `superseded` are history: never edited for a code change.
+- verifier runs `wiki-check.sh --code`; release runs `wiki-index.sh`, then `wiki-check.sh --code`, and
+  refuses to commit while it is red. `docs/knowledge/` and `docs/standards/` are outside these rules.
 
 ## Old wikis
 
@@ -56,7 +56,7 @@ file, section Wiki without types.
 
 ## Checking
 
-`bash scripts/wiki-check.sh <project_dir> [--changed <path>...]` prints
+`bash scripts/wiki-check.sh <project_dir> [--code <dir>] [--changed <path>...]` prints
 `wiki-check: <file>: <problem>` (`<file>` relative to `docs/`) per failure and exits 1; silent and 0 when green.
 
 | Problem | Meaning |
@@ -71,7 +71,8 @@ file, section Wiki without types.
 | `unclosed front matter`, `duplicate heading <h>` | no closing `---`; the same `##` heading twice in a page |
 | `page over 8 KB without ## headings` | add headings or split the page |
 | `INDEX.md stale` | `wiki-index.sh --check` fails: run `wiki-index.sh` |
-| `drift: <code path> changed, page not updated` | `--changed` names a code file a page's `files:` lists, page not changed |
+| `drift: <code path> changed, page not updated` | `--changed` names a code file a draft or active page's `files:` lists, page not changed |
+| `missing file <path>` | `--code` (the code root): an active page's `files:` entry is not in its working tree |
 
 Also `wiki-check: INDEX.md: missing` (other checks still run) and `wiki-check: docs: missing docs/ directory` (nothing else is checked).
 `--changed` takes code-root-relative paths (as `git diff --name-only` prints there). A changed page
