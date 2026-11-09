@@ -65,6 +65,10 @@ run: `claude plugin eval plugins/corecrew --ablation none --no-publish`.
   `tests/test_no_personal.sh` checks it.
 - **English** in every file, comment and commit message. A README may have translations
   (`README.<code>.md`).
+- **Texts a person reads** (what a hook prints) go in the plugin's message table, in every language:
+  `plugins/corecrew/hooks/messages.sh` or `plugins/coremodel/hooks/locales/`. Output of a script a
+  skill runs stays English; [ARCHITECTURE.md](ARCHITECTURE.md#how-the-parts-fit) has the rule and
+  its exceptions.
 
 ## Commits and pull requests
 

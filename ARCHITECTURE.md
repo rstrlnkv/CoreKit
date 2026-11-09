@@ -127,6 +127,15 @@ hook trust           on install                          after you enable them i
   (the `.env` templates): `CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` in any folder, `/.claude/`
   and `/docs/superpowers/` at the root only, `.env` and `.env.*`
   (not `.envrc`, `.env.example`, `.env.sample` or `.env.template`), `*.pem` and `*.key`.
+- **Texts and languages.** A text a hook prints, or one a person reads with no model in between,
+  lives in its plugin's message table in every language: `plugins/corecrew/hooks/messages.sh`
+  (`msg`, the languages in `MSG_LANGS`) and `plugins/coremodel/hooks/locales/`. The output of a
+  script a skill runs is English protocol; the model relays it in the person's language. Named
+  exceptions stay English: the git hooks and the output of `install-hooks.sh`, coremodel's Codex
+  hint (`plugins/coremodel/codex/hint.sh`) and the read-only checker's refusal, which only a
+  subagent reads (`MSG_EN_ONLY` in messages.sh). Manifests are English.
+  `tests/test_hook_messages.sh` allows Cyrillic in shipped plugin code only in those tables (and in
+  comments and in the example prompts of coremodel's classifier, which no person reads).
 - **The Core.** The private repo (`~/Projects/Core` by default) holds the standards, knowledge and
   each project's `CLAUDE.md` and `docs/` wiki. The code lives in its own repo beside it; a
   gitignored `CLAUDE.local.md` link in the code folder loads the private `CLAUDE.md`.

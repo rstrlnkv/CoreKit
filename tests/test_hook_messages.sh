@@ -68,6 +68,16 @@ for k in $(. "$M" 2>/dev/null; echo $MSG_KEYS); do
 done
 assert_contains "$M" "To add a language, add it to MSG_LANGS"   # the header says how to add a language
 
+# --- Which texts are translated (ARCHITECTURE.md, "Texts and languages"): in shipped plugin code, Cyrillic only in the
+# message tables (corecrew's messages.sh, coremodel's hooks/locales/). Comments and the coremodel classifier's prompt
+# (example prompts for the model, read by no person) are no texts. Tests, evals and README.<code>.md are not scanned.
+CYR=$'[\xd0-\xd3][\x80-\xbf]'
+cyr_hits="$(cd "$ROOT" && for d in plugins/*/hooks plugins/*/scripts plugins/*/skills plugins/*/agents plugins/*/git-hooks \
+    plugins/*/codex plugins/*/templates; do [ -d "$d" ] && LC_ALL=C grep -rnE "$CYR" "$d"; done \
+  | LC_ALL=C grep -vE '^(plugins/corecrew/hooks/messages\.sh|plugins/coremodel/hooks/locales/[^:]*|plugins/coremodel/hooks/classifier\.ts|[^:]*/README\.[A-Za-z-]+\.md):' \
+  | LC_ALL=C grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//|/\*|\*( |$))')"
+assert_eq "$cyr_hits" "" "Cyrillic in shipped plugin code outside the message tables"
+
 # --- msg: language choice and verbatim arguments.
 text() { # text <lang-variant> <key> [args]
   local v="$1"; shift
