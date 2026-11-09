@@ -115,7 +115,7 @@ _setting_valid() {
     core_dir:"~"|core_dir:"~/"*|core_dir:/*) return 0 ;;
     attribution:allow|attribution:forbid) return 0 ;;
     model_profile:economy|model_profile:balanced|model_profile:strong) return 0 ;;
-    ui_language:en|ui_language:ru) return 0 ;;
+    ui_language:en|ui_language:ru) return 0 ;;   # the same list as MSG_LANGS in hooks/messages.sh
   esac
   return 1
 }

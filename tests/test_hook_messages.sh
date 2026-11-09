@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # hooks/messages.sh and the language of every message the five hooks show. The plugin setting
-# ui_language (CLAUDE_PLUGIN_OPTION_UI_LANGUAGE) is en (default) or ru; an unset, empty, unknown or
-# unsubstituted "${user_config.ui_language}" value means en. Arguments print verbatim. Every key in the
-# table has both an en and a ru text. Exit codes and stdout/stderr channels stay as they were.
+# ui_language (CLAUDE_PLUGIN_OPTION_UI_LANGUAGE) is one of MSG_LANGS (en, the default, and ru); an unset, empty,
+# unknown or unsubstituted "${user_config.ui_language}" value means en. Arguments print verbatim. Every key in the
+# table has a text in every language. Exit codes and stdout/stderr channels stay as they were.
 source "$(dirname "$0")/lib.sh"
 source "$(dirname "$0")/lib-hook.sh"
 new_sandbox
@@ -11,34 +11,61 @@ export CLAUDE_PLUGIN_ROOT="$PLUGIN"
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
 assert_file "$M"
 
-# --- The table: both languages for every key; the key list matches the branches; every key used by a hook exists.
+# --- The table: one list of languages (MSG_LANGS); every key has a text in each, with the same @N placeholders as
+# its en text; MSG_KEYS matches the branches, and a key's branches stand together; every key a caller uses exists.
 (
   . "$M" 2>/dev/null || exit 3
-  [ -n "${MSG_KEYS:-}" ] || exit 4
-  for k in $MSG_KEYS; do
-    msg_has "$k" en || { echo "key $k lacks en"; exit 1; }
-    msg_has "$k" ru || { echo "key $k lacks ru"; exit 1; }
+  [ -n "${MSG_KEYS:-}" ] && [ -n "${MSG_LANGS:-}" ] || exit 4
+  for l in $MSG_LANGS; do
+    for k in $MSG_KEYS; do msg_has "$k" "$l" || { echo "key $k lacks $l"; exit 1; }; done
   done
   exit 0
-) >"$SANDBOX/tbl.out" 2>&1; assert_eq "$?" "0" "every key has en and ru: $(cat "$SANDBOX/tbl.out")"
-branches="$(grep -oE '^[[:space:]]*(en|ru):[a-z_]+\)' "$M" | sed -E 's/^[[:space:]]*//; s/\)$//' | LC_ALL=C sort)"
-wanted="$(. "$M" 2>/dev/null; for k in $MSG_KEYS; do echo "en:$k"; echo "ru:$k"; done | LC_ALL=C sort)"
-assert_eq "$branches" "$wanted" "MSG_KEYS and the en:/ru: branches agree"
-used="$(grep -ohE '\bmsg[[:space:]]+[a-z_]+' "$HOOKS"/session-start.sh "$HOOKS"/guard-code.sh "$HOOKS"/guard-secrets.sh \
-  "$HOOKS"/one-suite.sh "$HOOKS"/stop-remind.sh "$SCRIPTS"/prepare.sh "$M" | awk '{print $2}' | LC_ALL=C sort -u)"
-[ -n "$used" ] && pass || fail "no hook calls msg"
-for k in $used; do (. "$M"; msg_has "$k" en) && pass || fail "hook uses key $k that is not in the table"; done
-for k in $(. "$M" 2>/dev/null; echo $MSG_KEYS); do
-  printf '%s\n' "$used" | grep -qx "$k" && pass || fail "key $k is not used by any hook"
+) >"$SANDBOX/tbl.out" 2>&1; assert_eq "$?" "0" "every key has a text in every language: $(cat "$SANDBOX/tbl.out")"
+LANGS="$(. "$M" 2>/dev/null; echo "${MSG_LANGS:-}")"
+[ -n "$LANGS" ] && pass || fail "messages.sh has no MSG_LANGS"
+# the other two lists of languages: the plugin option's choices and the values lib-settings.sh accepts
+opts="$(sed -n '/"ui_language"/,/}/s/.*"options": *\[\(.*\)\].*/\1/p' "$PLUGIN/.claude-plugin/plugin.json" | sed 's/"//g; s/, */ /g')"
+assert_eq "$opts" "$LANGS" "the ui_language options in plugin.json are MSG_LANGS"
+accepted="$(grep -oE 'ui_language:[a-z]+' "$SCRIPTS/lib-settings.sh" | sed 's/^ui_language://' | tr '\n' ' ' | sed 's/ $//')"
+assert_eq "$accepted" "$LANGS" "the ui_language values lib-settings.sh accepts are MSG_LANGS"
+branches="$(grep -oE '^[[:space:]]*[a-z]+:[a-z_]+\)' "$M" | sed -E 's/^[[:space:]]*//; s/\)$//' | LC_ALL=C sort)"
+wanted="$(. "$M" 2>/dev/null; for k in $MSG_KEYS; do for l in $MSG_LANGS; do echo "$l:$k"; done; done | LC_ALL=C sort)"
+assert_eq "$branches" "$wanted" "MSG_KEYS times MSG_LANGS and the <lang>:<key> branches agree"
+split="$(awk 'match($0, /^[[:space:]]*[a-z]+:[a-z_]+\)/) { k = substr($0, RSTART, RLENGTH); sub(/^[[:space:]]*[a-z]+:/, "", k); sub(/\)$/, "", k)
+  if (k != prev && (k in seen)) print k; seen[k] = 1; prev = k }' "$M")"
+assert_eq "$split" "" "each key's branches stand together"
+ph() { printf '%s' "$1" | grep -oE '@[1-9]' | LC_ALL=C sort -u | tr '\n' ' '; }
+bad="$(. "$M" 2>/dev/null
+  for k in $MSG_KEYS; do
+    msg_has "$k" en; want="$(ph "$MSG_T")"
+    for l in $MSG_LANGS; do
+      msg_has "$k" "$l" || continue
+      got="$(ph "$MSG_T")"; [ "$got" = "$want" ] || echo "key $k: $l has the placeholders '$got', en has '$want'"
+    done
+  done)"
+assert_eq "$bad" "" "every language has the placeholders of the en text"
+assert_eq "$(grep -c 'CLAUDE_PLUGIN_OPTION_UI_LANGUAGE' "$M")" "0" "messages.sh reads the language only through lib.sh"
+# the callers: every corecrew shell file that sources messages.sh (an indented source line too: lib.sh's CLI)
+callers="$(grep -rlE '^[[:space:]]*\. .*/messages\.sh' "$PLUGIN" --include='*.sh' | LC_ALL=C sort)"
+for f in "$HOOKS/session-start.sh" "$HOOKS/stop-remind.sh" "$SCRIPTS/prepare.sh" "$SCRIPTS/lib.sh"; do
+  printf '%s\n' "$callers" | grep -qxF "$f" && pass || fail "the caller list lacks $f: $callers"
 done
-assert_contains "$M" "add one more branch with its texts to each key below"   # the header says how to add a language
+# shellcheck disable=SC2086
+used="$(grep -ohE '\bmsg[[:space:]]+[a-z_]+' $callers "$M" | awk '{print $2}' | LC_ALL=C sort -u)"
+[ -n "$used" ] && pass || fail "no caller calls msg"
+for k in $used; do (. "$M"; msg_has "$k" en) && pass || fail "a caller uses key $k that is not in the table"; done
+# shellcheck disable=SC2086  # the key list is split on purpose
+for k in $(. "$M" 2>/dev/null; echo $MSG_KEYS); do
+  printf '%s\n' "$used" | grep -qx "$k" && pass || fail "key $k is not used by any caller"
+done
+assert_contains "$M" "To add a language, add it to MSG_LANGS"   # the header says how to add a language
 
 # --- msg: language choice and verbatim arguments.
 text() { # text <lang-variant> <key> [args]
   local v="$1"; shift
   case "$v" in
-    unset) ( unset CLAUDE_PLUGIN_OPTION_UI_LANGUAGE; . "$M"; msg "$@" ) ;;
-    *) ( export CLAUDE_PLUGIN_OPTION_UI_LANGUAGE="$v"; . "$M"; msg "$@" ) ;;
+    unset) ( unset CLAUDE_PLUGIN_OPTION_UI_LANGUAGE; . "$SCRIPTS/lib.sh"; . "$M"; msg "$@" ) ;;
+    *) ( export CLAUDE_PLUGIN_OPTION_UI_LANGUAGE="$v"; . "$SCRIPTS/lib.sh"; . "$M"; msg "$@" ) ;;
   esac
 }
 PLACEHOLDER='${user_config.ui_language}'
@@ -267,7 +294,7 @@ rm -f "$SFM"
 assert_eq "$(ftext msg docs_index /p)" "Project docs index: /p" "no file -> en"
 assert_contains_str() { case "$1" in *"$2"*) pass ;; *) fail "$3: $1" ;; esac; }
 assert_lacks_str() { case "$1" in *"$2"*) fail "$3: $1" ;; *) pass ;; esac; }
-wtext() { ( unset CLAUDE_PLUGIN_OPTION_UI_LANGUAGE; CLAUDE_PLUGIN_OPTION_UI_LANGUAGE="$1"; shift; . "$M"; msg_settings_warning "$@" ); }
+wtext() { ( unset CLAUDE_PLUGIN_OPTION_UI_LANGUAGE; CLAUDE_PLUGIN_OPTION_UI_LANGUAGE="$1"; shift; . "$SCRIPTS/lib.sh"; . "$M"; msg_settings_warning "$@" ); }
 for l in en ru; do
   t="$(wtext "$l" core_dir Core option '~/Projects/Core' /f/settings)"
   assert_contains_str "$t" "core_dir" "core_dir warning $l has the key"

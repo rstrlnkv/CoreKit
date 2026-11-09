@@ -5,21 +5,25 @@
 #   msg <key> [arg ...]    prints the text of <key> in the language of the setting ui_language
 #                          (lib.sh resolve_setting: plugin option, then settings file), without a final newline.
 #   msg_has <key> <lang>   exit 0 when the table has a <lang> text for <key>.
-#   MSG_KEYS               the list of keys (tests/test_hook_messages.sh checks both languages for each).
+#   MSG_LANGS              the one list of languages; en is the default.
+#   MSG_KEYS               the list of keys (tests/test_hook_messages.sh checks every language for each).
 #
-# Languages: en (default) and ru. An unset, empty, unknown or unsubstituted "${user_config." value is en
-# (lib.sh not sourced: only the plugin option is read).
+# Source lib.sh first (every hook does). The language is UI_LANGUAGE (load_settings sets it), else lib.sh's
+# resolve_setting ui_language; an empty value, or one not in MSG_LANGS, is en.
 # A key that lacks a text in the chosen language prints its en text.
 # In a text, @1 @2 ... stand for the arguments. They are inserted as plain text (never as a printf
-# format, never re-scanned), so a path with %, spaces, quotes or Cyrillic prints verbatim.
+# format, never re-scanned), so a path with %, spaces, quotes or Cyrillic prints verbatim. Every language of a
+# key has the placeholders of its en text.
 #
-# To add a language, add one more branch with its texts to each key below (a "<lang>:<key>)" line next to the
-# "en:" and "ru:" ones; a key without it falls back to en), and add the language to the ui_language
-# options in .claude-plugin/plugin.json. Nothing else changes.
+# To add a language, add it to MSG_LANGS and give each key below one more branch, a "<lang>:<key>)" line beside
+# the key's other branches (a key's branches stand together). Then add the language to the ui_language options
+# in .claude-plugin/plugin.json and to _setting_valid in scripts/lib-settings.sh. tests/test_hook_messages.sh
+# checks each of these.
 #
 # Portable bash 3.2: no associative arrays, no case-change expansions.
 
-# shellcheck disable=SC2034  # MSG_KEYS is read by tests/test_hook_messages.sh (both languages for every key)
+MSG_LANGS="en ru"
+# shellcheck disable=SC2034  # MSG_KEYS is read by tests/test_hook_messages.sh (every language for every key)
 MSG_KEYS="sync_failed sync_not_ours agents_in_core hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
 session_rules schema_none run_starting layout_note old_hooks hooks_path guard_code_blocked guard_code_public guard_code_too_many patch_too_many patch_unjudgeable patch_no_reader patch_shell secrets_blocked secrets_ask
 local_link_created agents_link_created agents_link_wrong local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind
@@ -27,11 +31,12 @@ readonly_agent settings_invalid_path settings_invalid_value settings_unreadable 
 src_env src_option src_file fix_env fix_option fix_file codex_trust codex_profile"
 
 # _msg_text <lang> <key> — sets MSG_T to the text, or to nothing when there is none. Keep the keys and
-# the en:/ru: branches in step with MSG_KEYS.
+# their <lang>: branches in step with MSG_KEYS and MSG_LANGS.
 _msg_text() {
   MSG_T=""
   case "$1:$2" in
     en:sync_failed) MSG_T='corecrew: tools not refreshed: could not update @1' ;;
+    ru:sync_failed) MSG_T='corecrew: инструменты не обновлены: не удалось обновить @1' ;;
     en:sync_not_ours) MSG_T='corecrew: tools not refreshed: @1 is not a corecrew tools folder; move it away and start a new session' ;;
     ru:sync_not_ours) MSG_T='corecrew: инструменты не обновлены: @1 — не папка инструментов corecrew; уберите её и начните новую сессию' ;;
     en:agents_in_core) MSG_T='corecrew: AGENTS.md exists in the Core at @1; fold it into CLAUDE.md and remove it, then the AGENTS.md link can be made' ;;
@@ -40,7 +45,6 @@ _msg_text() {
     ru:codex_trust) MSG_T='Защита corecrew (внутренние документы в коде, секреты) и напоминание сохранить изменения не работают в Codex, пока вы не доверите хуки corecrew: откройте /hooks, просмотрите хуки и доверьте их, затем начните новую сессию (или перезапустите Codex, если только что это сделали).' ;;
     en:codex_profile) MSG_T="corecrew's sandbox profile is not the default in Codex, so secrets (.env files, keys) are protected only partly, by corecrew's hooks. To protect them better, run this in a terminal (it only prints text): bash \"@1\" codex-profile    then copy what it prints and paste it into @2. The profile applies to every Codex session, and afterwards Codex asks for approval before each git commit. It is a default only: command-line sandbox flags or a trusted project's settings can switch it off (the comments in the pasted text say how). corecrew never writes that file." ;;
     ru:codex_profile) MSG_T='Профиль песочницы corecrew в Codex не выбран по умолчанию, поэтому секреты (файлы .env, ключи) защищены лишь частично — только хуками corecrew. Чтобы защита стала надёжнее, выполните в терминале (команда только печатает текст): bash "@1" codex-profile    затем скопируйте напечатанное и вставьте в @2. Профиль действует на все сессии Codex, а после этого Codex будет спрашивать подтверждение перед каждым git commit. Это лишь значение по умолчанию: флаги песочницы в командной строке или настройки доверенного проекта могут его отключить (подробности — в комментариях вставленного текста). corecrew этот файл никогда не меняет.' ;;
-    ru:sync_failed) MSG_T='corecrew: инструменты не обновлены: не удалось обновить @1' ;;
     en:hint_not_set_up) MSG_T='corecrew: Core at @1 is not set up — /corecrew:new-project or /corecrew:task adopt <folder> will set it up' ;;
     ru:hint_not_set_up) MSG_T='corecrew: Core в @1 не настроен — /corecrew:new-project или /corecrew:task adopt <folder> настроят его' ;;
     en:hint_not_found) MSG_T='corecrew: Core not found at @1 — /corecrew:new-project or /corecrew:task adopt <folder> will set it up' ;;
@@ -78,9 +82,9 @@ _msg_text() {
     en:patch_too_many) MSG_T='corecrew: this patch names more than @1 files and cannot be checked. Split it into patches of at most @1 files.' ;;
     ru:patch_too_many) MSG_T='corecrew: патч затрагивает больше @1 файлов, проверить его нельзя. Разбейте его на патчи не более чем по @1 файлов.' ;;
     en:patch_unjudgeable) MSG_T='corecrew: the patch cannot be judged: its text cannot be read, and the line "@1" names an internal path. Use the apply_patch tool and lines like "*** Add File: <full path>".' ;;
+    ru:patch_unjudgeable) MSG_T='corecrew: патч нельзя проверить: не удаётся прочитать текст патча, а строка "@1" называет внутренний путь. Используйте инструмент apply_patch и строки вида "*** Add File: <полный путь>".' ;;
     en:patch_no_reader) MSG_T='corecrew: the patch cannot be judged: patch-paths.awk is missing or failed, so no file of the patch can be checked. Reinstall the corecrew plugin.' ;;
     ru:patch_no_reader) MSG_T='corecrew: патч нельзя проверить: patch-paths.awk отсутствует или не сработал, поэтому ни один файл патча не проверить. Переустановите плагин corecrew.' ;;
-    ru:patch_unjudgeable) MSG_T='corecrew: патч нельзя проверить: не удаётся прочитать текст патча, а строка "@1" называет внутренний путь. Используйте инструмент apply_patch и строки вида "*** Add File: <полный путь>".' ;;
     en:patch_shell) MSG_T='corecrew: run patches with the apply_patch tool, not through the Bash command line; that form cannot be checked (matched: @1). If this is not a patch, rewrite the command without it: run a reader such as grep or cat on its own, or name the files instead of using a wildcard.' ;;
     ru:patch_shell) MSG_T='corecrew: применяйте патчи инструментом apply_patch, а не через командную строку (Bash); в такой форме патч проверить нельзя (сработало на: @1). Если это не патч, перепишите команду без этого: запустите чтение (grep, cat) отдельной командой или перечислите файлы вместо шаблона.' ;;
     en:secrets_blocked) MSG_T='corecrew: reading secrets is blocked (@1)' ;;
@@ -136,14 +140,14 @@ _msg_text() {
   esac
 }
 
-# _msg_lang — the language to use: en or ru.
+# _msg_lang — the language to use: one of MSG_LANGS, else en.
 _msg_lang() {
   local l
   if [ -n "${UI_LANGUAGE:-}" ]; then l="$UI_LANGUAGE"
-  elif type resolve_setting >/dev/null 2>&1; then l="$(resolve_setting ui_language)"
-  else case "${CLAUDE_PLUGIN_OPTION_UI_LANGUAGE:-}" in *'${user_config.'*) l="" ;; *) l="${CLAUDE_PLUGIN_OPTION_UI_LANGUAGE:-}" ;; esac
+  else l="$(resolve_setting ui_language)"
   fi
-  case "$l" in ru) printf 'ru' ;; *) printf 'en' ;; esac
+  [ -n "$l" ] || { printf en; return 0; }
+  case " $MSG_LANGS " in *" $l "*) printf '%s' "$l" ;; *) printf en ;; esac
 }
 
 msg_has() { _msg_text "$2" "$1"; [ -n "$MSG_T" ]; }
@@ -158,8 +162,9 @@ msg() {
   tpl="$MSG_T"
   # The texts name skills as Claude Code calls them (/corecrew:<skill>); Codex calls them $corecrew:<skill>
   # (lib.sh host). Only the text changes, before the arguments go in.
+  # shellcheck disable=SC2016  # $corecrew is literal text
   case "$tpl" in
-    */corecrew:*) if type host >/dev/null 2>&1 && [ "$(host)" = codex ]; then tpl="$(printf '%s' "$tpl" | sed 's|/corecrew:|$corecrew:|g')"; fi ;;
+    */corecrew:*) if [ "$(host)" = codex ]; then tpl="$(printf '%s' "$tpl" | sed 's|/corecrew:|$corecrew:|g')"; fi ;;
   esac
   while :; do
     case "$tpl" in *@*) ;; *) break ;; esac
