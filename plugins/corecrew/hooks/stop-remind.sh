@@ -18,10 +18,13 @@ cd "$cwd" 2>/dev/null || exit 0
 load_settings
 project_of "$cwd" >/dev/null || exit 0
 locate 2>/dev/null || exit 0
-dirty=""
-[ -n "$(git -C "$CODE" status --porcelain)" ] && dirty="code"
+# Each git command runs once: the two statuses are kept for the dirty bit and for the sum below.
+CODE_ST="$(git -C "$CODE" status --porcelain)"
 # shellcheck disable=SC2086
-if [ -n "$(git -C "$CORE" status --porcelain -- $CORE_PATHS)" ]; then
+CORE_ST="$(git -C "$CORE" status --porcelain -- $CORE_PATHS)"
+dirty=""
+[ -n "$CODE_ST" ] && dirty="code"
+if [ -n "$CORE_ST" ]; then
   if [ -n "$dirty" ]; then dirty="both"; else dirty="docs"; fi
 fi
 STATE="$(git -C "$CODE" rev-parse --absolute-git-dir)/new-project-stop-remind"
@@ -41,18 +44,24 @@ untracked() {
       while IFS= read -r -d '' f; do printf '%s/%s\0' "$repo" "$f"; done
   done
 }
+# The untracked list is made once, into a temp file, and read by the sum and both newer_than calls; when no temp
+# file can be made, each of them makes the list again (as before).
+UT="$(mktemp "${TMPDIR:-/tmp}/corecrew-stop.XXXXXX" 2>/dev/null)" || UT=""
+if [ -n "$UT" ]; then trap 'rm -f "$UT"' EXIT; untracked > "$UT"; fi
+ut() { if [ -n "$UT" ]; then cat -- "$UT"; else untracked; fi; }
 # newer_than <file> — the untracked paths changed after <file> was written, one per line.
 newer_than() {
-  untracked | xargs -0 -r sh -c 'r=$1; shift; find "$@" -prune -newer "$r" -print' sh "$1" 2>/dev/null
+  ut | xargs -0 -r sh -c 'r=$1; shift; find "$@" -prune -newer "$r" -print' sh "$1" 2>/dev/null
 }
-# changes <repo> [paths] — status, staged and unstaged diffs (work without commits)
+# changes <repo> <its status> [paths] — status (kept from above: printed with the newline $(...) took off, and
+# nothing when empty), staged and unstaged diffs (work without commits)
 changes() {
-  local repo="$1"; shift
-  git -C "$repo" status --porcelain -- "$@"
+  local repo="$1" st="$2"; shift 2
+  [ -z "$st" ] || printf '%s\n' "$st"
   git -C "$repo" diff -- "$@"; git -C "$repo" diff --cached -- "$@"
 }
 # shellcheck disable=SC2086
-sum=$({ changes "$CODE"; changes "$CORE" $CORE_PATHS; untracked | LC_ALL=C xargs -0 -r ls -lnd -- 2>/dev/null; } | cksum)
+sum=$({ changes "$CODE" "$CODE_ST"; changes "$CORE" "$CORE_ST" $CORE_PATHS; ut | LC_ALL=C xargs -0 -r ls -lnd -- 2>/dev/null; } | cksum)
 # The state file: the sum, then the untracked paths dated after it was written (a clock ahead, a
 # file unpacked with a future date): those stay "newer" and are not news at the next stop.
 if [ -f "$STATE" ]; then
