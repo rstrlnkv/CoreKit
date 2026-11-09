@@ -69,13 +69,38 @@ done
 assert_contains "$M" "To add a language, add it to MSG_LANGS"   # the header says how to add a language
 
 # --- Which texts are translated (ARCHITECTURE.md, "Texts and languages"): in shipped plugin code, Cyrillic only in the
-# message tables (corecrew's messages.sh, coremodel's hooks/locales/). Comments and the coremodel classifier's prompt
-# (example prompts for the model, read by no person) are no texts. Tests, evals and README.<code>.md are not scanned.
+# message tables (corecrew's messages.sh, coremodel's hooks/locales/). Comments of code files and the coremodel
+# classifier's prompt (example prompts for the model, read by no person) are no texts. A .md or .tmpl line is text
+# whatever it starts with, and so is a line inside a shell heredoc. Tests, evals and README.<code>.md are not scanned.
 CYR=$'[\xd0-\xd3][\x80-\xbf]'
+# in_heredoc <file> <line> — exit 0 when the line of a shell file lies inside a heredoc (<<WORD, <<-WORD, quoted or not)
+in_heredoc() {
+  LC_ALL=C awk -v n="$2" '
+    NR == n { found = (hd != ""); exit }
+    hd != "" { l = $0; if (dash) sub(/^\t+/, "", l); if (l == hd) hd = ""; next }
+    /^[ \t]*#/ { next }
+    match($0, /<<-?[ \t]*["\047]?[A-Za-z_][A-Za-z0-9_]*["\047]?/) {
+      if (RSTART > 1 && substr($0, RSTART - 1, 1) == "<") next
+      w = substr($0, RSTART, RLENGTH); dash = (w ~ /^<<-/)
+      sub(/^<<-?[ \t]*/, "", w); gsub(/["\047]/, "", w); hd = w
+    }
+    END { exit !found }' "$1"
+}
+# cyr_text <file:line:text> — exit 0 when the hit is text, not a comment of a code file
+cyr_text() {
+  local f="${1%%:*}" rest="${1#*:}" ln t
+  ln="${rest%%:*}"; t="${rest#*:}"
+  while [ "${t# }" != "$t" ] || [ "${t#$'\t'}" != "$t" ]; do t="${t# }"; t="${t#$'\t'}"; done
+  case "$f" in
+    *.sh|*.bash|*.awk) case "$t" in '#'*) in_heredoc "$ROOT/$f" "$ln"; return ;; esac ;;
+    *.ts|*.tsx|*.js|*.mjs|*.cjs) case "$t" in '//'*|'/*'*|'* '*|'*') return 1 ;; esac ;;
+  esac
+  return 0
+}
 cyr_hits="$(cd "$ROOT" && for d in plugins/*/hooks plugins/*/scripts plugins/*/skills plugins/*/agents plugins/*/git-hooks \
     plugins/*/codex plugins/*/templates; do [ -d "$d" ] && LC_ALL=C grep -rnE "$CYR" "$d"; done \
   | LC_ALL=C grep -vE '^(plugins/corecrew/hooks/messages\.sh|plugins/coremodel/hooks/locales/[^:]*|plugins/coremodel/hooks/classifier\.ts|[^:]*/README\.[A-Za-z-]+\.md):' \
-  | LC_ALL=C grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//|/\*|\*( |$))')"
+  | while IFS= read -r hit; do cyr_text "$hit" && printf '%s\n' "$hit"; done)"
 assert_eq "$cyr_hits" "" "Cyrillic in shipped plugin code outside the message tables"
 
 # --- msg: language choice and verbatim arguments.

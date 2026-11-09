@@ -119,7 +119,7 @@ _sf_get_r() {
   return 1
 }
 # _sf_get <key> — prints what _sf_get_r sets.
-_sf_get() { _sf_get_r "$1"; printf '%s' "$_SF_V"; return 0; }
+_sf_get() { _sf_get_r "$1" || :; printf '%s' "$_SF_V"; }
 
 # _setting_valid <key> <value> — exit 0 when the value is usable. core_dir: ~, ~/..., or an absolute path.
 _setting_valid() {
@@ -148,7 +148,7 @@ _resolve_setting() {
       2:attribution) v="${CLAUDE_PLUGIN_OPTION_ATTRIBUTION:-}"; src="option" ;;
       2:model_profile) v="${CLAUDE_PLUGIN_OPTION_MODEL_PROFILE:-}"; src="option" ;;
       2:ui_language) v="${CLAUDE_PLUGIN_OPTION_UI_LANGUAGE:-}"; src="option" ;;
-      3:*) _sf_get_r "$key"; v="$_SF_V"; src="file" ;;
+      3:*) _sf_get_r "$key" || :; v="$_SF_V"; src="file" ;;
       *) continue ;;
     esac
     # as opt_value: a placeholder is no value; trailing newlines are dropped
@@ -221,5 +221,6 @@ load_settings() {
   _resolve_setting attribution; ATTRIBUTION="$REPLY"
   _resolve_setting model_profile; MODEL_PROFILE="$REPLY"
   _resolve_setting ui_language; UI_LANGUAGE="$REPLY"
-  _coredev_get_r app-id-prefix; APP_ID_PREFIX="$_CDV"
+  _coredev_get_r app-id-prefix || :; APP_ID_PREFIX="$_CDV"
+  return 0
 }
