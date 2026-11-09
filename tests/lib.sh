@@ -107,6 +107,14 @@ scaffold_old() {
 # so git hook shims installed in the sandbox have something to run.
 sync_tools() { bash "$SCRIPTS/sync-tools.sh" "$PLUGIN" "$COREDEV_TOOLS" >/dev/null; }
 
+# copy_fixture <name> <dest> — tests/fixtures/<name> copied to <dest> (which must not exist yet), its CLAUDE.md.in
+# renamed to CLAUDE.md. The fixtures keep CLAUDE.md as CLAUDE.md.in because this repo's .gitignore has a
+# CLAUDE.md line: a CLAUDE.md here is a private file, never a tracked one.
+copy_fixture() {
+  cp -R "$ROOT/tests/fixtures/$1" "$2" || return 1
+  [ ! -e "$2/CLAUDE.md.in" ] || mv "$2/CLAUDE.md.in" "$2/CLAUDE.md"
+}
+
 # Checksum of all files under a dir, excluding .git internals.
 # (NUL-separated, so names with spaces or non-ASCII characters are summed too.)
 tree_sum() { (cd "$1" && find . -type f -not -path '*/.git/*' -print0 | xargs -0 cksum | LC_ALL=C sort -k3); }

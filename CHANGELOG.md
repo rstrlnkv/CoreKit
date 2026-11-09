@@ -32,6 +32,7 @@ commit log has the full detail.
 - The secrets guard no longer refuses a command whose input redirect has a descriptor number
   (`cp .env.example .env 0</dev/null`), and the read-only checkers judge the real destination of
   such a command: the digits of `N<` are the descriptor, not an argument.
+- adopt refuses to run over a leftover staged copy of the same project and says how to recover.
 
 ## [0.12.0] - 2026-11-09
 

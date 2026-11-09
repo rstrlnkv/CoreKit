@@ -126,6 +126,10 @@ assert_contains "$F/.git/hooks/pre-commit" "corecrew hook shim"
 assert_contains "$CORE_DIR/.git/hooks/pre-push" "corecrew hook shim"
 ls -A "$CORE_DIR" | grep -q '^\.adopt' && fail "temp dir left in Core" || pass
 assert_eq "$(bash "$SCRIPTS/lib.sh" project-of "$F")" "foo" "project_of after adopt"
+# the line before the last asks for a new session in the code folder and names no host
+assert_eq "$(printf '%s\n' "$OUT" | tail -2 | head -1)" "start a new session in $F so CLAUDE.local.md loads" "restart line"
+# a second adopt of the same folder: the Core folder is taken; nothing changes
+refuses "target exists: $CORE_DIR/foo" --from "$F"
 
 # --- the classic repo: files move, history stays, wiki is green; a settings.local.json of the user's
 # is left as is with a warning
@@ -178,7 +182,7 @@ assert_eq "$(git -C "$CORE_DIR" show --name-only --format= HEAD | sed 's|/.*||' 
 # --- a 0.6-format wiki (tests/fixtures/wiki-old): adopt ends with a migrated wiki. Dates depend on the
 # repo's history, so they are not compared here (test_wiki_migrate.sh compares the tree byte for byte).
 new_sandbox; setup_core
-F="$SANDBOX/Projects/wiki-old"; mkdir -p "$F"; cp -R "$ROOT/tests/fixtures/wiki-old/docs" "$F/docs"; cp "$ROOT/tests/fixtures/wiki-old/CLAUDE.md.in" "$F/CLAUDE.md"
+F="$SANDBOX/Projects/wiki-old"; copy_fixture wiki-old "$F"
 git init -q "$F" && git -C "$F" symbolic-ref HEAD refs/heads/main
 git -C "$F" add -A && git -C "$F" commit -q -m initial
 assert_exit 0 bash "$AD" --from "$F"
@@ -532,6 +536,25 @@ assert_file "$F/src/a.sh"; assert_dir "$F/.git"
 assert_eq "$(git -C "$F" log -1 --format=%s)" "Move internal Claude files to Core" "repo commit kept"
 git -C "$F" cat-file -e HEAD~1:CLAUDE.md 2>/dev/null && pass || fail "history lost"
 assert_no_file "$F/CLAUDE.local.md"
+# the staging folder carries the project name; a rerun refuses while the staged copy is there (plain and
+# --dry-run), names it and says how to recover; nothing changes
+LEFT="$(ls -d "$CORE_DIR"/.adopt.mv-app.*/p 2>/dev/null)"; LEFT="${LEFT%/p}"
+[ -n "$LEFT" ] && pass || fail "no staging folder named after the project: $(ls -A "$CORE_DIR")"
+LW="leftover staged copy of mv-app: $LEFT (an earlier adopt stopped); if the last commit in $F is \"Move internal Claude files to Core\", undo it with git -C \"$F\" revert --no-edit HEAD; then remove $LEFT and run adopt again"
+refuses "$LW" --from "$F"
+refuses "$LW" --from "$F" --dry-run
+assert_eq "$(head -1 "$STAGED/CLAUDE.md")" "# Old project" "staged CLAUDE.md after the rerun"
+assert_no_file "$CORE_DIR/mv-app"
+# another project's leftover does not block adopt of this one
+mkrepo "$SANDBOX/Projects/other-app"
+assert_exit 0 bash "$AD" --from "$SANDBOX/Projects/other-app"
+assert_file "$CORE_DIR/other-app/CLAUDE.md"; assert_dir "$LEFT"
+# the recovery the refusal names works: revert, remove the leftover, adopt again
+git -C "$F" revert --no-edit HEAD >/dev/null && pass || fail "revert of the repo commit failed"
+rm -rf "$LEFT"
+assert_exit 0 bash "$AD" --from "$F"
+assert_eq "$(head -1 "$CORE_DIR/mv-app/CLAUDE.md")" "# Old project" "CLAUDE.md after the recovery"
+assert_eq "$(last_line "$OUT")" "open: $F" "last line after the recovery"
 }
 bg part_names_and_files
 
@@ -854,6 +877,62 @@ grep -qxF -- "- cc-app — Adopted existing project — cc-app/" "$CORE_DIR/PROJ
 assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "temp folder left in the Core (Core commit failed)"
 git -C "$CORE_DIR" add -- cc-app PROJECTS.md && git -C "$CORE_DIR" commit -q -m "Adopt cc-app" && pass || fail "the commit by hand failed"
 assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "Core dirty after the commit by hand"
+
+# --- the .worktreeinclude write fails (after the .gitignore lines were appended): exit 1 before the repo
+# commit; .gitignore comes back byte for byte, no .worktreeinclude, nothing else changed
+new_sandbox; setup_core
+F="$SANDBOX/Projects/wti-fail"; mkrepo "$F"
+printf 'build/\n' > "$F/.gitignore"; git -C "$F" add .gitignore && git -C "$F" commit -q -m gi
+REAL_CP="$(command -v cp)"
+mkdir -p "$SANDBOX/stub"
+cat > "$SANDBOX/stub/cp" <<STUB
+#!/bin/sh
+for a in "\$@"; do last="\$a"; done
+case "\$last" in */.worktreeinclude) echo "cp: stub failure" >&2; exit 1 ;; esac
+exec "$REAL_CP" "\$@"
+STUB
+chmod +x "$SANDBOX/stub/cp"
+before="$(snap_tree "$SANDBOX")"
+OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$AD" --from "$F" 2>&1)"; rc=$?
+assert_eq "$rc" "1" ".worktreeinclude failure exit"
+echo "$OUT" | grep -qxF "adopt: could not write $F/.worktreeinclude" && pass || fail ".worktreeinclude failure message: $OUT"
+assert_eq "$(snap_tree "$SANDBOX")" "$before" "a failed .worktreeinclude write changed something"
+assert_eq "$(cat "$F/.gitignore")" "build/" ".gitignore not restored (.worktreeinclude failure)"
+assert_no_file "$F/.worktreeinclude"
+assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "temp folder left in the Core (.worktreeinclude failure)"
+rm -rf "$SANDBOX/stub"
+
+# --- the .gitignore write fails (a read-only .gitignore; a read-only folder when there is none): exit 1
+# before the repo commit, nothing changed (not checkable as root, who may write anyway)
+chmod 444 "$F/.gitignore"
+if ( : >> "$F/.gitignore" ) 2>/dev/null; then
+  skip ".gitignore write failure" "a read-only file is writable here (root)"
+else
+  before="$(snap_tree "$SANDBOX")"
+  OUT="$(bash "$AD" --from "$F" 2>&1)"; rc=$?
+  assert_eq "$rc" "1" ".gitignore failure exit"
+  echo "$OUT" | grep -qxF "adopt: could not write $F/.gitignore" && pass || fail ".gitignore failure message: $OUT"
+  assert_eq "$(snap_tree "$SANDBOX")" "$before" "a failed .gitignore write changed something"
+  assert_eq "$(cat "$F/.gitignore")" "build/" ".gitignore changed (.gitignore failure)"
+  assert_no_file "$F/.worktreeinclude"
+  git -C "$F" rm -q .gitignore && git -C "$F" commit -q -m "no gi"
+  chmod 555 "$F"
+  before="$(snap_tree "$SANDBOX")"
+  OUT="$(bash "$AD" --from "$F" 2>&1)"; rc=$?
+  chmod 755 "$F"
+  assert_eq "$rc" "1" "new .gitignore failure exit"
+  echo "$OUT" | grep -qxF "adopt: could not write $F/.gitignore" && pass || fail "new .gitignore failure message: $OUT"
+  assert_eq "$(snap_tree "$SANDBOX")" "$before" "a failed new .gitignore changed something"
+  assert_no_file "$F/.gitignore"; assert_no_file "$F/.worktreeinclude"
+fi
+
+# --- old layout with --purpose: the PROJECTS.md line gets the new text and the new entry, and stays one line
+new_sandbox; setup_core
+mkold old-app
+assert_exit 0 bash "$AD" --from "$CORE_DIR/old-app/code" --purpose "New text"
+grep -qxF -- "- old-app — New text — old-app/" "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md line (--purpose): $(cat "$CORE_DIR/PROJECTS.md")"
+assert_eq "$(grep -c '^- old-app ' "$CORE_DIR/PROJECTS.md")" "1" "one PROJECTS.md line (--purpose)"
+echo "$OUT" | grep -qxF "updated PROJECTS.md entry" && pass || fail "no 'updated PROJECTS.md entry' line: $OUT"
 }
 bg part_late_phases
 

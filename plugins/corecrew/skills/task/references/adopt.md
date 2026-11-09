@@ -23,6 +23,11 @@ never run `adopt.sh` before "ok".
    - `different disk` (old layout): the Core sits on another disk than `<Projects>`, so the code
      folder cannot be moved by a rename; the user puts the Core on the same disk first.
    - `CLAUDE.local.md exists`: the user moves their own file away first.
+   - `leftover staged copy of <name>: <Core>/.adopt.<name>.XXXXXX`: an earlier adopt of this project
+     stopped before its files reached `<Core>/<name>`. If the last commit in the code folder is
+     "Move internal Claude files to Core", undo it first (`git -C "<folder>" revert --no-edit HEAD`):
+     that brings the files back to the repo. Then remove the leftover folder and run adopt again.
+     Do not move the leftover to `<Core>/<name>` by hand: the next run would stop at `target exists`.
 
    Otherwise tell the user in plain words:
    - the name, and that the folder stays where it is (old layout: that it moves from

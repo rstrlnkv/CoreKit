@@ -4,8 +4,8 @@ source "$(dirname "$0")/lib.sh"
 new_sandbox
 P="$SCRIPTS/wiki-pages.sh"
 I="$SCRIPTS/wiki-index.sh"
-FX="$SANDBOX/fixtures"; cp -R "$ROOT/tests/fixtures" "$FX"
-for f in "$FX"/*/CLAUDE.md.in; do mv "$f" "${f%.in}"; done
+FX="$SANDBOX/fixtures"; mkdir -p "$FX"
+for n in wiki-index wiki-index-fresh; do copy_fixture "$n" "$FX/$n"; done
 
 # --- wiki-pages.sh: docs-relative, C-sorted; no INDEX.md, knowledge/, standards/, superpowers/, .obsidian/
 assert_exit 0 bash "$P" "$FX/wiki-index/docs"
@@ -107,7 +107,7 @@ One line per page; open only the page you need.
 assert_not_contains "$FX/wiki-index-fresh/docs/INDEX.md" "history:"
 
 # --- I1: a 0.6 wiki (pages, none with a type) is refused: exit 1, one line, INDEX.md byte-identical
-OLD6="$SANDBOX/old6"; cp -R "$ROOT/tests/fixtures/wiki-old" "$OLD6"
+OLD6="$SANDBOX/old6"; copy_fixture wiki-old "$OLD6"
 rm "$OLD6/docs/features/export.md"        # the one page of the fixture already in the new format
 grep -rlq '^type:' "$OLD6/docs" --include='*.md' && fail "0.6 copy still has a typed page" || pass
 cp "$OLD6/docs/INDEX.md" "$SANDBOX/old6.index"

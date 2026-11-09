@@ -18,6 +18,8 @@
 #   target exists: <path>        <Core>/<name> (new layout) or a <Projects> folder named <name> in any
 #                                letter case (old layout)
 #   two folders differ only in case: <A>, <B>
+#   leftover staged copy of <name>: <Core>/.adopt.<name>.XXXXXX (...)   (new layout: an earlier adopt stopped after
+#       staging; the line says how to recover: revert the repo commit if it was made, remove the folder, rerun)
 #   Core is not set up
 #   CLAUDE.local.md exists in <folder>: move it away first (...)    (a file, or a link elsewhere)
 #   not found: <path>                  a --public-docs path that is not in the repo
@@ -28,7 +30,8 @@
 #       not compare the disks of <Core> and <Projects>" when df gives no usable answer)
 #   git does not know your name and email (...)
 # Only files git tracks are copied and removed; ignored files stay in the repo untouched.
-# Exit 1 (nothing deleted; the message says where the files are): a failed mv after the repo commit.
+# Exit 1 (nothing deleted; the message says where the files are): a failed mv after the repo commit. The staged
+# copy stays in <Core>/.adopt.<name>.XXXXXX; a rerun refuses (leftover staged copy) until it is recovered.
 # Exit 1 (nothing changed; wiki-migrate's stderr line says why): wiki-migrate fails on the staged copy (new
 # layout), before the repo commit.
 # Steps (new layout): copy CLAUDE.md, AGENTS.md, docs/ and .claude/ (not settings.local.json, not
@@ -80,6 +83,10 @@ usage() {
   exit 2
 }
 refuse() { printf '%s\n' "$1" >&2; exit 2; }
+# The lines printed in more than one place.
+IDENT_MSG="git does not know your name and email (git config --global user.name / user.email)"
+GI_SKIP_MSG="warning: .gitignore is not a plain file; add the corecrew ignore lines to it yourself"
+NO_COMMIT_MSG="no repo commit: git tracks none of the internal files"
 
 # parse_args <args...> — the options into FROM, NAME, PUBLIC, CHECK, PURPOSE, PURPOSE_SET and DRY.
 parse_args() {
@@ -214,6 +221,14 @@ preconditions() {
     K="$FROM"   # the code folder: stays where it is
     { [ ! -e "$P" ] && [ ! -L "$P" ]; } || refuse "target exists: $P"
     CLASH="$(code_dir_of "$NAME" 2>&1 >/dev/null)"; [ $? -ne 3 ] || refuse "$CLASH"
+    # A staged copy left by an earlier adopt of this project (its move into the Core failed, or the run was
+    # killed): another run would stage the template pages over the user's lost ones. Names carry no glob
+    # characters (valid_project_name), and .adopt.<name>.* never matches another project's folder.
+    for d in "$CORE_DIR/.adopt.$NAME".*/p; do
+      [ -d "$d" ] || continue
+      d="${d%/p}"
+      refuse "leftover staged copy of $NAME: $d (an earlier adopt stopped); if the last commit in $FROM is \"Move internal Claude files to Core\", undo it with git -C \"$FROM\" revert --no-edit HEAD; then remove $d and run adopt again"
+    done
   else
     K="$PROJECTS_DIR/$NAME"   # the code folder after the move
     for d in "$PROJECTS_DIR"/*; do
@@ -358,9 +373,9 @@ plan() {
 
   # Git needs an identity for the commits: refuse now rather than half way.
   if [ "${#REMOVE[@]}" -gt 0 ] || [ -n "$GI_ADD" ] || [ "$WTI_ADD" -eq 1 ]; then
-    ident_ok "$FROM" || refuse "git does not know your name and email (git config --global user.name / user.email)"
+    ident_ok "$FROM" || refuse "$IDENT_MSG"
   fi
-  ident_ok "$CORE_DIR" || refuse "git does not know your name and email (git config --global user.name / user.email)"
+  ident_ok "$CORE_DIR" || refuse "$IDENT_MSG"
 
   # settings.local.json in the code folder: created when missing; else it should name <Core>/<name>.
   SL_REL=".claude/settings.local.json"; SL_STATE=create
@@ -386,11 +401,11 @@ print_plan() {
   elif [ -n "$GI_ADD" ] || [ "$WTI_ADD" -eq 1 ]; then
     echo "one repo commit \"Move internal Claude files to Core\" with only the lines below (git tracks none of the internal files)"
   else
-    echo "no repo commit: git tracks none of the internal files"
+    echo "$NO_COMMIT_MSG"
   fi
   show "add to .gitignore (in the same commit):" "$GI_ADD"
   [ "$WTI_ADD" -eq 0 ] || echo "add .worktreeinclude (in the same commit; it lists .claude/settings.local.json for new worktrees)"
-  [ "$GI_SKIP" -eq 0 ] || echo "warning: .gitignore is not a plain file; add the corecrew ignore lines to it yourself"
+  [ "$GI_SKIP" -eq 0 ] || echo "$GI_SKIP_MSG"
   [ "$NNEST" -eq 0 ] || show "$NEST_WARN" "$NEST"
   [ "$STALE" -eq 0 ] || echo "$STALE_WARN"
   if [ "$OLD" -eq 0 ]; then
@@ -426,7 +441,7 @@ print_plan() {
 # Sets TMP, STAGE, COMMITTED, CREATED, MIG.
 stage() {
   COMMITTED=0
-  TMP="$(mktemp -d "$CORE_DIR/.adopt.XXXXXX")" || { echo "adopt: cannot create a temp folder in $CORE_DIR" >&2; exit 1; }
+  TMP="$(mktemp -d "$CORE_DIR/.adopt.$NAME.XXXXXX")" || { echo "adopt: cannot create a temp folder in $CORE_DIR" >&2; exit 1; }
   trap cleanup EXIT
   STAGE="$TMP/p"
   # shellcheck disable=SC2034  # render() in lib.sh fills the templates with it
@@ -469,22 +484,23 @@ stage() {
   fi
 }
 
+# restore_gi — .gitignore as it was before commit_repo: removed when adopt created it, else the backup copied back.
+restore_gi() { if [ "$GI_NEW" -eq 1 ]; then rm -f "$GI"; else cp -p "$TMP/gitignore.orig" "$GI"; fi; }
+
 # --- Phase: commit_repo. The repo commit. If it fails the files and .gitignore come back; nothing else
 # was touched. Sets COMMITTED and GI_NEW.
 commit_repo() {
-  [ "$GI_SKIP" -eq 0 ] || echo "warning: .gitignore is not a plain file; add the corecrew ignore lines to it yourself" >&2
+  [ "$GI_SKIP" -eq 0 ] || echo "$GI_SKIP_MSG" >&2
   GI_NEW=0
   if [ -n "$GI_ADD" ]; then
     if [ -e "$GI" ]; then cp -p "$GI" "$TMP/gitignore.orig" || { echo "adopt: could not back up .gitignore" >&2; exit 1; }
     else GI_NEW=1; fi
     { { [ ! -s "$GI" ] || [ -z "$(tail -c1 "$GI")" ] || printf '\n'; }
       printf '# corecrew: internal Claude files and secrets stay out of this repo\n%s' "$GI_ADD"; } >> "$GI" \
-      || { if [ "$GI_NEW" -eq 1 ]; then rm -f "$GI"; else cp -p "$TMP/gitignore.orig" "$GI"; fi
-           echo "adopt: could not write $GI" >&2; exit 1; }
+      || { restore_gi; echo "adopt: could not write $GI" >&2; exit 1; }
   fi
   if [ "$WTI_ADD" -eq 1 ]; then
-    cp "$TPL/code/worktreeinclude" "$WTI" || { rm -f "$WTI"
-      if [ -n "$GI_ADD" ]; then if [ "$GI_NEW" -eq 1 ]; then rm -f "$GI"; else cp -p "$TMP/gitignore.orig" "$GI"; fi; fi
+    cp "$TPL/code/worktreeinclude" "$WTI" || { rm -f "$WTI"; [ -z "$GI_ADD" ] || restore_gi
       echo "adopt: could not write $WTI" >&2; exit 1; }
   fi
   if [ "${#REMOVE[@]}" -gt 0 ] || [ -n "$GI_ADD" ] || [ "$WTI_ADD" -eq 1 ]; then
@@ -498,7 +514,7 @@ commit_repo() {
       fi
       if [ -n "$GI_ADD" ]; then
         git -C "$FROM" reset -q -- .gitignore >/dev/null 2>&1
-        if [ "$GI_NEW" -eq 1 ]; then rm -f "$GI"; else cp -p "$TMP/gitignore.orig" "$GI"; fi
+        restore_gi
       fi
       if [ "$WTI_ADD" -eq 1 ]; then git -C "$FROM" reset -q -- .worktreeinclude >/dev/null 2>&1; rm -f "$WTI"; fi
       refuse "could not commit in $FROM (nothing was changed)"
@@ -556,7 +572,7 @@ finish() {
     [ "${#REMOVE[@]}" -eq 0 ] || echo "removed ${#REMOVE[@]} file(s) from the repo (commit: Move internal Claude files to Core)"
     [ -z "$GI_ADD" ] || echo "added $GI_N ignore line(s) to .gitignore (commit: Move internal Claude files to Core)"
     [ "$WTI_ADD" -eq 0 ] || echo "added .worktreeinclude (commit: Move internal Claude files to Core)"
-  else echo "no repo commit: git tracks none of the internal files"; fi
+  else echo "$NO_COMMIT_MSG"; fi
   [ -z "$CREATED" ] || { echo "created:"; printf '%s\n' "$CREATED" | sed 's/^/  /'; }
   if [ "$OLD" -eq 0 ]; then
     echo "folder unchanged: $K"
@@ -593,22 +609,7 @@ finish() {
   esac
   # The PROJECTS.md line: an existing one (the old layout's "<name>/code/") gets the new entry (and the
   # --purpose text when given), else one is added.
-  ENTRY="$(basename "$K")/"
-  if [ -f "$CORE_DIR/PROJECTS.md" ] && grep -q "^- $NAME " "$CORE_DIR/PROJECTS.md"; then
-    PT="$CORE_DIR/PROJECTS.md.adopt.$$"
-    if N="$NAME" E="$ENTRY" PU="$PURPOSE" PS="$PURPOSE_SET" LC_ALL=C awk 'BEGIN { pre = "- " ENVIRON["N"] " "; sep = " — " }
-        !done && index($0, pre) == 1 {
-          s = $0; last = 0; off = 0
-          while ((i = index(s, sep)) > 0) { last = off + i; off += i; s = substr(s, i + 1) }
-          if (ENVIRON["PS"] == "1") $0 = "- " ENVIRON["N"] sep ENVIRON["PU"] sep ENVIRON["E"]
-          else $0 = (last > 0 ? substr($0, 1, last - 1) : $0) sep ENVIRON["E"]
-          done = 1 }
-        { print }' "$CORE_DIR/PROJECTS.md" > "$PT" && mv "$PT" "$CORE_DIR/PROJECTS.md"; then
-      echo "updated PROJECTS.md entry"
-    else rm -f "$PT"; echo "warning: could not write PROJECTS.md" >&2; fi
-  else
-    projects_entry "$NAME" "$PURPOSE" "$ENTRY" >/dev/null || echo "warning: could not write PROJECTS.md" >&2
-  fi
+  projects_upsert "$NAME" "$PURPOSE" "$(basename "$K")/" "$PURPOSE_SET" || echo "warning: could not write PROJECTS.md" >&2
   if git -C "$CORE_DIR" add -- "$NAME" PROJECTS.md && git -C "$CORE_DIR" commit -q -m "Adopt $NAME" -- "$NAME" PROJECTS.md >/dev/null 2>&1; then
     echo "Core commit: Adopt $NAME"
   else
@@ -616,7 +617,7 @@ finish() {
   fi
   WOUT="$(bash "$ROOT_DIR/scripts/wiki-check.sh" "$P" 2>&1)"
   if [ -n "$WOUT" ]; then echo "the wiki has problems to fix:"; printf '%s\n' "$WOUT"; else echo "wiki: green"; fi
-  echo "restart Claude Code in $K so CLAUDE.local.md loads"
+  echo "start a new session in $K so CLAUDE.local.md loads"
   echo "open: $K"
 }
 

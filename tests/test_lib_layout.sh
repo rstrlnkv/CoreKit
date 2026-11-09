@@ -44,6 +44,26 @@ assert_exit 0 bash "$LIB" code-dir twin;                                 assert_
   cat "$CORE_DIR/PROJECTS.md" ) > "$SANDBOX/out" 2>&1
 assert_eq "$(cat "$SANDBOX/out")" "- foo — x — Foo/" "valid_project_name / rel_core / projects_entry"
 
+# --- projects_upsert <name> <purpose> <entry> <purpose_set>: a new name is appended silently; the name's line
+# gets the new entry (and the purpose when purpose_set is 1) and "updated PROJECTS.md entry" is printed
+pu() { ( source "$LIB"; load_settings; projects_upsert "$@" ); }
+printf -- '- bar — Old — bar/code/\n- barn — Keep — barn/\n- dash — a — b — dash/code/\n' > "$CORE_DIR/PROJECTS.md"
+assert_exit 0 pu foo "New" "Foo/" 0;        assert_eq "$OUT" "" "projects_upsert append is silent"
+assert_exit 0 pu bar "Ignored" "bar/" 0;    assert_eq "$OUT" "updated PROJECTS.md entry" "projects_upsert update line"
+assert_exit 0 pu dash "Ignored" "dash/" 0
+assert_exit 0 pu barn "Fresh" "Barn/" 1
+assert_eq "$(cat "$CORE_DIR/PROJECTS.md")" "$(printf -- '- bar — Old — bar/\n- barn — Fresh — Barn/\n- dash — a — b — dash/\n- foo — New — Foo/')" "projects_upsert lines"
+before="$(cat "$CORE_DIR/PROJECTS.md")"
+OUT="$(DRY=1 pu bar "X" "x/" 1)"; assert_eq "$OUT" "would update PROJECTS.md entry" "projects_upsert DRY=1"
+assert_eq "$(cat "$CORE_DIR/PROJECTS.md")" "$before" "projects_upsert DRY=1 wrote PROJECTS.md"
+# a failed write leaves PROJECTS.md as it was and no temp file (a read-only Core folder; root may write anyway)
+before="$(snap_tree "$CORE_DIR")"; chmod 555 "$CORE_DIR"
+if ( : > "$CORE_DIR/.w" ) 2>/dev/null; then rm -f "$CORE_DIR/.w"; chmod 755 "$CORE_DIR"; skip "projects_upsert write failure" "a read-only folder is writable here (root)"
+else
+  assert_exit 1 pu bar "X" "x/" 1; chmod 755 "$CORE_DIR"
+  assert_eq "$(snap_tree "$CORE_DIR")" "$before" "a failed projects_upsert changed the Core"
+fi
+
 # --- link_agents <code_dir> <core_project_dir>: <code_dir>/AGENTS.md -> <core_project_dir>/CLAUDE.md (M7)
 la() { ( source "$LIB"; load_settings; link_agents "$@" ); }
 new_sandbox; P="$SANDBOX/Projects"
@@ -159,7 +179,7 @@ HELPERS="expand_home canon_dir coredev_get core_ready coredev_set opt_value sett
   _resolve_setting _settings_file_check resolve_setting settings_warning_lines _core_raw load_settings json_str patch_paths
   _project_of_path worktree_of project_of wt_is_main_of code_root_of code_dir_of layout_of valid_project_name lc norm_path
   resolve_abs codex_home host tools_dir hooks_marker_path plugin_version rel_core esc render put mkdir_p git_init
-  project_docs_manifest put_project_docs link_file_to_claude link_local_claude link_agents projects_entry"
+  project_docs_manifest put_project_docs link_file_to_claude link_local_claude link_agents projects_entry projects_upsert"
 # shellcheck disable=SC1090,SC2086
 missing="$( ( . "$LIB"; for fn in $HELPERS; do type "$fn" >/dev/null 2>&1 || echo "$fn"; done ) 2>&1 )"
 assert_eq "$missing" "" "helpers not defined after sourcing lib.sh"
