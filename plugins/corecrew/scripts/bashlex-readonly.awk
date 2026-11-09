@@ -28,27 +28,8 @@ BEGIN {
 function classify(b) { return (b in TRACK) ? b : "?" }
 function on_out(w) { path(w) }
 function on_in(w) { }
-# on_subst(w) — a $(...) or backtick body inside double quotes is a command line too: queue it
-function on_subst(w,   n, p, c, depth, st, q) {
-  n = length(w); p = 1
-  while (p <= n) {
-    c = substr(w, p, 1)
-    if (c == "$" && substr(w, p + 1, 1) == "(") {
-      st = p + 2; depth = 1; p = st
-      while (p <= n && depth > 0) {
-        c = substr(w, p, 1)
-        if (c == "(") depth++
-        else if (c == ")") depth--
-        p++
-      }
-      enqueue(depth == 0 ? substr(w, st, p - 1 - st) : substr(w, st))
-    } else if (c == "`") {
-      q = index(substr(w, p + 1), "`")
-      if (q == 0) { enqueue(substr(w, p + 1)); p = n + 1 }
-      else { enqueue(substr(w, p + 1, q - 1)); p += q + 1 }
-    } else p++
-  }
-}
+# on_subst(w) — a $(...) or backtick body inside double quotes is queued as a command line (bash-lex.awk)
+function on_subst(w) { subst_queue(w) }
 END { if (nomore || capped) printf "X\t%s\n", "a command this check could not read whole" }
 function out(kind, a) {
   if (ne >= CAP) { capped = 1; full = 1; return }
@@ -70,12 +51,6 @@ function path(a) {
 # cd, pushd, popd: from here the folder of a relative path is unknown. Tracking it is not safe:
 # `(cd /tmp); rm x` and `cd /tmp | rm x` run rm where the command started.
 function do_cd() { cdunk = 1 }
-# nonopt(n) — the n-th word that is not an option
-function nonopt(n,   k, c) {
-  c = 0
-  for (k = 1; k <= na; k++) if (substr(args[k], 1, 1) != "-") { c++; if (c == n) return args[k] }
-  return ""
-}
 function has(re,   k) { for (k = 1; k <= na; k++) if (args[k] ~ re) return 1; return 0 }
 # after(opt) — the word after an option given as its own word, or the value of --opt=value / -oVALUE
 function after(short, long,   k, a) {

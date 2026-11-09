@@ -17,8 +17,8 @@
 #   on_out(w)    — w is the target of an output redirect (> >> >| &> >&file)
 #   on_in(w)     — w is the word after an input redirect (< file)
 #   on_subst(w)  — w is a word with a command substitution inside double quotes ("$(...)" or backticks);
-#                  it may call enqueue(text) to have the text lexed as a command line after the main pass
-#                  (both programs do)
+#                  it may call subst_queue(w) to have each substitution lexed as a command line after the
+#                  main pass (both programs do), or enqueue(text) for any other text
 #   finalize()   — one command is complete: cmd (its name) and args[1..na] (its words) are set
 #   globals it may set: full (stop reading); nomore is set here by <<"WORD" inside "$(...)" (reading stops:
 #   a hook that must not fail open there can look at it in its END block)
@@ -152,6 +152,28 @@ function stmt_end() {
 function fdword() { if (inword && !hasq && !wbad && !want_redir && !want_in && word ~ /^[0-9]+$/) { inword = 0; word = ""; wx = ""; wl = 0 } else endword() }
 # enqueue(text) — a command line to lex after the main pass (at most 50)
 function enqueue(t) { if (nq < 50) Q[++nq] = t }
+# subst_queue(w) — w has a $(...) or backtick substitution from inside double quotes: each body is queued as a
+# command line (an unbalanced $( takes the rest of the word). A hook program's on_subst may call it.
+function subst_queue(w,   n, p, c, depth, st, q) {
+  n = length(w); p = 1
+  while (p <= n) {
+    c = substr(w, p, 1)
+    if (c == "$" && substr(w, p + 1, 1) == "(") {
+      st = p + 2; depth = 1; p = st
+      while (p <= n && depth > 0) {
+        c = substr(w, p, 1)
+        if (c == "(") depth++
+        else if (c == ")") depth--
+        p++
+      }
+      enqueue(depth == 0 ? substr(w, st, p - 1 - st) : substr(w, st))
+    } else if (c == "`") {
+      q = index(substr(w, p + 1), "`")
+      if (q == 0) { enqueue(substr(w, p + 1)); p = n + 1 }
+      else { enqueue(substr(w, p + 1, q - 1)); p += q + 1 }
+    } else p++
+  }
+}
 { buf = (NR == 1 ? "" : buf) $0 }
 function lex(text,   lxn, lxk, lxpos, lxw, lxl, lxc) {
   len = length(text); i = 1; lxc = 0
