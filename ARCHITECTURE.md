@@ -58,7 +58,7 @@ plugins/coreopinion/              second opinion from GPT (Claude Code only)
   evals/                          trigger evals
 scripts/commit-subjects.sh        the check of this repo's own commit subjects (CI job and optional commit-msg hook)
 tests/                            bash tests, run by tests/run.sh; lib.sh gives each test a sandbox
-docs/                             upgrade guides (migration-*.md) and icon sources (icons/)
+docs/                             the upgrade guide (migration-0.3.md) and icon sources (icons/)
 ```
 
 ## Hosts

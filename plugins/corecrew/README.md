@@ -94,8 +94,8 @@ Then restart the host. An update never touches your Core, standards or knowledge
 Auto-update is off for third-party marketplaces by default; turn it on in `/plugin` → Marketplaces
 → corekit → Enable auto-update.
 
-Coming from `coredev` (0.2.x): follow [docs/migration-0.3.md](../../docs/migration-0.3.md). Coming
-from 0.1.x: follow [docs/migration-0.2.md](../../docs/migration-0.2.md) first.
+Coming from `coredev` (0.2.x) or `corekit` (0.1.x): follow
+[docs/migration-0.3.md](../../docs/migration-0.3.md).
 
 ## Features
 

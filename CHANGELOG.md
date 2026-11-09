@@ -474,7 +474,7 @@ after each update.
   they stay current after an update.
 - `feature-dev` is needed by `task` but is not a hard dependency.
 - `.env.example`, `.env.sample` and `.env.template` are allowed everywhere.
-- Upgrade steps from 0.1: [docs/migration-0.2.md](docs/migration-0.2.md).
+- Upgrade steps from 0.1: [docs/migration-0.3.md](docs/migration-0.3.md).
 
 ### Removed
 
