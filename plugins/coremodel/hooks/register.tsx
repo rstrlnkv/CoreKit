@@ -3,47 +3,30 @@ import type { EngineInterface, ModelCompleteResult, Register, RenderChildren } f
 
 import type { Band, Lang, Level, Mark, Stats } from '../types'
 import { buildPrompt, LEVELS, parseAnswer, type Pick, toLevel } from './classifier'
-import { detectModels, enabledModels, LADDER, MODELS, type ModelKey, requestModel, standIn, toModel } from './models'
-import { decide, decideModel, effortOptions, hostLang, LOCALES, type Mode, MODES, modelOptions, settingLang, texts } from './policy'
+import { allowedModels, chatTokens, currentLang, currentMode, isEmptyChat, log, pickOn, PLUGIN, refreshListed } from './host'
+import { enabledModels, LADDER, type ModelKey, MODELS, requestModel, standIn, toModel } from './models'
+import { decide, decideModel, effortOptions, LOCALES, type Mode, modelOptions, MODES, texts } from './policy'
 import { BAND_MS, type Held, session } from './session'
 
-const PLUGIN = 'coremodel'
 const band = atom({ plugin: 'coremodel', key: 'band' } as const, null)
+
 const override = atom({ plugin: 'coremodel', key: 'override' } as const, null)
+
 const marks = atom({ plugin: 'coremodel', key: 'marks' } as const, {})
+
 const stats = atom({ plugin: 'coremodel', key: 'stats' } as const, null)
+
 const failure = atom({ plugin: 'coremodel', key: 'failure' } as const, null)
+
 const NO_STATS: Stats = { picks: { low: 0, medium: 0, high: 0, xhigh: 0, max: 0 }, kept: 0, last: null, marks: 0, models: { haiku: 0, sonnet: 0, opus: 0, fable: 0 } }
+
 // Classifier failures in a row before the person is told: one is often a passing API hiccup.
 const FAIL_SHOW = 2
+
 // The classifier answers in about 2 s; the whole pick waits CLASSIFY_MS at most, and a second
 // call starts when the first has not answered in HEDGE_MS.
 const CLASSIFY_MS = 8_000
 const HEDGE_MS = 3_000
-
-/** Reads the /config Model row again; any failure means "no verdict" (nothing is filtered). */
-async function refreshListed($: EngineInterface): Promise<void> {
-  try {
-    const row = (await $.config.list()).find(r => r.key === 'model')
-    session.listed = detectModels(row?.options)
-  } catch {
-    session.listed = null
-  }
-}
-
-/** The models CoreModel may pick: switched on in the settings, listed by the account, minus those that failed. */
-function allowedModels(options: Readonly<Record<string, unknown>>): ModelKey[] {
-  return enabledModels(options).filter(k => (session.listed === null || session.listed.includes(k)) && !session.unavailable.has(k))
-}
-
-/** A line in Claude Code's debug log (`claude --debug`); never in the transcript, never a file. */
-async function log($: EngineInterface, what: string, err: unknown) {
-  try {
-    $.ui.log(`${PLUGIN}: ${what}: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
-  } catch {
-    // Nowhere left to report it.
-  }
-}
 
 /** An Esc on the turn cut the classifier: the person stopped it, nothing is broken. */
 class Cut extends Error {}
@@ -62,13 +45,6 @@ async function failed($: EngineInterface, lang: Lang, reason: string): Promise<v
       // The pane still says it.
     }
   }
-}
-
-/** The mode: what /coremodel stored wins over the setting. */
-async function currentMode($: EngineInterface, options: { mode?: unknown }): Promise<Mode> {
-  const stored = await $.store.get('mode')
-  if (MODES.includes(stored as Mode)) return stored as Mode
-  return MODES.includes(options.mode as Mode) ? (options.mode as Mode) : MODES[0]!
 }
 
 /** Switches to `level` by holding it on this chat's requests. */
@@ -145,25 +121,6 @@ async function placeMark($: EngineInterface, change: Mark) {
 async function applyModel($: EngineInterface, key: ModelKey, base: string): Promise<void> {
   session.modelHold = { key, base }
   await syncOverride($)
-}
-
-/** The chat's size as the last response read it; undefined when Claude Code does not say. */
-async function chatTokens($: EngineInterface): Promise<number | undefined> {
-  try {
-    return (await $.session.usage()).context.tokens
-  } catch {
-    return undefined
-  }
-}
-
-/** True before Claude's first reply in this chat. */
-async function isEmptyChat($: EngineInterface): Promise<boolean> {
-  return !(await $.session.messages()).some(m => m.role === 'assistant')
-}
-
-/** True unless the plugin setting `pickModel` is off: then CoreModel picks the effort only. */
-function pickOn(options: { pickModel?: unknown }): boolean {
-  return options.pickModel !== 'off'
 }
 
 /**
@@ -571,22 +528,6 @@ const RULE = '─'.repeat(40)
 const captionWidth = (t: ReturnType<typeof texts>) =>
   Math.max(...[t.thisChat, t.model, t.effort, t.thisSession, t.lastPick].map(c => c.length)) + 1
 
-/**
- * The language of the words: the plugin's own setting when it names one, else Claude Code's
- * `language` setting, else English. Never the text of a prompt. A host that cannot answer (an
- * older Claude Code, unreadable settings) gets English and a debug line; the prompt goes on.
- */
-async function currentLang($: EngineInterface, options: { language?: unknown }): Promise<Lang> {
-  const fixed = settingLang(options.language)
-  if (fixed) return fixed
-  try {
-    return hostLang(await $.settings.read({ key: 'language' }))
-  } catch (err) {
-    await log($, 'language', err)
-    return 'en'
-  }
-}
-
 export const register: Register = (on, options) => {
 
   on('prompt.submit', async ($, e, next) => {
@@ -772,7 +713,8 @@ export const register: Register = (on, options) => {
     )
   })
 
-  on('ui.render', { component: 'Pane', requestId: PLUGIN }, async ($, e) => {
+  // A hook's filter is read from literals in its own file, so the pane id is spelled out here.
+  on('ui.render', { component: 'Pane', requestId: 'coremodel' }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const t = texts(session.lastLang)
     const mode = await currentMode($, options)
