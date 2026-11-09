@@ -114,6 +114,50 @@ one x_exec.sh; assert_eq "$RC" "0" "count_execs: $OUT"
 assert_eq "$(left)" "0" "cpu_run, assert_linear, count_execs: nothing left"
 chmod -R u+rwx "$RT"; rm -rf "$RT"; mkdir -p "$RT"
 
+# --- setup_core builds the first Core of a file and publishes a copy (core-cache.<key> in TEST_TMP, a link made at
+# once with ln -sn); a later fresh Core with the same key is copied from it. The key holds what can change the
+# Core: the GIT_* variables, the global git config, PATH, umask and the scripts folder. A publish over a cache
+# already there changes nothing and leaves no folder behind; a copy is a real folder, equal to the built one.
+export HC_SCRIPTS="$SCRIPTS"
+cat > "$T/x_cache.sh" <<'EOF'
+source "$(dirname "$0")/lib.sh"
+SCRIPTS="$HC_SCRIPTS"
+caches() { find "$TEST_TMP" -mindepth 1 -maxdepth 1 -name 'core-cache.*' | wc -l | tr -d ' '; }
+tmps() { find "$TEST_TMP" -mindepth 1 -maxdepth 1 -name 'corecache.*' | wc -l | tr -d ' '; }
+new_sandbox; setup_core || fail "the first setup_core"; C1="$CORE_DIR"
+assert_eq "$(caches)/$(tmps)" "1/1" "the first build publishes one cache (a link to one folder)"
+CACHE="$(find "$TEST_TMP" -mindepth 1 -maxdepth 1 -name 'core-cache.*')"
+[ -n "$CACHE" ] && [ -L "$CACHE" ] && pass || { fail "no cache, or the cache is not a link"; finish; }
+new_sandbox; setup_core || fail "the second setup_core"; C2="$CORE_DIR"
+new_sandbox; setup_core || fail "the third setup_core"; C3="$CORE_DIR"
+for c in "$C2" "$C3"; do
+  [ -d "$c/.git" ] && [ ! -L "$c" ] && pass || fail "$c is not a real folder with a repo"
+  assert_eq "$(git -C "$c" status --porcelain)" "" "a copied Core: git status"
+  assert_eq "$(tree_sum "$c")" "$(tree_sum "$C1")" "a copied Core: the same files as the built one"
+  assert_eq "$(git -C "$c" rev-parse HEAD)" "$(git -C "$C1" rev-parse HEAD)" "a copied Core: the same commit"
+  assert_eq "$(git -C "$c" ls-files -s)" "$(git -C "$C1" ls-files -s)" "a copied Core: the same index"
+  assert_eq "$(cat "$c/.git/config")" "$(cat "$C1/.git/config")" "a copied Core: the same repo config"
+done
+assert_eq "$(caches)/$(tmps)" "1/1" "copies publish nothing"
+# a fresh build that publishes over the cache: the cache stays as it was, with no nested folder, and no copy is left
+before="$(tree_sum "$CACHE/")"
+core_cache_publish "$C1" "$CACHE"
+assert_eq "$(find "$CACHE/" -mindepth 1 -maxdepth 1 -name 'corecache.*' | wc -l | tr -d ' ')" "0" "a second publish: no nested folder"
+assert_eq "$(tree_sum "$CACHE/")" "$before" "a second publish: the cache is unchanged"
+assert_eq "$(caches)/$(tmps)" "1/1" "a second publish: its copy is removed"
+# setup_core on a Core folder that exists builds as before and publishes nothing
+new_sandbox; mkdir -p "$CORE_DIR"; setup_core || fail "setup_core on an empty folder"
+[ -f "$CORE_DIR/.coredev" ] && pass || fail "setup_core on an empty folder: no .coredev"
+assert_eq "$(caches)" "1" "a Core folder that existed is not published"
+# another git identity is another key: the commit carries the new name, never the cached one
+new_sandbox; export GIT_AUTHOR_NAME=other; setup_core || fail "setup_core with another identity"
+assert_eq "$(git -C "$CORE_DIR" log -1 --format=%an)" "other" "another identity: the commit's author"
+assert_eq "$(caches)" "2" "another identity: a cache of its own"
+finish
+EOF
+one x_cache.sh; assert_eq "$RC" "0" "core cache: $OUT"
+chmod -R u+rwx "$RT"; rm -rf "$RT"; mkdir -p "$RT"
+
 # --- run.sh: a filter, one line with the time per file, quiet passing files, the skip list after the result
 rm -f "$T"/x_*.sh
 fake test_ok.sh 'note "noisy"; pass; finish'
@@ -201,12 +245,15 @@ changed "a retargeted link" 'ln -sfn sub "$G/l"' 'ln -sfn f "$G/l"'
 # each of the next three alters only one part: an ignored link only its target, a commit of the same tree only HEAD,
 # an index-only change only the status
 changed "a retargeted ignored link" 'ln -sfn sub "$G/ign"' 'ln -sfn f "$G/ign"'
-H0="$(git -C "$G" rev-parse HEAD)"; C="$(git -C "$G" commit-tree "$H0^{tree}" -p "$H0" -m same)"
+H0="$(git -C "$G" rev-parse HEAD)"
+# shellcheck disable=SC2034  # read in the eval strings of changed
+C="$(git -C "$G" commit-tree "$H0^{tree}" -p "$H0" -m same)"
 changed "HEAD moved to a commit of the same tree" 'git -C "$G" reset -q --soft "$C"' 'git -C "$G" reset -q --soft "$H0"'
 changed "an index-only change" 'git -C "$G" rm -q --cached f' 'git -C "$G" add f'
 changed "an empty folder" 'mkdir "$S/empty"' 'rmdir "$S/empty"'
 changed ".git/REVERT_HEAD" 'git -C "$G" rev-parse HEAD > "$G/.git/REVERT_HEAD"' 'rm "$G/.git/REVERT_HEAD"'
 changed ".git/index.lock" ': > "$G/.git/index.lock"' 'rm "$G/.git/index.lock"'
+# shellcheck disable=SC2034  # read in the eval string of changed
 H="$(git -C "$G" rev-parse HEAD)"
 changed "git reset --soft HEAD~1" 'git -C "$G" reset -q --soft HEAD~1' 'git -C "$G" reset -q --soft "$H"'
 snap_tree "$SANDBOX/no such folder" | grep -q . && pass || fail "snap_tree prints nothing for a missing folder"
