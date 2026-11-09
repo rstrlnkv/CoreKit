@@ -1,3 +1,5 @@
+Read CONTRIBUTING.md first: it has the rules, the tests and the release steps.
+
 ## What and why
 
 <!-- What changes, and the problem it solves. Link the issue if there is one. -->
@@ -6,7 +8,8 @@
 
 - [ ] `bash tests/run.sh` prints ALL TESTS PASSED (a behaviour change starts with a failing test).
 - [ ] `claude plugin validate .` and `claude plugin validate plugins/<plugin>` pass for every plugin I changed.
-- [ ] Scripts run on macOS bash 3.2 with BSD tools (no `sed -i`, `mapfile`, `grep -P`, `jq`; see tests/test_portability.sh).
+- [ ] Scripts run on macOS bash 3.2 with BSD tools, without `jq` (tests/test_portability.sh lists the forbidden constructs).
+- [ ] Commit subjects follow `type(scope): subject`, at most 72 characters (CI job commit-subjects).
 - [ ] `shellcheck --severity=warning` reports nothing for the shell files I changed (CI runs it on every shell file of
       the plugins, tests/ and scripts/; settings in .shellcheckrc and tests/.shellcheckrc).
 

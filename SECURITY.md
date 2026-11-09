@@ -107,27 +107,20 @@ one). It does not cover git history (`git show HEAD:.env`).
   (`python -c`, `node -e`); `git -C <dir> mv`; other writers (`rsync`,
   `dd of=`, `tar -C`, `curl -o`). The git pre-commit and pre-push hooks check what is committed
   and pushed.
-- The pre-commit hook's list (`blocked-patterns`) is narrower than the code guard's: it blocks
-  `CLAUDE*.md`, `AGENTS.md`, `.claude/`, the `superpowers` folder of `docs/`, `.env*` and key files,
-  not the rest of `docs/`. A `docs/` file that got past the code guard can still be committed by hand.
+- The git hooks' list (`plugins/corecrew/scripts/git-hooks/blocked-patterns`, read by the pre-commit
+  and pre-push hooks, case-insensitive) is narrower than the code guard's. It blocks `CLAUDE.md`,
+  `CLAUDE.local.md` and `AGENTS.md` in any folder; `/.claude/` and `/docs/superpowers/` at the root only;
+  `.env` and `.env.*` in any folder, except `.env.example`, `.env.sample` and `.env.template`
+  (`.envrc` does not match); and `*.pem` and `*.key` files. It does not block the rest of `docs/`, so
+  a `docs/` file that got past the code guard can still be committed by hand.
 - Codex subagents cannot be made read-only: the read-only steps of `/corecrew:task` are checked
   (the working tree before and after), not enforced.
 
 ## Data that leaves your machine
 
-- **corecrew** talks to GitHub through `gh` and `git`. Read-only checks run without a prompt (in Codex,
-  whose sandbox has no network, every network call asks first):
-  `new-project` checks that `gh` is logged in and that the project name is free on GitHub,
-  `/corecrew:ship` fetches tags from `origin` to check for a clash, and the Core pre-push hook asks
-  `api.github.com` whether the Core repo is private. Writes happen only after your yes: each repo
-  creation, each push, and the tag and GitHub release of `/corecrew:ship`.
-- **coremodel**, in Claude Code, sends each prompt you type to a short classifier call through your
-  own Claude Code account, to pick the model and effort. In Codex, while its hint is on, it sends each
-  prompt a second time to OpenAI through `codex exec`. [plugins/coremodel/README.md](plugins/coremodel/README.md)
-  says how to turn the hint on or off.
-- **coreopinion** (Claude Code only) sends the files you confirm, and your question, to OpenAI
-  through the Codex CLI. Secret-looking files are filtered out of the list, and a read-only
-  permission profile keeps GPT away from them.
+- **corecrew** talks to GitHub through `gh` and `git` (stack generators you approve reach their own package hosts): read-only checks run without a prompt, every write (a repo, a push, a tag, a release) waits for your yes, and in Codex every network call asks first ([what it runs and sends](plugins/corecrew/README.md#what-it-runs-and-sends)).
+- **coremodel** sends each prompt to a short classifier call through your own Claude Code account; in Codex, once you turn its hint on, it sends each prompt a second time to OpenAI ([requirements](plugins/coremodel/README.md#requirements), [the Codex hint](plugins/coremodel/README.md#codex)).
+- **coreopinion** (Claude Code only) sends your question and the files you confirm to OpenAI through the Codex CLI; secret-looking files are filtered out, and a read-only permission profile keeps GPT away from them ([requirements](plugins/coreopinion/README.md#requirements)).
 
 ## Scope
 

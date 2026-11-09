@@ -1,12 +1,6 @@
 # CoreKit
 
-Three independent plugins for Claude Code and the Codex CLI. Install one, two or all three.
-
-| Plugin | What you get | Hosts |
-|---|---|---|
-| [**corecrew**](plugins/corecrew/README.md) | Run every project the same way: start from an interview, work with a crew of agents, keep the docs in a private repo. | Claude Code, Codex |
-| [**coremodel**](plugins/coremodel/README.md) | Each prompt runs on the model and effort level it needs; you are asked before the costly ones. | Claude Code; a hint in Codex |
-| [**coreopinion**](plugins/coreopinion/README.md) | A second opinion from GPT on your code or plan; Claude stays the only one that edits. | Claude Code |
+Three plugins for Claude Code and Codex: a project workflow (corecrew), a model and effort picker (coremodel) and a second opinion from GPT (coreopinion).
 
 ![corecrew](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcorecrew%2F.claude-plugin%2Fplugin.json&query=%24.version&label=corecrew) ![coremodel](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcoremodel%2F.claude-plugin%2Fplugin.json&query=%24.version&label=coremodel) ![coreopinion](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcoreopinion%2F.claude-plugin%2Fplugin.json&query=%24.version&label=coreopinion) ![platform](https://img.shields.io/badge/tested%20on-macOS%20%7C%20Linux-lightgrey) ![licence](https://img.shields.io/github/license/rstrlnkv/CoreKit)
 
@@ -58,23 +52,38 @@ In Codex: `codex plugin marketplace upgrade corekit`, then trust the hooks again
 
 ## Features
 
-Each plugin's README has the full description, its commands and its settings:
+Each plugin's README has the full description, its commands and its settings.
 
-- [corecrew](plugins/corecrew/README.md): `/corecrew:new-project`, `/corecrew:task`, `/corecrew:ship`
-  and `/corecrew:new-standard`, hooks that keep secrets and internal files out of your public
-  code, and `save` / `undo-step` for one step at a time.
-- [coremodel](plugins/coremodel/README.md): picks Haiku, Sonnet, Opus or Fable and the effort level
-  before Claude starts on a prompt; `/coremodel` shows and changes what it does.
-- [coreopinion](plugins/coreopinion/README.md): `/coreopinion:second-opinion` asks GPT through the
-  Codex CLI, with a narrow read-only permission profile, and sends only the files you confirm.
+| Feature | What it does |
+|---|---|
+| [**corecrew**](plugins/corecrew/README.md) | Runs every project the same way: it starts from an interview, works with a crew of agents and keeps the docs in a private repo. Commands: `/corecrew:new-project`, `/corecrew:task`, `/corecrew:ship` and `/corecrew:new-standard`; hooks keep secrets and internal files out of your public code; `save` and `undo-step` go one step at a time. Hosts: Claude Code, Codex. |
+| [**coremodel**](plugins/coremodel/README.md) | Picks Haiku, Sonnet, Opus or Fable and the effort level before Claude starts on a prompt, and asks before the costly ones. Command: `/coremodel` shows and changes what it does. Hosts: Claude Code; in Codex, a hint you turn on. |
+| [**coreopinion**](plugins/coreopinion/README.md) | Gets a second opinion from GPT on your code or plan through the Codex CLI, with a narrow read-only permission profile, and sends only the files you confirm; Claude stays the only one that edits. Command: `/coreopinion:second-opinion`. Host: Claude Code. |
 
 ## Requirements
 
 - **Hosts:** Claude Code 2.1.271 or newer (coremodel needs 2.1.309), or the Codex CLI.
 - **OS:** macOS and Linux: CI runs the full suite on both, on macOS with its system bash 3.2.
   Windows needs Git for Windows and is untested.
+- **CPU architecture:** any; the plugins are bash scripts and a TypeScript module with no native
+  code ([corecrew](plugins/corecrew/README.md#requirements), [coremodel](plugins/coremodel/README.md#requirements),
+  [coreopinion](plugins/coreopinion/README.md#requirements)).
 - **Per plugin:** corecrew needs git and the GitHub CLI (`gh`); coreopinion needs the Codex CLI
-  signed in with a ChatGPT plan. Details, network use and the files each plugin writes are in its README.
+  signed in with a ChatGPT plan.
+- **Network:** corecrew reaches GitHub through `gh` and `git`, coremodel has no host of its own
+  (its Codex hint, once on, sends each prompt to OpenAI), and coreopinion sends the files you
+  confirm to OpenAI through the Codex CLI
+  ([corecrew](plugins/corecrew/README.md#what-it-runs-and-sends), [coremodel](plugins/coremodel/README.md#requirements),
+  [coreopinion](plugins/coreopinion/README.md#requirements)).
+- **Permissions:** corecrew's hooks refuse some reads and writes, and its project settings let
+  Claude reach the project's Core folder from the code folder; coremodel asks for nothing beyond its
+  hooks; coreopinion runs Codex with a narrow read-only profile ([corecrew](plugins/corecrew/README.md#what-the-hooks-do),
+  [coremodel](plugins/coremodel/README.md#requirements),
+  [coreopinion](plugins/coreopinion/README.md#what-is-sent-and-what-gpt-can-read)).
+- **Changes outside its own folders:** corecrew keeps a tools copy in its data folder, writes your
+  Core and puts git hooks into your code repos; coremodel and coreopinion leave nothing behind
+  ([corecrew](plugins/corecrew/README.md#changes-outside-the-repo), [coremodel](plugins/coremodel/README.md#requirements),
+  [coreopinion](plugins/coreopinion/README.md#requirements)).
 
 ## Uninstall
 

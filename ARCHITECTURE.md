@@ -47,7 +47,10 @@ plugins/corecrew/                 project workflow
 plugins/coremodel/                model and effort picker
   hooks/                          the Claude Code module (TypeScript)
   codex/                          hint.sh and hooks.json: the Codex hint
-  tests/, types/                  the module's tests and the host API types
+  types/index.d.ts                the plugin's type contract (the host API types are written by
+                                  Claude Code into .claude-plugin/types/, which git does not track)
+  tests/                          *.test.ts(x), run by `claude plugin test` through tests/test_coremodel.sh;
+                                  quality.sh is the manual check of the classifier
 plugins/coreopinion/              second opinion from GPT (Claude Code only)
   skills/second-opinion/          SKILL.md; scripts/: ask-gpt.sh (the Codex run), allowed-files.sh and
                                   secret-patterns.txt (the one secret list)
@@ -56,7 +59,7 @@ plugins/coreopinion/              second opinion from GPT (Claude Code only)
 scripts/commit-subjects.sh        the check of this repo's own commit subjects (CI job and optional commit-msg hook)
 scripts/make-test-coredev.sh      builds test-coredev, the hand-made project for an end-to-end try of /corecrew:task
 tests/                            bash tests, run by tests/run.sh; lib.sh gives each test a sandbox
-docs/                             upgrade guides (migration-*.md) and icon sources (icons/)
+docs/                             the upgrade guide (migration-0.3.md) and icon sources (icons/)
 ```
 
 ## Hosts
@@ -104,8 +107,10 @@ hook trust           on install                          after you enable them i
   set), the one place git hooks run them from, so a plugin update reaches the git hooks without
   reinstalling them.
 - **Git hooks** (`scripts/git-hooks/`) are shims installed by `install-hooks.sh` into the code repo
-  (pre-commit, pre-push: no `CLAUDE.md`, `AGENTS.md`, `.claude/`, secrets or keys in commits) and
-  into the Core (pre-push: the GitHub repo must be private).
+  (pre-commit, pre-push) and into the Core (pre-push: the GitHub repo must be private). The code
+  repo hooks refuse what `scripts/git-hooks/blocked-patterns` lists: `CLAUDE.md`, `CLAUDE.local.md`
+  and `AGENTS.md` in any folder, `/.claude/` and `/docs/superpowers/` at the root only, `.env` and `.env.*`
+  (not `.envrc`, `.env.example`, `.env.sample` or `.env.template`), `*.pem` and `*.key`.
 - **The Core.** The private repo (`~/Projects/Core` by default) holds the standards, knowledge and
   each project's `CLAUDE.md` and `docs/` wiki. The code lives in its own repo beside it; a
   gitignored `CLAUDE.local.md` link in the code folder loads the private `CLAUDE.md`.
@@ -114,7 +119,8 @@ hook trust           on install                          after you enable them i
 
 - Internal files never enter a code repo. `CLAUDE.md`, `AGENTS.md`, `.claude/` and secrets are kept
   out by the code guard and by the git hooks. The wiki (`docs/`) is kept out only by the code guard,
-  which is best effort; the git hooks do not block `docs/`, because a project may publish docs there.
+  which is best effort. Under `docs/` the git hooks block only its `superpowers/` folder, where
+  planning plugins write their drafts; the rest of `docs/` passes, because a project may publish docs there.
 - The host's permissions and sandbox are the security boundary; the hooks are a best-effort second
   line (see [SECURITY.md](SECURITY.md#threat-model)).
 - Scripts run on macOS bash 3.2 with BSD tools, without `jq`; `tests/test_portability.sh` checks it.

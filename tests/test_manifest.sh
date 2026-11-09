@@ -104,6 +104,10 @@ check_retrust() {
     || fail "$2, section [$want_ver]: the Codex hooks changed in it, but it does not say \"again in \`/hooks\`\""
 }
 
+# one description of the repo: README.md line 3 is the marketplace's top-level description
+# (the GitHub repository description is set to the same text by hand: gh repo edit --description)
+assert_eq "$(sed -n 3p "$ROOT/README.md")" "$(market_desc corekit)" "README.md line 3 vs the marketplace.json description"
+
 plugins=""
 for d in "$ROOT"/plugins/*/; do plugins="$plugins $(basename "$d")"; done
 for pl in $plugins; do
@@ -232,26 +236,20 @@ assert_not_contains "$T/CLAUDE.md.tmpl" '/bin/'
 assert_contains "$T/CLAUDE.md.tmpl" 'undo-step'
 assert_contains "$T/CLAUDE.md.tmpl" 'printed at session start'
 
-# migration note: the seven upgrade steps from 0.1
-MG="$ROOT/docs/migration-0.2.md"
-assert_file "$MG"
-assert_contains "$MG" '/plugin install coredev@corekit'
-assert_contains "$MG" 'claude plugin disable corekit@synced'
-assert_not_contains "$MG" 'see below'
-assert_not_contains "$MG" 'TODO'
-assert_contains "$MG" 'install-hooks.sh'
-assert_contains "$MG" 'session-rules.md'
-for n in 1 2 3 4 5 6 7; do assert_contains "$MG" "### Step $n"; done
-
-# migration note 0.3: the rename coredev -> corecrew, effort-picker -> coreeffort
+# the upgrade guide, one and current: it exists, the corecrew README links it, the 0.2 guide is gone,
+# and every option key that Step 2 names in backticks is a userConfig key of corecrew or coremodel
 M3="$ROOT/docs/migration-0.3.md"
 assert_file "$M3"
-assert_contains "$M3" '/plugin install corecrew@corekit'
-assert_contains "$M3" '/plugin install coremodel@corekit'
-assert_not_contains "$M3" '/coreeffort'
-assert_contains "$M3" 'install-hooks.sh'
-assert_contains "$M3" 'corecrew-corekit'
-assert_contains "$CR" 'docs/migration-0.3.md'
+assert_no_file "$ROOT/docs/migration-0.2.md"
+assert_contains "$CR" '](../../docs/migration-0.3.md)'
+uc_keys() { sed -n 's/^    "\([A-Za-z_]*\)": {$/\1/p' "$@"; }
+keys="$(uc_keys "$P" "$ROOT/plugins/coremodel/.claude-plugin/plugin.json")"
+step2="$(awk '/^### Step 2[.]/ { on = 1; next } /^#/ { on = 0 } on' "$M3")"
+[ -n "$step2" ] && pass || fail "docs/migration-0.3.md has no Step 2"
+for k in $(printf '%s\n' "$step2" | grep -oE '`[A-Za-z_]+`' | tr -d '`' | sort -u); do
+  printf '%s\n' "$keys" | grep -qxF "$k" && pass \
+    || fail "docs/migration-0.3.md Step 2 names \`$k\`, which is no userConfig key of corecrew or coremodel"
+done
 
 # trigger evals (claude plugin eval): every case has a prompt and a grader; the frontmatter
 # description is quoted (a bare ": " breaks the YAML); results stay out of git

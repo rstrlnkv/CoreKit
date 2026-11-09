@@ -1,9 +1,10 @@
-# Migrating to corecrew 0.3
+# Upgrading to corecrew
 
-For a user of `coredev` 0.2.x. The plugin is now called `corecrew` (brand CoreCrew), and the
-second plugin `effort-picker` is now `coremodel` (CoreModel; it was called `coreeffort` for a short time). The marketplace and the
-repository stay `corekit`. If you come from 0.1.x (`corekit`), do
-[migration-0.2.md](migration-0.2.md) first.
+For a user of `coredev` 0.2.x or of the `corekit` plugin 0.1.x. The plugin is now called `corecrew`
+(brand CoreCrew), and the second plugin `effort-picker` is now `coremodel` (CoreModel; it was called
+`coreeffort` for a short time). The marketplace and the repository stay `corekit`. Coming from
+0.1.x (`corekit`), also do the steps of
+[Coming from 0.1.x (corekit), also](#coming-from-01x-corekit-also) after Step 5.
 `<Core>` is your Core folder (default `~/Projects/Core`). It needs no change: `<Core>/.coredev`
 keeps its name.
 
@@ -31,9 +32,13 @@ claude plugin uninstall effort-picker@corekit
 
 ### Step 2. Set the settings again
 
-Settings belong to a plugin name, so the new plugins start with the defaults.
-`/plugin` → Installed → corecrew → Configure options: `core_dir`, `attribution`,
-`model_profile`, `ui_language`. For coremodel: `mode`, `classifier`, `models`, `pickModel`.
+Settings belong to a plugin name, so the new plugins start with the defaults. Set them in
+`/plugin` → Installed → the plugin → Configure options:
+
+- corecrew: `core_dir`, `attribution`, `model_profile`, `ui_language`.
+- coremodel: `mode`, `language`, `classifier`, `useHaiku`, `useSonnet`, `useOpus`, `useFable`,
+  `pickModel`. The older text setting with a list of models is no longer read: untick the models
+  you do not want with the four Allow switches.
 
 ### Step 3. Re-install the git hooks
 
@@ -56,3 +61,43 @@ Commands are `/corecrew:new-project`, `/corecrew:task`, `/corecrew:new-standard`
 
 Quit and start `claude` again. In a project's code folder, check that `/corecrew:task` is
 listed and that the session start shows no note about old git hooks.
+
+## Coming from 0.1.x (corekit), also
+
+Versions 0.1.x were the `corekit` plugin. Do these steps once, after Step 5.
+
+1. Remove the old manual skill copy. 0.1.x was installed by `install.sh`, which copied the skill to
+   `~/.claude/skills/new-project` and put a `.corekit` marker file in it. This removes the folder
+   only when the marker is there:
+   ```bash
+   [ -f ~/.claude/skills/new-project/.corekit ] && rm -r ~/.claude/skills/new-project && echo removed || echo "left alone (no marker)"
+   ```
+   A folder without the marker is yours; leave it alone. If `claude plugin list` shows
+   `corekit@synced` (the old plugin from claude.ai sync), run `claude plugin disable corekit@synced`.
+2. Remove the `Stop` hook from each existing project. The plugin ships the Stop hook now. In every
+   project, open `<Core>/<project>/code/.claude/settings.local.json`. Delete the whole
+   `"hooks": { ... }` entry (from `"hooks"` to its closing `}`), and delete the comma after the
+   `"permissions"` block that stood before it. Keep any other content of the file. The result:
+   ```json
+   {
+     "permissions": {
+       "additionalDirectories": ["<Core>/<project>"]
+     }
+   }
+   ```
+   Check that the file is still valid JSON:
+   ```bash
+   python3 -m json.tool <Core>/<project>/code/.claude/settings.local.json >/dev/null && echo ok
+   ```
+   Without this step Claude is reminded twice, once by the old hook (`<Core>/bin/stop-remind.sh`)
+   and once by the plugin.
+3. Move personal rules and turn on auto-update.
+   - Move your personal rules (the ones you keep for every project) into `<Core>/session-rules.md`,
+     and commit it: `git -C <Core> add session-rules.md && git -C <Core> commit -m "Add session rules"`.
+     `/corecrew:task` stops while a Core file it commits with a step has uncommitted changes.
+   - Auto-update is off by default for third-party marketplaces: `/plugin` → Marketplaces →
+     corekit → Enable auto-update. Updates arrive only when the plugin's `version` changes.
+
+`<Core>/bin/` and `<Core>/hooks/` copies written by 0.1.x are your files. They keep working but
+are no longer updated, and the plugin no longer writes there. You can delete them once every
+project went through step 2 above and Step 3.
