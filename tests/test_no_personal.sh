@@ -151,6 +151,7 @@ printf 'see spec §4.2 and spec D17\n' > "$R/tests/spec.sh" # hit once: private 
 printf 'see spec section 4\n' > "$R/docs/design.md"        # allowed: docs/
 printf 'see ADR 009\n' > "$R/plugins/p/hooks/adr.sh"       # hit: a private ADR in a shipped file
 mkdir -p "$SK/templates"; printf '# ADR 001: stack\n' > "$SK/templates/d.md.tmpl"   # allowed: the user's own ADR
+mkdir -p "$R/plugins/p/templates/docs"; printf '# ADR 001: stack\n' > "$R/plugins/p/templates/docs/d.md.tmpl"   # allowed: the same, plugin level
 printf 'LIMIT (ADR 009)\n' > "$R/tests/adr.sh"             # allowed: tests are not shipped
 printf 'see the plan 3c\n' > "$R/plugins/p/hooks/plan.sh"  # hit: a private plan in a shipped file
 printf 'Task 4 adds it\n' > "$R/plugins/p/hooks/task.sh"   # hit: a private task in a shipped file
