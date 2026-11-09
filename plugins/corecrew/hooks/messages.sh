@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# The one table of every message the corecrew hooks show. Sourced by all five hooks.
+# The one table of every message the corecrew hooks show. Sourced by all five hooks, by prepare.sh and by the
+# lib.sh CLI (core-dir and settings print their settings warnings in English with msg_settings_warning).
 #
 #   msg <key> [arg ...]    prints the text of <key> in the language of the setting ui_language
 #                          (lib.sh resolve_setting: plugin option, then settings file), without a final newline.

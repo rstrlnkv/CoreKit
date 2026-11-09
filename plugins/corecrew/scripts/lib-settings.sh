@@ -142,7 +142,8 @@ _resolve_setting() {
     v="$(opt_value "$v")"
     [ -n "$v" ] || continue
     if _setting_valid "$key" "$v"; then REPLY="$v"; break; fi
-    # an unknown ui_language is silently English (as documented in hooks/messages.sh); the rest is named
+    # an unknown ui_language is silently English (as documented in hooks/messages.sh); the rest is named in
+    # SETTINGS_WARN, whose texts are msg_settings_warning in hooks/messages.sh
     [ "$key" = ui_language ] || bad="${bad}${v}"$'\t'"${src}"$'\n'
   done
   if [ -z "$REPLY" ]; then
@@ -169,32 +170,6 @@ _settings_file_check() {
 
 # resolve_setting <key> — prints the value (see _resolve_setting; warnings are not kept).
 resolve_setting() { local SETTINGS_WARN=""; _SF_DONE=""; _resolve_setting "$1"; printf '%s' "$REPLY"; }
-
-# settings_warning_lines — SETTINGS_WARN as English lines for stderr, one per ignored value: what is wrong,
-# where to fix it, what is used instead. (hooks/messages.sh has the same texts in en and ru.)
-settings_warning_lines() {
-  local k v s e sl fx
-  while IFS=$'\t' read -r k v s e; do
-    [ -n "$k" ] || continue
-    if [ "$k" = home ]; then
-      printf 'corecrew: HOME is empty or not an absolute path, so ~ (the default core_dir ~/Projects/Core) has no meaning and there is no Core. Set HOME or give core_dir as an absolute path.\n'; continue
-    fi
-    if [ "$k" = settings_file ]; then
-      printf 'corecrew: the settings file %s cannot be read (or is over 64 KB); its values are ignored and the defaults are used.\n' "$v"; continue
-    fi
-    case "$s" in
-      env) sl="environment variable CORE_DIR"; fx="Unset or correct the CORE_DIR variable." ;;
-      option) sl="plugin option"; fx="Correct it in the plugin's options in Claude Code." ;;
-      *) sl="settings file"; fx="Correct it in $(settings_file_path)." ;;
-    esac
-    case "$k" in
-      core_dir) printf 'corecrew: core_dir "%s" (%s) is not valid: it must be an absolute path or start with ~/. %s Using %s instead.\n' "$v" "$sl" "$fx" "$e" ;;
-      attribution) printf 'corecrew: attribution "%s" (%s) is not valid: use allow or forbid. %s Using "%s" instead.\n' "$v" "$sl" "$fx" "$e" ;;
-      model_profile) printf 'corecrew: model_profile "%s" (%s) is not valid: use economy, balanced or strong. %s Using "%s" instead.\n' "$v" "$sl" "$fx" "$e" ;;
-      *) printf 'corecrew: %s "%s" (%s) is not valid. %s Using "%s" instead.\n' "$k" "$v" "$sl" "$fx" "$e" ;;
-    esac
-  done <<< "$SETTINGS_WARN"
-}
 
 # _core_raw <value> — sets CORE_RAW: the core_dir value with ~ expanded and no trailing slash.
 # shellcheck disable=SC2088  # a literal ~ is compared, not expanded

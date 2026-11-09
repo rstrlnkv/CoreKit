@@ -254,6 +254,20 @@ ERRW="$(CORE_DIR=rel bash "$LIB" core-dir 2>&1 >/dev/null)"
 case "$ERRW" in *'environment variable CORE_DIR'*'Unset or correct the CORE_DIR variable'*'Using ~/Projects/Core'*) pass ;; *) fail "env warning: $ERRW" ;; esac
 ERRW="$(CLAUDE_PLUGIN_OPTION_CORE_DIR=rel bash "$LIB" core-dir 2>&1 >/dev/null)"
 case "$ERRW" in *"plugin option"*"options in Claude Code"*) pass ;; *) fail "option warning: $ERRW" ;; esac
+# one text per warning: the CLI prints the texts of hooks/messages.sh, in English whatever ui_language says
+assert_eq "$(cat "$SCRIPTS/lib.sh" "$SCRIPTS/lib-settings.sh" | grep -c 'is not valid')" "0" "no warning text outside hooks/messages.sh"
+sfw 'attribution: yes\nui_language: ru\n'
+ERRW="$(bash "$LIB" settings attribution 2>&1 >/dev/null)"
+case "$ERRW" in 'corecrew: attribution "yes" (settings file) is not valid: use allow or forbid.'*) pass ;; *) fail "CLI warning with ui_language ru: $ERRW" ;; esac
+# a lib.sh without hooks/messages.sh beside it (the tools copy) prints no warning; stdout and the exit code stay
+mkdir -p "$SANDBOX/nomsg/scripts"; cp "$SCRIPTS"/lib*.sh "$SANDBOX/nomsg/scripts/"
+OUTO="$(CORE_DIR=rel bash "$SANDBOX/nomsg/scripts/lib.sh" core-dir 2>"$SANDBOX/err")"; RCO=$?
+assert_eq "$RCO" "0" "no messages.sh: core-dir exit"; assert_eq "$OUTO" "$RH/Projects/Core" "no messages.sh: core-dir stdout"
+assert_eq "$(cat "$SANDBOX/err")" "" "no messages.sh: no warning"
+OUTO="$(bash "$SANDBOX/nomsg/scripts/lib.sh" settings attribution 2>"$SANDBOX/err")"; RCO=$?
+assert_eq "$RCO$OUTO" "0attribution: allow" "no messages.sh: settings exit and stdout"
+assert_eq "$(cat "$SANDBOX/err")" "" "no messages.sh: settings prints no warning"
+sfw ''
 # unreadable file: defaults (skipped as root, which reads anything)
 printf 'attribution: forbid\n' > "$SANDBOX/unread"; chmod 000 "$SANDBOX/unread"
 if [ ! -r "$SANDBOX/unread" ]; then

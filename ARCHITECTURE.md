@@ -19,6 +19,7 @@ plugins/corecrew/                 project workflow
                                   absent (Claude Code's Plan/Explore agents, and Codex)
   agents/                         engineer, tester, security, verifier, localizer, designer
   hooks/                          hooks.json and the five hook scripts, messages.sh for their texts
+                                  and for the settings warnings of the lib.sh CLI
   scripts/                        the machinery in portable bash; each file's header says what it does
     lib.sh                        shared helpers: scripts and hooks source it, or run it as a command
     lib-*.sh                      the parts lib.sh sources: lib-paths.sh, lib-settings.sh, lib-layout.sh,
