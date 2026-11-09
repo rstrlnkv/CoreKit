@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# The public-repository standard (<Core>/standards/public-repository.md), the checks that run offline.
-# Rule 4 binds the plugin READMEs too (one shape for all three): `# <Name>`, a one-line description,
+# The public-repository standard (<Core>/standards/public-repository.md), checks 1 to 4, which run offline:
+# the root files, no loose code at the root, nothing rule 2 keeps out, no CHANGELOG translation and the
+# order of the required README.md headings, all read from the tracked files. Rule 4 binds the plugin READMEs too (one shape for all three): `# <Name>`, a one-line description,
 # one line of shields.io badges (platform, release, licence), then ## Install, ## Features (opening
 # with a `| Feature | What it does |` table), ## Requirements, ## Development, ## Licence, in that order.
 # Nothing in a plugin is built, so a plugin README says Development, never Build from source.
@@ -57,6 +58,28 @@ plugin_readme_problems() {
     || echo "## Features does not open with a | Feature | What it does | table"
 }
 
+# repo_problems <repo> — one line per way the tracked files break checks 1 to 4 of the standard; nothing when
+# they fit: the root files (1), no loose code at the root (1), nothing rule 2 keeps out (2), no CHANGELOG
+# translation, a plugin's included (3), the required headings of README.md in order (4)
+repo_problems() {
+  local files f got
+  files="$(git -C "$1" ls-files)"
+  for f in README.md LICENSE CHANGELOG.md SECURITY.md ARCHITECTURE.md; do
+    printf '%s\n' "$files" | LC_ALL=C grep -qxF "$f" || echo "missing $f"
+  done
+  printf '%s\n' "$files" | LC_ALL=C grep -v / | LC_ALL=C grep -E '\.(swift|cs|py|js|ts|go|rs|c|cpp|h|m|sh|cmd)$' \
+    | LC_ALL=C grep -vx 'Package.swift' | LC_ALL=C sed 's/^/loose code at the root: /'
+  printf '%s\n' "$files" | LC_ALL=C grep -iE '^(Architecture|design|\.superpowers)/|^release-[^/]*\.md$' \
+    | LC_ALL=C sed 's/^/tracked, rule 2 keeps it out: /'
+  printf '%s\n' "$files" | LC_ALL=C grep -E '(^|/)CHANGELOG\.[^/]+\.md$' | LC_ALL=C sed 's/^/a CHANGELOG translation: /'
+  got="$(req_headings "$1/README.md")"
+  printf '%s\n' "$got" | LC_ALL=C grep -qxE '## Install\|## Features\|## Requirements\|## (Build from source|Development)\|## Licence' \
+    || echo "README.md required headings out of order: $got"
+}
+
+out="$(repo_problems "$ROOT")"
+[ -z "$out" ] && pass || fail "$out"
+
 for f in "$ROOT"/plugins/*/README.md; do
   out="$(plugin_readme_problems "$f")"
   [ -z "$out" ] && pass || fail "${f#"$ROOT"/}: $out"
@@ -90,4 +113,31 @@ caught "Build from source" 's/^## Development$/## Build from source/'
 caught "a swapped heading order" 's/^## Requirements$/## TMP/; s/^## Features$/## Requirements/; s/^## TMP$/## Features/'
 caught "Features without the table" 's/^| Feature | What it does |$/| Word | Meaning |/'
 caught "no Licence heading" 's/^## Licence$/## License/'
+
+# the repo checks: a repo in shape passes; each planted error is reported (plant <what> <command>, run in a fresh repo)
+make_repo() {
+  rm -rf "$SANDBOX/r"; mkdir -p "$SANDBOX/r/scripts" && git -C "$SANDBOX/r" init -q
+  printf '%s\n' '# R' '' 'Does one thing.' '' '## Install' '## Features' '## Requirements' '## Uninstall' \
+    '## Build from source' '## Licence' > "$SANDBOX/r/README.md"
+  for f in LICENSE CHANGELOG.md SECURITY.md ARCHITECTURE.md Package.swift scripts/run.sh; do
+    printf 'x\n' > "$SANDBOX/r/$f"
+  done
+  printf '.DS_Store\n' > "$SANDBOX/r/.gitignore"; git -C "$SANDBOX/r" add -A
+}
+plant() {
+  make_repo
+  ( cd "$SANDBOX/r" && eval "$2" && git add -A )
+  [ -n "$(repo_problems "$SANDBOX/r")" ] && pass || fail "self-check: $1 passes"
+}
+make_repo
+assert_eq "$(repo_problems "$SANDBOX/r")" "" "self-check: a repo in shape"
+plant "a missing LICENSE" 'git rm -q --cached LICENSE && rm LICENSE'
+plant "loose code at the root" 'printf x > tool.sh'
+plant "a tracked design/x" 'mkdir design && printf x > design/x'
+plant "a tracked Architecture/ page" 'mkdir Architecture && printf x > Architecture/a.md'
+plant "a tracked .superpowers/ file" 'mkdir .superpowers && printf x > .superpowers/a'
+plant "a release-note draft" 'printf x > release-1.0.md'
+plant "a CHANGELOG translation" 'printf x > CHANGELOG.ru.md'
+plant "a plugin CHANGELOG translation" 'mkdir -p plugins/p && printf x > plugins/p/CHANGELOG.ru.md'
+plant "a swapped heading order" "sed -e 's/^## Features\$/## T/; s/^## Requirements\$/## Features/; s/^## T\$/## Requirements/' README.md > R && mv R README.md"
 finish

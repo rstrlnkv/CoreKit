@@ -121,23 +121,27 @@ anchors_of() {
     /^#+ / { h = $0; sub(/^#+ /, "", h); h = tolower(h); gsub(/[^a-z0-9 _-]/, "", h); gsub(/ /, "-", h); print h }
   ' "$1"
 }
-# check_anchors <doc> — every ](path.md#anchor) and ](#anchor) link in <doc> names a heading of its target;
-# a web link is not checked
+# check_anchors <doc> — every relative ](target) link in <doc>: a link without # names a file or folder that
+# exists; a ](path.md#anchor) or ](#anchor) link names a heading of its target. Web and mailto links are not checked.
 check_anchors() {
   local l target anchor file
   while IFS= read -r l; do
     l="${l#](}"; l="${l%)}"
-    target="${l%%#*}"; anchor="${l#*#}"
+    case "$l" in http://*|https://*|mailto:*) continue ;; esac
+    target="${l%%#*}"
     case "$target" in
-      http://*|https://*) continue ;;
       '') file="$1" ;;
       *) file="$(dirname "$1")/$target" ;;
+    esac
+    case "$l" in
+      *'#'*) anchor="${l#*#}" ;;
+      *) [ -e "$file" ] && pass || fail "${1#"$ROOT"/} links $l: no such file"; continue ;;
     esac
     if [ ! -f "$file" ]; then fail "${1#"$ROOT"/} links $l: no such file"
     elif anchors_of "$file" | grep -qxF -- "$anchor"; then pass
     else fail "${1#"$ROOT"/} links $l, but ${target:-it} has no heading for #$anchor"
     fi
-  done < <(LC_ALL=C grep -oE '\]\([^)[:space:]]*#[^)[:space:]]+\)' "$1")
+  done < <(LC_ALL=C grep -oE '\]\([^)[:space:]]+\)' "$1")
 }
 for doc in $docs; do check_anchors "$ROOT/$doc"; done
 # the README's Claude Code install section points at the deny rules: the host is the boundary, the hooks
@@ -191,4 +195,7 @@ assert_eq "$(anchors_of "$SANDBOX/a.md" | tr '\n' ' ')" "doc host-settings new-p
 ( FAILS=0; check_anchors "$SANDBOX/a.md" >/dev/null; [ "$FAILS" -eq 0 ] ) && pass || fail "good anchor links fail"
 printf '%s\n' '[x](#host-setting) [y](other.md#here) [z](gone.md#there)' > "$SANDBOX/b.md"
 ( FAILS=0; check_anchors "$SANDBOX/b.md" >/dev/null; [ "$FAILS" -eq 3 ] ) && pass || fail "a missing anchor or file passes the anchor check"
+# a link without an anchor names an existing file; web and mailto links are not checked
+printf '%s\n' '[g](gone.md) [o](other.md) [d](./) [w](https://example.com/gone.md) [m](mailto:someone)' > "$SANDBOX/c.md"
+( FAILS=0; check_anchors "$SANDBOX/c.md" >/dev/null; [ "$FAILS" -eq 1 ] ) && pass || fail "a dead link without an anchor passes the link check"
 finish
