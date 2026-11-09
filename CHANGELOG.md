@@ -42,6 +42,9 @@ commit log has the full detail.
 - undo-step is all-or-nothing when a commit fails: when a pre-commit hook refuses the Undo commit,
   or a repo has no git identity or a stale `index.lock`, it exits 1 with "Nothing was changed" and
   the cause, and leaves both repos as they were.
+- install-hooks prints a corecrew line that names the hook instead of a raw shell error when a
+  hooks folder cannot be written, and save then says nothing was saved. When git cannot write the
+  code repo's `.git`, save gives its Codex hint before it tries to install the hooks.
 
 ## [0.12.0] - 2026-11-09
 

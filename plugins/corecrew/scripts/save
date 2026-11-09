@@ -20,15 +20,21 @@ if [ "$NOATTR" = 1 ]; then
 fi
 [ -n "$MSG" ] || [ $PUSH -eq 1 ] || { echo 'Usage: save "<message>" [--push] [--no-attribution]' >&2; exit 2; }
 locate || exit 1
+# A code repo git cannot write (Codex keeps .git read-only) is named first, with the Codex hint, before
+# install-hooks tries to write its hooks folder. The Core is checked below, only when it has docs.
+can_commit "$CODE" save "nothing saved" || exit 1
 
 # Make sure protective hook shims are in place. With core.hooksPath set (husky, lefthook, a global
 # setting) git does not run .git/hooks: install-hooks.sh then exits 4 and explains on stderr how to
-# chain corecrew's checks; the step is still saved.
+# chain corecrew's checks; the step is still saved. Shims it cannot write stop the save.
 if [ ! -x "$MAIN/.git/hooks/pre-commit" ] || [ ! -x "$MAIN/.git/hooks/pre-push" ] || \
    [ ! -x "$CORE/.git/hooks/pre-push" ] || git -C "$MAIN" config --get core.hooksPath >/dev/null 2>&1 || \
    git -C "$CORE" config --get core.hooksPath >/dev/null 2>&1; then
   rc=0; CORE_DIR="$CORE" bash "$(dirname "$0")/install-hooks.sh" "$PROJECT" >/dev/null || rc=$?
-  case "$rc" in 0|4) ;; *) exit 1 ;; esac
+  case "$rc" in
+    0|4) ;;
+    *) echo "save: the corecrew git hooks could not be installed (see above); nothing saved." >&2; exit 1 ;;
+  esac
 fi
 
 # Both repos must be able to commit before the code commit is made, so a step is not left half saved
@@ -43,7 +49,6 @@ CORE_DIRTY=$(git -C "$CORE" status --porcelain -- $CORE_PATHS 2>/dev/null) || CO
 if [ -z "$MSG" ] && { [ -n "$(git -C "$CODE" status --porcelain 2>/dev/null)" ] || [ -n "$CORE_DIRTY" ]; }; then
   echo 'save: there are changes to save; give them a message: save "<message>" --push' >&2; exit 2
 fi
-can_commit "$CODE" save "nothing saved" || exit 1
 [ -z "$CORE_DIRTY" ] || can_commit "$CORE" save "nothing saved" || exit 1
 
 # Step-Id = <time>-<NN>-<random>. NN counts this project's steps within one second, so undo-step can
