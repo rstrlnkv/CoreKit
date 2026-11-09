@@ -111,6 +111,12 @@ caught "a release badge of another plugin" '5s|%2Fx%2F|%2Fy%2F|'
 caught "a platform version Requirements lacks" '5s|2\.1\.271|2.1.300|'
 caught "Build from source" 's/^## Development$/## Build from source/'
 caught "a swapped heading order" 's/^## Requirements$/## TMP/; s/^## Features$/## Requirements/; s/^## TMP$/## Features/'
+# the order check alone: Install and Development swapped break nothing else, so its line is the only problem
+# (a check that compared the headings as a set, or sorted, would report nothing)
+good | LC_ALL=C sed 's/^## Install$/## TMP/; s/^## Development$/## Install/; s/^## TMP$/## Development/' > "$X"
+assert_eq "$(plugin_readme_problems "$X")" \
+  "required headings out of shape: ## Development|## Features|## Requirements|## Install|## Licence" \
+  "self-check: the heading order alone"
 caught "Features without the table" 's/^| Feature | What it does |$/| Word | Meaning |/'
 caught "no Licence heading" 's/^## Licence$/## License/'
 
