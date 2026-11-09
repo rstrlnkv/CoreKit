@@ -231,9 +231,21 @@ undo_fails() {
   assert_eq "$(snap_tree "$C" "$CORE_DIR")" "$before" "$label: a failed undo changed the repos"
   no_revert_left
 }
+# another project's work in the Core (a staged file, an unsaved edit, an untracked file) survives a failed commit:
+# the rollback puts back only the step's paths and never resets the Core
+mkdir -p "$CORE_DIR/other"; echo saved > "$CORE_DIR/other/CLAUDE.md"
+git -C "$CORE_DIR" add other/CLAUDE.md; git -C "$CORE_DIR" commit -q -m "other project" -- other/CLAUDE.md
+echo notes > "$CORE_DIR/other/notes.md"; git -C "$CORE_DIR" add other/notes.md
+echo edited >> "$CORE_DIR/other/CLAUDE.md"; echo loose > "$CORE_DIR/other/loose.md"
+other_ok() {
+  assert_eq "$(git -C "$CORE_DIR" diff --cached --name-only)" "other/notes.md" "$1: another project's staged file"
+  assert_eq "$(cat "$CORE_DIR/other/CLAUDE.md")" "$(printf 'saved\nedited')" "$1: another project's unsaved edit"
+  assert_contains "$CORE_DIR/other/loose.md" loose
+}
 HOOK="$CORE_DIR/.git/hooks/pre-commit"
 printf '#!/bin/sh\nexit 1\n' > "$HOOK"; chmod +x "$HOOK"
 undo_fails "pre-commit hook" env
+other_ok "pre-commit hook"
 rm -f "$HOOK"
 git -C "$CORE_DIR" config user.useConfigOnly true
 undo_fails "no Core identity" env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL
