@@ -57,9 +57,9 @@
 #   Limit: Codex does send agent_type for subagents, but ro_agent never fires there: Codex agent names are neither
 #   corecrew:* nor the bare checker names (a Codex crew is started by text; task 4 adds a git status check).
 #   Limit: write_stdin into an open exec session: no evidence that it runs the hook (to be checked live).
-# - Bash: a plain reading for honest mistakes (ADR 009: the host's permissions and the git pre-commit and pre-push hooks
-#   are the boundary; deliberate evasion is out of scope). scripts/bashlex-guard-code.awk reads words, quotes, comments,
-#   heredoc bodies and separators, and prints the write targets: > >> >| &> >&file <>, tee, touch, mkdir, install
+# - Bash: a plain reading for honest mistakes (SECURITY.md, "Threat model": the host's permissions and the git pre-commit
+#   and pre-push hooks are the boundary; deliberate evasion is out of scope). scripts/bashlex-guard-code.awk reads words,
+#   quotes, comments, heredoc bodies and separators, and prints the write targets: > >> >| &> >&file <>, tee, touch, mkdir, install
 #   (-d makes dirs), cp, mv and git mv (the destination; a destination directory also gets the sources' names), ln (a
 #   CLAUDE.local.md or AGENTS.md at the code root that links a file in the Core, not in a code folder, passes: session
 #   start asks for that link; a relative source is read from the cwd; a source made at run time, such as
