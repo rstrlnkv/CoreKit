@@ -220,8 +220,8 @@ check_fixtures() {
 }
 check_fixtures "$ROOT/CONTRIBUTING.md" "$ROOT/tests/fixtures" "$ROOT/tests"
 # self-check: a new fixture that neither the doc nor a test names fails twice; a glob in the doc counts
-mkdir -p "$SANDBOX/fx/wiki-zzz" "$SANDBOX/fx/std-a.md" "$SANDBOX/ts"
-printf '%s\n' '# C' '### Test fixtures' '- `std-*.md`, `tests/fixtures/wiki-good/`' '## Next' '`wiki-zzz`' > "$SANDBOX/c2.md"
+mkdir -p "$SANDBOX/fx/zz-unnamed" "$SANDBOX/fx/std-a.md" "$SANDBOX/ts"
+printf '%s\n' '# C' '### Test fixtures' '- `std-*.md`, `tests/fixtures/wiki-good/`' '## Next' '`zz-unnamed`' > "$SANDBOX/c2.md"
 printf '%s\n' 'copy_fixture std-a.md x' > "$SANDBOX/ts/test_a.sh"
 ( FAILS=0; check_fixtures "$SANDBOX/c2.md" "$SANDBOX/fx" "$SANDBOX/ts" >/dev/null; [ "$FAILS" -eq 2 ] ) \
   && pass || fail "a fixture missing from the doc and the tests does not fail twice"
