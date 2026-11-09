@@ -937,6 +937,29 @@ else
   assert_no_file "$F/.gitignore"; assert_no_file "$F/.worktreeinclude"
 fi
 
+# --- the .gitignore append fails after a partial write: a file-size limit 4 bytes above .gitignore, SIGXFSZ ignored
+# (a write that starts past the limit fails with "File too large"; the probe writes in two pieces, as adopt's printf
+# does, and the case is skipped where that still succeeds). exit 1 before the repo commit, and restore_gi puts
+# .gitignore back byte for byte; nothing else changed
+new_sandbox; setup_core
+F="$SANDBOX/Projects/gi-partial"; mkrepo "$F"
+{ printf 'build/\n'; head -c $((64 * 1024 - 12)) /dev/zero | tr '\0' x; printf '\n'; } > "$F/.gitignore"
+git -C "$F" add .gitignore && git -C "$F" commit -q -m gi
+cp -p "$F/.gitignore" "$SANDBOX/gi.orig"; cp -p "$F/.gitignore" "$SANDBOX/gi.probe"
+limited() { (trap '' XFSZ; ulimit -f 64; exec "$@"); }
+if limited bash -c 'printf "a first piece\n%s" "a second piece" >> "$1"' _ "$SANDBOX/gi.probe" >/dev/null 2>&1 \
+   || cmp -s "$SANDBOX/gi.probe" "$SANDBOX/gi.orig"; then
+  skip ".gitignore partial write" "a file-size limit does not stop an append after a partial write here"
+else
+  rm -f "$SANDBOX/gi.probe"; before="$(snap_tree "$SANDBOX")"
+  OUT="$(limited bash "$AD" --from "$F" 2>&1)"; rc=$?
+  assert_eq "$rc" "1" ".gitignore partial write exit"
+  echo "$OUT" | grep -qxF "adopt: could not write $F/.gitignore" && pass || fail ".gitignore partial write message: $OUT"
+  cmp -s "$F/.gitignore" "$SANDBOX/gi.orig" && pass || fail ".gitignore not restored after a partial write"
+  assert_eq "$(snap_tree "$SANDBOX")" "$before" "a partial .gitignore write changed something"
+  assert_no_file "$F/.worktreeinclude"
+fi
+
 # --- old layout with --purpose: the PROJECTS.md line gets the new text and the new entry, and stays one line
 new_sandbox; setup_core
 mkold old-app
