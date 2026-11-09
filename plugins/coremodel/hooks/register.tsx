@@ -4,54 +4,17 @@ import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 import type { Band, Level, Mark, Stats } from '../types'
 import { classifierFault, classify, Cut, FAIL_SHOW, failed, pickWorked } from './ask'
 import { LEVELS, type Pick, toLevel } from './classifier'
+import { applyLevel, applyModel, chatState, clearBand, confirmCost, currentBand, dropBand, heldPair, paneChoice, paneModel, releaseHold, releaseLevel, releaseModel, setMode, showBand } from './hold'
 import { allowedModels, chatTokens, currentLang, currentMode, isEmptyChat, log, pickOn, PLUGIN, refreshListed } from './host'
 import { enabledModels, LADDER, type ModelKey, MODELS, requestModel, standIn, toModel } from './models'
 import { decide, decideModel, effortOptions, LOCALES, type Mode, modelOptions, MODES, texts } from './policy'
-import { BAND_MS, type Held, session } from './session'
-
-const band = atom({ plugin: 'coremodel', key: 'band' } as const, null)
-
-const override = atom({ plugin: 'coremodel', key: 'override' } as const, null)
+import { type Held, session } from './session'
 
 const marks = atom({ plugin: 'coremodel', key: 'marks' } as const, {})
 
 const stats = atom({ plugin: 'coremodel', key: 'stats' } as const, null)
 
 const NO_STATS: Stats = { picks: { low: 0, medium: 0, high: 0, xhigh: 0, max: 0 }, kept: 0, last: null, marks: 0, models: { haiku: 0, sonnet: 0, opus: 0, fable: 0 } }
-
-/** Switches to `level` by holding it on this chat's requests. */
-async function applyLevel($: EngineInterface, level: Level, base: string): Promise<void> {
-  session.hold = { level, base }
-  await syncOverride($)
-}
-
-/** What the drawings read: the held pair, or null when nothing is held. */
-async function syncOverride($: EngineInterface): Promise<void> {
-  const pair = { model: session.modelHold?.key ?? null, level: session.hold?.level ?? null }
-  await update($, override, () => (pair.model || pair.level ? pair : null))
-}
-
-/** Lets go of the held level: the chat runs at the menu's level again. */
-async function releaseLevel($: EngineInterface): Promise<void> {
-  session.hold = null
-  // The pane reads `seen`: after a release it is the menu's level, not the one just let go.
-  session.seen = toLevel(session.asked) || session.seen
-  await syncOverride($)
-}
-
-/** Lets go of the held model: the chat runs on the person's own model again. */
-async function releaseModel($: EngineInterface): Promise<void> {
-  session.modelHold = null
-  await syncOverride($)
-}
-
-/** Lets go of both parts (off, Release, a new session). */
-async function releaseHold($: EngineInterface): Promise<void> {
-  session.hold = null
-  session.seen = toLevel(session.asked) || session.seen
-  session.modelHold = null
-  await syncOverride($)
-}
 
 /**
  * A new chat starts with nothing held: the hold and the undo line go, and a pick still on its way
@@ -68,7 +31,7 @@ async function newChat($: EngineInterface, fromEngine: boolean): Promise<void> {
   session.seen = toLevel(session.asked)
   await releaseHold($)
   if (fromEngine) await update($, marks, () => ({}))
-  await update($, band, () => null)
+  await dropBand($)
   $.ui.invalidate('ui.render')
 }
 
@@ -87,68 +50,6 @@ async function placeMark($: EngineInterface, change: Mark) {
   const id = `mark-${n}`
   await update($, marks, cur => ({ ...cur, [id]: change }))
   await $.ui.place({ id })
-}
-
-/** Switches to `key` by holding it on this chat's requests. */
-async function applyModel($: EngineInterface, key: ModelKey, base: string): Promise<void> {
-  session.modelHold = { key, base }
-  await syncOverride($)
-}
-
-/**
- * What the chat runs at, from the held pair: each held part, else what the last request showed.
- * "Your default" names only the held parts, as the chat's own menu sets them. The model only while
- * CoreModel picks it.
- */
-function chatState(pair: { model: ModelKey | null; level: Level | null } | null, options: { pickModel?: unknown }) {
-  const withModel = pickOn(options)
-  const nowModel: ModelKey | '' = withModel ? (pair?.model ?? toModel(session.seenModel)) : ''
-  const nowLevel: Level | '' = pair?.level ?? session.seen
-  const defaultModel: ModelKey | '' = withModel && pair?.model ? toModel(session.seenModel) : ''
-  const defaultLevel: Level | '' = pair?.level ? toLevel(session.asked) : ''
-  return { nowModel, nowLevel, isHeld: !!(pair?.model || pair?.level), defaultModel, defaultLevel }
-}
-
-/** The cost question before a switch to `key` mid-chat; true on the person's yes. */
-async function confirmCost($: EngineInterface, key: ModelKey, nowModel: ModelKey | '', why: string): Promise<boolean> {
-  const t = texts(session.lastLang)
-  const yes = t.switchToModel(key)
-  try {
-    const answer = await $.ui.ask(t.costQuestion(key, nowModel, await chatTokens($), why), { options: [yes, nowModel ? t.keepModel(nowModel) : t.cancel], header: t.modelHeader })
-    return answer === yes
-  } catch {
-    return false
-  }
-}
-
-/** Takes `b` down unless a newer band has replaced it. */
-async function clearBand($: EngineInterface, b: Band): Promise<void> {
-  await update($, band, cur => (cur && cur.id === b.id ? null : cur))
-}
-
-/**
- * Puts `b` above the prompt for BAND_MS: a silent switch with its undo, or a suggestion. VS Code draws
- * no band, so there it is said in a toast, a silent switch with the undo command.
- */
-async function showBand($: EngineInterface, b: Band) {
-  if (b.undo) session.lastUndo = b
-  await update($, band, () => b)
-  if (session.surface === 'vscode') {
-    const t = texts(b.lang)
-    try {
-      $.ui.toast(
-        b.suggest
-          ? `${t.suggests} ${t.change(b.model, '', b.level, '', b.why)}`
-          : `CoreModel: ${t.change(b.model, b.fromModel, b.level, b.from, b.why)}${b.undo ? ` · ${t.undoHint}` : ''}`,
-      )
-    } catch {
-      // The transcript row still says it.
-    }
-  }
-  void (async () => {
-    await $.clock.sleep(BAND_MS)
-    await clearBand($, b)
-  })().catch(err => log($, 'band', err))
 }
 
 /** A level named in typed text, in any locale; undefined when it names none. */
@@ -375,55 +276,6 @@ function undoTarget(b: Band): { model: ModelKey | '' | undefined; level: Level |
   }
 }
 
-/** Sets the mode as `/coremodel <mode>` does; returns the reply. */
-async function setMode($: EngineInterface, options: { mode?: unknown; pickModel?: unknown }, arg: Mode | 'on'): Promise<string> {
-  const t = texts(session.lastLang)
-  let text: string
-  if (arg === 'auto' || arg === 'suggest') {
-    await $.store.set('mode', arg)
-    await $.store.set('lastMode', arg)
-    // A suggestion of the other mode has no place any more.
-    await update($, band, cur => (cur?.suggest && arg === 'auto' ? null : cur))
-    text = t.modeSet(arg, pickOn(options))
-  } else if (arg === 'off') {
-    await $.store.set('mode', 'off')
-    await releaseHold($)
-    await update($, band, () => null)
-    text = t.modeOff
-  } else {
-    const last = await $.store.get('lastMode')
-    const mode: Mode = last === 'auto' || last === 'suggest' ? last : options.mode === 'suggest' ? 'suggest' : 'auto'
-    await $.store.set('mode', mode)
-    text = t.modeOnFor(mode)
-  }
-  $.ui.invalidate('ui.render')
-  return text
-}
-
-/**
- * A level the person picks in the pane (null: Use my default). It is their newest choice, so the band
- * goes, and the hold takes the menu's level from the next request as its base.
- */
-async function paneChoice($: EngineInterface, level: Level | null): Promise<void> {
-  session.touched += 1
-  if (level) await applyLevel($, level, '')
-  else await releaseHold($)
-  await update($, band, () => null)
-}
-
-/**
- * A model the person presses in the pane. Mid-chat the cost question comes first;
- * the press itself is their yes, so no other question follows.
- */
-async function paneModel($: EngineInterface, key: ModelKey): Promise<void> {
-  session.touched += 1
-  const nowModel = session.modelHold?.key ?? toModel(session.seenModel)
-  if (key === nowModel) return
-  if (!(await isEmptyChat($)) && !(await confirmCost($, key, nowModel, ''))) return
-  await applyModel($, key, '')
-  await update($, band, () => null)
-}
-
 const RULE = '─'.repeat(40)
 // The width of the captions in the pane's rows, in cells: the longest caption of the language, plus one,
 // so every row's value starts in the same column.
@@ -577,7 +429,7 @@ export const register: Register = (on, options) => {
     }
     const mode = await currentMode($, options)
     // pickModel off: the level only, as everywhere else.
-    const { nowModel: model, nowLevel: level, isHeld, defaultModel, defaultLevel } = chatState(await read($, override), options)
+    const { nowModel: model, nowLevel: level, isHeld, defaultModel, defaultLevel } = chatState(await heldPair($), options)
     const yours = t.pair(defaultModel, defaultLevel)
     if (!arg) {
       let answer = ''
@@ -597,7 +449,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'SessionMode' }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const t = texts(session.lastLang)
-    const { nowModel, nowLevel, isHeld } = chatState(await read($, override), options)
+    const { nowModel, nowLevel, isHeld } = chatState(await heldPair($), options)
     const mode = await currentMode($, options)
     // While a model or level is set, both parts are named: the part not set is what the chat last showed.
     const state = mode === 'off' ? t.off : isHeld ? t.pair(nowModel, nowLevel) : ''
@@ -620,7 +472,7 @@ export const register: Register = (on, options) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const t = texts(session.lastLang)
     const mode = await currentMode($, options)
-    const { nowModel, nowLevel, isHeld, defaultModel, defaultLevel } = chatState(await read($, override), options)
+    const { nowModel, nowLevel, isHeld, defaultModel, defaultLevel } = chatState(await heldPair($), options)
     const s = await read($, stats)
     const fault = await classifierFault($)
     const allowed = allowedModels(options)
@@ -721,14 +573,14 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const b = await read($, band)
+    const b = await currentBand($)
     if (!b || e.props.hasSurvey) return next(e)
     const rest = await next(e)
     const { Box, Button, Text } = $.ui.resolve(e)
     const t = texts(b.lang)
     // A press on an old band, or after the person changed it: their own choice stands.
     const current = async () => {
-      const cur = await read($, band)
+      const cur = await currentBand($)
       return !!cur && cur.id === b.id
     }
     if (b.suggest) {
