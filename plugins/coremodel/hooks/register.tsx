@@ -202,12 +202,16 @@ function pickOn(options: { pickModel?: unknown }): boolean {
 
 /**
  * What the chat runs at, from the held pair: each held part, else what the last request showed.
- * The model only while CoreModel picks it.
+ * "Your default" names only the held parts, as the chat's own menu sets them. The model only while
+ * CoreModel picks it.
  */
 function chatState(pair: { model: ModelKey | null; level: Level | null } | null, options: { pickModel?: unknown }) {
-  const nowModel: ModelKey | '' = pickOn(options) ? (pair?.model ?? toModel(seenModel)) : ''
+  const withModel = pickOn(options)
+  const nowModel: ModelKey | '' = withModel ? (pair?.model ?? toModel(seenModel)) : ''
   const nowLevel: Level | '' = pair?.level ?? seen
-  return { nowModel, nowLevel, isHeld: !!(pair?.model || pair?.level) }
+  const defaultModel: ModelKey | '' = withModel && pair?.model ? toModel(seenModel) : ''
+  const defaultLevel: Level | '' = pair?.level ? toLevel(asked) : ''
+  return { nowModel, nowLevel, isHeld: !!(pair?.model || pair?.level), defaultModel, defaultLevel }
 }
 
 /** The cost question before a switch to `key` mid-chat; true on the person's yes. */
@@ -763,10 +767,9 @@ export const register: Register = (on, options) => {
       return { text: t.probeLogged(rows.length) }
     }
     const mode = await currentMode($, options)
-    const pair = await read($, override)
     // pickModel off: the level only, as everywhere else.
-    const { nowModel: model, nowLevel: level, isHeld } = chatState(pair, options)
-    const yours = t.pair(pair?.model && pickOn(options) ? toModel(seenModel) : '', pair?.level ? toLevel(asked) : '')
+    const { nowModel: model, nowLevel: level, isHeld, defaultModel, defaultLevel } = chatState(await read($, override), options)
+    const yours = t.pair(defaultModel, defaultLevel)
     if (!arg) {
       let answer = ''
       try {
@@ -807,8 +810,7 @@ export const register: Register = (on, options) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const t = texts(lastLang)
     const mode = await currentMode($, options)
-    const pair = await read($, override)
-    const { nowModel, nowLevel, isHeld } = chatState(pair, options)
+    const { nowModel, nowLevel, isHeld, defaultModel, defaultLevel } = chatState(await read($, override), options)
     const s = await read($, stats)
     const fault = await read($, failure)
     const allowed = allowedModels(options)
@@ -820,7 +822,7 @@ export const register: Register = (on, options) => {
     // A selected button says so in its words, not by colour alone; the colour stays as a second cue.
     const mark = (label: string, isOn: boolean) => (isOn ? `● ${label}` : label)
     const nowPair = t.pair(nowModel, nowLevel)
-    const yours = t.pair(pair?.model && withModel ? toModel(seenModel) : '', toLevel(asked))
+    const yours = t.pair(defaultModel, defaultLevel)
     const caption = captionWidth(t)
     const row = (key: string, label: string, body: RenderChildren) => (
       <Box key={key} flexDirection="row" gap="sm">

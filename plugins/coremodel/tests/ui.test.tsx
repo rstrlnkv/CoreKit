@@ -608,6 +608,18 @@ test('the pane names your default only once a request shows it', async ($, on) =
   expect(await has($, /your default: Medium/)).toBe(true)
 })
 
+test('with only the model held, the pane and /coremodel name the same default: the held part', async ($, on) => {
+  const w = world(on)
+  engineFooter(on)
+  w.row = null
+  w.reply = 'nothing'   // the mode question is dismissed: the reply says where things stand
+  await start($)
+  await step($, 'medium')
+  await pressPane($, 'model-opus')
+  expect(await has($, /^Set by CoreModel for this chat · your default: Sonnet$/)).toBe(true)
+  expect(await run($, '')).toContain('set by CoreModel; your default: Sonnet)')
+})
+
 test('no undo when the previous level is unknown', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   engineFooter(on)
