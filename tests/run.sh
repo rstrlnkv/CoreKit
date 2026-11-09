@@ -75,7 +75,10 @@ t0=$(date +%s); n=0
 if [ "$jobs" = 1 ]; then
   for t in $files; do n=$((n + 1)); bash "$HERE/run.sh" --one "$n" "$t"; report "$n" "$t"; done
 else
-  for t in $files; do n=$((n + 1)); echo "$n $t"; done | xargs -P "$jobs" -n 2 bash "$HERE/run.sh" --one
+  # the largest files start first (size stands in for run time), so a slow file does not start last; the report
+  # below keeps the alphabetical order
+  for t in $files; do n=$((n + 1)); echo "$(( $(wc -c < "$t") )) $n $t"; done | sort -k1,1nr -k2,2n | cut -d' ' -f2- \
+    | xargs -P "$jobs" -n 2 bash "$HERE/run.sh" --one
   n=0; for t in $files; do n=$((n + 1)); report "$n" "$t"; done
 fi
 if [ $rc -eq 0 ]; then echo "ALL TESTS PASSED"; else echo "SOME TESTS FAILED"; fi
