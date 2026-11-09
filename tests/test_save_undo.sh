@@ -5,7 +5,6 @@ scaffold_old save-app
 P="$CORE_DIR/save-app"; C="$P/code"; SAVE="$SCRIPTS/save"; UNDO="$SCRIPTS/undo-step"
 assert_file "$SAVE"; assert_file "$UNDO"; assert_no_file "$CORE_DIR/bin"; assert_no_file "$CORE_DIR/hooks"
 step_ids() { git -C "$1" log --format=%B | sed -n 's/^Step-Id: //p'; }
-cnt() { git -C "$1" rev-list --count HEAD 2>/dev/null || echo 0; }
 
 # first save: both repos get one commit with the same Step-Id; hooks get installed
 (cd "$C" && bash "$SAVE" "Initial scaffold") >/dev/null 2>&1
@@ -15,22 +14,22 @@ a=$(step_ids "$C" | head -1); b=$(step_ids "$CORE_DIR" | head -1)
 
 # changes in both repos
 echo "v1" > "$C/app.txt"; echo "feature" > "$P/docs/features/f.md"
-nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
+nc=$(commit_count "$C"); nd=$(commit_count "$CORE_DIR")
 (cd "$C" && bash "$SAVE" "Add feature") > "$SANDBOX/out" 2>&1
 assert_contains "$SANDBOX/out" "saved code"; assert_contains "$SANDBOX/out" "saved docs"
-assert_eq "$(cnt "$C")" "$((nc+1))"; assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))"
+assert_eq "$(commit_count "$C")" "$((nc+1))"; assert_eq "$(commit_count "$CORE_DIR")" "$((nd+1))"
 assert_eq "$(git -C "$C" log -1 --format=%s)" "Add feature"
 
 # only docs changed -> one commit
-echo "more" >> "$P/docs/features/f.md"; nc=$(cnt "$C")
+echo "more" >> "$P/docs/features/f.md"; nc=$(commit_count "$C")
 (cd "$C" && bash "$SAVE" "Docs only") >/dev/null 2>&1
-assert_eq "$(cnt "$C")" "$nc" "code got an empty commit"
+assert_eq "$(commit_count "$C")" "$nc" "code got an empty commit"
 
 # nothing to save
-nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
+nc=$(commit_count "$C"); nd=$(commit_count "$CORE_DIR")
 (cd "$C" && bash "$SAVE" "Nothing") > "$SANDBOX/out" 2>&1
 assert_contains "$SANDBOX/out" "nothing to save"
-assert_eq "$(cnt "$C")" "$nc"; assert_eq "$(cnt "$CORE_DIR")" "$nd"
+assert_eq "$(commit_count "$C")" "$nc"; assert_eq "$(commit_count "$CORE_DIR")" "$nd"
 
 # Core commit touches only this project's folder (other project's changes stay uncommitted)
 mkdir -p "$CORE_DIR/other"; echo x > "$CORE_DIR/other/x.md"
@@ -49,10 +48,10 @@ assert_eq "$(git -C "$W" log -1 --format=%s)" "From worktree"
 assert_eq "$(git -C "$C" log -1 --format=%s)" "Only mine" "main branch changed by worktree save"
 
 # undo last step (Only mine): code file back to v1, history grows
-nc=$(cnt "$C")
+nc=$(commit_count "$C")
 (cd "$C" && bash "$UNDO") > "$SANDBOX/out" 2>&1
 assert_eq "$(cat "$C/app.txt")" "v1" "undo did not restore code"
-assert_eq "$(cnt "$C")" "$((nc+1))" "undo should add a revert commit"
+assert_eq "$(commit_count "$C")" "$((nc+1))" "undo should add a revert commit"
 # undo again: reverts the previous step (Docs only touched docs only) -> code unchanged, docs reverted
 (cd "$C" && bash "$UNDO") > "$SANDBOX/out" 2>&1
 assert_contains "$SANDBOX/out" "docs"
@@ -89,19 +88,19 @@ echo z >> "$P/docs/brief.md"; (cd "$C" && bash "$SAVE" "Core only") >/dev/null 2
 assert_eq "$rc" "0" "save --push with nothing to save: $(cat "$SANDBOX/out")"
 assert_contains "$SANDBOX/out" "nothing to save"; assert_contains "$SANDBOX/out" "pushed Core"
 assert_eq "$(git -C "$SANDBOX/core.git" log -1 --format=%s main 2>/dev/null)" "Core only" "save --push alone did not push the Core"
-echo "v4" > "$C/app.txt"; nc=$(cnt "$C")
+echo "v4" > "$C/app.txt"; nc=$(commit_count "$C")
 (cd "$C" && bash "$SAVE" --push) > "$SANDBOX/out" 2>&1; rc=$?
 assert_eq "$rc" "2" "save --push with changes and no message must be refused"
-assert_eq "$(cnt "$C")" "$nc" "a refused save --push made a commit"; assert_contains "$SANDBOX/out" "message"
+assert_eq "$(commit_count "$C")" "$nc" "a refused save --push made a commit"; assert_contains "$SANDBOX/out" "message"
 git -C "$C" status --porcelain | grep -q app.txt && pass || fail "the refused save staged or lost app.txt"
 (cd "$C" && bash "$SAVE") > "$SANDBOX/out" 2>&1; assert_eq "$?" "2" "save with no message and no --push: usage"
 # failure path: a Core remote that is gone. The commits of both repos stay; the code remote is untouched.
 git -C "$CORE_DIR" remote set-url origin "$SANDBOX/missing.git"
-echo w >> "$P/docs/brief.md"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
+echo w >> "$P/docs/brief.md"; nc=$(commit_count "$C"); nd=$(commit_count "$CORE_DIR")
 (cd "$C" && bash "$SAVE" "Push fails" --push) > "$SANDBOX/out" 2>&1; rc=$?
 assert_eq "$rc" "1" "save --push with a missing Core remote"
 assert_contains "$SANDBOX/out" "Push failed"
-assert_eq "$(cnt "$C")" "$((nc+1))" "the code commit of a failed push"; assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "the Core commit of a failed push"
+assert_eq "$(commit_count "$C")" "$((nc+1))" "the code commit of a failed push"; assert_eq "$(commit_count "$CORE_DIR")" "$((nd+1))" "the Core commit of a failed push"
 assert_eq "$(cat "$C/app.txt")" "v4" "a failed push changed a file"
 assert_eq "$(git -C "$SANDBOX/code.git" rev-list --all --count)" "0" "a failed push touched the code remote"
 assert_contains "$SANDBOX/out" "code not pushed"   # the user learns where the code goes even when the Core push fails
@@ -109,11 +108,11 @@ git -C "$CORE_DIR" remote set-url origin "$SANDBOX/core.git"
 # failure path: the Core pre-push hook refuses the push (pre-push-core on a non-GitHub remote). The line that
 # says the code leaves through ship is printed anyway; the exit is non-zero; both commits stay.
 printf '#!/bin/sh\n# corecrew hook shim (test: refuse)\necho "Push blocked: test" >&2\nexit 1\n' > "$CORE_DIR/.git/hooks/pre-push"
-echo "v5" > "$C/app.txt"; echo w >> "$P/docs/brief.md"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
+echo "v5" > "$C/app.txt"; echo w >> "$P/docs/brief.md"; nc=$(commit_count "$C"); nd=$(commit_count "$CORE_DIR")
 (cd "$C" && bash "$SAVE" "Hook refuses" --push) > "$SANDBOX/out" 2>&1; rc=$?
 assert_eq "$rc" "1" "save --push with a Core pre-push hook that refuses"
 assert_contains "$SANDBOX/out" "Push failed"; assert_contains "$SANDBOX/out" "code not pushed"
-assert_eq "$(cnt "$C")" "$((nc+1))" "the code commit when the hook refuses"; assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "the Core commit when the hook refuses"
+assert_eq "$(commit_count "$C")" "$((nc+1))" "the code commit when the hook refuses"; assert_eq "$(commit_count "$CORE_DIR")" "$((nd+1))" "the Core commit when the hook refuses"
 assert_eq "$(cat "$C/app.txt")" "v5" "a refused push changed a file"
 assert_eq "$(git -C "$SANDBOX/core.git" log -1 --format=%s main 2>/dev/null)" "Core only" "a refused push reached the Core remote"
 printf '#!/bin/sh\n# corecrew hook shim (test no-op)\nexit 0\n' > "$CORE_DIR/.git/hooks/pre-push"
@@ -128,9 +127,9 @@ for f in knowledge/engineer.md standards/README.md session-rules.md; do
 done
 assert_eq "$(git -C "$CORE_DIR" status --porcelain | grep -v 'other/')" "" "knowledge changes left uncommitted"
 # a knowledge-only change is a step of its own
-echo "more" >> "$CORE_DIR/knowledge/engineer.md"; nd=$(cnt "$CORE_DIR")
+echo "more" >> "$CORE_DIR/knowledge/engineer.md"; nd=$(commit_count "$CORE_DIR")
 (cd "$C" && bash "$SAVE" "Knowledge only") >/dev/null 2>&1
-assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "knowledge-only change not saved"
+assert_eq "$(commit_count "$CORE_DIR")" "$((nd+1))" "knowledge-only change not saved"
 
 # --no-attribution drops Co-Authored-By / Generated with lines from the message (both repos)
 echo "v2" > "$C/app.txt"; echo "x" >> "$P/docs/features/f.md"
@@ -257,7 +256,7 @@ assert_contains "$SANDBOX/out" "Run this inside a project's code folder."
 
 # git cannot write .git (Codex sandbox keeps it read-only): save fails loudly, never "nothing to save"
 if [ "$(id -u)" != 0 ]; then
-  echo "ro" > "$C/ro.txt"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
+  echo "ro" > "$C/ro.txt"; nc=$(commit_count "$C"); nd=$(commit_count "$CORE_DIR")
   chmod a-w "$C/.git"
   (cd "$C" && bash "$SAVE" "Read-only git") > "$SANDBOX/out" 2>&1; rc=$?
   chmod u+w "$C/.git"
@@ -265,7 +264,7 @@ if [ "$(id -u)" != 0 ]; then
   assert_not_contains "$SANDBOX/out" "nothing to save"
   assert_contains "$SANDBOX/out" "save: git could not write"
   assert_eq "$(cat "$C/ro.txt")" "ro" "file changed by a failed save"
-  assert_eq "$(cnt "$C")" "$nc"; assert_eq "$(cnt "$CORE_DIR")" "$nd"
+  assert_eq "$(commit_count "$C")" "$nc"; assert_eq "$(commit_count "$CORE_DIR")" "$nd"
   git -C "$C" status --porcelain | grep -q 'ro.txt' && pass || fail "ro.txt not left uncommitted"
   rm -f "$C/ro.txt"
 fi
@@ -273,10 +272,10 @@ fi
 # core.hooksPath set by another tool (husky, lefthook): corecrew cannot install its shims there, so save
 # still commits and says on stderr that the hooks are not installed (it does not fail every time)
 mkdir -p "$C/.husky"; git -C "$C" config core.hooksPath .husky
-echo "hp" > "$C/hp.txt"; nc=$(cnt "$C")
+echo "hp" > "$C/hp.txt"; nc=$(commit_count "$C")
 (cd "$C" && bash "$SAVE" "With hooksPath") > "$SANDBOX/out" 2>"$SANDBOX/err"; rc=$?
 assert_eq "$rc" "0" "save failed with core.hooksPath set"
-assert_eq "$(cnt "$C")" "$((nc+1))" "no commit with core.hooksPath set"
+assert_eq "$(commit_count "$C")" "$((nc+1))" "no commit with core.hooksPath set"
 assert_contains "$SANDBOX/err" "core.hooksPath"
 assert_no_file "$C/.husky/pre-commit"
 git -C "$C" config --unset core.hooksPath
@@ -290,14 +289,14 @@ git -C "$CORE_DIR" log -1 --format=%B | grep -qx "Step-Id: $(step_ids "$C" | hea
 # Both repos must be able to commit before the code commit is made. Failure path: a Core that
 # cannot commit leaves both repos as they were (no code commit without its docs commit).
 # no identity in the Core (the code repo has one of its own)
-echo "id" > "$C/id.txt"; echo "id" >> "$P/docs/brief.md"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
+echo "id" > "$C/id.txt"; echo "id" >> "$P/docs/brief.md"; nc=$(commit_count "$C"); nd=$(commit_count "$CORE_DIR")
 git -C "$C" config user.name tester; git -C "$C" config user.email tester@example.com
 git -C "$CORE_DIR" config user.useConfigOnly true
 (cd "$C" && env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL \
   bash "$SAVE" "No identity") > "$SANDBOX/out" 2>&1; rc=$?
 [ "$rc" != 0 ] && pass || fail "save exited 0 with no identity in the Core"
-assert_eq "$(cnt "$C")" "$nc" "code commit made although the Core cannot commit"
-assert_eq "$(cnt "$CORE_DIR")" "$nd" "Core commit made with no identity"
+assert_eq "$(commit_count "$C")" "$nc" "code commit made although the Core cannot commit"
+assert_eq "$(commit_count "$CORE_DIR")" "$nd" "Core commit made with no identity"
 assert_contains "$SANDBOX/out" "identity"; assert_contains "$SANDBOX/out" "nothing saved"
 git -C "$CORE_DIR" config --unset user.useConfigOnly
 # a stale index.lock in the Core
@@ -305,7 +304,7 @@ git -C "$CORE_DIR" config --unset user.useConfigOnly
 (cd "$C" && bash "$SAVE" "Locked Core") > "$SANDBOX/out" 2>&1; rc=$?
 rm -f "$CORE_DIR/.git/index.lock"
 [ "$rc" != 0 ] && pass || fail "save exited 0 with a Core index.lock"
-assert_eq "$(cnt "$C")" "$nc" "code commit made although the Core index is locked"
+assert_eq "$(commit_count "$C")" "$nc" "code commit made although the Core index is locked"
 assert_contains "$SANDBOX/out" "index.lock"
 # a stale index.lock in the code repo
 : > "$C/.git/index.lock"
@@ -319,14 +318,14 @@ if [ "$(id -u)" != 0 ]; then
   (cd "$C" && bash "$SAVE" "Read-only Core") > "$SANDBOX/out" 2>&1; rc=$?
   chmod u+w "$CORE_DIR/.git"
   [ "$rc" != 0 ] && pass || fail "save exited 0 with a read-only Core .git"
-  assert_eq "$(cnt "$C")" "$nc" "code commit made although the Core .git is read-only"
+  assert_eq "$(commit_count "$C")" "$nc" "code commit made although the Core .git is read-only"
   assert_contains "$SANDBOX/out" "save: git could not write $CORE_DIR/.git"
 fi
 assert_eq "$(cat "$C/id.txt")" "id" "a refused save changed a file"
 # the legitimate save of the same changes goes through
 (cd "$C" && bash "$SAVE" "With identity") > "$SANDBOX/out" 2>&1
-assert_eq "$(cnt "$C")" "$((nc+1))" "save after the fixes: no code commit"
-assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "save after the fixes: no Core commit"
+assert_eq "$(commit_count "$C")" "$((nc+1))" "save after the fixes: no code commit"
+assert_eq "$(commit_count "$CORE_DIR")" "$((nd+1))" "save after the fixes: no Core commit"
 
 # The Core is checked only when it has docs to commit. With no identity in the Core (user.useConfigOnly,
 # the identity set per repo) a code-only step still saves. A step with docs is refused before the code
@@ -334,35 +333,34 @@ assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "save after the fixes: no Core commit
 git -C "$CORE_DIR" config user.useConfigOnly true
 noid_save() { (cd "$C" && env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL \
   bash "$SAVE" "$1") > "$SANDBOX/out" 2>&1; }
-trees() { git -C "$C" status --porcelain; git -C "$CORE_DIR" status --porcelain; tree_sum "$C"; tree_sum "$CORE_DIR"; }
-echo "code only" > "$C/noid.txt"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
+echo "code only" > "$C/noid.txt"; nc=$(commit_count "$C"); nd=$(commit_count "$CORE_DIR")
 noid_save "Code only, no Core identity"; rc=$?
 assert_eq "$rc" "0" "a code-only step was refused for the Core's identity: $(cat "$SANDBOX/out")"
-assert_eq "$(cnt "$C")" "$((nc+1))" "code-only step with no Core identity: no code commit"
-assert_eq "$(cnt "$CORE_DIR")" "$nd" "code-only step made a Core commit"
+assert_eq "$(commit_count "$C")" "$((nc+1))" "code-only step with no Core identity: no code commit"
+assert_eq "$(commit_count "$CORE_DIR")" "$nd" "code-only step made a Core commit"
 assert_eq "$(git -C "$C" log -1 --format=%s)" "Code only, no Core identity"
-echo "noid 2" > "$C/noid.txt"; echo "noid" >> "$P/docs/brief.md"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
-before=$(trees)
+echo "noid 2" > "$C/noid.txt"; echo "noid" >> "$P/docs/brief.md"; nc=$(commit_count "$C"); nd=$(commit_count "$CORE_DIR")
+before=$(snap_tree "$C" "$CORE_DIR")
 noid_save "Docs, no Core identity"; rc=$?
 [ "$rc" != 0 ] && pass || fail "a step with docs saved with no identity in the Core"
 assert_contains "$SANDBOX/out" "identity"; assert_contains "$SANDBOX/out" "nothing saved"
-assert_eq "$(cnt "$C")" "$nc" "code commit made although the Core cannot commit the docs"
-assert_eq "$(cnt "$CORE_DIR")" "$nd" "Core commit made with no identity"
-assert_eq "$(trees)" "$before" "a refused save changed a tree"
+assert_eq "$(commit_count "$C")" "$nc" "code commit made although the Core cannot commit the docs"
+assert_eq "$(commit_count "$CORE_DIR")" "$nd" "Core commit made with no identity"
+assert_eq "$(snap_tree "$C" "$CORE_DIR")" "$before" "a refused save changed a tree"
 git -C "$CORE_DIR" config --unset user.useConfigOnly
 (cd "$C" && bash "$SAVE" "Docs with identity") >/dev/null 2>&1
-assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "save with the Core identity back: no Core commit"
+assert_eq "$(commit_count "$CORE_DIR")" "$((nd+1))" "save with the Core identity back: no Core commit"
 
 # CDPATH exported with "." in it: bash's cd then prints the folder it went to. The Core's git folder
 # is found by a relative path (.git), so a cd that prints would break the check. Saved from a linked
 # worktree, whose git folders are absolute paths.
-echo "cdpath" > "$W/cdpath.txt"; echo "cdpath" >> "$P/docs/brief.md"; nd=$(cnt "$CORE_DIR")
+echo "cdpath" > "$W/cdpath.txt"; echo "cdpath" >> "$P/docs/brief.md"; nd=$(commit_count "$CORE_DIR")
 (cd "$W" && CDPATH=".:$SANDBOX" bash "$SAVE" "With CDPATH") > "$SANDBOX/out" 2>&1; rc=$?
 assert_eq "$rc" "0" "save with CDPATH exported: $(cat "$SANDBOX/out")"
 assert_eq "$(git -C "$W" log -1 --format=%s)" "With CDPATH" "save with CDPATH: no code commit"
-assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "save with CDPATH: no Core commit"
+assert_eq "$(commit_count "$CORE_DIR")" "$((nd+1))" "save with CDPATH: no Core commit"
 # the same from the main code folder, whose git folder is the relative .git
-echo "cdpath main" > "$C/cdpath.txt"; nd=$(cnt "$CORE_DIR")
+echo "cdpath main" > "$C/cdpath.txt"; nd=$(commit_count "$CORE_DIR")
 (cd "$C" && CDPATH=".:$SANDBOX" bash "$SAVE" "With CDPATH main") > "$SANDBOX/out" 2>&1; rc=$?
 assert_eq "$rc" "0" "save with CDPATH exported, main folder: $(cat "$SANDBOX/out")"
 assert_eq "$(git -C "$C" log -1 --format=%s)" "With CDPATH main" "save with CDPATH, main folder: no code commit"
@@ -372,17 +370,17 @@ git -C "$C" config --unset user.name; git -C "$C" config --unset user.email
 # names the code commit and its Step-Id, and says a rerun commits the docs; the rerun does.
 printf '#!/bin/sh\necho "core hook refused" >&2\nexit 1\n' > "$CORE_DIR/.git/hooks/pre-commit"
 chmod +x "$CORE_DIR/.git/hooks/pre-commit"
-echo "half" > "$C/half.txt"; echo "half" >> "$P/docs/brief.md"; nc=$(cnt "$C"); nd=$(cnt "$CORE_DIR")
+echo "half" > "$C/half.txt"; echo "half" >> "$P/docs/brief.md"; nc=$(commit_count "$C"); nd=$(commit_count "$CORE_DIR")
 (cd "$C" && bash "$SAVE" "Half step") > "$SANDBOX/out" 2>&1; rc=$?
 rm -f "$CORE_DIR/.git/hooks/pre-commit"
 [ "$rc" != 0 ] && pass || fail "save exited 0 although the docs commit failed"
-assert_eq "$(cnt "$C")" "$((nc+1))" "half step: no code commit"
-assert_eq "$(cnt "$CORE_DIR")" "$nd" "half step: Core commit made"
+assert_eq "$(commit_count "$C")" "$((nc+1))" "half step: no code commit"
+assert_eq "$(commit_count "$CORE_DIR")" "$nd" "half step: Core commit made"
 assert_contains "$SANDBOX/out" "$(git -C "$C" rev-parse --short HEAD)"
 assert_contains "$SANDBOX/out" "Step-Id: $(step_ids "$C" | head -1)"
 assert_contains "$SANDBOX/out" "run save again"
 (cd "$C" && bash "$SAVE" "Half step docs") > "$SANDBOX/out" 2>&1
-assert_eq "$(cnt "$CORE_DIR")" "$((nd+1))" "rerun did not commit the docs"
+assert_eq "$(commit_count "$CORE_DIR")" "$((nd+1))" "rerun did not commit the docs"
 assert_contains "$SANDBOX/out" "saved docs"
 assert_eq "$(git -C "$CORE_DIR" status --porcelain -- save-app)" "" "docs left uncommitted after the rerun"
 

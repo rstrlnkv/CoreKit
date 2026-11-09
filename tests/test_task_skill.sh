@@ -7,9 +7,6 @@ PA="$T/references/paths.md"
 BR="$T/references/brief.md"
 RP="$T/references/report.md"
 
-# section <file> <name>: the body of "## <name>" up to the next "## " heading.
-section() { awk -v n="$2" '$0 == "## " n {f=1; next} /^## /{f=0} f' "$1"; }
-sec_has() { section "$1" "$2" | grep -qF -- "$3" && pass || fail "$1 section '$2' lacks: $3"; }
 
 # SKILL.md frontmatter
 assert_file "$SK"
@@ -39,16 +36,16 @@ done
 # paths.md: one section per path, plus the checkers' wave
 assert_file "$PA"
 for p in fix full question batch release adopt; do
-  [ -n "$(section "$PA" "$p")" ] && pass || fail "paths.md lacks section '## $p'"
+  [ -n "$(md_section "$PA" "$p")" ] && pass || fail "paths.md lacks section '## $p'"
 done
-[ -n "$(section "$PA" "checkers' wave")" ] && pass || fail "paths.md lacks section '## checkers' wave'"
-sec_has "$PA" fix "red"
-sec_has "$PA" fix "mutations"
-sec_has "$PA" full "3–5"
-sec_has "$PA" full "5 tasks"
-sec_has "$PA" full "3 modules"
-sec_has "$PA" release 'references/release.md'
-sec_has "$PA" adopt 'references/adopt.md'
+[ -n "$(md_section "$PA" "checkers' wave")" ] && pass || fail "paths.md lacks section '## checkers' wave'"
+md_section_has "$PA" fix "red"
+md_section_has "$PA" fix "mutations"
+md_section_has "$PA" full "3–5"
+md_section_has "$PA" full "5 tasks"
+md_section_has "$PA" full "3 modules"
+md_section_has "$PA" release 'references/release.md'
+md_section_has "$PA" adopt 'references/adopt.md'
 assert_contains "$PA" 'check: <set after scaffolding>'
 assert_not_contains "$PA" "superpowers:"
 
@@ -74,9 +71,9 @@ rule "Standards once rule" '^9\. A reply without `Standards:` .*goes back once'
 rule "subagent_type for feature-dev" '`corecrew:<role>` for corecrew roles, the full name for'
 rule "no model for the architect and explorer" 'Do not pass `model` to the architect and explorer agents'
 # feature-dev is optional: the built-in Plan and Explore agents with the shared role text stand in, nothing stops
-sec_has "$SK" Start '`Plan`'
-sec_has "$SK" Start '`Explore`'
-sec_has "$SK" Start 'references/architect-explorer.md'
+md_section_has "$SK" Start '`Plan`'
+md_section_has "$SK" Start '`Explore`'
+md_section_has "$SK" Start 'references/architect-explorer.md'
 for f in "$SK" "$PA"; do grep -qiE 'stop[^.]*until it is installed|Without feature-dev stop' "$f" && fail "$f still stops without feature-dev" || pass; done
 assert_contains "$SK" 'applies-to'
 assert_not_contains "$SK" 'docs/specs/'
@@ -99,41 +96,41 @@ awk '/^## /{exit} 1' "$PA" | grep -qF 'before the first tester call' && pass || 
 awk '/^## /{exit} 1' "$PA" | grep -qF 'into the `check:` line' && pass || fail "paths.md preamble lacks where the check: line is written"
 block "$SK" '^4[.] [*][*]Read' '^5[.] ' | grep -qF 'paths.md' && pass || fail "SKILL.md Start, Read does not point at paths.md for the unset check:"
 # Release path runs release.md in full; postcondition 4 applies.
-sec_has "$PA" release 'in full'
-sec_has "$PA" release 'postcondition 4'
-section "$PA" release | grep -qF 'from the version step' && fail "release section still skips postconditions" || pass
+md_section_has "$PA" release 'in full'
+md_section_has "$PA" release 'postcondition 4'
+md_section "$PA" release | grep -qF 'from the version step' && fail "release section still skips postconditions" || pass
 # Question path and knowledge: the rule lives in SKILL.md Knowledge; paths.md points at it.
 once 'the tree was clean at Start, so `save` commits only the chain'
-sec_has "$SK" Knowledge 'was clean at Start'
-sec_has "$SK" Knowledge '`save` commits only the chain'"'"'s files'
-sec_has "$PA" question 'SKILL.md, section Knowledge'
-section "$PA" question | grep -qF 'No release, no commit' && fail "question section contradicts SKILL.md" || pass
+md_section_has "$SK" Knowledge 'was clean at Start'
+md_section_has "$SK" Knowledge '`save` commits only the chain'"'"'s files'
+md_section_has "$PA" question 'SKILL.md, section Knowledge'
+md_section "$PA" question | grep -qF 'No release, no commit' && fail "question section contradicts SKILL.md" || pass
 # The Codex commit stop lives in codex-host.md, Approval outside the sandbox; codex.md points at it.
 once 'Codex sandbox keeps .git read-only'
 once 'only the commit stops'
-section "$PLUGIN/reference/codex-host.md" 'Approval outside the sandbox' | grep -qiF 'only the commit stops' && pass ||
+md_section "$PLUGIN/reference/codex-host.md" 'Approval outside the sandbox' | grep -qiF 'only the commit stops' && pass ||
   fail "codex-host.md Approval lacks: only the commit stops"
-sec_has "$T/references/codex.md" 'Commit in Codex' 'section Approval outside the sandbox'
+md_section_has "$T/references/codex.md" 'Commit in Codex' 'section Approval outside the sandbox'
 assert_contains "$RP" 'none — no files changed'
 # full and batch point at the wave; the large-plan stop runs the first task whole.
-sec_has "$PA" full "checkers' wave"
-section "$PA" full | grep -qF 'one repair pass' && fail "full duplicates the wave repair" || pass
-sec_has "$PA" full 'whole chain'
-sec_has "$PA" batch "checkers' wave"
-sec_has "$PA" batch 'grep'
+md_section_has "$PA" full "checkers' wave"
+md_section "$PA" full | grep -qF 'one repair pass' && fail "full duplicates the wave repair" || pass
+md_section_has "$PA" full 'whole chain'
+md_section_has "$PA" batch "checkers' wave"
+md_section_has "$PA" batch 'grep'
 # fix: a red test before, green after.
-sec_has "$PA" fix 'show it red'
-sec_has "$PA" fix 'green after the fix'
+md_section_has "$PA" fix 'show it red'
+md_section_has "$PA" fix 'green after the fix'
 # brief.md: the opening sentence is the first instruction.
-first="$(section "$BR" 'Opening sentence' | awk 'NF{print; exit}')"
+first="$(md_section "$BR" 'Opening sentence' | awk 'NF{print; exit}')"
 assert_eq "$first" '`This brief comes from corecrew:task, path: <path>, project: <name>, core: <Core>, and IS your task.`' "brief opening is first"
 # REV-16: the brief never retells session-rules.md either; the engineer reads it
-sec_has "$BR" Never 'session-rules.md'
+md_section_has "$BR" Never 'session-rules.md'
 # REV-5: task no longer asks the level; knowledge.md gives it (one source), and the standard offer stays
-section "$SK" Knowledge | grep -qF 'this project / all projects' && fail "SKILL.md still asks the knowledge level" || pass
-sec_has "$SK" Knowledge 'reference/knowledge.md'
-sec_has "$SK" Knowledge '/corecrew:new-standard'
-sec_has "$SK" Knowledge 'ok / no'
+md_section "$SK" Knowledge | grep -qF 'this project / all projects' && fail "SKILL.md still asks the knowledge level" || pass
+md_section_has "$SK" Knowledge 'reference/knowledge.md'
+md_section_has "$SK" Knowledge '/corecrew:new-standard'
+md_section_has "$SK" Knowledge 'ok / no'
 
 # No superpowers dependency anywhere under skills/task/
 if grep -rF "superpowers:" "$T" >/dev/null 2>&1; then fail "superpowers: referenced under skills/task/"; else pass; fi
@@ -166,8 +163,8 @@ block "$REL" '^1[.] [*][*]Tests' '^2[.] ' | grep -qF 'paths.md' && pass || fail 
 # SKILL.md Start records the base commits; both files agree with release.md.
 assert_contains "$SK" 'git rev-parse HEAD'
 assert_contains "$SK" 'base commit'
-sec_has "$PA" release 'postcondition 4'
-section "$PA" release | grep -qF 'wiki-check' && fail "paths.md release duplicates postconditions" || pass
+md_section_has "$PA" release 'postcondition 4'
+md_section "$PA" release | grep -qF 'wiki-check' && fail "paths.md release duplicates postconditions" || pass
 assert_contains "$SK" 'Never tag, never push'
 
 # Fix round 1: scoped Core checks, explicit changed-file lists, no repair after the commit.
@@ -186,8 +183,8 @@ grep -qE 'git status --short$|git status --short`' "$REL" && pass || fail "relea
 # Start stops on an unclean tree; paths.md release matches the version order.
 assert_contains "$SK" 'uncommitted changes'
 assert_contains "$SK" 'git status --short'
-sec_has "$PA" release 'one engineer call'
-sec_has "$PA" release '<version>'
+md_section_has "$PA" release 'one engineer call'
+md_section_has "$PA" release '<version>'
 
 # brief.md passes the plugin file paths that engineer and verifier cannot find by themselves.
 assert_contains "$BR" 'Plugin paths'
@@ -214,30 +211,30 @@ assert_contains "$SK" 'run_in_background: false'
 for f in "$T"/references/*.md; do
   if grep -qF '${' "$f"; then fail "$(basename "$f") holds a \${...} placeholder: $(grep -nF '${' "$f" | head -2 | tr '\n' ' ')"; else pass; fi
 done
-sec_has "$SK" Paths 'lib.sh" plugin-root'
-sec_has "$SK" Paths '`<scripts>` is `<plugin>/scripts`'
-sec_has "$SK" Start 'opened with Read'
-sec_has "$SK" Start 'bash "<scripts>/lib.sh" settings attribution='"'"'${user_config.attribution}'"'"' model_profile='"'"'${user_config.model_profile}'"'"
+md_section_has "$SK" Paths 'lib.sh" plugin-root'
+md_section_has "$SK" Paths '`<scripts>` is `<plugin>/scripts`'
+md_section_has "$SK" Start 'opened with Read'
+md_section_has "$SK" Start 'bash "<scripts>/lib.sh" settings attribution='"'"'${user_config.attribution}'"'"' model_profile='"'"'${user_config.model_profile}'"'"
 assert_contains "$REL" '<scripts>/save'
 assert_contains "$REL" '<scripts>/wiki-check.sh'
 assert_contains "$T/references/adopt.md" '<scripts>/adopt.sh'
 assert_contains "$BR" '<plugin>/reference/wiki.md'
 
 # New layout: the code lives beside the Core
-sec_has "$SK" Start 'lib.sh" project-of'
-sec_has "$SK" Start '<Projects>/<Name>'
-sec_has "$SK" Start 'old layout'
-sec_has "$SK" Start 'lib.sh" layout'
-sec_has "$SK" Start 'lib.sh" code-dir'
+md_section_has "$SK" Start 'lib.sh" project-of'
+md_section_has "$SK" Start '<Projects>/<Name>'
+md_section_has "$SK" Start 'old layout'
+md_section_has "$SK" Start 'lib.sh" layout'
+md_section_has "$SK" Start 'lib.sh" code-dir'
 # a non-zero exit of layout / code-dir: no code folder (exit 1) or a case clash (exit 3)
-sec_has "$SK" Start 'exit 1 from `layout` or `code-dir`'
-sec_has "$SK" Start 'the code is not cloned'
-sec_has "$SK" Start '`<Projects>/<Name>`'
-sec_has "$SK" Start 'exit 3'
-sec_has "$SK" Start 'two folders differ only in case'
-sec_has "$SK" Start 'the output of'
-section "$SK" Start | grep -qF 'the printed' && fail "Start step 2 still says 'the printed'" || pass
-section "$SK" Start | grep -qF 'must be inside `<Core>/<project>/`' && fail "Start step 2 still demands <Core>/<project>/" || pass
+md_section_has "$SK" Start 'exit 1 from `layout` or `code-dir`'
+md_section_has "$SK" Start 'the code is not cloned'
+md_section_has "$SK" Start '`<Projects>/<Name>`'
+md_section_has "$SK" Start 'exit 3'
+md_section_has "$SK" Start 'two folders differ only in case'
+md_section_has "$SK" Start 'the output of'
+md_section "$SK" Start | grep -qF 'the printed' && fail "Start step 2 still says 'the printed'" || pass
+md_section "$SK" Start | grep -qF 'must be inside `<Core>/<project>/`' && fail "Start step 2 still demands <Core>/<project>/" || pass
 assert_not_contains "$BR" '<Core>/<project>/code/'
 assert_not_contains "$REL" '../docs/'
 assert_not_contains "$PA" '<Core>/<project>/code'
@@ -245,22 +242,22 @@ assert_not_contains "$PLUGIN/reference/wiki.md" 'relative to `code/`'
 # Start steps 1-8 in order; the wiki step (6) sits between the clean tree and the base commits.
 prev=0
 for n in 1 2 3 4 5 6 7 8; do
-  l="$(section "$SK" Start | grep -nE "^$n\\. " | head -1 | cut -d: -f1)"
+  l="$(md_section "$SK" Start | grep -nE "^$n\\. " | head -1 | cut -d: -f1)"
   if [ -n "$l" ] && [ "$l" -gt "$prev" ]; then pass; else fail "SKILL.md Start step $n missing or out of order"; fi
   prev="${l:-$prev}"
 done
-section "$SK" Start | grep -E '^6\. ' | grep -qF '**Wiki.**' && pass || fail "SKILL.md Start step 6 is not the wiki step"
-section "$SK" Start | grep -E '^7\. ' | grep -qF '**Base commits.**' && pass || fail "SKILL.md Start step 7 is not Base commits"
+md_section "$SK" Start | grep -E '^6\. ' | grep -qF '**Wiki.**' && pass || fail "SKILL.md Start step 6 is not the wiki step"
+md_section "$SK" Start | grep -E '^7\. ' | grep -qF '**Base commits.**' && pass || fail "SKILL.md Start step 7 is not Base commits"
 assert_contains "$REL" 'Start, **Wiki**'
 # 0.7 wiki: the release wiki step regenerates INDEX.md before the check (more in test_wiki_texts.sh)
 assert_contains "$REL" 'wiki-index.sh'
 # Cross-file references name steps, never their numbers (numbers move when a step is added):
 # "Start, **<Name>**" must name a bold step of Start in task/SKILL.md; "postcondition N" a numbered postcondition of
 # release.md; "rule N" a numbered rule of task/SKILL.md. Checked in every corecrew prompt.
-start_names="$(section "$SK" Start | sed -nE 's/^[0-9]+\. \*\*([^*]+)\.\*\*.*/\1/p')"
+start_names="$(md_section "$SK" Start | sed -nE 's/^[0-9]+\. \*\*([^*]+)\.\*\*.*/\1/p')"
 [ "$(printf '%s\n' "$start_names" | grep -c .)" -ge 7 ] && pass || fail "Start steps have bold names: $start_names"
 npost="$(grep -cE '^[1-9]\. \*\*' "$REL")"
-nrule="$(section "$SK" Rules | grep -cE '^[0-9]+\. ')"
+nrule="$(md_section "$SK" Rules | grep -cE '^[0-9]+\. ')"
 bad=""
 for f in "$PLUGIN"/skills/*/SKILL.md "$PLUGIN"/skills/*/references/*.md "$PLUGIN"/reference/*.md "$PLUGIN"/agents/*.md; do
   nm="${f#"$PLUGIN"/}"
@@ -286,7 +283,7 @@ for w in '[Unreleased]' Added Changed Deprecated Removed Fixed Security 'Keep a 
 
 # The Codex README section agrees with codex-host.md: without approval only the commit stops (the same line),
 # and it says the guards are off until /hooks trust, with the skills that remind (the ones that run prepare.sh).
-CX_STOP="$(section "$PLUGIN/reference/codex-host.md" 'Approval outside the sandbox' | grep -oE '`Commit: stopped[^`]*`' | head -1)"
+CX_STOP="$(md_section "$PLUGIN/reference/codex-host.md" 'Approval outside the sandbox' | grep -oE '`Commit: stopped[^`]*`' | head -1)"
 [ -n "$CX_STOP" ] && pass || fail "codex-host.md Approval outside the sandbox lacks the stop line"
 RCX="$(awk '/^### /{on = ($0 == "### Codex")} /^## /{on=0} on' "$PLUGIN/README.md")"
 case "$RCX" in *"$CX_STOP"*) pass ;; *) fail "README Codex section does not name $CX_STOP" ;; esac

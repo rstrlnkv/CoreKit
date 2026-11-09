@@ -4,9 +4,6 @@ source "$(dirname "$0")/lib.sh"
 B="$ROOT/scripts/make-test-coredev.sh"
 WC="$SCRIPTS/wiki-check.sh"
 
-# state <dir> — everything a refusal must not change: files, HEAD, status
-state() { tree_sum "$1"; git -C "$1" rev-parse HEAD 2>&1; git -C "$1" status --porcelain 2>&1; }
-
 # --- success
 new_sandbox; setup_core
 P="$CORE_DIR/test-coredev"; C="$SANDBOX/Projects/test-coredev"
@@ -62,10 +59,10 @@ assert_contains "$C/.git/hooks/pre-push" "corecrew hook shim"
 assert_contains "$CORE_DIR/.git/hooks/pre-push" "corecrew hook shim"
 
 # --- second run: refused, exit 2, one plain line, nothing changed
-before="$(state "$CORE_DIR"; state "$C")"
+before="$(snap_tree "$CORE_DIR" "$C")"
 assert_exit 2 bash "$B" "$CORE_DIR"
 assert_eq "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "1" "refusal is one line: $OUT"
-after="$(state "$CORE_DIR"; state "$C")"
+after="$(snap_tree "$CORE_DIR" "$C")"
 assert_eq "$after" "$before" "second run changed something"
 
 # --- a Core that is not set up: refused, nothing created
@@ -85,9 +82,9 @@ assert_no_file "$SANDBOX/Projects/test-coredev"
 # --- a folder beside the Core in the way: refused, exit 2, nothing changed
 new_sandbox; setup_core
 mkdir -p "$SANDBOX/Projects/test-coredev"; echo mine > "$SANDBOX/Projects/test-coredev/x"
-before="$(state "$CORE_DIR")"
+before="$(snap_tree "$CORE_DIR")"
 assert_exit 2 bash "$B" "$CORE_DIR"
-assert_eq "$(state "$CORE_DIR")" "$before" "Core changed on refusal"
+assert_eq "$(snap_tree "$CORE_DIR")" "$before" "Core changed on refusal"
 assert_no_file "$CORE_DIR/test-coredev"
 assert_eq "$(ls "$SANDBOX/Projects/test-coredev")" "x" "foreign folder touched"
 
@@ -108,10 +105,7 @@ assert_eq "$(cat "$CORE_DIR/notes.txt")" "keep" "notes.txt"
 
 # --- no git identity: plain message, exit 1, nothing created
 new_sandbox; setup_core
-noid() { env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL \
-  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null HOME="$SANDBOX/nohome" \
-  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.useConfigOnly GIT_CONFIG_VALUE_0=true "$@"; }
-assert_exit 1 noid bash "$B" "$CORE_DIR"
+assert_exit 1 no_git_identity bash "$B" "$CORE_DIR"
 echo "$OUT" | grep -q 'user.name' && pass || fail "no hint about git identity: $OUT"
 assert_no_file "$CORE_DIR/test-coredev"
 assert_no_file "$SANDBOX/Projects/test-coredev"

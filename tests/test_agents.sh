@@ -5,8 +5,6 @@ AG="$PLUGIN/agents"
 ROLES="engineer tester security verifier localizer designer"
 READONLY="security verifier localizer designer"
 
-section() { awk -v n="$2" '$0 == "## " n {f=1; next} /^## /{f=0} f' "$1"; }
-sec_has() { section "$1" "$2" | grep -qF -- "$3" && pass || fail "$(basename "$1") section '$2' lacks: $3"; }
 has() { grep -qiF -- "$2" "$1" && pass || fail "$(basename "$1") lacks: $2"; }
 # front <file>: the lines between the first two '---' lines.
 front() { awk '/^---$/ {n++; next} n==1' "$1"; }
@@ -42,13 +40,13 @@ for r in $ROLES; do
   secs="$(grep '^## ' "$f" | tr '\n' '|')"
   assert_eq "$secs" "## Question|## What to show|## What to read first|## How you work|## What not to do|## Reply format|" "$r.md sections"
   # reading order (spec 13.1)
-  sec_has "$f" "What to read first" 'CLAUDE.md'
-  sec_has "$f" "What to read first" 'docs/INDEX.md'
-  sec_has "$f" "What to read first" 'applies-to'
-  sec_has "$f" "What to read first" "docs/knowledge/$r.md"
-  sec_has "$f" "What to read first" "<Core>/knowledge/$r.md"
-  sec_has "$f" "What to read first" 'no knowledge'
-  rd="$(section "$f" "What to read first")"
+  md_section_has "$f" "What to read first" 'CLAUDE.md'
+  md_section_has "$f" "What to read first" 'docs/INDEX.md'
+  md_section_has "$f" "What to read first" 'applies-to'
+  md_section_has "$f" "What to read first" "docs/knowledge/$r.md"
+  md_section_has "$f" "What to read first" "<Core>/knowledge/$r.md"
+  md_section_has "$f" "What to read first" 'no knowledge'
+  rd="$(md_section "$f" "What to read first")"
   a="$(printf '%s\n' "$rd" | grep -n 'CLAUDE.md' | head -1 | cut -d: -f1)"
   b="$(printf '%s\n' "$rd" | grep -n 'docs/INDEX.md' | head -1 | cut -d: -f1)"
   p="$(printf '%s\n' "$rd" | grep -n 'wiki page' | head -1 | cut -d: -f1)"
@@ -60,29 +58,29 @@ for r in $ROLES; do
     && printf "%s\n" "$rd" | awk -v a="docs/knowledge/$r.md" -v b="<Core>/knowledge/$r.md" '{s = s $0 "\n"} END {i = index(s, a); j = index(s, b); exit !(i > 0 && j > 0 && i < j)}' \
     && pass || fail "$r.md reading order is not CLAUDE.md, INDEX, page, standards, project knowledge, Core knowledge"
   # knowledge of another stack is skipped; a one-stack line is tagged (spec 12.3)
-  sec_has "$f" "What to read first" 'skip lines tagged `[<stack>]` for another stack'
-  sec_has "$f" "How you work" 'Tag a Knowledge line `[<stack>]` when it holds for one stack only'
+  md_section_has "$f" "What to read first" 'skip lines tagged `[<stack>]` for another stack'
+  md_section_has "$f" "How you work" 'Tag a Knowledge line `[<stack>]` when it holds for one stack only'
   # reply format ends with the two lines, in this order
-  last2="$(section "$f" "Reply format" | grep -v '^```' | awk 'NF' | tail -2)"
+  last2="$(md_section "$f" "Reply format" | grep -v '^```' | awk 'NF' | tail -2)"
   assert_eq "$(printf '%s\n' "$last2" | sed -n 1p)" 'Standards: <name — the rule applied, quoted | none needed | none in Core>' "$r.md second-to-last reply line"
   assert_eq "$(printf '%s\n' "$last2" | sed -n 2p)" 'Knowledge line: <symptom → cause → guard | none>' "$r.md last reply line"
-  sec_has "$f" "Reply format" 'Open:'
+  md_section_has "$f" "Reply format" 'Open:'
   # shared practice, language, budget, brief is the task
-  sec_has "$f" "How you work" 'foreground'
-  sec_has "$f" "How you work" 'retried, never polled'
-  sec_has "$f" "How you work" 'by range'
-  sec_has "$f" "How you work" 'one Bash call'
-  sec_has "$f" "How you work" 'Reply in English'
-  sec_has "$f" "How you work" 'reply labels as given'
-  sec_has "$f" "How you work" 'write files in English'
-  sec_has "$f" "How you work" 'By about turn 50'
-  sec_has "$f" "How you work" 'what is done and what is left'
-  sec_has "$f" "How you work" 'hard limit is 60 and gives no reply'
-  sec_has "$f" "What not to do" 'brief'
-  sec_has "$f" "What not to do" 'Open'
-  sec_has "$f" "What not to do" 'path: question'
-  sec_has "$f" "What not to do" 'change no files'
-  sec_has "$f" "What not to do" '`file:line`'
+  md_section_has "$f" "How you work" 'foreground'
+  md_section_has "$f" "How you work" 'retried, never polled'
+  md_section_has "$f" "How you work" 'by range'
+  md_section_has "$f" "How you work" 'one Bash call'
+  md_section_has "$f" "How you work" 'Reply in English'
+  md_section_has "$f" "How you work" 'reply labels as given'
+  md_section_has "$f" "How you work" 'write files in English'
+  md_section_has "$f" "How you work" 'By about turn 50'
+  md_section_has "$f" "How you work" 'what is done and what is left'
+  md_section_has "$f" "How you work" 'hard limit is 60 and gives no reply'
+  md_section_has "$f" "What not to do" 'brief'
+  md_section_has "$f" "What not to do" 'Open'
+  md_section_has "$f" "What not to do" 'path: question'
+  md_section_has "$f" "What not to do" 'change no files'
+  md_section_has "$f" "What not to do" '`file:line`'
   # forbidden strings (home paths and archive project names: tests/test_no_personal.sh scans all)
   for s in '.claude/crew' 'CoreCrew' 'superpowers' '${CLAUDE_'; do
     grep -qF -- "$s" "$f" && fail "$r.md contains: $s" || pass
@@ -99,12 +97,12 @@ for r in $READONLY; do
   has "$f" 'never edit project files'
   has "$f" 'logs to a file are fine'
   has "$f" 'for engineer'
-  sec_has "$f" "Reply format" 'nothing found'
+  md_section_has "$f" "Reply format" 'nothing found'
 done
-sec_has "$AG/security.md" "Reply format" 'Not checked'
-sec_has "$AG/verifier.md" "Reply format" 'Not resolved'
-sec_has "$AG/localizer.md" "Reply format" 'Not confirmed'
-sec_has "$AG/designer.md" "Reply format" 'Not measured'
+md_section_has "$AG/security.md" "Reply format" 'Not checked'
+md_section_has "$AG/verifier.md" "Reply format" 'Not resolved'
+md_section_has "$AG/localizer.md" "Reply format" 'Not confirmed'
+md_section_has "$AG/designer.md" "Reply format" 'Not measured'
 
 # Role specifics the spec pins (section 13.2, 8.2, 9.3).
 E="$AG/engineer.md"
@@ -122,16 +120,16 @@ has "$E" 'command and its output'
 has "$E" 'never commit'
 has "$E" 'save'
 has "$E" 'never weaken'
-sec_has "$E" "Reply format" 'Screens:'
+md_section_has "$E" "Reply format" 'Screens:'
 # REV-16: the engineer reads the owner's session rules itself; SessionStart output reaches only the main session.
-sec_has "$E" "What to read first" '<Core>/session-rules.md'
-rd="$(section "$E" "What to read first")"
+md_section_has "$E" "What to read first" '<Core>/session-rules.md'
+rd="$(md_section "$E" "What to read first")"
 a="$(printf '%s\n' "$rd" | grep -n 'CLAUDE.md' | head -1 | cut -d: -f1)"
 s="$(printf '%s\n' "$rd" | grep -n 'session-rules.md' | head -1 | cut -d: -f1)"
 b="$(printf '%s\n' "$rd" | grep -n 'docs/INDEX.md' | head -1 | cut -d: -f1)"
 [ -n "$a" ] && [ -n "$s" ] && [ -n "$b" ] && [ "$a" -lt "$s" ] && [ "$s" -lt "$b" ] && pass || fail "engineer.md does not read session-rules.md between CLAUDE.md and docs/INDEX.md"
 # the brief and the project's CLAUDE.md win over it, and its talk rules do not touch the reply contract
-sec_has "$E" "What to read first" 'win'
+md_section_has "$E" "What to read first" 'win'
 # only the engineer, the one author of changes, reads it
 for r in tester security verifier localizer designer; do grep -qF 'session-rules.md' "$AG/$r.md" && fail "$r.md reads session-rules.md" || pass; done
 T="$AG/tester.md"

@@ -29,14 +29,6 @@ mkold() {
   echo 'echo a' > "$c/main.sh"
   git -C "$c" add -A && git -C "$c" commit -q -m "initial"
 }
-# snap — everything a refusal must not change: file contents, the file list, HEAD and status of every repo
-snap() {
-  tree_sum "$SANDBOX"
-  find "$SANDBOX" -not -path '*/.git/*' | LC_ALL=C sort
-  find "$SANDBOX" -name .git -print | LC_ALL=C sort | while IFS= read -r g; do
-    git -C "$(dirname "$g")" rev-parse HEAD 2>&1; git -C "$(dirname "$g")" status --porcelain 2>&1
-  done
-}
 last_line() { printf '%s\n' "$1" | tail -1; }
 # wiki_only <project dir> <want> — wiki-check prints exactly <want> (newline separated; "" = green).
 # A copied page with no known folder gets no `type` (wiki-migrate warns "set type"), so it stays red
@@ -49,9 +41,9 @@ wiki_only() {
 refuses() {
   local want="$1"; shift
   local before after
-  before="$(snap)"
+  before="$(snap_tree "$SANDBOX")"
   OUT="$(bash "$AD" "$@" 2>&1)"; local rc=$?
-  after="$(snap)"
+  after="$(snap_tree "$SANDBOX")"
   assert_eq "$rc" "2" "refusal exit ($want)"
   assert_eq "$OUT" "$want" "refusal message"
   assert_eq "$after" "$before" "refusal changed something ($want)"
@@ -220,10 +212,10 @@ F="$SANDBOX/Projects/mig-fail"; mkdir -p "$F/docs/specs" "$F/docs/superpowers/sp
 git init -q "$F" && git -C "$F" symbolic-ref HEAD refs/heads/main
 printf '# Mig\n' > "$F/CLAUDE.md"; printf '# Mine\n' > "$F/docs/specs/a.md"; printf '# Theirs\n' > "$F/docs/superpowers/specs/a.md"
 git -C "$F" add -A && git -C "$F" commit -q -m initial
-before="$(snap)"
+before="$(snap_tree "$SANDBOX")"
 OUT="$(bash "$AD" --from "$F" 2>&1)"; rc=$?
 [ "$rc" != 0 ] && pass || fail "adopt succeeded although wiki-migrate failed: $OUT"
-assert_eq "$(snap)" "$before" "a failed wiki-migrate changed the repo or the Core"
+assert_eq "$(snap_tree "$SANDBOX")" "$before" "a failed wiki-migrate changed the repo or the Core"
 echo "$OUT" | grep -q 'open:' && fail "adopt reported success: $OUT" || pass
 
 # --- --check, --public-docs: docs/ stays in the repo and is listed in CLAUDE.md
@@ -266,9 +258,9 @@ assert_contains "$C" "Text."
 # --- --dry-run changes nothing, prints the plan
 new_sandbox; setup_core
 F="$SANDBOX/Projects/dry-app"; mkrepo "$F"
-before="$(snap)"
+before="$(snap_tree "$SANDBOX")"
 assert_exit 0 bash "$AD" --from "$F" --dry-run --public-docs "docs/guide.md"
-after="$(snap)"
+after="$(snap_tree "$SANDBOX")"
 assert_eq "$after" "$before" "dry run changed something"
 echo "$OUT" | grep -qF "CLAUDE.md" && pass || fail "plan lacks CLAUDE.md: $OUT"
 echo "$OUT" | grep -qF "docs/guide.md" && pass || fail "plan lacks the public page: $OUT"
@@ -348,19 +340,19 @@ assert_exit 2 bash "$AD" --from "$SANDBOX" --bogus
 new_sandbox; setup_core
 F="$SANDBOX/Projects/hook-app"; mkrepo "$F"
 printf '#!/bin/sh\necho no >&2\nexit 1\n' > "$F/.git/hooks/pre-commit"; chmod +x "$F/.git/hooks/pre-commit"
-before="$(snap)"
+before="$(snap_tree "$SANDBOX")"
 OUT="$(bash "$AD" --from "$F" 2>&1)"; rc=$?
 assert_eq "$rc" "2" "commit failure exit"
 echo "$OUT" | grep -q "could not commit" && pass || fail "commit failure message: $OUT"
-after="$(snap)"
+after="$(snap_tree "$SANDBOX")"
 assert_eq "$after" "$before" "commit failure changed something"
 assert_eq "$(git -C "$F" diff --cached --name-only)" "" "index not restored"
 assert_no_file "$F/.worktreeinclude"
 # the same with a .gitignore of the user's: it comes back byte for byte
 printf 'build/\n' > "$F/.gitignore"; git -C "$F" add .gitignore; git -C "$F" commit -q --no-verify -m gi
-before="$(snap)"
+before="$(snap_tree "$SANDBOX")"
 assert_exit 2 bash "$AD" --from "$F"
-after="$(snap)"
+after="$(snap_tree "$SANDBOX")"
 assert_eq "$after" "$before" "commit failure changed something (existing .gitignore)"
 assert_eq "$(cat "$F/.gitignore")" "build/" ".gitignore not restored"
 
@@ -373,11 +365,11 @@ new_sandbox; setup_core
 cp -R "$PLUGIN" "$SANDBOX/plugin-copy"; rm -f "$SANDBOX/plugin-copy/scripts/rule-block.awk"
 F="$SANDBOX/Projects/rd-app"; mkrepo "$F"
 mkdir -p "$F/.claude/rules"; printf 'Rule.\n' > "$F/.claude/rules/r.md"; git -C "$F" add -A && git -C "$F" commit -q -m rule
-before="$(snap)"
+before="$(snap_tree "$SANDBOX")"
 OUT="$(bash "$SANDBOX/plugin-copy/scripts/adopt.sh" --from "$F" 2>&1)"; rc=$?
 assert_eq "$rc" "1" "missing reader exit"
 echo "$OUT" | grep -q "could not read .claude/rules/r.md" && pass || fail "missing reader message: $OUT"
-assert_eq "$(snap)" "$before" "a missing reader changed something"
+assert_eq "$(snap_tree "$SANDBOX")" "$before" "a missing reader changed something"
 assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "temp folder left in the Core (missing reader)"
 }
 bg part_refusals
@@ -825,11 +817,11 @@ for a in "$@"; do case "$a" in */fold-rules.awk) echo "awk: stub failure" >&2; e
 exec /usr/bin/awk "$@"
 STUB
 chmod +x "$SANDBOX/stub/awk"
-before="$(snap)"
+before="$(snap_tree "$SANDBOX")"
 OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$AD" --from "$F" 2>&1)"; rc=$?
 assert_eq "$rc" "1" "fold failure exit"
 echo "$OUT" | grep -qF "adopt: could not fold the rules into CLAUDE.md" && pass || fail "fold failure message: $OUT"
-assert_eq "$(snap)" "$before" "a failed fold changed the repo or the Core"
+assert_eq "$(snap_tree "$SANDBOX")" "$before" "a failed fold changed the repo or the Core"
 assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "temp folder left in the Core (failed fold)"
 assert_eq "$(git -C "$F" log -1 --format=%s)" "rule" "repo commit made although the fold failed"
 assert_no_file "$F/CLAUDE.local.md"
