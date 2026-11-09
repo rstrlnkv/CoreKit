@@ -47,7 +47,9 @@ echo x > "$C/cfg/.env.prod"; git -C "$C" add -f cfg/.env.prod; git -C "$C" commi
 git -C "$C" push -q origin main 2>/dev/null && fail "push of cfg/.env.prod allowed" || pass
 git -C "$C" reset -q --hard HEAD~1
 echo x > "$C/CLAUDE.md"; git -C "$C" add -f CLAUDE.md; git -C "$C" commit -q --no-verify -m sneaky
-git -C "$C" push -q origin main 2>/dev/null && fail "push of CLAUDE.md allowed" || pass
+git -C "$C" push -q origin main 2>"$SANDBOX/push.err" && fail "push of CLAUDE.md allowed" || pass
+# the advice fits both hosts
+assert_contains "$SANDBOX/push.err" "Remove them from history before pushing (ask your assistant to help)."
 
 # Core pre-push: privacy check via gh
 STUB="$SANDBOX/stub"; mkdir -p "$STUB"
@@ -83,9 +85,21 @@ echo x > "$C/ok.txt"; git -C "$C" add ok.txt
 OUT=$(git -C "$C" commit -m t 2>&1); rc=$?
 [ $rc -ne 0 ] && pass || fail "commit allowed with tools file missing"
 echo "$OUT" | grep -q 'is missing' && pass || fail "no 'is missing' message: $OUT"
-echo "$OUT" | grep -q 'Start Claude Code once with corecrew enabled' && pass || fail "no fix hint: $OUT"
+# the shim names the host that installed it (COREKIT_HOST in tests, else the plugin's place on disk)
+echo "$OUT" | grep -qF 'Start a Claude Code session with corecrew enabled, or remove this hook' && pass || fail "no fix hint: $OUT"
 echo "$OUT" | grep -qF "rm \"$C/.git/hooks/pre-commit\"" && pass || fail "no rm hint: $OUT"
 mv "$SANDBOX/pcc" "$COREDEV_TOOLS/git-hooks/pre-commit-code"; git -C "$C" reset -q; rm -f "$C/ok.txt"
+# installed from Codex, the shim names Codex
+COREKIT_HOST=codex bash "$SCRIPTS/install-hooks.sh" "$P" >/dev/null 2>&1
+assert_contains "$C/.git/hooks/pre-commit" "Start a Codex session with corecrew enabled, or remove this hook"
+assert_not_contains "$C/.git/hooks/pre-commit" "Claude Code"
+mv "$COREDEV_TOOLS/git-hooks/pre-commit-code" "$SANDBOX/pcc"
+echo x > "$C/ok.txt"; git -C "$C" add ok.txt
+OUT=$(git -C "$C" commit -m t 2>&1) && fail "commit allowed with tools file missing (Codex shim)" || pass
+echo "$OUT" | grep -qF 'Start a Codex session with corecrew enabled' && pass || fail "no Codex fix hint: $OUT"
+mv "$SANDBOX/pcc" "$COREDEV_TOOLS/git-hooks/pre-commit-code"; git -C "$C" reset -q; rm -f "$C/ok.txt"
+COREKIT_HOST=claude bash "$SCRIPTS/install-hooks.sh" "$P" >/dev/null 2>&1
+assert_contains "$C/.git/hooks/pre-commit" "Start a Claude Code session with corecrew enabled"
 
 # an old 0.1.x hook (marker "new-project hook") is replaced by a shim
 printf '#!/bin/sh\n# new-project hook: OLDBODY\nexit 0\n' > "$C/.git/hooks/pre-commit"
@@ -159,6 +173,11 @@ for bad in "папка/CLAUDE.md" "é/.env" Claude.md .ENV; do
 done
 mv "$COREDEV_TOOLS/git-hooks/blocked-patterns" "$SANDBOX/bp"
 try_commit src/ok.txt && fail "missing patterns file must fail closed" || pass
+# the fix names no single host: the static hook cannot know which one installed it
+mkdir -p "$C/src"; echo x > "$C/src/ok.txt"; git -C "$C" add src/ok.txt
+OUT=$(git -C "$C" commit -q -m t 2>&1); git -C "$C" reset -q; rm -rf "${C:?}/src"
+echo "$OUT" | grep -qF "Start a new session of the assistant that installed these hooks (Claude Code or Codex) with corecrew enabled to refresh the tools." \
+  && pass || fail "missing patterns: no host-neutral fix: $OUT"
 mv "$SANDBOX/bp" "$COREDEV_TOOLS/git-hooks/blocked-patterns"
 # the exception list: a missing one fails closed too; a blank line in it (which grep would read as "matches every path")
 # lets nothing through

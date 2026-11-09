@@ -5,7 +5,7 @@
 PATTERNS="$(dirname "$0")/blocked-patterns"; ALLOWED="$(dirname "$0")/allowed-patterns"
 for f in "$PATTERNS" "$ALLOWED"; do
   if [ ! -r "$f" ]; then
-    echo "Blocked: $f is missing, so internal files can't be checked. Start Claude Code once with corecrew enabled to refresh the tools." >&2
+    echo "Blocked: $f is missing, so internal files can't be checked. Start a new session of the assistant that installed these hooks (Claude Code or Codex) with corecrew enabled to refresh the tools." >&2
     exit 1
   fi
 done

@@ -80,7 +80,10 @@ echo "v3" > "$C/app.txt"; echo y >> "$P/docs/brief.md"
 (cd "$C" && bash "$SAVE" "Publish" --push) > "$SANDBOX/out" 2>&1
 assert_eq "$(git -C "$SANDBOX/code.git" rev-list --all --count)" "0" "save --push must not push the code"
 assert_eq "$(git -C "$SANDBOX/core.git" log -1 --format=%s main 2>/dev/null)" "Publish"
-assert_contains "$SANDBOX/out" "pushed Core"; assert_contains "$SANDBOX/out" "ship"
+assert_contains "$SANDBOX/out" "pushed Core"
+# the line fits both hosts: it names the skill, not Claude Code's slash command
+assert_contains "$SANDBOX/out" "code not pushed: the code leaves only through corecrew's ship skill"
+assert_not_contains "$SANDBOX/out" "/corecrew:ship"
 assert_eq "$(git -C "$C" log -1 --format=%s)" "Publish" "save --push: the code commit"
 # --push alone (no message) with nothing to save: pushes the Core; with changes to save it is refused (2)
 echo z >> "$P/docs/brief.md"; (cd "$C" && bash "$SAVE" "Core only") >/dev/null 2>&1

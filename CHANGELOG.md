@@ -13,6 +13,7 @@ commit log has the full detail.
 
 - wiki-check: pages with status done or superseded no longer report drift; with `--code`, an active
   page whose `files:` names a missing path is reported, and task's release blocks on it.
+- git hook, shim and save texts name the host that installed corecrew, or neither.
 
 ### Deprecated
 
