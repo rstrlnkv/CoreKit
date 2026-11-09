@@ -854,6 +854,62 @@ grep -qxF -- "- cc-app — Adopted existing project — cc-app/" "$CORE_DIR/PROJ
 assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "temp folder left in the Core (Core commit failed)"
 git -C "$CORE_DIR" add -- cc-app PROJECTS.md && git -C "$CORE_DIR" commit -q -m "Adopt cc-app" && pass || fail "the commit by hand failed"
 assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "Core dirty after the commit by hand"
+
+# --- the .worktreeinclude write fails (after the .gitignore lines were appended): exit 1 before the repo
+# commit; .gitignore comes back byte for byte, no .worktreeinclude, nothing else changed
+new_sandbox; setup_core
+F="$SANDBOX/Projects/wti-fail"; mkrepo "$F"
+printf 'build/\n' > "$F/.gitignore"; git -C "$F" add .gitignore && git -C "$F" commit -q -m gi
+REAL_CP="$(command -v cp)"
+mkdir -p "$SANDBOX/stub"
+cat > "$SANDBOX/stub/cp" <<STUB
+#!/bin/sh
+for a in "\$@"; do last="\$a"; done
+case "\$last" in */.worktreeinclude) echo "cp: stub failure" >&2; exit 1 ;; esac
+exec "$REAL_CP" "\$@"
+STUB
+chmod +x "$SANDBOX/stub/cp"
+before="$(snap_tree "$SANDBOX")"
+OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$AD" --from "$F" 2>&1)"; rc=$?
+assert_eq "$rc" "1" ".worktreeinclude failure exit"
+echo "$OUT" | grep -qxF "adopt: could not write $F/.worktreeinclude" && pass || fail ".worktreeinclude failure message: $OUT"
+assert_eq "$(snap_tree "$SANDBOX")" "$before" "a failed .worktreeinclude write changed something"
+assert_eq "$(cat "$F/.gitignore")" "build/" ".gitignore not restored (.worktreeinclude failure)"
+assert_no_file "$F/.worktreeinclude"
+assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "temp folder left in the Core (.worktreeinclude failure)"
+rm -rf "$SANDBOX/stub"
+
+# --- the .gitignore write fails (a read-only .gitignore; a read-only folder when there is none): exit 1
+# before the repo commit, nothing changed (not checkable as root, who may write anyway)
+chmod 444 "$F/.gitignore"
+if ( : >> "$F/.gitignore" ) 2>/dev/null; then
+  skip ".gitignore write failure" "a read-only file is writable here (root)"
+else
+  before="$(snap_tree "$SANDBOX")"
+  OUT="$(bash "$AD" --from "$F" 2>&1)"; rc=$?
+  assert_eq "$rc" "1" ".gitignore failure exit"
+  echo "$OUT" | grep -qxF "adopt: could not write $F/.gitignore" && pass || fail ".gitignore failure message: $OUT"
+  assert_eq "$(snap_tree "$SANDBOX")" "$before" "a failed .gitignore write changed something"
+  assert_eq "$(cat "$F/.gitignore")" "build/" ".gitignore changed (.gitignore failure)"
+  assert_no_file "$F/.worktreeinclude"
+  git -C "$F" rm -q .gitignore && git -C "$F" commit -q -m "no gi"
+  chmod 555 "$F"
+  before="$(snap_tree "$SANDBOX")"
+  OUT="$(bash "$AD" --from "$F" 2>&1)"; rc=$?
+  chmod 755 "$F"
+  assert_eq "$rc" "1" "new .gitignore failure exit"
+  echo "$OUT" | grep -qxF "adopt: could not write $F/.gitignore" && pass || fail "new .gitignore failure message: $OUT"
+  assert_eq "$(snap_tree "$SANDBOX")" "$before" "a failed new .gitignore changed something"
+  assert_no_file "$F/.gitignore"; assert_no_file "$F/.worktreeinclude"
+fi
+
+# --- old layout with --purpose: the PROJECTS.md line gets the new text and the new entry, and stays one line
+new_sandbox; setup_core
+mkold old-app
+assert_exit 0 bash "$AD" --from "$CORE_DIR/old-app/code" --purpose "New text"
+grep -qxF -- "- old-app — New text — old-app/" "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md line (--purpose): $(cat "$CORE_DIR/PROJECTS.md")"
+assert_eq "$(grep -c '^- old-app ' "$CORE_DIR/PROJECTS.md")" "1" "one PROJECTS.md line (--purpose)"
+echo "$OUT" | grep -qxF "updated PROJECTS.md entry" && pass || fail "no 'updated PROJECTS.md entry' line: $OUT"
 }
 bg part_late_phases
 
