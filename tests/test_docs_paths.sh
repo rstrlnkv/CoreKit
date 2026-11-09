@@ -198,4 +198,31 @@ printf '%s\n' '[x](#host-setting) [y](other.md#here) [z](gone.md#there)' > "$SAN
 # a link without an anchor names an existing file; web and mailto links are not checked
 printf '%s\n' '[g](gone.md) [o](other.md) [d](./) [w](https://example.com/gone.md) [m](mailto:someone)' > "$SANDBOX/c.md"
 ( FAILS=0; check_anchors "$SANDBOX/c.md" >/dev/null; [ "$FAILS" -eq 1 ] ) && pass || fail "a dead link without an anchor passes the link check"
+# Every top-level name in tests/fixtures/ is named in CONTRIBUTING.md's "### Test fixtures" (a code span; a glob such as
+# `standard-*.md` counts, a trailing / and a tests/fixtures/ prefix are dropped) and in at least one tests/test_*.sh.
+# check_fixtures <doc> <fixtures dir> <tests dir> — one FAIL per name missing from either
+check_fixtures() {
+  local spans name t found
+  spans="$(awk '/^#/ { f = ($0 == "### Test fixtures"); next } f' "$1" | grep -oE '`[^` ]+`' | tr -d '`' \
+    | sed -e 's|^tests/fixtures/||' -e 's|/$||')"
+  [ -n "$spans" ] || { fail "$(basename "$1") has no ### Test fixtures section with code spans"; return; }
+  for name in "$2"/*; do
+    name="${name##*/}"
+    found=""
+    while IFS= read -r t; do
+      # shellcheck disable=SC2254  # a span may be a glob on purpose
+      case "$name" in $t) found=1; break ;; esac
+    done <<< "$spans"
+    [ -n "$found" ] && pass || fail "$(basename "$1") does not name the fixture $name under ### Test fixtures"
+    grep -qE "(^|[^A-Za-z0-9_.-])$(printf '%s' "$name" | sed 's/\./\\./g')([^A-Za-z0-9_.-]|$)" "$3"/test_*.sh \
+      && pass || fail "no tests/test_*.sh names the fixture $name"
+  done
+}
+check_fixtures "$ROOT/CONTRIBUTING.md" "$ROOT/tests/fixtures" "$ROOT/tests"
+# self-check: a new fixture that neither the doc nor a test names fails twice; a glob in the doc counts
+mkdir -p "$SANDBOX/fx/wiki-zzz" "$SANDBOX/fx/std-a.md" "$SANDBOX/ts"
+printf '%s\n' '# C' '### Test fixtures' '- `std-*.md`, `tests/fixtures/wiki-good/`' '## Next' '`wiki-zzz`' > "$SANDBOX/c2.md"
+printf '%s\n' 'copy_fixture std-a.md x' > "$SANDBOX/ts/test_a.sh"
+( FAILS=0; check_fixtures "$SANDBOX/c2.md" "$SANDBOX/fx" "$SANDBOX/ts" >/dev/null; [ "$FAILS" -eq 2 ] ) \
+  && pass || fail "a fixture missing from the doc and the tests does not fail twice"
 finish

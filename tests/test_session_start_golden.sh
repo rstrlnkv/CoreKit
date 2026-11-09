@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Characterisation of hooks/session-start.sh: its output must stay byte-identical when work moves out of it into
-# scripts/prepare.sh. Golden file: tests/fixtures/session-start-golden.txt, the Claude Code output (regenerate on
-# purpose with GOLDEN_WRITE=1; sandbox paths are shown as @SB@, the plugin folder as @PL@). The same cases run through
-# the hook as Codex calls it (its SessionStart input, COREKIT_HOST=codex): that output must equal the golden with each
-# /corecrew: written $corecrew:, so there is no second golden file.
+# Pins the whole output of hooks/session-start.sh (stdout, stderr and exit code) byte for byte in seven cases: no Core;
+# a ready Core, outside a project; a new-layout project whose links are created, then current; a real CLAUDE.local.md;
+# a layout note with a stale git hook; and the Core's own project folder. A change to any of these texts fails here
+# until the golden file is regenerated on purpose. Golden file: tests/fixtures/session-start-golden.txt, the Claude
+# Code output (GOLDEN_WRITE=1 rewrites it; sandbox paths are shown as @SB@, the plugin folder as @PL@). The same cases
+# run through the hook as Codex calls it (its SessionStart input, COREKIT_HOST=codex): that output must equal the golden
+# with each /corecrew: written $corecrew:, so there is no second golden file.
 source "$(dirname "$0")/lib.sh"
 source "$(dirname "$0")/lib-hook.sh"
 H="$HOOKS/session-start.sh"
