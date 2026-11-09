@@ -30,7 +30,8 @@ render() {
 # put <template> <dest> [copy] — create dest from template unless it exists. Default mode
 # renders placeholders through render() above; "copy" copies the file as is. The file is written
 # to dest.tmp.<pid> and moved into place, so a failed write leaves no partial dest a rerun would skip.
-# A dangling symlink at dest stays: the file goes to the end of the link chain, as a plain write would.
+# A dangling symlink at dest stays: the file goes to the end of the link chain, as a plain write would. A link
+# that loops, or a chain of more than 16 links, is refused with a message that names dest; nothing is written.
 put() {
   local src="$1" dest="$2" mode="${3:-render}" tmp out n=0 t
   if [ -e "$dest" ]; then echo "skipped $(rel_core "$dest")"; return 0; fi
@@ -41,7 +42,10 @@ put() {
     case "$t" in /*) out="$t" ;; *) out="$(dirname "$out")/$t" ;; esac
     n=$((n + 1))
   done
-  [ -L "$out" ] && return 1
+  if [ -L "$out" ]; then
+    echo "Could not write $dest: it is a link that loops or a chain of more than 16 links. Fix or remove the link, then run again." >&2
+    return 1
+  fi
   [ "$out" = "$dest" ] && { mkdir -p "$(dirname "$dest")" || return 1; }
   tmp="$out.tmp.$$"
   if [ "$mode" = copy ]; then cp "$src" "$tmp"; else render "$src" "$tmp"; fi \

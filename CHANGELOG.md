@@ -55,6 +55,9 @@ commit log has the full detail.
 - install-hooks prints a corecrew line that names the hook instead of a raw shell error when a
   hooks folder cannot be written, and save then says nothing was saved. When git cannot write the
   code repo's `.git`, save gives its Codex hint before it tries to install the hooks.
+- setup-core, scaffold and adopt name the file when a link at a file they create loops
+  (`README.md -> README.md`) or is a chain of more than 16 links, and say to fix or remove it;
+  before, setup-core stopped with exit 1 and no message. Nothing is written.
 
 ## [0.12.0] - 2026-11-09
 
