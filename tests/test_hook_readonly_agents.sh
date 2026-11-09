@@ -137,7 +137,9 @@ printf 'BEGIN { this is not awk\n' > "$BP/scripts/bashlex-readonly.awk"
 OLDH="$H"; H="$BP/hooks/guard-code.sh"
 run_as $V 'ls'; assert_eq "$RC" "2" "broken checker: refused"
 H="$OLDH"
-# messages in Russian
+# with ui_language ru the refusal stays English: only a subagent told to work in English reads it (MSG_EN_ONLY)
 CLAUDE_PLUGIN_OPTION_UI_LANGUAGE=ru run_as $V 'rm -f src/a.txt'
-case "$ERR" in *"только читает"*) pass ;; *) fail "ru message: $ERR" ;; esac
+assert_eq "$RC" "2" "ru: refused"
+case "$ERR" in *"is a read-only checker and must not change anything ("*) pass ;; *) fail "ru: the refusal is not English: $ERR" ;; esac
+case "$ERR" in *"только читает"*) fail "ru: the refusal has Russian: $ERR" ;; *) pass ;; esac
 finish

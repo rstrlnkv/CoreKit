@@ -7,18 +7,19 @@
 #   msg_has <key> <lang>   exit 0 when the table has a <lang> text for <key>.
 #   MSG_LANGS              the one list of languages; en is the default.
 #   MSG_KEYS               the list of keys (tests/test_hook_messages.sh checks every language for each).
+#   MSG_EN_ONLY            the keys that have only an en text, each with its reason beside the list.
 #
 # Source lib.sh first (every hook does). The language is UI_LANGUAGE (load_settings sets it), else lib.sh's
 # resolve_setting ui_language; an empty value, or one not in MSG_LANGS, is en.
-# A key that lacks a text in the chosen language prints its en text.
+# A key that lacks a text in the chosen language prints its en text: only the keys of MSG_EN_ONLY lack one.
 # In a text, @1 @2 ... stand for the arguments. They are inserted as plain text (never as a printf
 # format, never re-scanned), so a path with %, spaces, quotes or Cyrillic prints verbatim. Every language of a
 # key has the placeholders of its en text.
 #
-# To add a language, add it to MSG_LANGS and give each key below one more branch, a "<lang>:<key>)" line beside
-# the key's other branches (a key's branches stand together). Then add the language to the ui_language options
-# in .claude-plugin/plugin.json and to _setting_valid in scripts/lib-settings.sh. tests/test_hook_messages.sh
-# checks each of these.
+# To add a language, add it to MSG_LANGS and give each key below, but those of MSG_EN_ONLY, one more branch: a
+# "<lang>:<key>)" line beside the key's other branches (a key's branches stand together). Then add the language to
+# the ui_language options in .claude-plugin/plugin.json and to _setting_valid in scripts/lib-settings.sh.
+# tests/test_hook_messages.sh checks each of these.
 #
 # Portable bash 3.2: no associative arrays, no case-change expansions.
 
@@ -29,6 +30,10 @@ session_rules schema_none run_starting layout_note old_hooks hooks_path hooks_pa
 local_link_created agents_link_created agents_link_wrong agents_link_failed local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind
 readonly_agent settings_invalid_path settings_invalid_value settings_unreadable settings_no_home allowed_attribution allowed_model_profile
 src_env src_option src_file fix_env fix_option fix_file codex_trust codex_profile"
+# readonly_agent: the read-only checker's refusal is read only by a subagent (designer, localizer, security,
+# verifier) told to work in English, never by the person, so it stays English, as do the reasons in its @2.
+# shellcheck disable=SC2034  # read by tests/test_hook_messages.sh
+MSG_EN_ONLY="readonly_agent"
 
 # _msg_text <lang> <key> — sets MSG_T to the text, or to nothing when there is none. Keep the keys and
 # their <lang>: branches in step with MSG_KEYS and MSG_LANGS.
@@ -74,7 +79,6 @@ _msg_text() {
     en:hooks_path_empty) MSG_T='corecrew git hooks do not run in @1: core.hooksPath is set to an empty value, so git runs no hooks there. To install them, first remove the setting: git -C "@1" config --unset core.hooksPath    then run: bash "@2" "@3"' ;;
     ru:hooks_path_empty) MSG_T='Git-хуки corecrew не работают в @1: core.hooksPath задан пустым, поэтому git не запускает там никаких хуков. Чтобы установить их, сначала удалите эту настройку: git -C "@1" config --unset core.hooksPath    затем выполните: bash "@2" "@3"' ;;
     en:readonly_agent) MSG_T='corecrew: @1 is a read-only checker and must not change anything (@2). Write logs and scratch files under @3; report a needed change for engineer to make.' ;;
-    ru:readonly_agent) MSG_T='corecrew: @1 только читает и ничего не меняет (@2). Журналы и черновики пишите в @3; нужное изменение передайте engineer.' ;;
     en:guard_code_blocked) MSG_T='corecrew: @1 is an internal file and must not live in the code folder. Write it to @2 instead.' ;;
     ru:guard_code_blocked) MSG_T='corecrew: @1 — внутренний файл, ему не место в папке кода. Запишите его в @2.' ;;
     en:guard_code_public) MSG_T='Docs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in @1.' ;;

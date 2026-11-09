@@ -11,13 +11,17 @@ export CLAUDE_PLUGIN_ROOT="$PLUGIN"
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
 assert_file "$M"
 
+EN_ONLY="$(. "$M" 2>/dev/null; echo "${MSG_EN_ONLY:-}")"
+# en_only <key> <lang> — exit 0 when <lang> is not en and the key is in MSG_EN_ONLY (it has no <lang> text)
+en_only() { [ "$2" != en ] || return 1; case " $EN_ONLY " in *" $1 "*) return 0 ;; esac; return 1; }
+
 # --- The table: one list of languages (MSG_LANGS); every key has a text in each, with the same @N placeholders as
 # its en text; MSG_KEYS matches the branches, and a key's branches stand together; every key a caller uses exists.
 (
   . "$M" 2>/dev/null || exit 3
   [ -n "${MSG_KEYS:-}" ] && [ -n "${MSG_LANGS:-}" ] || exit 4
   for l in $MSG_LANGS; do
-    for k in $MSG_KEYS; do msg_has "$k" "$l" || { echo "key $k lacks $l"; exit 1; }; done
+    for k in $MSG_KEYS; do en_only "$k" "$l" || msg_has "$k" "$l" || { echo "key $k lacks $l"; exit 1; }; done
   done
   exit 0
 ) >"$SANDBOX/tbl.out" 2>&1; assert_eq "$?" "0" "every key has a text in every language: $(cat "$SANDBOX/tbl.out")"
@@ -29,8 +33,12 @@ assert_eq "$opts" "$LANGS" "the ui_language options in plugin.json are MSG_LANGS
 accepted="$(grep -oE 'ui_language:[a-z]+' "$SCRIPTS/lib-settings.sh" | sed 's/^ui_language://' | tr '\n' ' ' | sed 's/ $//')"
 assert_eq "$accepted" "$LANGS" "the ui_language values lib-settings.sh accepts are MSG_LANGS"
 branches="$(grep -oE '^[[:space:]]*[a-z]+:[a-z_]+\)' "$M" | sed -E 's/^[[:space:]]*//; s/\)$//' | LC_ALL=C sort)"
-wanted="$(. "$M" 2>/dev/null; for k in $MSG_KEYS; do for l in $MSG_LANGS; do echo "$l:$k"; done; done | LC_ALL=C sort)"
-assert_eq "$branches" "$wanted" "MSG_KEYS times MSG_LANGS and the <lang>:<key> branches agree"
+wanted="$(. "$M" 2>/dev/null; for k in $MSG_KEYS; do for l in $MSG_LANGS; do en_only "$k" "$l" || echo "$l:$k"; done; done | LC_ALL=C sort)"
+assert_eq "$branches" "$wanted" "MSG_KEYS times MSG_LANGS (en only for MSG_EN_ONLY) and the <lang>:<key> branches agree"
+# shellcheck disable=SC2086  # the key lists are split on purpose
+for k in $EN_ONLY; do
+  (. "$M"; for x in $MSG_KEYS; do [ "$x" = "$k" ] && exit 0; done; exit 1) && pass || fail "MSG_EN_ONLY names $k, which is not in MSG_KEYS"
+done
 split="$(awk 'match($0, /^[[:space:]]*[a-z]+:[a-z_]+\)/) { k = substr($0, RSTART, RLENGTH); sub(/^[[:space:]]*[a-z]+:/, "", k); sub(/\)$/, "", k)
   if (k != prev && (k in seen)) print k; seen[k] = 1; prev = k }' "$M")"
 assert_eq "$split" "" "each key's branches stand together"

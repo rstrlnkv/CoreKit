@@ -25,6 +25,8 @@ commit log has the full detail.
   page whose `files:` names a missing path is reported, and task's release blocks on it.
 - The git hook, shim and save texts name the host that installed corecrew, or neither; adopt's
   last line names no host.
+- The read-only checker's refusal is always English, whatever `ui_language` says: only a subagent
+  reads it.
 
 ### Deprecated
 
