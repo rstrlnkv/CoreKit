@@ -105,11 +105,13 @@ export function texts(lang: Lang) {
     const was = m ? pair(fromM, l ? fromL : '') : fromL ? n(fromL) : ''
     return now + (was ? ` (${s.was(was)})` : '') + (why ? ` · ${why}` : '')
   }
+  /** The mode's hint; Auto says less when CoreModel picks the effort only. */
+  const modeHint = (mode: Mode, pickModel: boolean) => (mode === 'auto' && !pickModel ? s.autoEffortHint : s.modeHint[mode])
   return {
     ...s,
     levelName: n,
     modeName: (m: Mode) => s.mode[m],
-    modeHintFor: (m: Mode, pickModel: boolean) => (m === 'auto' && !pickModel ? s.autoEffortHint : s.modeHint[m]),
+    modeHintFor: modeHint,
     pair,
     change,
     /** A transcript row: an arrow up or down, then the change. */
@@ -144,12 +146,12 @@ export function texts(lang: Lang) {
     insteadOfModel: (from: ModelKey, to: ModelKey) => s.insteadOf(name(from), name(to)),
     unavailableModel: (m: ModelKey) => s.unavailable(name(m)),
     modeQuestionFor: (mode: Mode, m: ModelKey | '', l: Level | '') => s.modeQuestion(s.mode[mode], pair(m, l) || s.unknownPair),
-    modeSet: (mode: Mode, pickModel: boolean) => s.modeIs(s.mode[mode], mode === 'auto' && !pickModel ? s.autoEffortHint : s.modeHint[mode]),
+    modeSet: (mode: Mode, pickModel: boolean) => s.modeIs(s.mode[mode], modeHint(mode, pickModel)),
     modeOnFor: (mode: Mode) => s.modeOn(s.mode[mode]),
     /** The /coremodel reply: the mode, what the chat runs at, the commands. */
     status: (mode: Mode, pickModel: boolean, m: ModelKey | '', l: Level | '', held: boolean, yours: string) =>
       [
-        s.modeIs(s.mode[mode], mode === 'auto' && !pickModel ? s.autoEffortHint : s.modeHint[mode]),
+        s.modeIs(s.mode[mode], modeHint(mode, pickModel)),
         held ? s.chatIsSet(pair(m, l) || s.unknownPair, yours) : s.chatIs(pair(m, l) || s.unknownPair),
         s.commands,
       ].join('\n'),
