@@ -77,7 +77,7 @@ Each plugin's README has the full description, its commands and its settings.
   [coreopinion](plugins/coreopinion/README.md#requirements)).
 - **Permissions:** corecrew's hooks refuse some reads and writes, and its project settings let
   Claude reach the project's Core folder from the code folder; coremodel asks for nothing beyond its
-  hooks; coreopinion runs Codex with a narrow read-only profile ([corecrew](plugins/corecrew/README.md#what-the-hooks-do),
+  hooks; coreopinion runs Codex with a narrow read-only profile ([corecrew](plugins/corecrew/README.md#requirements),
   [coremodel](plugins/coremodel/README.md#requirements),
   [coreopinion](plugins/coreopinion/README.md#what-is-sent-and-what-gpt-can-read)).
 - **Changes outside its own folders:** corecrew keeps a tools copy in its data folder, writes your
