@@ -484,7 +484,26 @@ check codewiki "wiki-check: architecture.md: missing file src/lib/
 wiki-check: features/login.md: missing file src/login.sh
 wiki-check: features/login.md: missing file my dir/
 wiki-check: features/login.md: drift: my file.sh changed, page not updated" --code "$CM" --changed "my file.sh"
-# Without --code nothing is checked for existence (wiki-good has no code root at all).
+# One reading of a files: entry in both loops: --code checks the path the drift loop compares ("." and repeated
+# slashes collapsed). ./src/dot.sh and src//double.sh are code paths to both (present, and they drift); an absolute
+# entry and one that climbs out of the code root are code paths to neither: missing, and never a drift, even
+# where the file system would find them (CN/src/abs.sh and CN/../outside.sh exist).
+CN="$SANDBOX/code norm/root"; mkdir -p "$SANDBOX/code norm"; cp -R "$CR" "$CN"; : > "$CN/src/dot.sh"; : > "$CN/src/double.sh"; : > "$CN/src/abs.sh"
+: > "$SANDBOX/code norm/outside.sh"
+clone codewiki "$FX/codenorm"
+sed 's/^  - src\/login\.sh$/&\
+  - .\/src\/dot.sh\
+  - src\/\/double.sh\
+  - \/src\/abs.sh\
+  - src\/..\/..\/outside.sh/' "$FX/codenorm/docs/features/login.md" > "$SANDBOX/s.tmp" && mv "$SANDBOX/s.tmp" "$FX/codenorm/docs/features/login.md"
+assert_contains "$FX/codenorm/docs/features/login.md" '  - src/../../outside.sh'
+NORM_MISSING="wiki-check: features/login.md: missing file /src/abs.sh
+wiki-check: features/login.md: missing file src/../../outside.sh"
+check codenorm "$NORM_MISSING" --code "$CN"
+check codenorm "$NORM_MISSING
+wiki-check: features/login.md: drift: src/dot.sh changed, page not updated
+wiki-check: features/login.md: drift: src/double.sh changed, page not updated" \
+  --code "$CN" --changed src/dot.sh src/double.sh src/abs.sh outside.sh ../outside.sh
 assert_exit 0 bash "$W" "$FX/codewiki"
 # Draft pages list files they will create; history pages list files that may be gone: neither is checked.
 clone codewiki "$SANDBOX/codedraft"
