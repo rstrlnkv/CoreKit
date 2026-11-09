@@ -38,4 +38,10 @@ if [ "$(id -u)" != 0 ]; then
   echo "$OUT" | grep -q '^merged into' && fail "success claimed after a failed copy: $OUT" || pass
   assert_file "$D3/ok.txt"; assert_no_file "$D3/ro/x.txt"; assert_eq "$(cat "$D3/ro/kept.txt")" "keep" "user file changed"
 fi
+# nested .gitignore files are kept, and what they ignore stays ignored
+new_sandbox; setup_core; scaffold_old mg-app; G="$SANDBOX/g"; mkdir -p "$G/android"
+printf 'key.properties\n' > "$G/android/.gitignore"; echo k > "$G/android/key.properties"
+bash "$SKILL/scripts/merge-generated.sh" "$G" "$CORE_DIR/mg-app/code" >/dev/null
+assert_file "$CORE_DIR/mg-app/code/android/.gitignore"
+git -C "$CORE_DIR/mg-app/code" status --porcelain | grep -q key.properties && fail "key.properties not ignored" || pass
 finish

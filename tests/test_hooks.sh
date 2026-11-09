@@ -150,4 +150,15 @@ mkdir -p "$CORE_DIR/bar"
 assert_exit 1 bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/bar"
 echo "$OUT" | grep -q 'No git repo at' && pass || fail "no 'No git repo at' message: $OUT"
 
+# the pre-commit hook on non-ASCII paths and case variants; a missing patterns file fails closed
+new_sandbox; setup_core; sync_tools; scaffold_old hk-app; C="$CORE_DIR/hk-app/code"
+bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/hk-app" >/dev/null
+for bad in "папка/CLAUDE.md" "é/.env" Claude.md .ENV; do
+  try_commit "$bad" && fail "commit allowed: $bad" || pass
+  rm -rf "${C:?}/${bad:?}"
+done
+mv "$COREDEV_TOOLS/git-hooks/blocked-patterns" "$SANDBOX/bp"
+try_commit src/ok.txt && fail "missing patterns file must fail closed" || pass
+mv "$SANDBOX/bp" "$COREDEV_TOOLS/git-hooks/blocked-patterns"
+
 finish

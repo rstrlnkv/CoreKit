@@ -398,4 +398,13 @@ unbounded=$(grep -E '(^| )log( |$)' "$SANDBOX/git-calls" | grep -vE '(^| )(-n [0
 assert_eq "$unbounded" "" "save ran git log without a count limit"
 assert_eq "$(git -C "$C" log -1 --format=%s)" "Bounded" "save through the wrapper did not commit"
 
+# a Core and a tools folder whose paths have spaces: save and undo-step still work
+SANDBOX="$(mktemp -d "$TEST_TMP/sb.XXXXXX")"; export CORE_DIR="$SANDBOX/my projects/Core"
+export CLAUDE_PLUGIN_DATA="$SANDBOX/plugin data"; export COREDEV_TOOLS="$CLAUDE_PLUGIN_DATA/tools"; sync_tools; setup_core
+scaffold_old sp-app; C="$CORE_DIR/sp-app/code"
+(cd "$C" && bash "$SAVE" init) >/dev/null 2>&1
+echo s > "$C/s.txt"; (cd "$C" && bash "$SAVE" s) >/dev/null 2>&1
+(cd "$C" && bash "$UNDO") >/dev/null 2>&1
+assert_no_file "$C/s.txt"
+
 finish
