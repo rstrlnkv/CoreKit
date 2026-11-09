@@ -195,7 +195,7 @@ switch with /model if the current one differs". You switch yourself with `/model
 model and effort settings were never changed, so nothing needs undoing. For Codex, remove the
 `codex_hint` line from `~/.config/coremodel/settings` if you added it.
 
-## Build from source
+## Development
 
 ```bash
 bash tests/test_coremodel.sh                          # validate the manifest and module, run the plugin's tests
