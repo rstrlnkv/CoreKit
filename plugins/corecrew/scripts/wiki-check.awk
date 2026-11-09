@@ -232,11 +232,13 @@ END {
     if (size > 8192 && h2 == 0) report(rel, "page over 8 KB without ## headings")
     # files: entries. Active pages must name paths that exist (--code); done and superseded pages
     # are history: no drift, no existence check; draft pages may name files still to be created.
+    # Both loops read an entry as norm() gives it; an absolute one, or one that climbs out of the code
+    # root, is no code path: missing here, and never a drift below.
     st = unq(val["status"])
     if (code != "" && st == "active")
       for (i = 1; i <= nf; i++) {
-        f = flist[i]
-        if (f ~ /\/$/ ? !isdir(code "/" f) : !exists(code "/" f)) report(rel, "missing file " f)
+        f = flist[i]; p = norm(f)
+        if (p ~ /^(\/|\.\.(\/|$))/ || (f ~ /\/$/ ? !isdir(code "/" p) : !exists(code "/" p))) report(rel, "missing file " f)
       }
     if (st != "done" && st != "superseded" && !(rel in pagechg)) {
       for (i = 1; i <= nf; i++) {

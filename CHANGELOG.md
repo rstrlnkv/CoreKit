@@ -55,6 +55,9 @@ commit log has the full detail.
 - install-hooks prints a corecrew line that names the hook instead of a raw shell error when a
   hooks folder cannot be written, and save then says nothing was saved. When git cannot write the
   code repo's `.git`, save gives its Codex hint before it tries to install the hooks.
+- wiki-check `--code` reads a `files:` entry as the drift check does: an absolute entry
+  (`/src/x`) or one that climbs out of the code root (`src/../../x`) is reported as a missing
+  file instead of passing while it could never drift.
 
 ## [0.12.0] - 2026-11-09
 
