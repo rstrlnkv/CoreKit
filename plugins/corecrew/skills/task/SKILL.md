@@ -112,10 +112,8 @@ attribution value resolved at Start" instead of placeholders:
    `/plugin install feature-dev@claude-plugins-official` adds the deeper feature-dev agents; no
    path stops for it. If neither kind is listed, a step that needs one stops and says why.
 4. **Read.** Read `<Core>/<project>/CLAUDE.md` and its `check: <command>` line. A line that still reads
-   `check: <set after scaffolding>`, or no line at all, means unset. Do not ask yet: ask the user
-   once for the command, before the first tester call that needs it (on `release`, before
-   postcondition 1; every path except `question`), and write the confirmed command into the `check:` line of that `CLAUDE.md`
-   (it is committed with the chain) so the next chain does not ask. List the file names of
+   `check: <set after scaffolding>`, or no line at all, means unset. Do not ask yet: the top of
+   `references/paths.md` says when to ask and where the answer is written. List the file names of
    `<Core>/standards/`, `<Core>/knowledge/` and `<Core>/<project>/docs/knowledge/`, and read the
    `applies-to` front matter of each standard (rule 9 needs it).
 5. **Clean tree.** Run `git status --short` in the code root and, for the Core paths `save`

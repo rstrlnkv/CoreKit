@@ -85,22 +85,35 @@ assert_contains "$SK" 'prepare.sh'
 assert_contains "$SK" 'If the user declines'
 c="$(grep -n 'lib.sh" core-dir' "$SK" | head -1 | cut -d: -f1)"; r="$(grep -n 'lib.sh" ready' "$SK" | head -1 | cut -d: -f1)"
 [ -n "$c" ] && [ -n "$r" ] && [ "$c" -lt "$r" ] && pass || fail "core-dir must come before ready in Start"
-# Unset check: both files agree on when to ask and where it is written.
-for f in "$SK" "$PA"; do
-  assert_contains "$f" 'before the first tester call'
-  assert_contains "$f" 'into the `check:` line'
-done
+# Each task-skill rule is stated once (Decision 11): count it over the task folder plus codex-host.md,
+# and check that the other places point at the one that states it.
+once() {
+  n="$(cat "$SK" "$T"/references/*.md "$PLUGIN/reference/codex-host.md" | grep -ciF -- "$1")"
+  assert_eq "$n" 1 "stated once in the task skill and codex-host.md: $1"
+}
+# block <file> <first-line ERE> <next-line ERE>: the lines from the first match up to the next one.
+block() { awk -v a="$2" -v b="$3" '$0 ~ b {f=0} $0 ~ a {f=1} f' "$1"; }
+# The unset check: line is asked about once; paths.md (the preamble) says when and where it is written.
+once 'before the first tester call'
+awk '/^## /{exit} 1' "$PA" | grep -qF 'before the first tester call' && pass || fail "paths.md preamble lacks the unset check: rule"
+awk '/^## /{exit} 1' "$PA" | grep -qF 'into the `check:` line' && pass || fail "paths.md preamble lacks where the check: line is written"
+block "$SK" '^4[.] [*][*]Read' '^5[.] ' | grep -qF 'paths.md' && pass || fail "SKILL.md Start, Read does not point at paths.md for the unset check:"
 # Release path runs release.md in full; postcondition 4 applies.
 sec_has "$PA" release 'in full'
 sec_has "$PA" release 'postcondition 4'
 section "$PA" release | grep -qF 'from the version step' && fail "release section still skips postconditions" || pass
-# Question path and knowledge: accepted lines are committed through save.
-sec_has "$PA" question 'save'
-sec_has "$PA" question 'Commit: none — no files changed'
+# Question path and knowledge: the rule lives in SKILL.md Knowledge; paths.md points at it.
+once 'the tree was clean at Start, so `save` commits only the chain'
+sec_has "$SK" Knowledge 'was clean at Start'
+sec_has "$SK" Knowledge '`save` commits only the chain'"'"'s files'
+sec_has "$PA" question 'SKILL.md, section Knowledge'
 section "$PA" question | grep -qF 'No release, no commit' && fail "question section contradicts SKILL.md" || pass
-sec_has "$PA" question 'accepted'
-assert_contains "$SK" 'was clean at Start'
-assert_contains "$SK" '`save` commits only the chain'"'"'s files'
+# The Codex commit stop lives in codex-host.md, Approval outside the sandbox; codex.md points at it.
+once 'Codex sandbox keeps .git read-only'
+once 'only the commit stops'
+section "$PLUGIN/reference/codex-host.md" 'Approval outside the sandbox' | grep -qiF 'only the commit stops' && pass ||
+  fail "codex-host.md Approval lacks: only the commit stops"
+sec_has "$T/references/codex.md" 'Commit in Codex' 'section Approval outside the sandbox'
 assert_contains "$RP" 'none — no files changed'
 # full and batch point at the wave; the large-plan stop runs the first task whole.
 sec_has "$PA" full "checkers' wave"
@@ -149,6 +162,7 @@ done
 grep -E "grep -icE" "$REL" | grep -qF 'forbid' && pass || fail "release.md: attribution check line is not guarded by forbid"
 # Question path with accepted lines runs only postconditions 5-7.
 assert_contains "$REL" '5–7'
+block "$REL" '^1[.] [*][*]Tests' '^2[.] ' | grep -qF 'paths.md' && pass || fail "release.md postcondition 1 does not point at paths.md for the unset check:"
 # SKILL.md Start records the base commits; both files agree with release.md.
 assert_contains "$SK" 'git rev-parse HEAD'
 assert_contains "$SK" 'base commit'
@@ -174,7 +188,6 @@ assert_contains "$SK" 'uncommitted changes'
 assert_contains "$SK" 'git status --short'
 sec_has "$PA" release 'one engineer call'
 sec_has "$PA" release '<version>'
-assert_contains "$PA" 'was clean at Start'
 
 # brief.md passes the plugin file paths that engineer and verifier cannot find by themselves.
 assert_contains "$BR" 'Plugin paths'
@@ -271,10 +284,10 @@ rm -rf "$T"
 # Release writes the changelog in Keep a Changelog 1.1.0 when the project's own standard does not say otherwise
 for w in '[Unreleased]' Added Changed Deprecated Removed Fixed Security 'Keep a Changelog'; do assert_contains "$REL" "$w"; done
 
-# The Codex README section agrees with references/codex.md: without approval only the commit stops (the same line),
+# The Codex README section agrees with codex-host.md: without approval only the commit stops (the same line),
 # and it says the guards are off until /hooks trust, with the skills that remind (the ones that run prepare.sh).
-CX_STOP="$(section "$PLUGIN/skills/task/references/codex.md" 'Commit in Codex' | grep -oE '`Commit: stopped[^`]*`' | head -1)"
-[ -n "$CX_STOP" ] && pass || fail "codex.md Commit in Codex lacks the stop line"
+CX_STOP="$(section "$PLUGIN/reference/codex-host.md" 'Approval outside the sandbox' | grep -oE '`Commit: stopped[^`]*`' | head -1)"
+[ -n "$CX_STOP" ] && pass || fail "codex-host.md Approval outside the sandbox lacks the stop line"
 RCX="$(awk '/^### /{on = ($0 == "### Codex")} /^## /{on=0} on' "$PLUGIN/README.md")"
 case "$RCX" in *"$CX_STOP"*) pass ;; *) fail "README Codex section does not name $CX_STOP" ;; esac
 printf '%s\n' "$RCX" | grep -F 'codex exec' | grep -qiE 'task stops' &&

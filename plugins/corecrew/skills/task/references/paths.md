@@ -6,7 +6,7 @@ fit one path, say so and pick the closest; never mix two chains in one call. Bri
 `<Core>/<project>/CLAUDE.md`; a line that still reads `check: <set after scaffolding>` means
 unset (or missing): ask the user once, before the first tester call that needs it (on `release`, before
 postcondition 1; every path except `question`), and write the confirmed command into the `check:` line of that `CLAUDE.md`
-so the next chain does not ask.
+(it is committed with the chain) so the next chain does not ask.
 
 ## fix
 A defect in a known place.
@@ -42,10 +42,8 @@ A question about the code or the project; no files change.
   corecrew role when the question is in its field (tester: how it is tested; security: what
   an input can reach; and so on).
 - Proof is a `file:line` for every claim. An answer with no `file:line` goes back once.
-- No files change, so no release. Only if the user accepts knowledge lines from the reply: write
-  them and commit through `save`; the tree was clean at Start, so `save` commits only the chain's
-  files (release.md postconditions 5–7); then `Commit:` is the
-  hash. With no accepted lines there is no commit: `Commit: none — no files changed`.
+- No files change, so no release. Knowledge lines the user accepts from the reply are written and
+  committed as SKILL.md, section Knowledge, says.
 
 ## batch
 Several changes of one shape (the same edit in many places, a rename, a version bump).

@@ -27,10 +27,9 @@ Security (only the groups that have lines), and an empty `## [Unreleased]` stays
 
 1. **Tests.** Chains with a tester: show the result of the final tester `check:` run (rule 7
    in SKILL.md); do not run the suite again. Release path (no tester): run the `check:`
-   command of `<Core>/<project>/CLAUDE.md` once from the code root. A line that reads
-   `check: <set after scaffolding>`, or no line, is unset: ask the user once, write the
-   confirmed command into the `check:` line (it is committed with the chain), then run it.
-   Never run the placeholder.
+   command of `<Core>/<project>/CLAUDE.md` once from the code root. An unset line is asked about
+   and written first, as the top of `paths.md` says; then run it. Never run the placeholder
+   `check: <set after scaffolding>`.
 2. **Checkers.** Every checker called in this chain (verifier, security, localizer, designer)
    has a clean final report: no open finding. None called (for example a `question` chain) → ✓.
 3. **Wiki.** `bash "<scripts>/wiki-index.sh" "<Core>/<project>"` (regenerates `docs/INDEX.md`; its

@@ -9,6 +9,12 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+### Deprecated
+
+- The older formats in `reference/older-formats.md` (a wiki without types, a brief with a stage
+  field, knowledge with sections, the old layout, old git hooks, a Core without a schema) are
+  supported until corecrew 1.0.
+
 ### Fixed
 
 - A template write that fails leaves no empty file that a rerun would skip: scaffold, adopt and

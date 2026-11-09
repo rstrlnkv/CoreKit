@@ -127,8 +127,8 @@ printf '%s\n' "$sf" | grep -qE '(^|[^<])plugins/cache/[a-z0-9-]+/corecrew/[0-9]+
 # No approval (codex exec): only the step that needs it stops, the same stop line the task chain reports;
 # the Approval section never tells the model to stop the whole skill.
 ap="$(awk '/^## /{on = ($0 == "## Approval outside the sandbox")} on' "$CH")"
-cx_stop="$(awk '/^## /{on = ($0 == "## Commit in Codex")} on' "$PLUGIN/skills/task/references/codex.md" | grep -oE '`Commit: stopped[^`]*`' | head -1)"
-[ -n "$cx_stop" ] && pass || fail "task/references/codex.md lacks the Commit: stopped line"
+cx_stop="$(printf '%s\n' "$ap" | grep -oE '`Commit: stopped[^`]*`' | head -1)"
+[ -n "$cx_stop" ] && pass || fail "codex-host.md Approval lacks the Commit: stopped line"
 case "$ap" in *'codex exec'*"$cx_stop"*) pass ;; *) fail "codex-host.md Approval: the codex exec case must name $cx_stop" ;; esac
 printf '%s\n' "$ap" | tr '\n' ' ' | grep -qiE 'not possible[^.]*, stop and report' &&
   fail "codex-host.md Approval: a missing approval must stop only that step, not the whole skill" || pass
