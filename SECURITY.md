@@ -107,9 +107,12 @@ one). It does not cover git history (`git show HEAD:.env`).
   (`python -c`, `node -e`); `git -C <dir> mv`; other writers (`rsync`,
   `dd of=`, `tar -C`, `curl -o`). The git pre-commit and pre-push hooks check what is committed
   and pushed.
-- The pre-commit hook's list (`blocked-patterns`) is narrower than the code guard's: it blocks
-  `CLAUDE*.md`, `AGENTS.md`, `.claude/`, the `superpowers` folder of `docs/`, `.env*` and key files,
-  not the rest of `docs/`. A `docs/` file that got past the code guard can still be committed by hand.
+- The git hooks' list (`plugins/corecrew/scripts/git-hooks/blocked-patterns`, read by the pre-commit
+  and pre-push hooks, case-insensitive) is narrower than the code guard's. It blocks `CLAUDE.md`,
+  `CLAUDE.local.md` and `AGENTS.md` in any folder; `/.claude/` and `/docs/superpowers/` at the root only;
+  `.env` and `.env.*` in any folder, except `.env.example`, `.env.sample` and `.env.template`
+  (`.envrc` does not match); and `*.pem` and `*.key` files. It does not block the rest of `docs/`, so
+  a `docs/` file that got past the code guard can still be committed by hand.
 - Codex subagents cannot be made read-only: the read-only steps of `/corecrew:task` are checked
   (the working tree before and after), not enforced.
 
