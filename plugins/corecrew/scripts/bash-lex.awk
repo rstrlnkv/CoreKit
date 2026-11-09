@@ -147,6 +147,9 @@ function stmt_end() {
   shk = 0; nsa = 0
   cmd = ""; na = 0; wrapped = 0; wname = ""; wskip = 0; wdur = 0; want_redir = 0; want_in = 0; rwredir = 0; skip_next = 0; want_hd = 0
 }
+# fdword — a redirect starts: a word of digits right before it (2>, 0<) is the descriptor, not an argument.
+# Not when the word is itself the target of a redirect still waiting for one (2>&1<file: 1 is the target).
+function fdword() { if (inword && !hasq && !wbad && !want_redir && !want_in && word ~ /^[0-9]+$/) { inword = 0; word = ""; wx = ""; wl = 0 } else endword() }
 # enqueue(text) — a command line to lex after the main pass (at most 50)
 function enqueue(t) { if (nq < 50) Q[++nq] = t }
 { buf = (NR == 1 ? "" : buf) $0 }
@@ -239,7 +242,7 @@ function lex(text,   lxn, lxk, lxpos, lxw, lxl, lxc) {
       stmt_end(); i++; continue
     }
     if (c == ">") {
-      if (inword && !hasq && !wbad && word ~ /^[0-9]+$/) { inword = 0; word = ""; wx = ""; wl = 0 } else endword()
+      fdword()
       i++
       if (C[i] == "(") continue
       d = C[i]
@@ -249,7 +252,7 @@ function lex(text,   lxn, lxk, lxpos, lxw, lxl, lxc) {
       continue
     }
     if (c == "<") {
-      endword()
+      fdword()
       if (C[i + 1] == "<") {
         if (C[i + 2] == "<") { i += 3; skip_next = 1; continue }
         i += 2; hdstrip = 0

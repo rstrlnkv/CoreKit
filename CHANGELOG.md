@@ -24,6 +24,9 @@ commit log has the full detail.
 
 - A template write that fails leaves no empty file that a rerun would skip: scaffold, adopt and
   setup-core write each file to a temp file and move it into place.
+- The secrets guard no longer refuses a command whose input redirect has a descriptor number
+  (`cp .env.example .env 0</dev/null`), and the read-only checkers judge the real destination of
+  such a command: the digits of `N<` are the descriptor, not an argument.
 
 ## [0.12.0] - 2026-11-09
 
