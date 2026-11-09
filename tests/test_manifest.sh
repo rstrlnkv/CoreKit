@@ -104,6 +104,10 @@ check_retrust() {
     || fail "$2, section [$want_ver]: the Codex hooks changed in it, but it does not say \"again in \`/hooks\`\""
 }
 
+# one description of the repo: README.md line 3 is the marketplace's top-level description
+# (the GitHub repository description is set to the same text by hand: gh repo edit --description)
+assert_eq "$(sed -n 3p "$ROOT/README.md")" "$(market_desc corekit)" "README.md line 3 vs the marketplace.json description"
+
 plugins=""
 for d in "$ROOT"/plugins/*/; do plugins="$plugins $(basename "$d")"; done
 for pl in $plugins; do

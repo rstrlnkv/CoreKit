@@ -1,6 +1,6 @@
 # CoreKit
 
-Three independent plugins for Claude Code and the Codex CLI. Install one, two or all three.
+Three plugins for Claude Code and Codex: a project workflow (corecrew), a model and effort picker (coremodel) and a second opinion from GPT (coreopinion).
 
 | Plugin | What you get | Hosts |
 |---|---|---|
