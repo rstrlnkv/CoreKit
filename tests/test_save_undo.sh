@@ -272,6 +272,43 @@ if [ "$(id -u)" != 0 ]; then
   rm -f "$C/ro.txt"
 fi
 
+# A missing code pre-commit shim and a read-only hooks folder: install-hooks cannot write it, so save
+# stops with corecrew lines, "nothing saved" and no raw shell error; nothing is committed and the files
+# stay. In Codex .git is read-only too: save then gives its Codex hint first. With the shims in place a
+# read-only hooks folder does not matter (save does not call install-hooks): the step is saved.
+if [ "$(id -u)" != 0 ]; then
+  echo "hk" > "$C/hk.txt"; echo "hk" >> "$P/docs/brief.md"; nc=$(commit_count "$C"); nd=$(commit_count "$CORE_DIR")
+  rm -f "$C/.git/hooks/pre-commit"
+  before=$(snap_tree "$C" "$CORE_DIR")
+  chmod a-w "$C/.git/hooks"
+  (cd "$C" && bash "$SAVE" "Read-only hooks") > "$SANDBOX/out" 2>&1; rc=$?
+  chmod u+w "$C/.git/hooks"
+  assert_eq "$rc" "1" "save with a read-only hooks folder: $(cat "$SANDBOX/out")"
+  assert_contains "$SANDBOX/out" "nothing saved"; assert_not_contains "$SANDBOX/out" "Permission denied"
+  assert_eq "$(commit_count "$C")" "$nc" "code commit made with no hook shims"
+  assert_eq "$(commit_count "$CORE_DIR")" "$nd" "Core commit made with no hook shims"
+  assert_eq "$(snap_tree "$C" "$CORE_DIR")" "$before" "a refused save changed a tree"
+  # Codex: the git folder is read-only as well
+  chmod a-w "$C/.git/hooks" "$C/.git"
+  (cd "$C" && bash "$SAVE" "Read-only git and hooks") > "$SANDBOX/out" 2>&1; rc=$?
+  chmod u+w "$C/.git" "$C/.git/hooks"
+  assert_eq "$rc" "1" "save with a read-only .git and hooks folder: $(cat "$SANDBOX/out")"
+  assert_contains "$SANDBOX/out" "in Codex allow the commit when asked"
+  assert_contains "$SANDBOX/out" "nothing saved"; assert_not_contains "$SANDBOX/out" "Permission denied"
+  assert_eq "$(commit_count "$C")" "$nc"; assert_eq "$(commit_count "$CORE_DIR")" "$nd"
+  assert_eq "$(snap_tree "$C" "$CORE_DIR")" "$before" "a refused save changed a tree"
+  # the shims back in place, the hooks folder read-only: the step is saved
+  bash "$SCRIPTS/install-hooks.sh" "$P" >/dev/null 2>&1
+  assert_file "$C/.git/hooks/pre-commit"
+  chmod a-w "$C/.git/hooks"
+  (cd "$C" && bash "$SAVE" "Read-only hooks, shims in place") > "$SANDBOX/out" 2>&1; rc=$?
+  chmod u+w "$C/.git/hooks"
+  assert_eq "$rc" "0" "save with the shims in place and a read-only hooks folder: $(cat "$SANDBOX/out")"
+  assert_eq "$(commit_count "$C")" "$((nc+1))"; assert_eq "$(commit_count "$CORE_DIR")" "$((nd+1))"
+else
+  skip "save with a read-only hooks folder" "running as root"
+fi
+
 # core.hooksPath set by another tool (husky, lefthook): corecrew cannot install its shims there, so save
 # still commits and says on stderr that the hooks are not installed (it does not fail every time)
 mkdir -p "$C/.husky"; git -C "$C" config core.hooksPath .husky

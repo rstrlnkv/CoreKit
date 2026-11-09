@@ -48,15 +48,20 @@ for f in pre-commit-code pre-push-code pre-push-core blocked-patterns allowed-pa
   [ -f "$SRC/$f" ] || { echo "corecrew: hook source $SRC/$f is missing; hooks not installed." >&2; exit 1; }
 done
 
-install_shim() {  # install_shim <name in tools/git-hooks> <dest hook path>
+# install_shim <name in tools/git-hooks> <dest hook path> — writes the shim through a temp file. When the
+# folder cannot be made or written, one corecrew line names the hook (not a raw shell error) and it
+# returns 1.
+install_shim() {
   local dest="$2" target="$TOOLS/git-hooks/$1"
   if [ -e "$dest" ] && ! grep -qF -e "$MARK" -e "$OLD_MARK" -e "$OLD_SHIM" "$dest"; then
     echo "WARN: $dest exists and is not a corecrew hook; left unchanged" >&2; return 0
   fi
-  mkdir -p "$(dirname "$dest")" || return 1
+  mkdir -p "$(dirname "$dest")" 2>/dev/null || {
+    echo "corecrew: could not write $dest; hooks not installed." >&2; return 1; }
   # Single-quote the paths inside the shim (a ' in a path is written as '\'').
   local qt qd
   qt=$(printf '%s' "$target" | sed "s/'/'\\\\''/g"); qd=$(printf '%s' "$dest" | sed "s/'/'\\\\''/g")
+  # 2>/dev/null comes before the redirect: else bash prints its own error when it cannot open the file
   {
     echo '#!/bin/sh'
     echo "$MARK"
@@ -64,7 +69,8 @@ install_shim() {  # install_shim <name in tools/git-hooks> <dest hook path>
     echo "H='$qd'"
     echo '[ -f "$T" ] || { echo "corecrew: $T is missing. Start a '"$HOST_NAME"' session with corecrew enabled, or remove this hook: rm \"$H\"" >&2; exit 1; }'
     echo 'exec bash "$T" "$@"'
-  } > "$dest.tmp.$$" && chmod +x "$dest.tmp.$$" && mv "$dest.tmp.$$" "$dest"
+  } 2>/dev/null > "$dest.tmp.$$" && chmod +x "$dest.tmp.$$" 2>/dev/null && mv "$dest.tmp.$$" "$dest" 2>/dev/null || {
+    rm -f "$dest.tmp.$$"; echo "corecrew: could not write $dest; hooks not installed." >&2; return 1; }
 }
 
 # The code folder comes from lib.sh (a folder beside the Core, else <Core>/<name>/code).

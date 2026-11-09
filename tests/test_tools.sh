@@ -321,4 +321,37 @@ assert_eq "$(grep -c 'refs/heads/main' "$SANDBOX/ihc seen" 2>/dev/null)" "1" "th
 echo x > "$C/CLAUDE.md"; git -C "$C" add -f CLAUDE.md; git -C "$C" commit -q --no-verify -m "add CLAUDE.md"
 git -C "$C" push -q "$SANDBOX/ihc remote.git" HEAD:refs/heads/main >/dev/null 2>&1 && fail "the chained line did not block a push of CLAUDE.md" || pass
 git -C "$C" config --unset core.hooksPath
+
+# 7. A hooks folder git cannot write: exit 1, one corecrew line that names the folder and no raw shell
+#    error, no temp file, the user's own hook there left as it was. The same when the hooks folder is
+#    missing and the git folder cannot be written (mkdir fails). Skipped as root (it can write anyway).
+# ro_refused <label> <hooks folder> — checks install-hooks' output in $OUT for that refusal
+ro_refused() {
+  assert_eq "$(echo "$OUT" | grep -c '^corecrew:')" "1" "$1: not exactly one corecrew line: $OUT"
+  echo "$OUT" | grep -qF "$2" && pass || fail "$1: the message does not name $2: $OUT"
+  assert_eq "$(echo "$OUT" | grep -c 'Permission denied')" "0" "$1: a raw shell error: $OUT"
+  echo "$OUT" | grep -qF "hooks installed" && fail "$1: claims success: $OUT" || pass
+}
+if [ "$(id -u)" != 0 ]; then
+  scaffold_old ihro; P="$CORE_DIR/ihro"; C="$P/code"; CH="$CORE_DIR/.git/hooks"
+  rm -f "$CH/pre-push"; printf '#!/bin/sh\necho mine\n' > "$CH/pre-commit"; chmod +x "$CH/pre-commit"
+  chmod a-w "$CH"
+  assert_exit 1 bash "$IH" "$P"
+  chmod u+w "$CH"
+  ro_refused "read-only Core hooks" "$CH"
+  assert_eq "$(cat "$CH/pre-commit")" "$(printf '#!/bin/sh\necho mine')" "the user's own Core hook changed"
+  assert_no_file "$CH/pre-push"
+  assert_eq "$(ls -A "$CH" | grep -c '\.tmp\.')" "0" "a temp file was left in $CH"
+  rm -f "$CH/pre-commit"
+  rm -rf "$C/.git/hooks"; chmod a-w "$C/.git"
+  assert_exit 1 bash "$IH" "$P"
+  chmod u+w "$C/.git"
+  ro_refused "no hooks folder, read-only .git" "$C/.git/hooks"
+  assert_no_file "$C/.git/hooks"
+  # the legitimate run after the cause is gone installs both repos' shims
+  assert_exit 0 bash "$IH" "$P"
+  assert_contains "$C/.git/hooks/pre-commit" "# corecrew hook shim"; assert_contains "$CH/pre-push" "# corecrew hook shim"
+else
+  skip "install-hooks read-only hooks folder" "running as root"
+fi
 finish

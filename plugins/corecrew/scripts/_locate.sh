@@ -1,4 +1,5 @@
-# Shared by save and undo-step: locate repos from the current directory.
+# Shared by save and undo-step: locate repos from the current directory (locate), and check that a
+# repo can commit before anything changes (can_commit).
 # Sets: CODE (code repo or worktree toplevel), MAIN (main code checkout), PROJECT (<Core>/<name>),
 # NAME, CORE, CORE_PATHS. Two layouts: old (<Core>/<name>/code) and new (<Projects>/<Name> beside
 # the Core, with a CLAUDE.local.md symlink to <Core>/<name>/CLAUDE.md).
@@ -74,4 +75,26 @@ core_paths() {
     fi
   done
   printf '%s\n' "$out"
+}
+
+# can_commit <repo> <tool> <what was not done> — exit 0 when git can commit in <repo>: a readable repo, a
+# writable git folder, no index.lock, a git identity. Else one line on stderr, "<tool>: <cause>; <what
+# was not done>.", and exit 1. save and undo-step call it before their first commit, so a step is not
+# left half saved or half undone for a reason known in advance. With CDPATH set, cd can print the folder
+# it went to; the cd here ignores CDPATH and prints nothing.
+can_commit() {
+  local r="$1" tool="$2" what="$3" gd common
+  gd=$(git -C "$r" rev-parse --absolute-git-dir 2>/dev/null) &&
+    common=$(cd "$r" && CDPATH='' cd -- "$(git rev-parse --git-common-dir)" >/dev/null && pwd) || {
+    echo "$tool: $r is not a readable git repo; $what." >&2; return 1; }
+  if [ ! -w "$gd" ] || [ ! -w "$common" ] || [ ! -w "$common/objects" ]; then
+    echo "$tool: git could not write $r/.git (read-only? in Codex allow the commit when asked); $what." >&2; return 1
+  fi
+  if [ -e "$gd/index.lock" ]; then
+    echo "$tool: $gd/index.lock exists: another git command is running in $r, or one crashed. Wait for it, or remove that file if no git command is running; $what." >&2
+    return 1
+  fi
+  if ! git -C "$r" var GIT_AUTHOR_IDENT >/dev/null 2>&1 || ! git -C "$r" var GIT_COMMITTER_IDENT >/dev/null 2>&1; then
+    echo "$tool: git has no user identity in $r (set user.name and user.email); $what." >&2; return 1
+  fi
 }

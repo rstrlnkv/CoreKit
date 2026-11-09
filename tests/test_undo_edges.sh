@@ -208,4 +208,45 @@ git -C "$C" log --format=%B | grep -q "^Undo-Of: $X" && fail "code half-undone" 
 assert_eq "$(git -C "$C" status --porcelain)" "" "code left dirty"
 assert_eq "$(git -C "$CORE_DIR" status --porcelain -- cf-app)" "" "docs left dirty"
 
+# failure path: a commit the undo makes fails (a refusing pre-commit hook in the Core, no git identity
+# in the Core, a stale Core index.lock). undo-step exits 1, says nothing was changed, and leaves both
+# repos as they were: files, HEADs, no revert in progress. With the cause gone, a plain undo-step
+# undoes the step in both repos.
+new_sandbox; setup_core; sync_tools; scaffold_old fc-app; P="$CORE_DIR/fc-app"; C="$P/code"
+cd "$C" || exit 1
+bash "$SAVE" init >/dev/null 2>&1
+git -C "$C" config user.name tester; git -C "$C" config user.email tester@example.com
+echo one > "$C/fc.txt"; echo one > "$P/docs/fc.md"; bash "$SAVE" "fc step" >/dev/null 2>&1
+FC=$(step_id "$C")
+assert_eq "$(step_id "$CORE_DIR")" "$FC" "the step has no Core commit"
+heads() { git -C "$C" rev-parse HEAD; git -C "$CORE_DIR" rev-parse HEAD; }
+# undo_fails <label> <cmd...> — undo-step run through cmd fails and changes nothing
+undo_fails() {
+  local label="$1" before h; shift
+  before=$(snap_tree "$C" "$CORE_DIR"); h=$(heads)
+  assert_exit 1 "$@" bash "$UNDO"
+  echo "$OUT" | grep -q 'reverted' && fail "$label: undo-step said it reverted: $OUT" || pass
+  echo "$OUT" | grep -qi 'nothing was changed' && pass || fail "$label: no 'nothing was changed': $OUT"
+  assert_eq "$(heads)" "$h" "$label: a HEAD moved"
+  assert_eq "$(snap_tree "$C" "$CORE_DIR")" "$before" "$label: a failed undo changed the repos"
+  no_revert_left
+}
+HOOK="$CORE_DIR/.git/hooks/pre-commit"
+printf '#!/bin/sh\nexit 1\n' > "$HOOK"; chmod +x "$HOOK"
+undo_fails "pre-commit hook" env
+rm -f "$HOOK"
+git -C "$CORE_DIR" config user.useConfigOnly true
+undo_fails "no Core identity" env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL
+echo "$OUT" | grep -q 'identity' && pass || fail "no identity cause: $OUT"
+git -C "$CORE_DIR" config --unset user.useConfigOnly
+: > "$CORE_DIR/.git/index.lock"
+undo_fails "Core index.lock" env
+echo "$OUT" | grep -q 'index.lock' && pass || fail "no index.lock cause: $OUT"
+rm -f "$CORE_DIR/.git/index.lock"
+assert_exit 0 bash "$UNDO"
+assert_no_file "$C/fc.txt"; assert_no_file "$P/docs/fc.md"
+git -C "$C" log -1 --format=%B | grep -qxF "Undo-Of: $FC" && pass || fail "the code step was not undone"
+git -C "$CORE_DIR" log -1 --format=%B | grep -qxF "Undo-Of: $FC" && pass || fail "the docs step was not undone"
+no_revert_left
+
 finish
