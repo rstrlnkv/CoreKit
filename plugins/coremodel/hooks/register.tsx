@@ -438,10 +438,10 @@ async function keptPrompt($: EngineInterface, named: boolean): Promise<void> {
 
 /** An applied switch: the session counts and a row in the transcript. */
 async function applied($: EngineInterface, change: Mark): Promise<void> {
-  const modelTo = change.model ?? null
+  const modelTo = change.model
   const levelTo = change.level
   await count($, s => {
-    const models = { ...NO_STATS.models!, ...s.models }
+    const models = { ...s.models }
     if (modelTo) models[modelTo] += 1
     const picks = levelTo ? { ...s.picks, [levelTo]: s.picks[levelTo] + 1 } : s.picks
     const last = s.last ? { ...s.last, level: levelTo ?? s.last.level, ...(modelTo ? { model: modelTo } : { model: undefined }) } : s.last
@@ -827,7 +827,7 @@ export const register: Register = (on, options) => {
     // The session in one line: models, then efforts, then the prompts left as they were.
     const sessionLine = s
       ? [
-          ...(pickOn && s.models ? LADDER.filter(m => s.models![m] > 0).map(m => `${MODELS[m].name} ${s.models![m]}`) : []),
+          ...(pickOn ? LADDER.filter(m => s.models[m] > 0).map(m => `${MODELS[m].name} ${s.models[m]}`) : []),
           ...LEVELS.filter(l => s.picks[l] > 0).map(l => `${t.levelName(l)} ${s.picks[l]}`),
           ...(s.kept > 0 ? [t.unchanged(s.kept)] : []),
         ].join(' · ')

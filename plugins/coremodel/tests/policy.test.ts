@@ -45,6 +45,20 @@ test('policy has no language-by-text rule', () => {
   expect('uiLang' in policy).toBe(false)
 })
 
+/** Every key of a locale with the type of its value, nested objects by path: `level.low string`. */
+function shape(x: object, at = ''): string[] {
+  return Object.entries(x).flatMap(([k, v]) =>
+    v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype ? shape(v, `${at}${k}.`) : [`${at}${k} ${typeof v}`],
+  )
+}
+
+test('every locale has exactly the keys of en, with the same value types', () => {
+  const en = shape(texts('en'))
+  const ru = shape(texts('ru'))
+  // Each list names the keys one locale has and the other lacks, so a failure says which key.
+  expect({ missing: en.filter(k => !ru.includes(k)), extra: ru.filter(k => !en.includes(k)) }).toEqual({ missing: [], extra: [] })
+})
+
 test('texts name the level in each language', () => {
   expect(texts('en').levelOption('high', true)).toBe('High (recommended)')
   expect(texts('ru').levelOption('high', true)).toBe('Высокое (советую)')

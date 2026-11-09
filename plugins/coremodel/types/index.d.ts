@@ -1,3 +1,5 @@
+// The plugin's type contract ("types" in plugin.json): its state and words. The host API types are
+// written by Claude Code into .claude-plugin/types/ and are not tracked.
 export type Level = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 /** The models CoreModel picks from, weakest to strongest. */
@@ -15,9 +17,9 @@ export type Band = {
   why: string
   /** The language of the words when the band was made; an older band keeps its own. */
   lang: 'ru' | 'en'
-  /** The model the switch moved to, and from; absent when the model did not change. */
-  model?: ModelKey | null
-  fromModel?: ModelKey | ''
+  /** The model the switch moved to, and from; null when the model did not change. */
+  model: ModelKey | null
+  fromModel: ModelKey | ''
   /** What the undo button restores per part: a level or model to hold, or 'release'; null: no button. */
   undo: { level?: Level | 'release'; model?: ModelKey | 'release' } | null
   /** A suggestion: `model` and `level` are what it offers (null: that part stays); Switch holds them. */
@@ -25,7 +27,7 @@ export type Band = {
 }
 
 /** One switch, drawn as a row in the transcript. */
-export type Mark = { level: Level | null; from: Level | ''; model?: ModelKey | null; fromModel?: ModelKey | ''; why: string; lang: 'ru' | 'en' }
+export type Mark = { level: Level | null; from: Level | ''; model: ModelKey | null; fromModel: ModelKey | ''; why: string; lang: 'ru' | 'en' }
 
 /** What this session's picks came to. */
 export type Stats = {
@@ -35,8 +37,8 @@ export type Stats = {
   kept: number
   /** The last readable pick. */
   last: { level: Level; why: string; model?: ModelKey; /** The person kept what they had. */ declined?: boolean } | null
-  /** Readable picks per model; absent in counts stored before 0.4.0. */
-  models?: Record<ModelKey, number>
+  /** Readable picks per model. */
+  models: Record<ModelKey, number>
   /** How many marks were placed; the next mark's id is `mark-<marks + 1>`. */
   marks: number
 }
