@@ -11,21 +11,21 @@
 #              (checks only "add 2 2" -> 4), one commit; .gitignore, .claude/settings.local.json,
 #              .worktreeinclude, and CLAUDE.local.md, a symlink to the private CLAUDE.md.
 # The git hook shims are installed and the Core gets one commit, "Add test-coredev fixture".
-# Usage: bash make-test-coredev.sh <core_dir>
+# Usage: bash scripts/make-test-coredev.sh <core_dir>
 # Output: "created ..." lines; the last line is the path of the code folder (<Projects>/test-coredev).
 # Exit:   0 built; 1 a step failed (or git does not know who you are); 2 refused, nothing changed
 #         (no argument, the Core is not set up, or <core_dir>/test-coredev or
 #         <Projects>/test-coredev already exists).
 # Only test-coredev/ in both places and the line in PROJECTS.md are written; the rest is left alone.
 set -u
-ROOT_DIR="$(cd "$(dirname "$0")/../../plugins/corecrew" && pwd)"   # the corecrew plugin
+ROOT_DIR="$(cd "$(dirname "$0")/../plugins/corecrew" && pwd)"   # the corecrew plugin
 TPL="$ROOT_DIR/skills/new-project/templates"
 . "$ROOT_DIR/scripts/lib.sh"
 
 refuse() { echo "make-test-coredev: $1" >&2; exit 2; }
 die() { echo "make-test-coredev: $1" >&2; exit 1; }
 
-[ $# -eq 1 ] && [ -n "$1" ] || refuse "usage: make-test-coredev.sh <core_dir>"
+[ $# -eq 1 ] && [ -n "$1" ] || refuse "usage: bash scripts/make-test-coredev.sh <core_dir>"
 CORE_DIR="$1"
 load_settings
 NAME="test-coredev"

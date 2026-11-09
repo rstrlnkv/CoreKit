@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# tests/fixtures/make-test-coredev.sh: the hand-made end-to-end project.
+# scripts/make-test-coredev.sh: the repo tool that builds the hand-made end-to-end project test-coredev.
 source "$(dirname "$0")/lib.sh"
-B="$ROOT/tests/fixtures/make-test-coredev.sh"
+B="$ROOT/scripts/make-test-coredev.sh"
 WC="$SCRIPTS/wiki-check.sh"
 
 # state <dir> — everything a refusal must not change: files, HEAD, status
@@ -78,6 +78,7 @@ assert_exit 2 bash "$B" "$CORE_DIR"
 assert_no_file "$CORE_DIR"
 new_sandbox; setup_core
 assert_exit 2 bash "$B"       # no argument
+echo "$OUT" | grep -qF "usage: bash scripts/make-test-coredev.sh <core_dir>" && pass || fail "usage names the old path: $OUT"
 assert_no_file "$CORE_DIR/test-coredev"
 assert_no_file "$SANDBOX/Projects/test-coredev"
 
