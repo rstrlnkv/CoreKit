@@ -71,8 +71,8 @@
 #   (timeout 5, nice -n 5, sudo -u root, env -u X, stdbuf -o0). zip -x/-i patterns are not files.
 #   Documented limits, not redesigned: a relative target after cd, xargs, find -exec, bash -c "...", and the
 #   guard being inert outside a project cwd.
-#   The tokenizer is one linear awk pass (scripts/bash-lex.awk, shared with the read-only rule of guard-code;
-#   guard-code's own write check has a reader of its own). After a cd the name
+#   The tokenizer is one linear awk pass (scripts/bash-lex.awk, shared with both readers of guard-code: its write
+#   check and the read-only rule). After a cd the name
 #   rule still applies (cd .. && cat .env is blocked) but a relative ~/.ssh is unknown. Not caught: git
 #   (git add .env is not a read; git show HEAD:.env is), output redirects, ls, a recursive grep over a
 #   folder, variables other than a leading $HOME, sh -c "...", scripts, a link with an innocent name.

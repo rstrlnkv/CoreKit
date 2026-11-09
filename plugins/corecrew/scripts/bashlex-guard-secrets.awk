@@ -9,7 +9,7 @@
 # Also prints "X\tnomore" or "X\tcap" when reading stopped early (a <<"WORD" inside "$(...)", or more than
 # CAP candidates): the caller does not trust the rest and fails closed.
 # Command substitutions inside double quotes ("$(cat .env)", backticks) are lexed as command lines of their
-# own, once the main pass is done (on_subst -> enqueue in bash-lex.awk).
+# own, once the main pass is done (on_subst -> subst_queue in bash-lex.awk).
 # Judged: the arguments of the commands in RD, and the word after an input redirect (< file). Not
 # judged: output redirects, commands that do not read (ls, rm, git, echo, ...), quoted text.
 BEGIN {
@@ -49,28 +49,8 @@ END {
   if (nomore) print "X\tnomore"
   else if (capped) print "X\tcap"
 }
-# on_subst(w) — w has a $(...) or backtick substitution from inside double quotes: each body is queued as a
-# command line (an unbalanced $( takes the rest of the word)
-function on_subst(w,   n, p, c, depth, st, q) {
-  n = length(w); p = 1
-  while (p <= n) {
-    c = substr(w, p, 1)
-    if (c == "$" && substr(w, p + 1, 1) == "(") {
-      st = p + 2; depth = 1; p = st
-      while (p <= n && depth > 0) {
-        c = substr(w, p, 1)
-        if (c == "(") depth++
-        else if (c == ")") depth--
-        p++
-      }
-      enqueue(depth == 0 ? substr(w, st, p - 1 - st) : substr(w, st))
-    } else if (c == "`") {
-      q = index(substr(w, p + 1), "`")
-      if (q == 0) { enqueue(substr(w, p + 1)); p = n + 1 }
-      else { enqueue(substr(w, p + 1, q - 1)); p += q + 1 }
-    } else p++
-  }
-}
+# on_subst(w) — a $(...) or backtick body inside double quotes is queued as a command line (bash-lex.awk)
+function on_subst(w) { subst_queue(w) }
 function classify(b) {
   if (b == "cd" || b == "pushd" || b == "popd") cdseen = 1
   return (b in RD) ? b : "?"

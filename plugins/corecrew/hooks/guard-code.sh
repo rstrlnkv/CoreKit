@@ -58,8 +58,9 @@
 #   corecrew:* nor the bare checker names (a Codex crew is started by text; task 4 adds a git status check).
 #   Limit: write_stdin into an open exec session: no evidence that it runs the hook (to be checked live).
 # - Bash: a plain reading for honest mistakes (SECURITY.md, "Threat model": the host's permissions and the git pre-commit
-#   and pre-push hooks are the boundary; deliberate evasion is out of scope). scripts/bashlex-guard-code.awk reads words,
-#   quotes, comments, heredoc bodies and separators, and prints the write targets: > >> >| &> >&file <>, tee, touch, mkdir, install
+#   and pre-push hooks are the boundary; deliberate evasion is out of scope). scripts/bashlex-guard-code.awk, on the shared
+#   tokenizer scripts/bash-lex.awk, reads words, quotes, comments, heredoc bodies and separators, and prints the write
+#   targets: > >> >| &> >&file <>, tee, touch, mkdir, install
 #   (-d makes dirs), cp, mv and git mv (the destination; a destination directory also gets the sources' names), ln (a
 #   CLAUDE.local.md or AGENTS.md at the code root that links a file in the Core, not in a code folder, passes: session
 #   start asks for that link; a relative source is read from the cwd; a source made at run time, such as
@@ -68,7 +69,8 @@
 #   -i .bak or -i '', is no file). mkdir follows the same rules as a write except the bare ".claude" dir, which holds
 #   settings.local.json.
 #   A target is judged by check_path below, like a file tool's path. Wrappers (sudo -u x, timeout 5, nice -n 5,
-#   env, if, do, ...) and VAR=value prefixes are skipped. A heredoc inside "$(...)" (the commit-message idiom) has its
+#   stdbuf -o L, env, if, do, ...) and VAR=value prefixes are skipped, with the values of the wrapper options the
+#   tokenizer's table lists. A heredoc inside "$(...)" (the commit-message idiom) has its
 #   body skipped. The first 100 distinct targets are judged; past that only the targets whose text names docs, .claude,
 #   CLAUDE.md, CLAUDE.local.md or AGENTS.md. More than 100 such targets past the first 100 refuse the whole command
 #   (guard_code_too_many) when the cwd or a target is in scope: judging them all would outlast the hook timeout. A link
@@ -81,7 +83,7 @@
 #   `cd -P /x`, `ls; cd /x`); a target with $ ` * ? [ { (variables,
 #   $(...), globs, braces); a command line handed to another shell (bash -c, sh -c, eval) or a script file; xargs,
 #   find -exec, interpreters (python -c, node -e); git -C <dir> mv; other writers (rsync, dd of=, tar -C, curl -o);
-#   a wrapper option whose value is not skipped (only -u -g -n -s -k -C -c take one: stdbuf -o L tee); past 100
+#   a wrapper option the tokenizer's table does not list (its value is read as the command); past 100
 #   targets, a target that reaches docs/ only through a link; the file-target judging outside a project.
 # - Inert outside a project (<Core>/<project>/
 #   or its code folder beside the Core): a target and a cwd that are not in a project pass (exit 0).
@@ -314,7 +316,10 @@ case "$cmd" in *">"*|*tee*|*touch*|*mkdir*|*cp*|*mv*|*ln*|*install*|*sed*|*perl*
 # (see scripts/bashlex-guard-code.awk).
 # tr's stderr is dropped: the reader stops early when it is missing or has too many targets (C), and with SIGPIPE
 # ignored tr would then print "write error: Broken pipe" to the user.
-targets="$({ printf '%s' "$cmd"; } 2>/dev/null | LC_ALL=C tr '\n\r' '\002 ' 2>/dev/null | LC_ALL=C awk -f "$SELF/scripts/bashlex-guard-code.awk" 2>/dev/null)"
+# Spaces become \004 when the command has no \004 byte: the tokenizer then reads a plain word whole (bash-lex.awk, Speed).
+sp=' '; lexsp=0; eot="$(printf '\004')"; case "$cmd" in *"$eot"*) ;; *) sp="$eot"; lexsp=1 ;; esac
+targets="$({ printf '%s' "$cmd"; } 2>/dev/null | LC_ALL=C tr '\n\r ' "$(printf '\002')$sp$sp" 2>/dev/null \
+  | LC_ALL=C awk -v lexsp="$lexsp" -f "$SELF/scripts/bash-lex.awk" -f "$SELF/scripts/bashlex-guard-code.awk" 2>/dev/null)"
 [ -n "$targets" ] || exit 0
 NL='
 '

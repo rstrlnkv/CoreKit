@@ -115,6 +115,8 @@ allowed $V "sed -n 1,5p src/a.txt"
 allowed $V "npm test > $TMPD/ro-log.txt 2>&1"
 allowed $V "swift test 2>&1 | tee /tmp/ro-log.txt"
 allowed $V "cp src/a.txt $TMPD/copy.txt"
+allowed $V "cp src/a.txt $TMPD/copy.txt 0</dev/null"   # 0< is a descriptor: the destination is still the last word
+allowed $V 'cat src/a.txt 2>&1<src/a.txt'
 allowed $V "rm -f /tmp/ro-log.txt"
 allowed $V 'ls > /dev/null 2>&1'
 allowed $V 'echo x > "$TMPDIR/log.txt"'   # a target with a variable is not judged (fails open)
