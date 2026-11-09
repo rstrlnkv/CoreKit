@@ -154,10 +154,10 @@ assert_not_contains "$PLUGIN/hooks/guard-code.sh" "so the hook and the commit ch
 # the network detail lives in the plugin READMEs; SECURITY.md only links them, so no copy can drift
 for w in 'gh run' 'gh auth status' 'api.github.com'; do assert_not_contains "$ROOT/SECURITY.md" "$w"; done
 # the forbidden bash constructs are listed once, in tests/test_portability.sh: CONTRIBUTING.md and the PR
-# template keep the principle and point there instead of copying the list
+# template keep the principle and point there instead of copying the list ([P]: test_portability.sh scans this file)
 for f in CONTRIBUTING.md .github/pull_request_template.md; do
   assert_contains "$ROOT/$f" 'tests/test_portability.sh'
-  LC_ALL=C grep -qE 'mapfile|readarray|grep -P|declare -A|local -n' "$ROOT/$f" \
+  LC_ALL=C grep -qE 'mapfile|readarray|grep -[P]|declare -[A]|local -[n]' "$ROOT/$f" \
     && fail "$f copies the forbidden constructs of tests/test_portability.sh" || pass
 done
 assert_contains "$ROOT/.github/pull_request_template.md" 'CONTRIBUTING.md'
