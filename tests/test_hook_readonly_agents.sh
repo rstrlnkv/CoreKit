@@ -116,6 +116,8 @@ allowed $V 'perl -Ilib -MList::Util -e 1'
 allowed $V 'perl -ne print src/a.txt && perl -e 1 -w src/a.txt && perl -eprint src/a.txt'
 allowed $V "perl -I /tmp -e 'print 1' && perl -ne 'print' src/a.txt && perl -wI /tmp -e 1"
 allowed $V 'truncate -s 0 /tmp/ro-a.txt'   # -s takes the size: the temp file is the target
+allowed $V 'truncate -cs 0 /tmp/ro-a.txt && truncate -c -s 0 /tmp/ro-a.txt && truncate -s0 /tmp/ro-a.txt'  # a group ending in s
+refused $V 'truncate -cs 0 src/a.txt'
 refused $V 'ln -s /tmp/ro-x /tmp/ro-l'     # ln keeps its own rule, -s or not
 allowed $V 'chmod -R u+w /tmp/d'
 allowed $V 'curl -s https://example.com && curl -o /tmp/f https://example.com/f && wget -qO- https://example.com'

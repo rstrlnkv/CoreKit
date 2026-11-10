@@ -215,7 +215,7 @@ function finalize(   k, a, dd, last, v, first, m, q, c) {
   for (k = 1; k <= na && !full; k++) {
     a = args[k]
     if (!dd && a == "--") { dd = 1; continue }
-    if (!dd && cmd == "truncate" && (a == "-s" || a == "--size")) { k++; continue }  # before the mode test: -s is a size
+    if (!dd && cmd == "truncate" && (a ~ /^-[A-Za-z]*s$/ || a == "--size")) { k++; continue }  # -s, -cs: the next word is a size
     if (!dd && substr(a, 1, 1) == "-" && a !~ /^-[rwxXst]+$/) continue
     if (first) { first = 0; continue }
     path(a)
