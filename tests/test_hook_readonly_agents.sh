@@ -106,6 +106,16 @@ allowed $V 'git config --get user.name && git config -l && git config user.name'
 allowed $V 'git -C /tmp/ro-clone checkout -b x'
 allowed $V 'git clone . /tmp/ro-copy'
 allowed $V 'perl -Ilib -MList::Util -e 1'
+# P9: perl reads switches after -e CODE, so any word before -- that holds an in-place switch is refused (a switch
+# word that takes the rest as a name, -I -M -m -x -d -D -C -F, is skipped); the code and the files are not read.
+for c in "perl -e s/a/b/ -pi src/a.txt" "perl -e 1 -i src/a.txt" "perl -0pi -e s/a/b/ src/a.txt" "perl -0777pi -e 1 src/a.txt" \
+         "perl -i.bak -pe 1 src/a.txt" "perl -wnl -i -e 1 src/a.txt" "perl -Ilib -pi -e 1 src/a.txt" "perl -E say -i src/a.txt"; do
+  refused $V "$c"
+done
+for c in 'perl -ne print src/a.txt' 'perl -lane 1 src/a.txt' 'perl -MList::Util=min -e 1' 'perl -Iinclude -e 1' \
+         'perl -x src/a.txt' 'perl -e 1 -- -i'; do
+  allowed $V "$c"
+done
 allowed $V 'chmod -R u+w /tmp/d'
 allowed $V 'curl -s https://example.com && curl -o /tmp/f https://example.com/f && wget -qO- https://example.com'
 allowed $V 'unzip -l /tmp/a.zip && tar tf /tmp/a.tar && tar xf /tmp/a.tar -C /tmp/x'
@@ -129,12 +139,14 @@ for c in 'rsync -a src/a.txt src/b.txt' 'truncate -s 0 src/a.txt' 'unlink src/a.
          'chmod 644 src/a.txt' 'chown me src/a.txt' 'dd if=/dev/zero of=src/a.txt' "g$SEDI s/a/b/ src/a.txt" 'patch -p1 src/a.txt /tmp/a.diff' \
          'rmdir src/x' 'install -m 644 /tmp/a src/a' 'pushd src && rm a.txt' 'popd && rm a.txt' 'mv /tmp/ro-a.txt src/e.txt' \
          'mv src/a.txt /tmp/ro-a.txt' 'touch -- -x' 'cp -- /tmp/a -x' 'ln /tmp/ro-x /tmp/ro-l' 'patch -p1 < /tmp/a.diff' \
-         'git branch --unset-upstream' 'chmod -x src/a.txt'; do
+         'git branch --unset-upstream' 'chmod -x src/a.txt' 'truncate -cs 0 src/a.txt' 'truncate -r /tmp/ro-a.txt src/a.txt' \
+         'truncate -s 0 -- src/a.txt' 'truncate --size=0 src/a.txt' 'truncate -s0 src/a.txt'; do
   refused $V "$c"
 done
 for c in 'rsync -a src/a.txt /tmp/ro-b.txt' 'truncate --size 0 /tmp/ro-a.txt' 'unlink /tmp/ro-a.txt' \
          'shred /tmp/ro-a.txt' 'chmod +x /tmp/ro-a.txt' 'chmod 644 /tmp/ro-a.txt' 'chown me /tmp/ro-a.txt' 'dd if=src/a.txt of=/tmp/ro-a.txt' \
-         'rmdir /tmp/ro-x' 'install -m 644 src/a.txt /tmp/ro-a' 'mv /tmp/ro-a.txt /tmp/ro-b.txt' 'pushd src && cat a.txt' 'gsed -n 1p src/a.txt'; do
+         'rmdir /tmp/ro-x' 'install -m 644 src/a.txt /tmp/ro-a' 'mv /tmp/ro-a.txt /tmp/ro-b.txt' 'pushd src && cat a.txt' 'gsed -n 1p src/a.txt' \
+         'truncate -s 0 /tmp/ro-a.txt' 'truncate -cs 0 /tmp/ro-a.txt' 'truncate -r src/a.txt /tmp/ro-a.txt' 'truncate --size=0 /tmp/ro-a.txt'; do
   allowed $V "$c"
 done
 # after cd, pushd or popd a relative write is refused wherever the hook started, also in a temp folder

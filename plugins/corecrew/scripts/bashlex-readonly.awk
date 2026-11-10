@@ -121,11 +121,14 @@ function finalize(   k, a, dd, last, v, first, m, q, c) {
     return
   }
   if (cmd == "perl") {
+    # perl reads switches after -e CODE too, so every word before -- counts; the code, the script and the files
+    # are not read (a switch word in them is refused, the safe side). A word that starts with a switch taking the
+    # rest of the word as a name (-I -M -m -x -d -D -C -F) is skipped. Not seen: $^I in the code, #! switches.
     for (k = 1; k <= na; k++) {
       a = args[k]
-      if (a ~ /^-[eE]/) return                     # the code starts: no more options
-      if (a ~ /^-[MImx]/) continue                 # -MModule, -Ilib: their letters are names
-      if (a ~ /^-[A-Za-z]*i/) { out("X", "perl -i"); return }
+      if (a == "--") return
+      if (a !~ /^-[^-]/ || a ~ /^-[IMmxdDCF]/) continue
+      if (a ~ /i/) { out("X", "perl -i"); return }
     }
     return
   }
@@ -211,7 +214,10 @@ function finalize(   k, a, dd, last, v, first, m, q, c) {
   for (k = 1; k <= na && !full; k++) {
     a = args[k]
     if (!dd && a == "--") { dd = 1; continue }
-    if (!dd && substr(a, 1, 1) == "-" && a !~ /^-[rwxXst]+$/) { if (cmd == "truncate" && (a == "-s" || a == "--size")) k++; continue }
+    # truncate: -s SIZE and -r FILE take the next word (also at the end of a cluster: -cs, -cr); test it before
+    # the chmod mode pattern below, which -s and -r would match
+    if (!dd && cmd == "truncate" && substr(a, 1, 1) == "-" && a != "-") { if (a ~ /^-[a-z]*[sr]$/ || a == "--size" || a == "--reference") k++; continue }
+    if (!dd && substr(a, 1, 1) == "-" && a !~ /^-[rwxXst]+$/) continue
     if (first) { first = 0; continue }
     path(a)
   }

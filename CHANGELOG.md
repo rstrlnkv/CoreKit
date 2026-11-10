@@ -31,6 +31,11 @@ Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off
 - `reference/older-formats.md` and the upgrade guide `docs/migration-0.3.md` (from `coredev` 0.2 and
   `corekit` 0.1): upgrade with corecrew 0.15 first; its tag `corecrew-v0.15.0` keeps the guide.
 
+### Fixed
+- The read-only rule of the checker agents refuses `perl` with an in-place switch anywhere before
+  `--` (`perl -e CODE -pi file` edited the project unrefused), and lets `truncate -s 0` and
+  `truncate -r FILE` write a file in the temp folders (it read the size as a path and refused).
+
 ## [0.15.0] - 2026-11-10
 
 Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off until then.
