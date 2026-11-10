@@ -726,6 +726,17 @@ sec_writers() {
   sh 'printf x <&0>.claude/settings.json'; blocked "printf x <&0>.claude/settings.json" "$C/.claude/settings.json" "$CORE_DIR/p/.claude/settings.json"
   sh 'cat <<<3>docs/a.md';               blocked "cat <<<3>docs/a.md" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
   run_bash 'cat <<3>docs/a.md\nx\n3';    blocked "cat <<3>docs/a.md (heredoc delimiter 3)" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  # tokenizer rules on the write side, each with its twin that passes: a <<- heredoc ends at a TAB-indented delimiter
+  # and the command after it is judged; the word after <&3 is no redirect target, so cp's last word is the target; a
+  # redirect inside >( ) is judged; a CR right after the redirect operator is a blank
+  run_bash 'cat <<-EOF\n\tx\n\tEOF\necho x > docs/a'; blocked "a write after a <<- heredoc" "$C/docs/a" "$CORE_DIR/p/docs/a"
+  run_bash 'cat <<-EOF\n\tx\n\tEOF\necho x > src/a'; hook_ok "a write into src/ after a <<- heredoc"
+  sh 'cp <&3 src/a docs/b';              blocked "cp <&3 src/a docs/b" "$C/docs/b" "$CORE_DIR/p/docs/b"
+  sh 'cp <&3 src/a src/b';               hook_ok "cp <&3 src/a src/b"
+  sh 'tee >(cat > docs/a.md)';           blocked "tee >(cat > docs/a.md)" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  sh 'tee >(cat > src/a.md)';            hook_ok "tee >(cat > src/a.md)"
+  run_bash 'echo x >\rdocs/a.md';        blocked "a CR after the redirect operator" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+  run_bash 'echo x >\rsrc/a.md';         hook_ok "a CR after the redirect operator, into src/"
   # a command with a \004 byte of its own is read byte by byte (lexsp=0): still judged
   sh "echo x$(printf '\004')y > docs/a.md"; blocked "a command with a \\004 byte" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
   # a link source spelled with a variable is unknown: the link itself is still judged where it lands
