@@ -205,13 +205,9 @@ preconditions() {
   BASE="$(basename "$FROM")"
   if [ "$OLD" -eq 0 ]; then
     [ "$(dirname "$FROM")" = "$PROJECTS_DIR" ] || refuse "not in $PROJECTS_DIR: move the folder to $PROJECTS_DIR/$BASE first"
-    if [ -n "$NAME" ]; then
-      valid_project_name "$NAME" || refuse "invalid project name '$NAME' (rename the folder)"
-      [ "$(lc "$BASE")" = "$NAME" ] || refuse "name '$NAME' does not match the folder '$BASE': rename the folder to $PROJECTS_DIR/$NAME first"
-    else
-      NAME="$(lc "$BASE")"
-      valid_project_name "$NAME" || refuse "invalid project name '$NAME' (rename the folder)"
-    fi
+    [ -n "$NAME" ] || NAME="$(lc "$BASE")"
+    valid_project_name "$NAME" || refuse "invalid project name '$NAME' (rename the folder)"
+    [ "$(lc "$BASE")" = "$NAME" ] || refuse "name '$NAME' does not match the folder '$BASE': rename the folder to $PROJECTS_DIR/$NAME first"
   else
     { [ -z "$NAME" ] && [ -z "$PUBLIC" ] && [ -z "$CHECK" ]; } || refuse "old layout: only --purpose and --dry-run apply"
     NAME="$OLDNAME"
@@ -278,7 +274,7 @@ plan() {
   # files are in the Core already.
   TRACKED=""
   [ "$OLD" -eq 1 ] || TRACKED="$(git -C "$FROM" -c core.quotepath=false ls-files -- CLAUDE.md AGENTS.md docs .claude)"
-  COPY=""; PUBKEEP=""; RULES=""; KEPT=""; NCOPY=0; NPUB=0; NSTAY=0; NRULES=0
+  COPY=""; PUBKEEP=""; RULES=""; KEPT=""; NCOPY=0; NSTAY=0; NRULES=0
   REMOVE=()
   while IFS= read -r f; do
     [ -n "$f" ] || continue
@@ -294,7 +290,7 @@ plan() {
 " ;; esac ;;
         esac ;;
       public) PUBKEEP="$PUBKEEP$f
-"; NPUB=$((NPUB + 1)) ;;
+" ;;
       stay) NSTAY=$((NSTAY + 1)) ;;
     esac
   done <<< "$TRACKED"
