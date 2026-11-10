@@ -39,6 +39,20 @@ assert_not_contains "$PF" 'brew '
 HOME="$SANDBOX/Роман" assert_exit 0 bash "$PF"
 echo "$OUT" | grep -q '^WARN' && pass || fail "no ASCII warning"
 
+# a Core path with non-Latin letters under a Latin home -> WARN core-path only (the home check stays OK)
+CORE_DIR="$SANDBOX/Проекты/Core" assert_exit 0 bash "$PF"
+echo "$OUT" | grep -q '^WARN core-path ' && pass || fail "no core-path WARN: $OUT"
+echo "$OUT" | grep -qx 'OK home-path' && pass || fail "home-path is not OK with a Latin home: $OUT"
+# and with both paths Latin there is no path warning at all
+assert_exit 0 bash "$PF"
+echo "$OUT" | grep -qx 'OK core-path' && pass || fail "core-path is not OK with a Latin Core path: $OUT"
+
+# git missing -> FAIL with the install page (only that line and the exit code: later checks may differ without git)
+NOGIT="$(path_without git)"
+assert_eq "$(PATH="$NOGIT" command -v git)" "" "path_without git hides every git"
+PATH="$NOGIT" assert_exit 1 bash "$PF"
+echo "$OUT" | grep -q '^FAIL git .*https://git-scm.com/downloads' && pass || fail "no git FAIL with the install page: $OUT"
+
 # existing local folder -> FAIL
 mkdir -p "$CORE_DIR/taken-app"
 assert_exit 1 bash "$PF" --name taken-app
