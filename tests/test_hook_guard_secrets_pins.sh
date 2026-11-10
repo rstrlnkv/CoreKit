@@ -108,6 +108,20 @@ sec_lex() {
   # a quoted NAME=value word is a command word, an unquoted one is an assignment
   b 'X=1 cat .env' '.env'
   p '"X=1" cat .env'
+  # a quote or backslash after the = keeps the word an assignment; one before the = makes it a command word
+  b 'X="1" cat .env' '.env'
+  b "X='a' cat .env" '.env'
+  b 'X=a\ b cat .env' '.env'
+  b 'A=1 B="2" cat .env' '.env'
+  p 'X="cat .env" true'
+  p "'X'=1 cat .env"
+  p 'FOO="a b" cat .envrc'
+  p 'X=1 ls'
+  p 'FOO="a b" make test'
+  # a here-string inside "$(...)" is not a heredoc: the lines after it are judged
+  b "echo \"\$(cat <<<x)\"${NL}cat .env" '.env'
+  b "echo \"\$(cat<<<x)\"${NL}cat .env" '.env'
+  p "echo \"\$(cat <<<x)\"${NL}cat .envrc"
   # a wrapper option that takes a value, long and short
   b 'sudo --user root cat .env' '.env'
   b 'sudo -u root cat .env' '.env'

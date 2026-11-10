@@ -90,8 +90,8 @@ function skip_heredocs(   k, j, line, found) {
 }
 function endword(   w, qd, b, rw, x) {
   if (!inword) return
-  w = wbad ? longw : word; qd = hasq; x = wx
-  inword = 0; word = ""; wx = ""; hasq = 0; wl = 0; wbad = 0
+  w = wbad ? longw : word; qd = qpre; x = wx
+  inword = 0; word = ""; wx = ""; hasq = 0; qpre = 0; wl = 0; wbad = 0
   if (wsub) { wsub = 0; on_subst(x) }
   if (skip_next) { skip_next = 0; return }
   if (want_hd) { want_hd = 0; hdn++; hd[hdn] = w; hds[hdn] = hdstrip; return }
@@ -103,7 +103,7 @@ function endword(   w, qd, b, rw, x) {
   if (want_in) { want_in = 0; on_in(w); return }
   if (cmd == "") {
     if (wskip) { wskip = 0; return }   # the value of a wrapper option
-    if (!qd && w ~ /^[A-Za-z_][A-Za-z0-9_]*=/) return
+    if (!qd && w ~ /^[A-Za-z_][A-Za-z0-9_]*=/) return   # X=1, X="a b": a quote before the = ("X=1") makes a command word
     if (wrapped && substr(w, 1, 1) == "-") { wrapper_opt(w); return }
     if (wdur) { wdur = 0; return }   # timeout's duration
     b = base(w)
@@ -183,7 +183,7 @@ function subst_queue(w,   n, p, c, depth, st, q) {
 { buf = (NR == 1 ? "" : buf) $0 }
 function lex(text,   lxn, lxk, lxpos, lxw, lxl, lxc) {
   len = length(text); i = 1; lxc = 0
-  inword = 0; word = ""; wx = ""; hasq = 0; wl = 0; wbad = 0; hdn = 0; wsub = 0
+  inword = 0; word = ""; wx = ""; hasq = 0; qpre = 0; wl = 0; wbad = 0; hdn = 0; wsub = 0
   # LXW[k]: the k-th run between \004 blanks; LXS[position] = k for the first byte of each run
   split("", LXS); lxn = 0; lxpos = 1
   if (BL != "") lxn = split(text, LXW, BL)
@@ -210,18 +210,20 @@ function lex(text,   lxn, lxk, lxpos, lxw, lxl, lxc) {
     if (c == "\\") {
       if (i < len) {
         d = C[i + 1]; if (d == BL) d = " "
-        if (d != NL) { app(d, escx(d)); inword = 1; hasq = 1 }
+        if (d != NL) { if (!index(word, "=")) qpre = 1; app(d, escx(d)); inword = 1; hasq = 1 }
         i += 2
       } else i++
       continue
     }
     if (c == "\047") {
+      if (!index(word, "=")) qpre = 1
       inword = 1; hasq = 1; j = i + 1
       while (j <= len && C[j] != "\047") j++
       sq = seg(i + 1, j); sqx = sq; gsub(/[$`]/, "\003", sqx); app(sq, sqx)
       i = j + 1; continue
     }
     if (c == "\"") {
+      if (!index(word, "=")) qpre = 1
       inword = 1; hasq = 1; k = i + 1; j = k
       while (j <= len) {
         d = C[j]
@@ -230,6 +232,7 @@ function lex(text,   lxn, lxk, lxpos, lxw, lxl, lxc) {
         # a heredoc inside "$(...)": its body (up to the delimiter line) is skipped, so a stray quote
         # in it cannot flip the quoting. <<"WORD" ends this span early: stop judging (fail open).
         if (d == NL && hdn > 0) { app(seg(k, j)); i = j + 1; skip_heredocs(); j = i; k = j; continue }
+        if (d == "<" && C[j + 1] == "<" && C[j + 2] == "<") { j += 3; continue }   # <<<x: a here-string, no heredoc
         if (d == "<" && C[j + 1] == "<" && C[j + 2] != "<") {
           p = j + 2; st = 0
           if (C[p] == "-") { st = 1; p++ }
