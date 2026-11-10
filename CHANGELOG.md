@@ -83,13 +83,15 @@ sandbox profile again (`lib.sh codex-profile`) and paste the new fragment (see F
   append or array-element assignment prefix (`X="1" cat .env`, `X+=1 cat .env`,
   `X[0]="1" cat .env`) and after a here-string inside `"$(...)"`; before, the command was not
   judged and the call passed.
-- Read-only checkers can no longer edit project files with `perl -e CODE -pi file`, and
-  `truncate -s N` on a file under the temp folder is no longer refused.
 - Codex: the printed sandbox profile also lets sandboxed commands read the global git config
   files (`~/.gitconfig`, `~/.config/git/config`) and git's global ignore file, each file alone,
   the corecrew tools copy (`save`, `undo-step`) and the hooks marker. Before, git failed whenever a
   global git config existed, `save` failed with a raw `Operation not permitted`, and `prepare.sh`
   kept printing the trust and profile notes.
+- Codex: when git in the sandbox fails with `unable to access` on a file that `~/.gitconfig`
+  includes (`[include]` or `[includeIf]`), the profile comment, the Codex host reference and
+  SECURITY.md say what to do: add a `"<file>" = "read"` line under
+  `[permissions.corecrew.filesystem]` by hand and keep tokens out of that file.
 - Codex: under the corecrew sandbox profile, `lib.sh layout`, `lib.sh code-dir` and `save` find
   the project's code folder from the current folder when the folder that holds your projects
   cannot be listed. That folder stays closed.
