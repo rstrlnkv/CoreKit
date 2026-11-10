@@ -267,6 +267,10 @@ for k in $(printf '%s\n' "$step2" | grep -oE '`[A-Za-z_]+`' | tr -d '`' | sort -
     || fail "docs/migration-0.3.md Step 2 names \`$k\`, which is no userConfig key of corecrew or coremodel"
 done
 
+# Nothing only a contributor uses ships in a plugin: a plugin's tests live in tests/<plugin>/ at the repo root,
+# so an install does not carry them.
+for d in "$ROOT"/plugins/*/tests; do assert_no_file "$d"; done
+
 # trigger evals (claude plugin eval): every case has a prompt and a grader; the frontmatter
 # description is quoted (a bare ": " breaks the YAML); results stay out of git
 for pl in corecrew coreopinion; do
