@@ -129,8 +129,23 @@ code_dir_of() {
     printf 'two folders differ only in case: %s, %s\n' "$(basename "$found")" "$(basename "$second")" >&2
     return 3
   fi
+  [ $n -eq 0 ] && ! ls "$pd" >/dev/null 2>&1 && { _code_dir_from_cwd "$pd" "$1"; return; }
   [ $n -eq 1 ] || return 1
   printf '%s\n' "$found"
+}
+
+# _code_dir_from_cwd <Projects> <name> — for code_dir_of when <Projects> cannot be listed (the corecrew Codex profile
+# does not open it: it holds other projects' secrets): prints <Projects>/<b> when the cwd is that folder or below it,
+# lc <b> is <name> and it is a folder; else exit 1. No case-clash check: the other folders cannot be seen.
+_code_dir_from_cwd() {
+  local p rest b
+  for p in "$(pwd -P)" "${PWD:-}"; do
+    case "$p/" in "$1"/?*) ;; *) continue ;; esac
+    rest="${p#"$1"/}"; b="${rest%%/*}"
+    [ "$(lc "$b")" = "$2" ] && [ -d "$1/$b" ] && [ "$1/$b" != "$CORE_DIR" ] || continue
+    printf '%s\n' "$1/$b"; return 0
+  done
+  return 1
 }
 
 # layout_of <name> — prints "new" (code folder beside the Core) or "old" (<Core>/<name>/code); exit 1

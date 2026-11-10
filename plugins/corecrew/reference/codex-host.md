@@ -67,6 +67,12 @@ Inside the sandbox `prepare.sh` cannot refresh the tools copy: the line
 `corecrew: tools not refreshed: could not update ...` is expected there, go on. The trusted
 session-start hook and an approved `install-hooks.sh` refresh the copy.
 
+The corecrew sandbox profile lets sandboxed commands read the plugin folder, the tools copy
+(`<Codex home>/plugins/data/corecrew-<marketplace>/tools`), the settings file, the hooks marker
+and the global git config files. `Operation not permitted` on one of these (git's
+`unable to access '<home>/.gitconfig'` too) means the pasted profile is older: tell the user to
+print it again with `bash "<scripts>/lib.sh" codex-profile` and paste it over the old one.
+
 ## Questions
 Codex has no AskUserQuestion tool. Ask in plain chat instead: at most three questions in one message,
 each with numbered options, the recommended one marked, and a note that the user may answer in their

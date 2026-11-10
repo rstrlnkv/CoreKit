@@ -38,13 +38,21 @@ done
 miss="$(printf '%s\n' $miss | grep -vxE '\*\[tT\]oken\*|\*TOKEN\*|\*\[sS\]ecret\*|\*SECRET\*' | tr '\n' ' ' | sed 's/ $//')"
 set +f
 assert_eq "$miss" "" "every secret pattern of the review profile is denied, but the four broad token and secret globs"
-# --- corecrew's own files: one read line for the folder Codex keeps this marketplace's plugins in, one for the settings
-# file. Both sit in the filesystem table (before the workspace table), nothing else of the home is listed, nothing is writable.
+# --- corecrew's own files: one read line for the folder Codex keeps this marketplace's plugins in, one for the tools
+# copy, one for the settings file, one for the hooks marker, and the two global git config files (each file alone, not
+# its folder: ~/.config/git may hold a credentials file). All sit in the filesystem table (before the workspace table),
+# nothing else of the home is listed, nothing is writable.
 fs="$(awk '/^\[permissions\.corecrew\.filesystem\]$/{f=1; next} /^\[/{f=0} f' "$FRAG")"
 own="$(printf '%s\n' "$fs" | grep '^"/')"
 assert_eq "$own" "\"$CODEX_HOME/plugins/cache/corekit\" = \"read\"
-\"$XDG_CONFIG_HOME/corecrew/settings\" = \"read\"" "the two read lines: the marketplace's plugin folder and the settings file"
-assert_eq "$(grep -c '^"/' "$FRAG")" "2" "no other absolute path in the fragment"
+\"$CODEX_HOME/plugins/data/corecrew-corekit/tools\" = \"read\"
+\"$XDG_CONFIG_HOME/corecrew/settings\" = \"read\"
+\"$XDG_CONFIG_HOME/corecrew/state/hooks-seen-codex\" = \"read\"
+\"$HOME/.gitconfig\" = \"read\"
+\"$XDG_CONFIG_HOME/git/config\" = \"read\"" "the six read lines: plugin folder, tools copy, settings file, hooks marker, two git config files"
+assert_eq "$(grep -c '^"/' "$FRAG")" "6" "no other absolute path in the fragment"
+assert_eq "$(XDG_CONFIG_HOME= bash "$SCRIPTS/lib.sh" codex-profile | grep -F '/git/config')" "\"$HOME/.config/git/config\" = \"read\"" "no XDG_CONFIG_HOME: the git config line is ~/.config/git/config"
+assert_eq "$(grep -v '^#' "$FRAG" | grep -cE '/git"|\.config"|/plugins/data/corecrew-corekit"|/state"')" "0" "no folder of those files is opened"
 prof() { bash "$SCRIPTS/lib.sh" codex-profile; }
 assert_eq "$(CORECREW_CONFIG="$SANDBOX/my conf" prof | grep -F 'my conf')" "\"$SANDBOX/my conf\" = \"read\"" "the settings line follows CORECREW_CONFIG (the file, not its folder)"
 assert_eq "$(CODEX_HOME= prof | grep -F '/plugins/cache/')" "\"$HOME/.codex/plugins/cache/corekit\" = \"read\"" "the plugin line follows the Codex home (~/.codex without CODEX_HOME)"
@@ -52,16 +60,17 @@ assert_eq "$(CODEX_HOME= prof | grep -F '/plugins/cache/')" "\"$HOME/.codex/plug
 assert_eq "$(CODEX_HOME='/x/a "q" \b' prof | grep -F '/plugins/cache/')" '"/x/a \"q\" \\b/plugins/cache/corekit" = "read"' "a quote and a backslash are escaped"
 # no usable home: each line is left out with a comment, the rest is printed, exit 0
 out="$(CODEX_HOME=rel HOME=rel XDG_CONFIG_HOME= prof)"; assert_eq "$?" "0" "no usable home: exit 0"
-assert_eq "$(printf '%s\n' "$out" | grep -v '^#' | grep -cE 'rel|plugins/cache|settings')" "0" "no usable home: no path line"
-assert_eq "$(printf '%s\n' "$out" | grep -c '^# (left out: ')" "2" "no usable home: a comment for each line left out"
-assert_eq "$(printf '%s\n' "$out" | grep -v '^#' | grep -c .)" "$(($(grep -v '^#' "$FRAG" | grep -c .) - 2))" "no usable home: the rest of the fragment is there"
+assert_eq "$(printf '%s\n' "$out" | grep -v '^#' | grep -cE 'rel|plugins/cache|plugins/data|settings|hooks-seen|gitconfig|git/config')" "0" "no usable home: no path line"
+assert_eq "$(printf '%s\n' "$out" | grep -c '^# (left out: ')" "6" "no usable home: a comment for each line left out"
+assert_eq "$(printf '%s\n' "$out" | grep -v '^#' | grep -c .)" "$(($(grep -v '^#' "$FRAG" | grep -c .) - 6))" "no usable home: the rest of the fragment is there"
 out="$(CODEX_HOME="$SANDBOX/a
-b" prof)"; assert_eq "$(printf '%s\n' "$out" | grep -c 'plugins/cache')" "0" "a home path with a newline is left out"
+b" prof)"; assert_eq "$(printf '%s\n' "$out" | grep -cE 'plugins/(cache|data)')" "0" "a home path with a newline is left out"
 assert_eq "$(printf '%s\n' "$out" | grep -vE '^[[:space:]]*(#.*)?$|^\[[^]]+\]$|^"[^"]+" = "[a-z]+"$|^default_permissions = "corecrew"$')" "" "...and the fragment stays well formed"
 # an installed copy names the marketplace it was installed from
 VER="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN/.claude-plugin/plugin.json" | head -1)"; [ -n "$VER" ] && pass || fail "no plugin version"
 mkdir -p "$SANDBOX/inst/plugins/cache/mymkt/corecrew"; cp -R "$PLUGIN" "$SANDBOX/inst/plugins/cache/mymkt/corecrew/$VER"
 assert_eq "$(bash "$SANDBOX/inst/plugins/cache/mymkt/corecrew/$VER/scripts/lib.sh" codex-profile | grep -F '/plugins/cache/')" "\"$CODEX_HOME/plugins/cache/mymkt\" = \"read\"" "the marketplace name comes from the install path"
+assert_eq "$(bash "$SANDBOX/inst/plugins/cache/mymkt/corecrew/$VER/scripts/lib.sh" codex-profile | grep -F '/plugins/data/')" "\"$CODEX_HOME/plugins/data/corecrew-mymkt/tools\" = \"read\"" "the tools copy line names the same marketplace"
 
 if ! command -v codex >/dev/null 2>&1; then skip codex-profile "codex not on PATH (sandbox checks)"; finish; fi
 # --- a read-only sandbox (what `codex sandbox` gives with no config; a plain `codex exec` in a project Codex does not
@@ -153,4 +162,72 @@ done
 out="$(sbx sh -c "echo y > '$INST/scripts/new.sh'; echo y >> '$SANDBOX/xdg/corecrew/settings'")"
 assert_eq "$(printf '%s\n' "$out" | grep -c 'not permitted')" "2" "installed: the plugin folder and the settings file are not writable"
 assert_no_file "$INST/scripts/new.sh"; assert_eq "$(cat "$SANDBOX/xdg/corecrew/settings")" "model_profile: strong" "installed: the settings file is unchanged"
+# closed <label> — in the cwd (a project with a .env): the project's .env, ~/.ssh/x and <Codex home>/auth.json (a fake
+# one, removed again) stay refused under the profile, whatever read line was added.
+closed() {
+  local f out
+  echo AUTH > "$CODEX_HOME/auth.json"; echo SECRET > .env
+  for f in .env "$H/.ssh/x" "$CODEX_HOME/auth.json"; do
+    out="$(sbx cat "$f")"; case "$out" in *"not permitted"*) pass ;; *) fail "$1: readable in the sandbox: $f: $out" ;; esac
+  done
+  rm -f "$CODEX_HOME/auth.json"
+}
+# --- the tools copy (plugins/data/corecrew-<marketplace>/tools): session start names its save and undo-step, so a
+# sandboxed command must read it; nothing in it is writable, and the rest of the data folder stays closed.
+T="$CODEX_HOME/plugins/data/corecrew-corekit/tools"; mkdir -p "${T%/*}"; echo DATA > "${T%/*}/other.txt"
+bash "$INST/scripts/sync-tools.sh" "$INST" "$T" >/dev/null; assert_file "$T/save"
+cd "$SANDBOX/w" || exit 1
+assert_eq "$(sbx bash "$T/lib.sh" host)" "codex" "tools copy: lib.sh runs in the sandbox"
+out="$(sbx cat "$T/save")"; case "$out" in *"not permitted"*) fail "tools copy: save is closed: $out" ;; *) pass ;; esac
+out="$(codex sandbox -- bash "$T/save" "Second step" 2>&1)"; rc=$?
+# (the /usr/bin/git shim may print its own "not permitted" for a cache file: only the line about save counts)
+case "$out" in *"$T/save"*"not permitted"*) fail "tools copy: save cannot be read: $out" ;; *) pass ;; esac
+case "$out" in *"not a corecrew project"*) pass ;; *) fail "tools copy: save does not reach its own checks: $out" ;; esac
+[ "$rc" -ne 126 ] && pass || fail "tools copy: save exits 126"
+out="$(sbx sh -c "echo y > '$T/x'")"; case "$out" in *"not permitted"*) pass ;; *) fail "tools copy: writable: $out" ;; esac
+assert_no_file "$T/x"
+out="$(sbx cat "${T%/*}/other.txt")"; case "$out" in *"not permitted"*) pass ;; *) fail "tools copy: the rest of the data folder is readable: $out" ;; esac
+closed "tools copy"
+# --- the hooks marker: with the marker of this version and the profile as the default, prepare.sh in the sandbox
+# prints neither the trust note nor the profile note (a hidden config.toml is the profile being active).
+MK="$SANDBOX/xdg/corecrew/state/hooks-seen-codex"; mkdir -p "${MK%/*}"; echo "$VER" > "$MK"
+assert_eq "$(sbx bash "$INST/scripts/prepare.sh" --part host; echo "rc=$?")" "rc=0" "marker and profile: prepare.sh --part host prints nothing in the sandbox"
+assert_eq "$(sbx cat "$MK")" "$VER" "marker: readable in the sandbox"
+out="$(sbx sh -c "echo y > '$MK'")"; case "$out" in *"not permitted"*) pass ;; *) fail "marker: writable: $out" ;; esac
+echo 0.0.1 > "$MK"
+out="$(sbx bash "$INST/scripts/prepare.sh" --part host)"
+case "$out" in *"until you trust"*) pass ;; *) fail "marker of another version: no trust note in the sandbox: $out" ;; esac
+case "$out" in *codex-profile*) fail "profile active: the profile note in the sandbox: $out" ;; *) pass ;; esac
+echo "$VER" > "$MK"; cp "$CODEX_HOME/config.toml" "$SANDBOX/profile.toml"
+printf '# no corecrew profile\n' > "$CODEX_HOME/config.toml"
+out="$(sbx bash "$INST/scripts/prepare.sh" --part host)"
+assert_eq "$(printf '%s\n' "$out" | grep -c codex-profile)" "1" "no profile: the profile note still shows in the sandbox"
+cp "$SANDBOX/profile.toml" "$CODEX_HOME/config.toml"
+closed "hooks marker"
+# --- the global git config: git reads ~/.gitconfig or $XDG_CONFIG_HOME/git/config; both files are readable, their
+# folders are not (~/.config/git may hold a credentials file). H is outside TMPDIR and /tmp.
+GP="$H/proj"; mkdir -p "$GP"; cd "$GP" || exit 1; git init -q; echo a > app.txt; git add app.txt; git commit -qm a; echo b > app.txt
+printf '[user]\n\tname = T\n\temail = t@e\n' > "$H/.gitconfig"
+assert_eq "$(unset GIT_CONFIG_GLOBAL; codex sandbox -- "$GITBIN" status --short 2>&1; echo "rc=$?")" " M app.txt
+rc=0" "~/.gitconfig: git status works in the sandbox"
+mkdir -p "$XDG_CONFIG_HOME/git"; mv "$H/.gitconfig" "$XDG_CONFIG_HOME/git/config"; echo CRED > "$XDG_CONFIG_HOME/git/credentials"
+assert_eq "$(unset GIT_CONFIG_GLOBAL; codex sandbox -- "$GITBIN" status --short 2>&1; echo "rc=$?")" " M app.txt
+rc=0" "XDG git config: git status works in the sandbox"
+out="$(sbx cat "$XDG_CONFIG_HOME/git/credentials")"; case "$out" in *"not permitted"*) pass ;; *) fail "git credentials beside the XDG git config: $out" ;; esac
+out="$(sbx sh -c "echo y >> '$XDG_CONFIG_HOME/git/config'")"; case "$out" in *"not permitted"*) pass ;; *) fail "git config: writable: $out" ;; esac
+closed "git config"
+# --- code_dir_of in the sandbox: <Projects> cannot be listed (not opened, it holds other projects' secrets), so the
+# lookup falls back to the cwd when that is the project's code folder. The Core gets write (a stand-in for --add-dir).
+P="$SANDBOX/P"; mkdir -p "$P/Core/demo" "$P/Demo/src" "$P/Other"; echo x > "$P/Core/demo/CLAUDE.md"; echo OTHERSECRET > "$P/Other/notes.txt"
+awk -v c="$P/Core" '{print} /^":tmpdir" = "write"$/{printf "\"%s\" = \"write\"\n", c}' "$SANDBOX/profile.toml" > "$CODEX_HOME/config.toml"
+cd "$P/Demo" || exit 1
+assert_eq "$(CORE_DIR="$P/Core" bash "$INST/scripts/lib.sh" layout demo)" "new" "code-dir outside the sandbox: layout new"
+assert_eq "$(CORE_DIR="$P/Core" sbx bash "$INST/scripts/lib.sh" layout demo; echo "rc=$?")" "new
+rc=0" "code-dir in the sandbox: layout new"
+assert_eq "$(CORE_DIR="$P/Core" sbx bash "$INST/scripts/lib.sh" code-dir demo)" "$P/Demo" "code-dir in the sandbox: the cwd's project"
+assert_eq "$(cd src && CORE_DIR="$P/Core" sbx bash "$INST/scripts/lib.sh" code-dir demo)" "$P/Demo" "code-dir in the sandbox: from a subfolder"
+assert_eq "$(CORE_DIR="$P/Core" sbx bash "$INST/scripts/lib.sh" code-dir other; echo "rc=$?")" "rc=1" "code-dir in the sandbox: another project is not guessed"
+out="$(sbx cat "$P/Other/notes.txt")"; case "$out" in *"not permitted"*) pass ;; *) fail "another project is readable: $out" ;; esac
+closed "code-dir"
+cp "$SANDBOX/profile.toml" "$CODEX_HOME/config.toml"
 finish

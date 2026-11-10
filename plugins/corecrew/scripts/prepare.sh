@@ -116,6 +116,12 @@ prepare_host() {
     # lib-host.sh codex_home): secrets are guarded best-effort only. Only a top-level key counts (before the first
     # [table] line; a line with a triple quote or an escaped quote before it makes the answer unsure, so the note shows); either quote style, a quoted key and a BOM are read; the value must be corecrew.
     cfg=""; base="$(codex_home)" && cfg="$base/config.toml"
+    # Inside the Codex sandbox a config.toml that cannot be read is the profile being active (a plain workspace-write
+    # sandbox reads everything; the profile keeps config.toml closed, as it can hold MCP tokens). Only a refused read
+    # counts: a missing file still gets the note.
+    if [ -n "$cfg" ] && [ -n "${CODEX_SANDBOX:-}" ]; then
+      case "$(LC_ALL=C cat "$cfg" 2>&1 >/dev/null)" in *"not permitted"*) cfg="" ;; esac
+    fi
     # LC_ALL=C: the BOM is compared byte for byte (in a UTF-8 locale awk's regex does not match the octal escapes).
     if [ -n "$cfg" ] && ! { LC_ALL=C tr -d '\r' < "$cfg" | LC_ALL=C tr "'" '"' | LC_ALL=C awk 'NR == 1 && substr($0, 1, 3) == "\357\273\277" { $0 = substr($0, 4) }
         { if ($0 ~ /"""/ || $0 ~ /\\"/) exit 1
