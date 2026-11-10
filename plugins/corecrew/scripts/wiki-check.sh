@@ -34,7 +34,7 @@
 # <file> is relative to docs/ ("features/login.md"); CLAUDE.md is printed as "../CLAUDE.md".
 # Pages are read for wikilinks (body and the related: field) and Markdown links; CLAUDE.md for
 # Markdown links only; all outside code fences and `inline code`. Markdown links ignore other
-# schemes (http:, mailto:...) and pure "#anchor"; "page.md#anchor" checks the file only.
+# schemes (http:, mailto:...) and pure "#anchor"; "page.md#anchor" checks the file only; %XX is decoded.
 # A wikilink [[t]], [[t#h]], [[t|alias]] or ![[t]] resolves: t with a "/" to docs/t.md or the file
 # docs/t; t without one to the page named t, else a file named t anywhere under docs/; an empty
 # t to the page itself. h is the exact text of a # to ###### heading of that page, outside fences.

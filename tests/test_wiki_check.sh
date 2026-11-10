@@ -532,6 +532,17 @@ assert_exit 2 bash "$W" "$FX/codewiki" --code --changed src/app.sh
 assert_exit 2 bash "$W" "$FX/codewiki" --code "$SANDBOX/does-not-exist"
 assert_exit 2 bash "$W" "$FX/codewiki" --code "$CR/src/app.sh"
 
+# A Markdown link target is percent-decoded before the file is looked up, ASCII (%20) and other bytes (%C3%A9,
+# the UTF-8 bytes of an e with an acute accent) alike; the message of a missing one prints the target as written.
+variant percent
+: > "$V/docs/features/my pic.png"; : > "$V/docs/features/$(printf 'caf\303\251').png"
+printf '\n## Pictures\n\nA [space](my%%20pic.png) and an [accent](caf%%C3%%A9.png).\n' >> "$V/docs/features/login.md"; reindex
+assert_contains "$V/docs/features/login.md" '(caf%C3%A9.png)'
+assert_exit 0 bash "$W" "$V"
+assert_eq "$OUT" "" "percent-encoded links to files that exist"
+printf '\nA [missing one](nope%%C3%%A9.png).\n' >> "$V/docs/features/login.md"
+check percent "wiki-check: features/login.md: broken link nope%C3%A9.png"
+
 # An install without exec bits (a host that drops them): the scripts run their siblings with bash, so wiki-check
 # and wiki-index work the same. Each of the three calls is seen alone below: the page list of wiki-check (a broken
 # call is exit 2), its INDEX check (a broken call is "INDEX.md stale"), the page list of wiki-index ("stale").
