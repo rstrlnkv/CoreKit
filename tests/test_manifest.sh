@@ -72,6 +72,11 @@ check_changelog() {
     END { if (n < 2) print "no released version" }
   ' "$1"
 }
+# png_size <file> — "<width> <height>" in pixels, read from the PNG header (the IHDR chunk: bytes 16 to 23, two
+# big-endian numbers), so the check needs no image tool and runs the same on every system
+png_size() {
+  od -An -tu1 -j16 -N8 "$1" 2>/dev/null | awk 'NF == 8 { print (($1 * 256 + $2) * 256 + $3) * 256 + $4, (($5 * 256 + $6) * 256 + $7) * 256 + $8 }'
+}
 # top_version <file> — the version of the first released heading
 top_version() { sed -n 's/^## \[\([0-9][0-9.]*\)\] - .*/\1/p' "$1" | head -1; }
 # market_desc <plugin> — the description of the plugin's entry in marketplace.json (one key per line)
@@ -142,11 +147,9 @@ for pl in $plugins; do
   # no top-level bin/ in a plugin: claude.ai and Cowork refuse a plugin that has one
   assert_no_file "$ROOT/plugins/$pl/bin"
   assert_file "$ROOT/docs/icons/$pl.svg"
-  if command -v sips >/dev/null 2>&1; then
-    w="$(sips -g pixelWidth "$ic" 2>/dev/null | sed -n 's/.*pixelWidth: //p')"; h="$(sips -g pixelHeight "$ic" 2>/dev/null | sed -n 's/.*pixelHeight: //p')"
-    assert_eq "$w" "$h" "$pl icon is square"
-    [ "${w:-0}" -ge 512 ] && [ "${w:-0}" -le 2048 ] && pass || fail "$pl icon is $w px, want 512 to 2048"
-  fi
+  wh="$(png_size "$ic")"; w="${wh% *}"; h="${wh#* }"
+  assert_eq "$w" "$h" "$pl icon is square"
+  [ "${w:-0}" -ge 512 ] && [ "${w:-0}" -le 2048 ] && pass || fail "$pl icon is $w px, want 512 to 2048"
   [ "$(wc -c < "$ic" | tr -d ' ')" -lt 262144 ] && pass || fail "$pl icon is 256 KiB or more"
   case "$(head -c 4 "$ic" | od -An -c | tr -d ' ')" in *PNG*) pass ;; *) fail "$pl icon is not a PNG" ;; esac
   # SECURITY.md: a line that names this plugin and a version names the current one
@@ -306,6 +309,8 @@ for k in composerIcon logo; do
 done
 if command -v python3 >/dev/null 2>&1; then
   assert_exit 0 python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$CX"
+else
+  skip plugin-json "python3 not on PATH; JSON well-formedness of the Codex manifest not checked"
 fi
 # Codex ignores disable-model-invocation; agents/openai.yaml is its equivalent. Both or neither.
 for sk in "$PLUGIN"/skills/*/SKILL.md; do
