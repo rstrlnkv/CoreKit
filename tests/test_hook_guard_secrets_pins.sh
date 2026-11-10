@@ -118,6 +118,13 @@ sec_lex() {
   p 'FOO="a b" cat .envrc'
   p 'X=1 ls'
   p 'FOO="a b" make test'
+  # an append (X+=) and an array element (X[0]=) are assignments too
+  b 'X+=1 cat .env' '.env'
+  b 'X+="1" cat .env' '.env'
+  b 'X[0]="1" cat .env' '.env'
+  b 'X[0]+=1 cat .env' '.env'
+  p 'X+=1 ls'
+  p 'X[0]="a b" cat .envrc'
   # a here-string inside "$(...)" is not a heredoc: the lines after it are judged
   b "echo \"\$(cat <<<x)\"${NL}cat .env" '.env'
   b "echo \"\$(cat<<<x)\"${NL}cat .env" '.env'

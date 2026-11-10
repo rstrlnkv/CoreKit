@@ -103,7 +103,8 @@ function endword(   w, qd, b, rw, x) {
   if (want_in) { want_in = 0; on_in(w); return }
   if (cmd == "") {
     if (wskip) { wskip = 0; return }   # the value of a wrapper option
-    if (!qd && w ~ /^[A-Za-z_][A-Za-z0-9_]*=/) return   # X=1, X="a b": a quote before the = ("X=1") makes a command word
+    # X=1, X="a b", X+=1, X[0]=1: a quote before the = ("X=1") makes a command word
+    if (!qd && w ~ /^[A-Za-z_][A-Za-z0-9_]*(\[.*\])?[+]?=/) return
     if (wrapped && substr(w, 1, 1) == "-") { wrapper_opt(w); return }
     if (wdur) { wdur = 0; return }   # timeout's duration
     b = base(w)
