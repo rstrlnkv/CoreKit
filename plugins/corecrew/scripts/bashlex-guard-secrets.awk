@@ -123,7 +123,6 @@ function cand(a,   l, t, x, nc, comp, k, hit, norm) {
     # rebuild from the lower-case parts (letter case is folded by the caller anyway)
     norm = comp[1]
     for (k = 2; k <= nc; k++) norm = norm "/" comp[k]
-    if (substr(a, 1, 1) == "~" && substr(norm, 1, 1) != "~") norm = "~" substr(norm, 2)
   }
   if (a in seen) return
   seen[a] = 1
