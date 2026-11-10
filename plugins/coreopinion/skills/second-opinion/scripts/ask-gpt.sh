@@ -50,7 +50,7 @@ for r in "${TMPDIR:-}" "$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null)" /tmp; do
   [ "$r" != / ] || continue
   case "${t_dir#"$r"/}" in "$t_dir"|*/*) ;; coreopinion.?*) t_ok=1 ;; esac
 done
-[ -n "$t_ok" ] || { echo "ask-gpt.sh: $T is not a mktemp -d folder in the temp folder; nothing was run or removed" >&2; exit 2; }
+[ -n "$t_ok" ] || { echo "ask-gpt.sh: $T is not a folder made by ask-gpt.sh --new (coreopinion.* right in the temp folder); nothing was run or removed" >&2; exit 2; }
 [ -f "$T/dir" ] || { echo "ask-gpt.sh: $T/dir is missing (make the folder with ask-gpt.sh --new)" >&2; exit 2; }
 # The prompt: from stdin (a heredoc in SKILL.md), unless a prompt.md is already there. A missing or empty prompt is
 # refused and the folder is left as it is.
