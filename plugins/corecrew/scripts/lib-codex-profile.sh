@@ -39,7 +39,9 @@ codex_profile() {
     '# secret files named below inside the project. It also reads three places of corecrew and three files of git, written' \
     '# below as paths of this machine: the folder Codex keeps the plugins of this marketplace in, the corecrew tools copy,' \
     '# the corecrew settings file and its hooks marker, the global git config files (git stops when it cannot read' \
-    '# one) and the global git ignore file (a core.excludesFile elsewhere is not read: git warns). Print the fragment' \
+    '# one) and the global git ignore file (a core.excludesFile elsewhere is not read: git warns). A file a git config' \
+    '# includes ([include] or [includeIf] path) is not read either, so git stops: add a line "<file>" = "read" for it' \
+    '# to the table below by hand (and again after a new paste), and keep tokens out of that file. Print the fragment' \
     '# again when the Codex home folder or the settings file moves. ~/.ssh and the rest of the home folder (the rest of' \
     '# the Codex home folder too) are not listed, so they stay closed.' \
     '# Codex keeps .git read-only, so commits ask for approval.' \
