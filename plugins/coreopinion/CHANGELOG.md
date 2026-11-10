@@ -6,6 +6,8 @@ All notable changes to `coreopinion` are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-10
+
 ### Changed
 - Codex no longer lists or installs coreopinion: the marketplace gives Codex its own list with
   corecrew and coremodel only. A copy installed earlier stays until `codex plugin remove coreopinion@corekit`.
