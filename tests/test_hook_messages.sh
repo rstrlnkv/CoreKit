@@ -97,7 +97,7 @@ cyr_text() {
   esac
   return 0
 }
-cyr_hits="$(cd "$ROOT" && for d in plugins/*/hooks plugins/*/scripts plugins/*/skills plugins/*/agents plugins/*/git-hooks \
+cyr_hits="$(cd "$ROOT" && for d in plugins/*/hooks plugins/*/scripts plugins/*/skills plugins/*/agents plugins/*/reference \
     plugins/*/codex plugins/*/templates; do [ -d "$d" ] && LC_ALL=C grep -rnE "$CYR" "$d"; done \
   | LC_ALL=C grep -vE '^(plugins/corecrew/hooks/messages\.sh|plugins/coremodel/hooks/locales/[^:]*|plugins/coremodel/hooks/classifier\.ts|[^:]*/README\.[A-Za-z-]+\.md):' \
   | while IFS= read -r hit; do cyr_text "$hit" && printf '%s\n' "$hit"; done)"
