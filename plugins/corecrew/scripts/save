@@ -82,10 +82,14 @@ docs_failed() {
 if [ -n "$CORE_DIRTY" ]; then
   # shellcheck disable=SC2086
   git -C "$CORE" add -A -- $CORE_PATHS || docs_failed "save: git could not write $CORE/.git (read-only? in Codex allow the commit when asked)."
+  # The commit names the staged files, not CORE_PATHS: an entry git knows no file under (an empty folder,
+  # one with only ignored files) would fail the commit as a pathspec. --no-renames: both names of a rename.
+  files=()
   # shellcheck disable=SC2086
-  if ! git -C "$CORE" diff --cached --quiet -- $CORE_PATHS; then
-    git -C "$CORE" commit -q -m "$MSG" -m "Step-Id: $ID
-Project: $NAME" -- $CORE_PATHS || docs_failed "Docs commit failed."
+  while IFS= read -r -d '' f; do files[${#files[@]}]="$f"; done < <(git -C "$CORE" diff --cached --name-only --no-renames -z -- $CORE_PATHS)
+  if [ ${#files[@]} -gt 0 ]; then
+    GIT_LITERAL_PATHSPECS=1 git -C "$CORE" commit -q -m "$MSG" -m "Step-Id: $ID
+Project: $NAME" -- "${files[@]}" || docs_failed "Docs commit failed."
     echo "saved docs"; saved=1
   fi
 fi

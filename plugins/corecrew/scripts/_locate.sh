@@ -6,7 +6,9 @@
 # shellcheck disable=SC2034  # CODE MAIN PROJECT NAME CORE CORE_PATHS are read by save and undo-step, which source this file
 locate() {
   local here="$PWD" common link ldir n
-  [ -d "$here/code/.git" ] && here="$here/code"
+  # old layout, a session in <Core>/<name>/: the code repo is the code folder below. A folder that is itself
+  # the root of a repo or worktree (.git, a folder or a file) is the project; its code/ is a nested repo.
+  [ -d "$here/code/.git" ] && [ ! -e "$here/.git" ] && here="$here/code"
   CODE=$(git -C "$here" rev-parse --show-toplevel 2>/dev/null) || {
     echo "Run this inside a project's code folder." >&2; return 1; }
   # A session in <Core>/<name>/ (a new-layout project, or a subfolder of an old-layout one): git finds
