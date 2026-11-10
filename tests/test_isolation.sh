@@ -2,10 +2,14 @@
 # The sandbox must not see the developer's HOME, XDG config or global/system git config.
 source "$(dirname "$0")/lib.sh"
 REAL_HOME="$HOME"
+# a planted outer value (never the real one): new_sandbox must replace it, not keep it
+export CORE_DIR="$TEST_TMP/outer-core" CLAUDE_PLUGIN_DATA="$TEST_TMP/outer-data"
 new_sandbox
 case "$HOME" in "$SANDBOX"/*) pass ;; *) fail "HOME not in the sandbox: $HOME" ;; esac
 case "${XDG_CONFIG_HOME:-}" in "$SANDBOX"/*) pass ;; *) fail "XDG_CONFIG_HOME not in the sandbox: ${XDG_CONFIG_HOME:-}" ;; esac
 case "${CODEX_HOME:-}" in "$SANDBOX"/*) pass ;; *) fail "CODEX_HOME not in the sandbox: ${CODEX_HOME:-}" ;; esac
+case "${CORE_DIR:-}" in "$SANDBOX"/*) pass ;; *) fail "CORE_DIR not in the sandbox: ${CORE_DIR:-}" ;; esac
+case "${CLAUDE_PLUGIN_DATA:-}" in "$SANDBOX"/*) pass ;; *) fail "CLAUDE_PLUGIN_DATA not in the sandbox: ${CLAUDE_PLUGIN_DATA:-}" ;; esac
 assert_eq "$GIT_CONFIG_GLOBAL" "$SANDBOX/gitconfig" "GIT_CONFIG_GLOBAL"
 assert_eq "$GIT_CONFIG_NOSYSTEM" "1" "GIT_CONFIG_NOSYSTEM"
 [ "$HOME" != "$REAL_HOME" ] && pass || fail "HOME is the real one"
