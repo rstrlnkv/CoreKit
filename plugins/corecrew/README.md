@@ -163,8 +163,9 @@ Say "new project" (or run `/corecrew:new-project`) and Claude:
 
 Start Claude Code in the code folder. It reads the private `CLAUDE.md` through the
 `CLAUDE.local.md` link, which session start makes and repairs. Projects made by 0.4 and older keep
-the code in `<Core>/<name>/code/`; there `/corecrew:task` asks you to run
-`/corecrew:task adopt <Core>/<name>/code` first, which moves it to this layout.
+the code in `<Core>/<name>/code/`, a layout this version no longer supports: session start says so,
+and `save`, `undo-step` and `adopt` refuse such a project without changing it. Move it beside the
+Core with corecrew 0.15 (`/corecrew:task adopt <Core>/<name>/code`) first.
 
 Rules for every session can go into `<Core>/session-rules.md` (optional): when it exists, session
 start prints it into the conversation, and the engineer agent reads it before it writes code (its
