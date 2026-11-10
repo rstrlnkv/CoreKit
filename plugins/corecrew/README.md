@@ -135,7 +135,7 @@ Coming from `coredev` (0.2.x) or `corekit` (0.1.x): follow
 | `/corecrew:task <task>` | Runs a task through the crew of agents and ends with a report and one commit |
 | `/corecrew:task release <version>` | Prepares a release: version, changelog and the other release checks |
 | `/corecrew:task adopt <folder>` | Brings an existing project into the Core layout |
-| `/corecrew:ship [patch\|minor\|major\|<version>]` | Releases the current branch, then, after your yes, pushes the branch, waits for its CI checks, fast-forwards the default branch and pushes it; after a second yes, tags the version and publishes a GitHub release |
+| `/corecrew:ship [<part>] [patch\|minor\|major\|<version>]` | Releases the current branch (in a repo with several versioned parts, the one `<part>` you name; from the default branch it offers a release branch), then, after your yes, pushes the branch, waits for its CI checks, fast-forwards the default branch and pushes it; after a second yes, tags the version and publishes a GitHub release |
 | `/corecrew:new-standard` | Helps you write a standard of your own into the Core |
 
 ### `new-project`

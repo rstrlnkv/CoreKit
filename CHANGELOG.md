@@ -11,6 +11,12 @@ commit log has the full detail.
 
 Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off until then.
 
+### Changed
+- `/corecrew:ship [<part>]`: a repo with several versioned parts releases one named part per
+  run instead of raising every part the branch touched. A branch with nothing beyond the default
+  branch, or the default branch itself (through a new `release/<part>` branch), can release a part
+  whose changelog has lines under Unreleased.
+
 ### Fixed
 - A release no longer stops once at the wiki check: after the version edit, the release path
   updates the wiki pages whose `files:` name the edited manifests or changelog.

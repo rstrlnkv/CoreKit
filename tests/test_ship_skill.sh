@@ -53,6 +53,15 @@ for w in 'git tag -f' 'tag -d' 'push --delete' '--force'; do assert_not_contains
 s1="$(printf '%s\n' "$steps" | awk '/\*\*Version and tag names\.\*\*/{f=1} /\*\*Release\.\*\*/{f=0} f')"
 case "$s1" in *'`v<version>`'*) pass ;; *) fail "step 1 does not contain the one-part tag form \`v<version>\`" ;; esac
 case "$s1" in *'`<part>-v<version>`'*) pass ;; *) fail "step 1 does not contain the several-parts tag form \`<part>-v<version>\`" ;; esac
+# P7: a repo with several versioned parts ships one part per run, the one the argument names; ship
+# never raises every part the branch touched. A branch with nothing beyond <main> (or <main> itself)
+# may still ship a part whose changelog has lines under Unreleased: on <main> ship offers a release branch.
+grep -q '^argument-hint:.*<part>' "$SK" && pass || fail "the argument hint names <part>"
+case "$s1" in *'one part per run'*) pass ;; *) fail "step 1: a repo with several versioned parts ships one part per run" ;; esac
+case "$s1" in *'raise each part the branch'*) fail "step 1 still raises every part the branch changed" ;; *) pass ;; esac
+s3="$(printf '%s\n' "$st" | awk '/\*\*Branch\.\*\*/{f=1} /\*\*Default branch moved\.\*\*/{f=0} f')"
+case "$s3" in *'Unreleased'*) pass ;; *) fail "Start 3: an empty <main>..HEAD goes on when the part has lines under Unreleased" ;; esac
+case "$s3" in *'git switch -c release/<part>'*) pass ;; *) fail "Start 3: on <main> ship offers git switch -c release/<part>" ;; esac
 for l in 'Merged:' 'Pushed:' 'Version:' 'Tag:' 'Release:' 'Open:'; do
   printf '%s\n' "$steps" | grep -qF -- "$l" && pass || fail "the report has $l"
 done

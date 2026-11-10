@@ -1,8 +1,8 @@
 ---
 name: ship
-description: Release the current branch (version, changelog, tests on that tree, commit), push it and wait for its CI checks, merge it into the default branch and push, then tag it and publish a GitHub release, each after your go-ahead. Use /corecrew:ship [patch|minor|major|<version>].
+description: Release the current branch (version, changelog, tests on that tree, commit), push it and wait for its CI checks, merge it into the default branch and push, then tag it and publish a GitHub release, each after your go-ahead. Use /corecrew:ship [<part>] [patch|minor|major|<version>].
 disable-model-invocation: true
-argument-hint: "[patch | minor | major | <version>]"
+argument-hint: "[<part>] [patch | minor | major | <version>]"
 ---
 
 # Ship
@@ -57,9 +57,13 @@ defaults are `core_dir` `~/Projects/Core`, `attribution` `allow`.
    - else (no remote, or its default is not known here) `git config init.defaultBranch`;
    - either way it must be a local branch: `git rev-parse --verify --quiet "refs/heads/<main>"`.
    Neither gives one: ask the user which branch to ship into, and check that one the same way.
-3. **Branch.** `git rev-parse --abbrev-ref HEAD` is the branch. On `<main>` (or on a detached HEAD)
-   say there is no branch to ship and stop. Then `git log --oneline <main>..HEAD`: empty → say the
-   branch has nothing that `<main>` lacks, and stop.
+3. **Branch.** `git rev-parse --abbrev-ref HEAD` is the branch. On a detached HEAD say there is no
+   branch to ship and stop. The part to ship is the one step 1 picks. Its changelog has lines under
+   `## [Unreleased]` (or the repo keeps no changelog and `git log --oneline <main>..HEAD` is not
+   empty) → there is something to release; otherwise say so and stop. On `<main>`: say a release
+   needs its own branch and, on the user's yes, run `git switch -c release/<part>` in the code root
+   (one versioned part: `<part>` is the project's name), then go on there. A branch with nothing
+   that `<main>` lacks goes on too: the release commit is what lands.
 4. **Default branch moved.** `git merge-base --is-ancestor <main> HEAD`, exit 0 → go on. Otherwise
    `<main>` has commits the branch lacks: say so, and on the user's yes run `git merge <main>` in the
    code root (a conflict: stop and name the files). The tests below then run on the merged tree.
@@ -67,14 +71,16 @@ defaults are `core_dir` `~/Projects/Core`, `attribution` `allow`.
    the GitHub release will be skipped, and go on.
 
 ## Steps
-1. **Version and tag names.** The argument picks the version: empty or `patch` raises the last
+1. **Version and tag names.** The argument is `[<part>] [<level or version>]`; a first word that is not a level or a version
+   is the `<part>`. The level picks the version: empty or `patch` raises the last
    number, `minor` the middle one (last becomes 0), `major` the first (the others become 0); an
    explicit `<version>` is used as given. Read the current version where the versioning standard in
    `<Core>/standards/` says it lives (a standard whose `applies-to` names `release`). No such
    standard: ask the user where the version lives and how it is written, before anything changes;
    this is the one place that asks, and the answer goes into the brief of step 2.
-   A repo with several versioned parts (several packages or plugins): raise each part the branch
-   changed (`git diff --name-only <main>...HEAD`), each by the same rule, and list them.
+   A repo with several versioned parts (several packages or plugins) ships one part per run: the
+   `<part>` the argument names. None named: list the parts whose changelog has lines under
+   `## [Unreleased]` and ask which one; the others wait for their own run.
    The tag of each new version follows that standard; when it says nothing, a repo with one
    versioned part uses `v<version>`, and a repo with several uses `<part>-v<version>` (the part's
    name as its manifest gives it). A tag that already exists
@@ -83,9 +89,8 @@ defaults are `core_dir` `~/Projects/Core`, `attribution` `allow`.
 2. **Release.** Run the `release` path of the task skill with that version:
    engineer writes the version and the changelog entry (the version answer of step 1 in its
    brief), then release.md postconditions 1–7 in order. The release commit subject is
-   `chore(<part>): release <version>` in a repo with several versioned parts (several raised at
-   once: the first in the subject, all of them in the body) and `chore: release <version>` in a
-   repo with one; a commit standard in `<Core>/standards/` wins. Postcondition 1 runs `check:`
+   `chore(<part>): release <version>` in a repo with several versioned parts and
+   `chore: release <version>` in a repo with one; a commit standard in `<Core>/standards/` wins. Postcondition 1 runs `check:`
    on the tree that has the new version, so the release commit itself is what was tested. A ✗ at
    postcondition 1 stops ship: show the output, name the uncommitted version and changelog files
    (`git status --short`), no repair, no merge; the user decides. Any other ✗ follows release.md;
@@ -134,7 +139,7 @@ defaults are `core_dir` `~/Projects/Core`, `attribution` `allow`.
 8. **Report.**
    - `Pushed: origin/<branch> (CI: passed | not waited for — <why>)` or `Pushed: no — <why>`
    - `Merged: <short hash of <main>> (<branch> → <main>)` and `Pushed: origin/<main>` or `Pushed: no — <why>`
-   - `Version: <old> → <new>` (one line per versioned part)
+   - `Version: <old> → <new>` (with the part's name in a repo with several)
    - `Tag: <tag> (pushed | local only)` or `Tag: none — <why>`; `Release: <url gh printed>` or `Release: none — <why>`
    - `Open:` what is left: a skipped push, tag or release, Core commits not on its remote
      (`git -C "<Core>" status -sb`), release.md lines put under `Open`, or `none`. The remote
