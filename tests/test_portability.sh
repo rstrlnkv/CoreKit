@@ -37,8 +37,9 @@ gawk-only awk|(^|[^A-Za-z0-9_])split\([[:space:]]*(/[^/]*/|"[^"]*"|[^][,()/"]*((
 EOF
 PATTERNS="${PATTERNS%$'\n'}"
 # A construct that is forbidden only as a command, label|regex as above. scan() tries it at the line start, after
-# | ; & ( ` or a shell keyword, and after a VAR=value, env or xargs prefix (AT, one pattern each, for the reason above),
-# and only in the files where the regex alone matches.
+# | ; & ( ` { or the ) of a case arm, after a shell keyword or command, exec or time, and after a VAR=value, env or
+# xargs prefix (AT, one pattern each, for the reason above), and only in the files where the regex alone matches.
+# Not seen: a command named by its path (/usr/bin/jq) or behind another wrapper (nice, nohup, builtin).
 IFS= read -r -d '' CMDS <<'EOF'
 jq as a command|jq([[:space:]]|$)
 GNU long option|(sed|date|stat|readlink|cp|mv|ln|rm|head|tail|cut|wc|mktemp|touch|xargs|tr|uniq|du)([[:space:]]+-[^-[:space:]][^[:space:]]*)*[[:space:]]+--[a-z]
@@ -52,7 +53,9 @@ AT='^
 &
 \(
 `
-(do|then|else|if|while|until|!)[[:space:]]
+\{
+\)
+(do|then|else|if|while|until|!|command|exec|time)[[:space:]]
 (=[^[:space:]]*|env|xargs([[:space:]]+-[^[:space:]]+)*)[[:space:]]'
 
 # scan <root> <path...> — prints "<path>:<line>: <label>" for each forbidden construct in the files (paths relative to
@@ -131,9 +134,16 @@ echo "${1@Q}"
 [[ ! -v name ]] && echo unset
 test -v name
 declare -r -g x=1
+{ jq -r .a f; }
+command jq -r .a f
+time jq -r .a f
+exec jq -r .a f
+case x in x) jq -r .a f ;; esac
+f() { jq -r .a "$1"; }
+{ tac f; }
 EOF
 printf '{ t = strftime("%%F") }\n' > "$SANDBOX/bad.awk"
-assert_eq "$(scan "$SANDBOX" bad.sh bad.awk | wc -l | tr -d ' ')" "45" "self-check hits"
+assert_eq "$(scan "$SANDBOX" bad.sh bad.awk | wc -l | tr -d ' ')" "52" "self-check hits"
 good="$SANDBOX/good.sh"
 cat > "$good" <<'EOF'
 sed -n 's/a/b/p' f > f.tmp && mv f.tmp f
@@ -169,6 +179,7 @@ sed 's/{name}/x/' f; sed -n '/x/{s/a/b/;}' f; sed -n '/x/{ p; }' f
 awk '{ if (match($0, /a(b)/)) n = split($0, a, /,/) } /x/ && match($1, /y/) { f(a, b) }' f
 LC_ALL=C sort -u f; env LC_ALL=C grep --color=never x f; xargs -0 rm -f < list
 echo "$@" "${1:-x}"; test -n "$x"; [[ ! -n $x ]]; declare -r x=1
+command -v jq > /dev/null; echo "(jq) {tac} ${x} tac"; exec 3>&1; time_left=1; x="$(basename "$f") jq"
 EOF
 assert_eq "$(scan "$SANDBOX" good.sh)" "" "portable lines flagged"
 printf '{ print tolower($0) } # and or not\n' > "$SANDBOX/good.awk"
