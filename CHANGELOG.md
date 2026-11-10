@@ -9,6 +9,8 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-10
+
 Codex: the hooks changed, so Codex keeps them off until you trust them again in `/hooks`. Print the
 sandbox profile again (`lib.sh codex-profile`) and paste the new fragment (see Fixed).
 
