@@ -5,13 +5,17 @@ bash "$SKILL/scripts/scaffold.sh" --name stop-app >/dev/null
 P="$CORE_DIR/stop-app"; C="$(dirname "$CORE_DIR")/stop-app"; H="$HOOKS/stop-remind.sh"
 assert_file "$H"
 J="$C/.claude/settings.local.json"
-python3 -m json.tool "$J" >/dev/null 2>&1 && pass || fail "settings.local.json is not valid JSON"
+# well-formed JSON (test-only use of python3; plugin code never uses it)
+if command -v python3 >/dev/null 2>&1; then
+  python3 -m json.tool "$J" >/dev/null 2>&1 && pass || fail "settings.local.json is not valid JSON"
+else
+  skip settings-json "python3 not on PATH; JSON well-formedness of settings.local.json not checked"
+fi
 # the Stop hook ships with the plugin; the project settings carry no hooks and no Core/bin path
 assert_not_contains "$J" "\"Stop\""; assert_not_contains "$J" "\"hooks\""
 assert_not_contains "$J" "stop-remind"; assert_contains "$J" "\"$P\""
 assert_not_contains "$PLUGIN/templates/code/settings.local.json.tmpl" "\"hooks\""
 HJ="$PLUGIN/hooks/hooks.json"
-python3 -m json.tool "$HJ" >/dev/null 2>&1 && pass || fail "hooks.json is not valid JSON"
 assert_contains "$HJ" "\"Stop\""
 assert_contains "$HJ" 'bash \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-remind.sh\"'
 assert_contains "$HJ" "\"timeout\": 10"
@@ -27,8 +31,13 @@ assert_eq "$rc" "2" "dirty code should block"; echo "$OUT" | grep -q 'save' && p
 echo "$OUT" | grep -qF "bash \"$SCRIPTS/save\"" && pass || fail "message does not name the plugin's save ($SCRIPTS/save): $OUT"
 echo "$OUT" | grep -qF "/bin/save" && fail "message names a Core/bin copy: $OUT" || pass
 echo "$OUT" | grep -q 'waiting for the user' && pass || fail "message lacks the waiting-for-approval case"
-# already reminded -> 0
+# already reminded in this stop -> 0. A new edit comes first, so the change set is one the hook has not
+# reminded about: only stop_hook_active can let these stops through (the once-per-change-set rule cannot)
+echo active >> "$C/new.txt"
 input "$C" true | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "stop_hook_active must not loop"
+printf '{"session_id":"x","cwd":"%s","hook_event_name":"Stop","stop_hook_active":\n true}' "$C" | bash "$H" >/dev/null 2>&1
+assert_eq "$?" "0" "stop_hook_active split over two lines must not loop"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "the edit made before stop_hook_active is reminded at the next stop"
 # same changes at the next stop (e.g. waiting for approval) -> no repeat
 input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "repeated reminder for unchanged state"
 # new edits, also to an already untracked file -> remind again
@@ -167,6 +176,45 @@ echo "$cps" | grep -q ' knowledge ' && pass || fail "a tracked folder missing on
 input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "a deleted tracked Core folder is a docs change"
 git -C "$CORE_ROOT" checkout -q -- knowledge
 
+# --- one case per rule of the change set
+(cd "$C" && bash "$SCRIPTS/save" "s-rules") >/dev/null 2>&1
+TF="$(git -C "$C" ls-files | head -1)"
+[ -n "$TF" ] && [ -f "$C/$TF" ] && pass || fail "rules: the code repo has no tracked file to edit"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "rules: the tree is clean at the start"
+# a clean tree forgets the last reminder: the identical edit made again later is a new change set
+echo forget >> "$C/$TF"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "forget: first reminder"
+git -C "$C" checkout -q -- "$TF"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "forget: the tree made clean passes"
+echo forget >> "$C/$TF"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "forget: the identical edit after a clean tree is reminded again"
+# a staged file edited and staged again: the status line and the (empty) unstaged diff are the same both times,
+# only the staged diff tells the two apart
+git -C "$C" add -- "$TF"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "staged: first reminder"
+echo again >> "$C/$TF"; git -C "$C" add -- "$TF"
+assert_eq "$(git -C "$C" diff -- "$TF")" "" "staged: the unstaged diff is empty"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "staged: an edit staged again was missed"
+# a new file git ignores in the code repo is no change
+mkdir -p "$GDC/info"; echo 'ignored-*' >> "$GDC/info/exclude"
+echo i > "$C/ignored-one.txt"
+assert_eq "$(git -C "$C" status --porcelain -- ignored-one.txt)" "" "ignored: git ignores the file"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "a new ignored file in the code repo reminded again"
+# a new untracked file in another project's folder of the same Core is no change of this project
+assert_dir "$CORE_DIR/fresh-app/docs"
+echo o > "$CORE_DIR/fresh-app/docs/not-ours.md"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain -- fresh-app/docs/not-ours.md | cut -c1-2)" "??" "other project: its new file is untracked"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "a new file in another project's Core folder reminded again"
+# a docs file of this project that is already dirty, edited again: the status is the same, its diff is not
+echo d1 >> "$P/docs/brief.md"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "dirty docs: first reminder"
+st1="$(git -C "$CORE_DIR" status --porcelain)"
+echo d2 >> "$P/docs/brief.md"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "$st1" "dirty docs: the second edit leaves the status as it was"
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "dirty docs: a second edit of an already dirty docs file was missed"
+rm -f "$C/ignored-one.txt" "$CORE_DIR/fresh-app/docs/not-ours.md"
+git -C "$C" reset -q --hard; git -C "$CORE_DIR" checkout -q -- "stop-app/docs/brief.md"
+
 # Codex Stop payloads (fixtures built from the rust-v0.166.0 structs): same rules, and an exit 2 carries a
 # non-empty stderr (Codex treats exit 2 with an empty one as a failed hook, not a block)
 FX="$ROOT/tests/fixtures/codex"
@@ -178,7 +226,9 @@ cstop stop; assert_eq "$CRC" "2" "codex Stop: dirty code blocks"
 [ -s "$SANDBOX/cerr" ] && pass || fail "codex Stop: exit 2 with an empty stderr"
 assert_eq "$(cat "$SANDBOX/cout")" "" "codex Stop: nothing on stdout"
 grep -q 'save' "$SANDBOX/cerr" && pass || fail "codex Stop: the reminder lacks save"
+echo active >> "$C/codex-new.txt"   # a change set not reminded about yet: only stop_hook_active lets it through
 cstop stop-active; assert_eq "$CRC" "0" "codex Stop: stop_hook_active exits 0"
+cstop stop; assert_eq "$CRC" "2" "codex Stop: the edit made before stop_hook_active is reminded at the next stop"
 cstop stop; assert_eq "$CRC" "0" "codex Stop: the same change set is not reminded twice"
 echo more >> "$C/codex-new.txt"
 cstop stop; assert_eq "$CRC" "2" "codex Stop: new edits remind again"
