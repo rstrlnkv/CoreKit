@@ -9,7 +9,7 @@
 # come before the kind-wide defaults. A row that matches no file fails: a renamed file must not lose its limit.
 #
 # Two layout contracts stay where they are, beside the checks they belong to:
-# - tests/lib.sh at most 250 lines (tests/test_lib_layout.sh: its helpers belong in its parts);
+# - plugins/corecrew/scripts/lib.sh at most 250 lines (tests/test_lib_layout.sh: its helpers belong in its parts);
 # - the Core's standards/README.md and knowledge/README.md at most 15 lines (tests/test_setup_core.sh: a limit on
 #   scaffold output, not on a tracked file).
 source "$(dirname "$0")/lib.sh"
@@ -24,14 +24,13 @@ plugins/corecrew/agents/verifier.md                       chars  590   one long 
 
 # Tight limits of today, per file.
 plugins/corecrew/skills/ship/SKILL.md                     lines  150
-plugins/corecrew/skills/task/SKILL.md                     lines  499
-plugins/corecrew/skills/new-standard/SKILL.md             lines  499
 plugins/corecrew/skills/task/references/release.md        lines  80
 plugins/corecrew/reference/knowledge.md                   lines  80
 plugins/corecrew/reference/wiki.md                        lines  80
 plugins/corecrew/agents/*.md                              lines  60
 
 # Kind-wide defaults.
+plugins/*/skills/*/SKILL.md                               lines  499
 plugins/*/skills/*/SKILL.md                               words  2500
 plugins/*/skills/*/references/*.md                        words  1200
 plugins/*/reference/*.md                                  words  1200
