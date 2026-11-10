@@ -24,31 +24,18 @@ git -C "$SANDBOX/r" check-ignore -q .claude/settings.local.json && fail "setting
 git config --global test.isolation yes
 assert_contains "$SANDBOX/gitconfig" "isolation = yes"
 
-# Every test file that runs code (a script by a variable path, claude, codex, git config --global or --system)
-# calls new_sandbox. A file run on its own has no throwaway HOME from run.sh, so without new_sandbox it would
-# write the developer's files.
-# runs_code <file> — the file runs code (comment lines and the source lines of lib.sh and lib-hook.sh do not count)
-runs_code() {
-  grep -v '^[[:space:]]*#' "$1" | grep -vF -e 'source "$(dirname "$0")/lib.sh"' -e 'source "$(dirname "$0")/lib-hook.sh"' \
-    | grep -qE '(^|[^[:alnum:]_-])(bash|sh|source|\.) +"?\$|(^|[;&|(`]|then |do |assert_exit [0-9]+ )[[:space:]]*(command +)?(claude|codex|git config --(global|system)) '
-}
+# Every test file calls new_sandbox. A file run on its own has no throwaway HOME from run.sh, so without new_sandbox
+# it would write the developer's files. Only the presence of the call is checked, not its position: code that a file
+# runs before its new_sandbox is not seen.
 has_sandbox() { grep -qE '(^|[;&(]|then |do )[[:space:]]*new_sandbox' "$1"; }
-# self-check on fixtures: a hook run, claude, codex and a global git config count; a comment, a read or the words
-# 'git config --global' in an assert's text do not; new_sandbox clears it
+# self-check on fixtures: the call counts; the word in a comment or in an assert's text does not
 F="$SANDBOX/fx"; mkdir -p "$F"
-printf 'source "$(dirname "$0")/lib.sh"\nbash "$HOOKS/guard-code.sh" < x\n' > "$F/hook"
-printf 'source "$(dirname "$0")/lib.sh"\nassert_exit 0 claude plugin validate "$P"\n' > "$F/claude"
-printf 'source "$(dirname "$0")/lib.sh"\nif true; then codex exec x; fi\n' > "$F/codex"
-printf 'source "$(dirname "$0")/lib.sh"\ngit config --global x.y z\n' > "$F/gitcfg"
-printf 'source "$(dirname "$0")/lib.sh"\nsource "$(dirname "$0")/lib-hook.sh"\n# bash "$HOOKS/x.sh"\nassert_contains "$SCRIPTS/save" bash\nassert_not_contains "$SK" "git config --global"\n' > "$F/reads"
 printf 'source "$(dirname "$0")/lib.sh"\nnew_sandbox\nbash "$HOOKS/guard-code.sh" < x\n' > "$F/sandboxed"
-for x in hook claude codex gitcfg; do runs_code "$F/$x" && pass || fail "runs_code misses the $x fixture"; done
-runs_code "$F/reads" && fail "runs_code counts a comment, a read or the helper source lines" || pass
+printf 'source "$(dirname "$0")/lib.sh"\n# new_sandbox\nassert_contains "$f" new_sandbox\ngit config --global x.y z\n' > "$F/bare"
 has_sandbox "$F/sandboxed" && pass || fail "has_sandbox misses new_sandbox"
-has_sandbox "$F/hook" && fail "has_sandbox sees a sandbox in a file without one" || pass
+has_sandbox "$F/bare" && fail "has_sandbox sees a sandbox in a file without one" || pass
 for t in "$ROOT"/tests/test_*.sh; do
-  runs_code "$t" || continue
-  has_sandbox "$t" && pass || fail "$(basename "$t") runs code without new_sandbox"
+  has_sandbox "$t" && pass || fail "$(basename "$t") runs without new_sandbox"
 done
 
 [ -z "${CORECREW_CONFIG:-}" ] && pass || fail "CORECREW_CONFIG leaks into the sandbox"
