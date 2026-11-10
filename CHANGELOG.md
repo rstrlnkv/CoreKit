@@ -17,6 +17,12 @@ Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off
   branch, or the default branch itself (through a new `release/<part>` branch), can release a part
   whose changelog has lines under Unreleased.
 
+### Deprecated
+- The older formats listed in `reference/older-formats.md` (the old layout with the code in
+  `<Core>/<name>/code/`, a wiki without types, a brief with `stage:`, knowledge with sections, the
+  Core `bin/` and `hooks/` folders, old git hooks, a Core without a schema) are removed in 1.0.0.
+  Bring a project up to date with this version first: `/corecrew:task` offers each step.
+
 ### Removed
 - `install-hooks.sh --tools <dir>`: set `COREDEV_TOOLS` instead; the flag is now refused.
 
