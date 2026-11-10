@@ -3,9 +3,9 @@
 # env (core_dir only), the plugin option CLAUDE_PLUGIN_OPTION_<KEY> (Claude Code), the settings file
 # ~/.config/corecrew/settings or $CORECREW_CONFIG (lines "key: value"; the only source in Codex), the
 # default. Project facts live in <Core>/.coredev (lines "key: value"). Files are read, never executed.
-# load_settings sets: CORE_DIR, CORE_NAME, PROJECTS_DIR, ATTRIBUTION, MODEL_PROFILE, UI_LANGUAGE,
-# APP_ID_PREFIX, SETTINGS_WARN (records "key<TAB>value<TAB>source<TAB>value in effect" of values ignored as invalid;
-# their texts are msg_settings_warning in hooks/messages.sh).
+# load_settings sets: CORE_DIR, CORE_NAME, PROJECTS_DIR, ATTRIBUTION, UI_LANGUAGE, SETTINGS_WARN (records
+# "key<TAB>value<TAB>source<TAB>value in effect" of values ignored as invalid; their texts are msg_settings_warning
+# in hooks/messages.sh).
 #
 # The helpers live in parts next to this file, which it sources (callers source only lib.sh):
 #   lib-paths.sh     expand_home canon_dir lc norm_path resolve_abs (and expand_home_r canon_dir_r, which set a variable)
@@ -67,14 +67,17 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   # _warn_settings — the SETTINGS_WARN records as English lines (the texts of hooks/messages.sh). messages.sh is
   # sourced only here; where it is missing (the tools copy) nothing is printed and the exit code stays.
   _warn_settings() {
-    local k v s e
-    [ -n "$SETTINGS_WARN" ] || return 0
+    local k v s rest="$SETTINGS_WARN"
+    [ -n "$rest" ] || return 0
     # shellcheck disable=SC1091
     . "$_LIB_DIR/../hooks/messages.sh" 2>/dev/null || return 0
-    while IFS=$'\t' read -r k v s e; do
+    while [ -n "$rest" ]; do   # one record per line; no here-string (see _sf_get_r)
+      _tab_cut_r "${rest%%$'\n'*}"; k="$_TC"
+      case "$rest" in *$'\n'*) rest="${rest#*$'\n'}" ;; *) rest="" ;; esac
       [ -n "$k" ] || continue
-      UI_LANGUAGE=en msg_settings_warning "$k" "$v" "$s" "$e" "$(settings_file_path)"; printf '\n'
-    done <<< "$SETTINGS_WARN"
+      _tab_cut_r "$_TR"; v="$_TC"; _tab_cut_r "$_TR"; s="$_TC"
+      UI_LANGUAGE=en msg_settings_warning "$k" "$v" "$s" "$_TR" "$(settings_file_path)"; printf '\n'
+    done
     return 0
   }
   _ORIG_CORE_DIR="${CORE_DIR:-}"

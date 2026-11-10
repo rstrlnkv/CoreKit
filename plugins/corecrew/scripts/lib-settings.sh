@@ -60,13 +60,6 @@ coredev_set() {
   mv "$tmp" "$f"
 }
 
-# opt_value <value> — the value, or nothing when it is empty or still holds the literal text
-# "${user_config." (Claude Code leaves placeholders unsubstituted while the plugin is not configured).
-opt_value() {
-  case "$1" in *'${user_config.'*) return 0 ;; esac
-  printf '%s' "$1"
-}
-
 # _sfp_r — sets _SFP to the settings file: $CORECREW_CONFIG (absolute; a relative one is ignored, as it would follow
 # the cwd), else $XDG_CONFIG_HOME/corecrew/settings (an empty or relative XDG_CONFIG_HOME is ignored), else
 # ~/.config/corecrew/settings. With no usable HOME there is no file: _SFP empty, exit 1.
@@ -110,13 +103,25 @@ _sf_load() {
 # _sf_get_r <key> — sets _SF_V to the value of the first "key: value" line of the settings file: trimmed, one pair
 # of matching quotes removed, CR dropped, "#" inside a value is data; blanks before the colon and a leading UTF-8 BOM
 # are accepted. Exit 1 when the file has no such line.
+# (The settings read path uses no here-string: bash 3.2 writes one to a temp file, and a read-only sandbox has none.)
 _sf_get_r() {
-  local k v
   _SF_V=""
-  while IFS=$'\t' read -r k v; do
-    [ "$k" = "$1" ] && { _SF_V="$v"; return 0; }
-  done <<< "$_SF_DATA"
-  return 1
+  case $'\n'"$_SF_DATA" in *$'\n'"$1"$'\t'*) ;; *) return 1 ;; esac
+  local IFS=$'\n' l g=""
+  case $- in *f*) ;; *) g=1; set -f ;; esac
+  for l in $_SF_DATA; do   # one linear walk: a prefix removal over the whole text is quadratic in bash 3.2
+    case "$l" in "$1"$'\t'*) _SF_V="${l#*$'\t'}"; break ;; esac
+  done
+  [ -z "$g" ] || set +f
+}
+# _tab_cut_r <text> — sets _TC to the first tab-separated field of the text and _TR to the rest, as
+# `IFS=<TAB> read -r first rest` does (tabs before either are dropped).
+_tab_cut_r() {
+  _TR="$1"
+  while [ "${_TR#$'\t'}" != "$_TR" ]; do _TR="${_TR#$'\t'}"; done
+  _TC="${_TR%%$'\t'*}"
+  case "$_TR" in *$'\t'*) _TR="${_TR#*$'\t'}" ;; *) _TR="" ;; esac
+  while [ "${_TR#$'\t'}" != "$_TR" ]; do _TR="${_TR#$'\t'}"; done
 }
 # _sf_get <key> — prints what _sf_get_r sets.
 _sf_get() { _sf_get_r "$1" || :; printf '%s' "$_SF_V"; }
@@ -138,7 +143,7 @@ _setting_valid() {
 # default. Empty, placeholder and invalid values fall through to the next source.
 # shellcheck disable=SC2088  # "~/Projects/Core" is the default as the user would type it; _core_raw expands it
 _resolve_setting() {
-  local key="$1" i v src bad="" k s
+  local key="$1" i v src bad=""
   REPLY=""; _sf_load
   for i in 1 2 3; do
     v=""; src=""
@@ -151,7 +156,7 @@ _resolve_setting() {
       3:*) _sf_get_r "$key" || :; v="$_SF_V"; src="file" ;;
       *) continue ;;
     esac
-    # as opt_value: a placeholder is no value; trailing newlines are dropped
+    # a value that still holds the placeholder text "${user_config." is no value; trailing newlines are dropped
     # shellcheck disable=SC2016  # the placeholder text is literal
     case "$v" in *'${user_config.'*) v="" ;; *) _nl_trim "$v"; v="$_NT" ;; esac
     [ -n "$v" ] || continue
@@ -166,10 +171,12 @@ _resolve_setting() {
       model_profile) REPLY=balanced ;; ui_language) REPLY=en ;;
     esac
   fi
-  while IFS=$'\t' read -r v s; do
-    [ -n "$v" ] || continue
-    SETTINGS_WARN="${SETTINGS_WARN}${key}"$'\t'"${v}"$'\t'"${s}"$'\t'"${REPLY}"$'\n'
-  done <<< "$bad"
+  while [ -n "$bad" ]; do   # one record per line
+    _tab_cut_r "${bad%%$'\n'*}"
+    case "$bad" in *$'\n'*) bad="${bad#*$'\n'}" ;; *) bad="" ;; esac
+    [ -n "$_TC" ] || continue
+    SETTINGS_WARN="${SETTINGS_WARN}${key}"$'\t'"${_TC}"$'\t'"${_TR}"$'\t'"${REPLY}"$'\n'
+  done
   return 0
 }
 
@@ -219,8 +226,7 @@ load_settings() {
     _dirname_r "$CORE_RAW"; canon_dir_r "$_DN"; PROJECTS_DIR="$_CANON"
   fi
   _resolve_setting attribution; ATTRIBUTION="$REPLY"
-  _resolve_setting model_profile; MODEL_PROFILE="$REPLY"
+  _resolve_setting model_profile   # only validated here, so an invalid value reaches SETTINGS_WARN
   _resolve_setting ui_language; UI_LANGUAGE="$REPLY"
-  _coredev_get_r app-id-prefix || :; APP_ID_PREFIX="$_CDV"
   return 0
 }

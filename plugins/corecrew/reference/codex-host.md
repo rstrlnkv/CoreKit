@@ -68,7 +68,7 @@ you may use it the same way.
 Codex has no Agent tool. A subagent is started with `spawn_agent`, and it must start clean: it gets
 none of this conversation, so its message holds the whole brief. Codex has two tool sets; use the
 one you have:
-- multi-agent v1 (Codex's default; `spawn_agent` takes `fork_context`, and there are `send_input`,
+- multi-agent v1 (`spawn_agent` takes `fork_context`, and there are `send_input`,
   `wait_agent` and `close_agent`): pass `fork_context: false` and `message`, plus `model` and
   `reasoning_effort` when the skill gives them. A nudge is `send_input`. Call `close_agent` once
   its final answer is in.
@@ -82,7 +82,5 @@ Then call `wait_agent` until the final answer arrives; on a timeout, wait again 
 subagent whose answer you need still runs.
 
 No `spawn_agent` tool at all: say in plain words that this step needs Codex subagents, which this
-session does not offer (the Codex feature `multi_agent` controls them; check that it is on in
-`codex features list`, then start a new session). A step whose skill names a fallback for a failed
-subagent (a research step) uses that fallback; any other step stops there. Do not do a crew role's
-work yourself instead.
+session does not offer. A step whose skill names a fallback for a failed subagent (a research step)
+uses that fallback; any other step stops there. Do not do a crew role's work yourself instead.

@@ -1,17 +1,36 @@
 # lib-codex-profile.sh — `bash lib.sh codex-profile` (lib.sh sources this file for that subcommand only).
 
+# _toml_read_line <path> <what> — prints `"<path>" = "read"` with the path as a TOML basic string (backslash and double
+# quote escaped). An empty path, or one with a control character (a one-line string cannot hold it), gives a comment
+# line that names what is left out instead.
+_toml_read_line() {
+  local s="$1" bs='\' q='"'
+  case "$s" in ""|*[[:cntrl:]]*) printf '# (left out: no usable path for %s; sandboxed commands cannot read it)\n' "$2"; return 0 ;; esac
+  s="${s//"$bs"/$bs$bs}"; s="${s//"$q"/$bs$q}"
+  printf '"%s" = "read"\n' "$s"
+}
+
 # codex_profile — prints a TOML fragment for ~/.codex/config.toml (never written by corecrew): a workspace-write permission
 # profile that keeps secret files unreadable. Patterns as in coreopinion's ask-gpt.sh review profile. Checked with
 # `codex sandbox`, codex 0.166 (tests/test_codex_profile.sh).
+# It opens two places of this machine for reading, or corecrew's own commands fail in the sandbox: the folder Codex keeps
+# this marketplace's plugins in (codex_home and marketplace_name; scripts, skills, role files; coremodel and coreopinion
+# lie there too) and the settings file (settings_file_path; the file alone, so a CORECREW_CONFIG in a wide folder opens
+# nothing else). Codex resolves links in both itself. The Core is not listed: it is added per session (--add-dir).
 codex_profile() {
-  local g
+  local g ch="" sf=""
+  ch="$(codex_home)" && ch="$ch/plugins/cache/$(marketplace_name)" || ch=""
+  sf="$(settings_file_path)" || sf=""
   printf '%s\n' '# corecrew: a Codex permission profile for coding.' \
     '# Put the line default_permissions = "corecrew" at the very top of config.toml (before any line that starts with [)' \
     '# and the rest at the end of the file. It then applies to every Codex session, in every project.' \
     '# Keep the tables and the key together: tables without the key make every plain Codex run fail. To try it first,' \
     '# put the whole fragment into a separate CODEX_HOME folder (CODEX_HOME=<folder> codex).' \
     '# What it does: reads and writes the project folder and temp folders, reads minimal system paths, and blocks the' \
-    '# secret files named below inside the project. ~/.ssh and the rest of the home folder are not listed, so they stay closed.' \
+    '# secret files named below inside the project. It also reads two places of corecrew, written below as paths of this' \
+    '# machine: the folder Codex keeps the plugins of this marketplace in, and the corecrew settings file. Print the' \
+    '# fragment again when the Codex home folder or the settings file moves. ~/.ssh and the rest of the home folder' \
+    '# (the rest of the Codex home folder too) are not listed, so they stay closed.' \
     '# Codex keeps .git read-only, so commits ask for approval.' \
     '# What it is NOT: a default, not a hard boundary.' \
     '#  - It is switched off by --sandbox, --dangerously-bypass-approvals-and-sandbox or -c sandbox_mode=... on the command' \
@@ -23,7 +42,10 @@ codex_profile() {
     '# Names are matched by pattern. Still over-blocked: source files named credentials*, secrets* or secret.*' \
     '# (credentials_form.ts, secrets_helper.py). Still open: .envrc (project config), other names not listed.' \
     'default_permissions = "corecrew"' '' '[permissions.corecrew.filesystem]' \
-    '":minimal" = "read"' '":tmpdir" = "write"' '' '[permissions.corecrew.filesystem.":workspace_roots"]' '"." = "write"'
+    '":minimal" = "read"' '":tmpdir" = "write"'
+  _toml_read_line "$ch" "the plugin folder in the Codex home folder"
+  _toml_read_line "$sf" "the corecrew settings file"
+  printf '%s\n' '' '[permissions.corecrew.filesystem.":workspace_roots"]' '"." = "write"'
   for g in '.env' '.env.*' '*.env' '*.env.*' '*.pem' '*.key' '*.p12' '*.pfx' 'id_rsa*' 'id_ed25519*' 'id_ecdsa*' 'id_dsa*' \
     '*[cC]redentials*' '*CREDENTIALS*' '.npmrc' '.netrc' '.pypirc' '.git-credentials' '.htpasswd' '.pgpass' '*.tfvars' '*.tfstate*' \
     '*.jks' '*.keystore' '*.p8' '*.ppk' '*.keytab' '.s3cfg' '.gnupg/**' '[sS]ecrets*' 'SECRETS*' '[sS]ecret.*' '*.secret' '*.secrets' \

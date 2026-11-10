@@ -35,6 +35,31 @@ mkdir -p "$C/vendor"; git -C "$SANDBOX/other" worktree add -q "$C/vendor/o" -b o
 OUT="$(bash "$SCRIPTS/prepare.sh" --cwd "$C/vendor/o" 2>&1)"
 [ ! -e "$C/vendor/o/CLAUDE.local.md" ] && pass || fail "link made in a foreign worktree under the project: $OUT"
 git -C "$SANDBOX/other" worktree remove --force "$C/vendor/o" 2>/dev/null
+# ...nor does one placed in the project's folder in the Core (its project by path, and outside the code folder); the
+# project's own worktree outside the code folder does get them
+git -C "$SANDBOX/other" worktree add -q "$P/owt" -b o3 || fail "other add 3"
+assert_eq "$(bash "$SCRIPTS/lib.sh" project-of "$P/owt")" "trust" "a foreign worktree in <Core>/<project>/ is in the project by its path"
+OUT="$(bash "$SCRIPTS/prepare.sh" --cwd "$P/owt" 2>&1)"
+[ ! -e "$P/owt/CLAUDE.local.md" ] && [ ! -e "$P/owt/AGENTS.md" ] && pass || fail "links made in a foreign worktree in the Core project folder: $OUT"
+git -C "$SANDBOX/other" worktree remove --force "$P/owt" 2>/dev/null
+OUT="$(bash "$SCRIPTS/prepare.sh" --cwd "$W" 2>&1)"
+[ -L "$W/CLAUDE.local.md" ] && pass || fail "no link in the project's own worktree outside the code folder: $OUT"
+
+# a linked worktree of a repository nested inside the project's code folder: its main checkout lies in the project but is
+# not the project's code folder, so the worktree is of no project (the project's own worktree, W, is)
+git init -q "$C/vendor/nested"; git -C "$C/vendor/nested" commit -q --allow-empty -m i
+git -C "$C/vendor/nested" worktree add -q "$SANDBOX/ext/n1" -b n1 || fail "nested add"
+assert_eq "$(wt_of "$SANDBOX/ext/n1" | cut -c1)" "0" "a worktree of a nested repo is a worktree"
+assert_eq "$(bash "$SCRIPTS/lib.sh" project-of "$C/vendor/nested")" "trust" "the nested repo itself lies in the project"
+assert_eq "$(bash "$SCRIPTS/lib.sh" project-of "$SANDBOX/ext/n1" 2>/dev/null)" "" "a worktree of a nested repo is of no project"
+assert_eq "$(bash "$SCRIPTS/lib.sh" project-of "$W" 2>/dev/null)" "trust" "the project's own worktree is of the project"
+git -C "$C/vendor/nested" worktree remove --force "$SANDBOX/ext/n1" 2>/dev/null; rm -rf "$C/vendor/nested"
+# a main checkout nested inside the project's linked worktree: the walk up stops at it, so a path in it is not the worktree's
+mkdir -p "$W/sub/plain"; git init -q "$W/sub/inner"; mkdir -p "$W/sub/inner/x"
+assert_eq "$(wt_of "$W/sub/inner/x" | cut -c1)" "1" "a path in a checkout nested in a worktree is in no worktree"
+assert_eq "$(bash "$SCRIPTS/lib.sh" project-of "$W/sub/inner/x" 2>/dev/null)" "" "...and in no project"
+assert_eq "$(bash "$SCRIPTS/lib.sh" project-of "$W/sub/plain" 2>/dev/null)" "trust" "a plain folder beside it is in the worktree's project"
+rm -rf "$W/sub"
 
 # --- the guard: forged .git files inside docs/ and .claude/ do not move the root
 mkdir -p "$C/docs/forged" "$C/.claude/forged"

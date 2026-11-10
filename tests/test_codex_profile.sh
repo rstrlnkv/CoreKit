@@ -38,8 +38,46 @@ done
 miss="$(printf '%s\n' $miss | grep -vxE '\*\[tT\]oken\*|\*TOKEN\*|\*\[sS\]ecret\*|\*SECRET\*' | tr '\n' ' ' | sed 's/ $//')"
 set +f
 assert_eq "$miss" "" "every secret pattern of the review profile is denied, but the four broad token and secret globs"
+# --- corecrew's own files: one read line for the folder Codex keeps this marketplace's plugins in, one for the settings
+# file. Both sit in the filesystem table (before the workspace table), nothing else of the home is listed, nothing is writable.
+fs="$(awk '/^\[permissions\.corecrew\.filesystem\]$/{f=1; next} /^\[/{f=0} f' "$FRAG")"
+own="$(printf '%s\n' "$fs" | grep '^"/')"
+assert_eq "$own" "\"$CODEX_HOME/plugins/cache/corekit\" = \"read\"
+\"$XDG_CONFIG_HOME/corecrew/settings\" = \"read\"" "the two read lines: the marketplace's plugin folder and the settings file"
+assert_eq "$(grep -c '^"/' "$FRAG")" "2" "no other absolute path in the fragment"
+prof() { bash "$SCRIPTS/lib.sh" codex-profile; }
+assert_eq "$(CORECREW_CONFIG="$SANDBOX/my conf" prof | grep -F 'my conf')" "\"$SANDBOX/my conf\" = \"read\"" "the settings line follows CORECREW_CONFIG (the file, not its folder)"
+assert_eq "$(CODEX_HOME= prof | grep -F '/plugins/cache/')" "\"$HOME/.codex/plugins/cache/corekit\" = \"read\"" "the plugin line follows the Codex home (~/.codex without CODEX_HOME)"
+# a quote or a backslash in the home path stays inside the TOML string
+assert_eq "$(CODEX_HOME='/x/a "q" \b' prof | grep -F '/plugins/cache/')" '"/x/a \"q\" \\b/plugins/cache/corekit" = "read"' "a quote and a backslash are escaped"
+# no usable home: each line is left out with a comment, the rest is printed, exit 0
+out="$(CODEX_HOME=rel HOME=rel XDG_CONFIG_HOME= prof)"; assert_eq "$?" "0" "no usable home: exit 0"
+assert_eq "$(printf '%s\n' "$out" | grep -v '^#' | grep -cE 'rel|plugins/cache|settings')" "0" "no usable home: no path line"
+assert_eq "$(printf '%s\n' "$out" | grep -c '^# (left out: ')" "2" "no usable home: a comment for each line left out"
+assert_eq "$(printf '%s\n' "$out" | grep -v '^#' | grep -c .)" "$(($(grep -v '^#' "$FRAG" | grep -c .) - 2))" "no usable home: the rest of the fragment is there"
+out="$(CODEX_HOME="$SANDBOX/a
+b" prof)"; assert_eq "$(printf '%s\n' "$out" | grep -c 'plugins/cache')" "0" "a home path with a newline is left out"
+assert_eq "$(printf '%s\n' "$out" | grep -vE '^[[:space:]]*(#.*)?$|^\[[^]]+\]$|^"[^"]+" = "[a-z]+"$|^default_permissions = "corecrew"$')" "" "...and the fragment stays well formed"
+# an installed copy names the marketplace it was installed from
+VER="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN/.claude-plugin/plugin.json" | head -1)"; [ -n "$VER" ] && pass || fail "no plugin version"
+mkdir -p "$SANDBOX/inst/plugins/cache/mymkt/corecrew"; cp -R "$PLUGIN" "$SANDBOX/inst/plugins/cache/mymkt/corecrew/$VER"
+assert_eq "$(bash "$SANDBOX/inst/plugins/cache/mymkt/corecrew/$VER/scripts/lib.sh" codex-profile | grep -F '/plugins/cache/')" "\"$CODEX_HOME/plugins/cache/mymkt\" = \"read\"" "the marketplace name comes from the install path"
 
 if ! command -v codex >/dev/null 2>&1; then skip codex-profile "codex not on PATH (sandbox checks)"; finish; fi
+# --- a read-only sandbox (what `codex sandbox` gives with no config; a plain `codex exec` in a project Codex does not
+# trust): nothing is writable, the temp folder included, and bash 3.2 writes a here-string to a temp file. lib.sh must
+# still read the settings file, name an ignored value, and print no raw bash error.
+RO="$SANDBOX/ro"; mkdir -p "$RO/codex-home" "$RO/Core" "$RO/w" "$SANDBOX/xdg/corecrew"
+printf 'core_dir: %s\nmodel_profile: strong\nattribution: maybe\n' "$RO/Core" > "$SANDBOX/xdg/corecrew/settings"
+ro() { (cd "$RO/w" && unset CORE_DIR && CODEX_HOME="$RO/codex-home" codex sandbox -- "$@"); }
+out="$(ro sh -c ': > probe' 2>&1)"; case "$out" in *"not permitted"*) pass ;; *) fail "the sandbox with no config is not read-only: $out" ;; esac
+assert_eq "$(ro bash "$SCRIPTS/lib.sh" settings model_profile 2>/dev/null)" "model_profile: strong" "read-only sandbox: the settings file is read"
+assert_eq "$(ro bash "$SCRIPTS/lib.sh" core-dir 2>/dev/null)" "$RO/Core" "read-only sandbox: core-dir is the file's core_dir"
+err="$(ro bash "$SCRIPTS/lib.sh" core-dir 2>&1 >/dev/null)"
+case "$err" in *'attribution "maybe"'*'is not valid'*) pass ;; *) fail "read-only sandbox: no settings warning on stderr: $err" ;; esac
+case "$err" in *"here document"*|*"temp file"*) fail "read-only sandbox: a raw bash error: $err" ;; *) pass ;; esac
+rm -f "$SANDBOX/xdg/corecrew/settings"
+
 # the profile writes the temp folder (and git needs its config in a place it can read), so the fake home must not sit in the one the sandbox sees
 H="$SANDBOX/home"; mkdir -p "$SANDBOX/tmp"; export TMPDIR="$SANDBOX/tmp"; cp "$GIT_CONFIG_GLOBAL" "$TMPDIR/gitconfig"; export GIT_CONFIG_GLOBAL="$TMPDIR/gitconfig"; mkdir -p "$CODEX_HOME" "$H/.ssh" "$SANDBOX/w/src"
 cp "$FRAG" "$CODEX_HOME/config.toml"
@@ -96,4 +134,23 @@ out="$(sbx cat src/secrets_helper.py)"; case "$out" in *"not permitted"*) pass ;
 # KNOWN LIMITS: /tmp stays readable and writable (the git helper needs it); the environment is not filtered
 out="$(sbx sh -c 'echo t > /tmp/corecrew_probe_$$ && cat /tmp/corecrew_probe_$$ && rm -f /tmp/corecrew_probe_$$')"; assert_eq "$out" "t" "KNOWN LIMIT: /tmp is writable"
 assert_eq "$(CORECREW_PROBE=envval sbx sh -c 'echo $CORECREW_PROBE')" "envval" "KNOWN LIMIT: environment variables are not filtered"
+# --- corecrew installed in the Codex home, the fragment printed by that copy as config.toml: sandboxed commands read
+# corecrew's scripts, role files and settings file (and the marketplace's other plugins); the rest of both homes stays closed
+INST="$CODEX_HOME/plugins/cache/corekit/corecrew/$VER"; mkdir -p "${INST%/*}" "$CODEX_HOME/plugins/cache/corekit/coremodel/1" "$CODEX_HOME/plugins/cache/othermkt/p" "$SANDBOX/xdg/corecrew" "$SANDBOX/xdg/other"
+cp -R "$PLUGIN" "$INST"; echo SIBLING > "$CODEX_HOME/plugins/cache/corekit/coremodel/1/x.txt"; echo OTHERMKT > "$CODEX_HOME/plugins/cache/othermkt/p/x.txt"
+echo AUTH > "$CODEX_HOME/auth.json"; echo NEIGHBOUR > "$SANDBOX/xdg/corecrew/notes"; echo OTHERCFG > "$SANDBOX/xdg/other/config"
+printf 'model_profile: strong\n' > "$SANDBOX/xdg/corecrew/settings"
+bash "$INST/scripts/lib.sh" codex-profile > "$CODEX_HOME/config.toml"
+cd "$SANDBOX/w" || exit 1
+assert_eq "$(sbx bash "$INST/scripts/lib.sh" settings model_profile)" "model_profile: strong" "installed: lib.sh runs and reads the settings file"
+assert_eq "$(sbx bash "$INST/scripts/lib.sh" host)" "codex" "installed: lib.sh host"
+assert_eq "$(sbx bash "$INST/skills/task/../../scripts/lib.sh" plugin-root)" "$INST" "installed: plugin-root through a skill's path"
+out="$(sbx cat "$INST/agents/engineer.md")"; case "$out" in *"not permitted"*) fail "installed: a role file is closed: $out" ;; *"name: engineer"*) pass ;; *) fail "installed: role file: $out" ;; esac
+assert_eq "$(sbx cat "$CODEX_HOME/plugins/cache/corekit/coremodel/1/x.txt")" "SIBLING" "installed: another plugin of the marketplace is readable"
+for f in .env "$H/.ssh/x" "$CODEX_HOME/auth.json" "$CODEX_HOME/config.toml" "$CODEX_HOME/plugins/cache/othermkt/p/x.txt" "$SANDBOX/xdg/corecrew/notes" "$SANDBOX/xdg/other/config"; do
+  out="$(sbx cat "$f")"; case "$out" in *"not permitted"*) pass ;; *) fail "installed: readable in the sandbox: $f: $out" ;; esac
+done
+out="$(sbx sh -c "echo y > '$INST/scripts/new.sh'; echo y >> '$SANDBOX/xdg/corecrew/settings'")"
+assert_eq "$(printf '%s\n' "$out" | grep -c 'not permitted')" "2" "installed: the plugin folder and the settings file are not writable"
+assert_no_file "$INST/scripts/new.sh"; assert_eq "$(cat "$SANDBOX/xdg/corecrew/settings")" "model_profile: strong" "installed: the settings file is unchanged"
 finish
