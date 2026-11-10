@@ -112,12 +112,10 @@ prepare_host() {
     if [ -z "$mk" ] || [ -z "$v" ] || [ "$(cat "$mk" 2>/dev/null)" != "$v" ]; then
       printf '%s\n' "$(msg codex_trust)"
     fi
-    # The corecrew sandbox profile is not the default in config.toml (read as data, never written; the path only from an
-    # absolute CODEX_HOME or HOME): secrets are guarded best-effort only. Only a top-level key counts (before the first
+    # The corecrew sandbox profile is not the default in config.toml (read as data, never written; the path comes from
+    # lib-host.sh codex_home): secrets are guarded best-effort only. Only a top-level key counts (before the first
     # [table] line; a line with a triple quote or an escaped quote before it makes the answer unsure, so the note shows); either quote style, a quoted key and a BOM are read; the value must be corecrew.
-    cfg=""; base="${CODEX_HOME:-}"
-    if [ -z "$base" ]; then case "${HOME:-}" in /*) base="$HOME/.codex" ;; esac; fi
-    case "$base" in /*) cfg="${base%/}/config.toml" ;; esac
+    cfg=""; base="$(codex_home)" && cfg="$base/config.toml"
     # LC_ALL=C: the BOM is compared byte for byte (in a UTF-8 locale awk's regex does not match the octal escapes).
     if [ -n "$cfg" ] && ! { LC_ALL=C tr -d '\r' < "$cfg" | LC_ALL=C tr "'" '"' | LC_ALL=C awk 'NR == 1 && substr($0, 1, 3) == "\357\273\277" { $0 = substr($0, 4) }
         { if ($0 ~ /"""/ || $0 ~ /\\"/) exit 1
