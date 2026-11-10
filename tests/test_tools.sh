@@ -301,6 +301,15 @@ assert_eq "$(cat "$C/.git/hooks/pre-push")" "$(printf '#!/bin/sh\necho mine')" "
 first="$(cat "$C/.git/hooks/pre-commit")"
 assert_exit 0 bash "$IH" "$P"
 assert_eq "$(cat "$C/.git/hooks/pre-commit")" "$first" "second run changed the shim"
+# a user's hook that is a link to a missing file is the user's too: the link stays, the WARN line names it, and for that
+# hook no corecrew shim is installed (as for any hook of the user's own)
+scaffold_old ihdl; P="$CORE_DIR/ihdl"; C="$P/code"
+ln -s "$SANDBOX/ihdl-gone-hook" "$C/.git/hooks/pre-commit"
+assert_exit 0 bash "$IH" "$P"
+assert_eq "$(readlink "$C/.git/hooks/pre-commit")" "$SANDBOX/ihdl-gone-hook" "dangling hook link: the user's link was replaced, no shim for it"
+assert_no_file "$SANDBOX/ihdl-gone-hook"
+echo "$OUT" | grep -qF "$C/.git/hooks/pre-commit exists and is not a corecrew hook; left unchanged" && pass || fail "dangling hook link: no WARN line: $OUT"
+assert_contains "$C/.git/hooks/pre-push" "# corecrew hook shim"
 
 # 5. An empty core.hooksPath (set to cancel a global one): git then runs no hooks from .git/hooks and
 #    rev-parse names the work tree root. Nothing is written anywhere, exit 4, no success line.
@@ -311,6 +320,8 @@ assert_no_file "$C/pre-commit"; assert_no_file "$C/pre-push"
 assert_no_file "$C/.git/hooks/pre-commit"; assert_no_file "$C/.git/hooks/pre-push"
 git -C "$C" status --porcelain | grep -qE 'pre-(commit|push)' && fail "an empty hooksPath left hook files in the work tree" || pass
 echo "$OUT" | grep -qF "core.hooksPath" && pass || fail "message does not name core.hooksPath: $OUT"
+echo "$OUT" | grep -qF "git -C '$C' config --unset core.hooksPath" && pass || fail "empty hooksPath: the note says to unset it: $OUT"
+echo "$OUT" | grep -qF "To chain them" && fail "empty hooksPath: chaining lines: $OUT" || pass
 echo "$OUT" | grep -qF "hooks installed" && fail "claims success with an empty hooksPath: $OUT" || pass
 git -C "$C" config --unset core.hooksPath
 

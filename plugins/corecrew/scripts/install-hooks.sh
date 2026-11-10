@@ -53,7 +53,8 @@ done
 # returns 1.
 install_shim() {
   local dest="$2" target="$TOOLS/git-hooks/$1"
-  if [ -e "$dest" ] && ! grep -qF -e "$MARK" -e "$OLD_MARK" -e "$OLD_SHIM" "$dest"; then
+  # (-L: a link whose target is missing is the user's hook too; grep fails on it, so it is left as it is)
+  if { [ -e "$dest" ] || [ -L "$dest" ]; } && ! grep -qF -e "$MARK" -e "$OLD_MARK" -e "$OLD_SHIM" "$dest"; then
     echo "WARN: $dest exists and is not a corecrew hook; left unchanged" >&2; return 0
   fi
   mkdir -p "$(dirname "$dest")" 2>/dev/null || {
