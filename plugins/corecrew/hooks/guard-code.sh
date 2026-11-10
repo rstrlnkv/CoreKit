@@ -71,6 +71,9 @@
 #   targets, a target that reaches docs/ only through a link; the file-target judging outside a project.
 # - Inert outside a project (<Core>/<project>/
 #   or its code folder beside the Core): a target and a cwd that are not in a project pass (exit 0).
+#   Except, in every folder: the Codex shell-patch refusal, and three apply_patch refusals (more than 100 paths,
+#   a missing patch-paths.awk, a text with an X line whose "***" line names an internal path), each pinned with a
+#   cwd outside any project in tests/test_hook_guard_code.sh.
 #   No network, no git; only canon_dir, project_of and one grep of the CLAUDE.md public-docs line.
 # - Input it cannot read (not JSON, no cwd, no path or command) passes.
 SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
