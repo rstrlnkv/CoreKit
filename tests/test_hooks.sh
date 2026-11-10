@@ -93,7 +93,14 @@ assert_contains "$SANDBOX/nolist.err" "git could not list the commits to push"
 
 # Core pre-push: privacy check via gh
 STUB="$SANDBOX/stub"; mkdir -p "$STUB"
-printf '#!/bin/sh\necho "$GH_STUB"\n' > "$STUB/gh"; chmod +x "$STUB/gh"
+# the stub answers one question only, the privacy of someone/Core; any other call fails with no answer
+cat > "$STUB/gh" <<'STUBEOF'
+#!/bin/sh
+[ -n "$GH_LOG" ] && echo "$*" >> "$GH_LOG"
+[ "$*" = "api repos/someone/Core --jq .private" ] || exit 1
+echo "$GH_STUB"
+STUBEOF
+chmod +x "$STUB/gh"
 H="$CORE_DIR/.git/hooks/pre-push"; URL=https://github.com/someone/Core.git
 GH_STUB=true  PATH="$STUB:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && pass || fail "private Core push blocked"
 GH_STUB=false PATH="$STUB:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && fail "public Core push allowed" || pass
@@ -101,12 +108,42 @@ PATH="$(path_without gh)" bash "$H" origin "$URL" </dev/null >/dev/null 2>"$SAND
 # the install hint is for every OS, the same as preflight's: the GitHub CLI site, not one package manager
 assert_contains "$SANDBOX/nogh" "https://cli.github.com"; assert_not_contains "$SANDBOX/nogh" "brew"
 GH_STUB=true PATH="$STUB:$PATH" bash "$H" origin "git@github.com:someone/Core.git" </dev/null >/dev/null 2>&1 && pass || fail "ssh url not parsed"
+GH_STUB=true PATH="$STUB:$PATH" bash "$H" origin "ssh://git@github.com/someone/Core.git" </dev/null >/dev/null 2>&1 && pass || fail "ssh:// url not parsed"
+# core_push <url>: the hook's exit code with a gh that calls someone/Core private; stderr in core.err, gh's calls in gh.log
+core_push() {
+  rm -f "$SANDBOX/gh.log"
+  GH_LOG="$SANDBOX/gh.log" GH_STUB=true CORECREW_GH_RETRY_SLEEP=0 PATH="$STUB:$PATH" bash "$H" origin "$1" </dev/null >/dev/null 2>"$SANDBOX/core.err"
+}
+# a remote that is not GitHub is refused as such, before gh is asked anything
+for u in "https://example.com/someone/Core.git" "$SANDBOX/remote.git"; do
+  core_push "$u" && fail "a non-GitHub host is refused: $u was allowed" || pass
+  assert_contains "$SANDBOX/core.err" "Core may only be pushed to GitHub"
+  assert_no_file "$SANDBOX/gh.log"
+done
+# a user part before github.com and one trailing slash are GitHub too: the same privacy question is asked
+for u in "https://someone@github.com/someone/Core.git" "https://github.com/someone/Core/" "https://someone@github.com/someone/Core.git/"; do
+  core_push "$u" && pass || fail "a GitHub remote was refused: $u ($(cat "$SANDBOX/core.err"))"
+  assert_eq "$(cat "$SANDBOX/gh.log" 2>/dev/null)" "api repos/someone/Core --jq .private" "gh is asked about someone/Core for $u"
+done
+GH_STUB=false PATH="$STUB:$PATH" bash "$H" origin "https://someone@github.com/someone/Core/" </dev/null >/dev/null 2>&1 \
+  && fail "public Core push allowed through a URL with a user part" || pass
+# a host that only looks like GitHub stays refused (github.com as the user part, in the path, as a prefix of the host,
+# after a slash in the user part, or with two slashes at the end)
+for u in "https://github.com@evil.example/someone/Core.git" "https://evil.example/github.com/someone/Core.git" \
+         "https://someone@github.company.com/someone/Core.git" "https://evil.example/x@github.com/someone/Core.git" \
+         "https://a@b@github.com/someone/Core.git" "https://github.com/someone/Core//" \
+         "git@someone@github.com:someone/Core.git" "http://someone@github.com/someone/Core.git"; do
+  core_push "$u" && fail "a look-alike remote was allowed: $u" || pass
+  assert_contains "$SANDBOX/core.err" "Core may only be pushed to GitHub"
+  assert_no_file "$SANDBOX/gh.log"
+done
 # a failed gh call (network) is retried: 2 failures then "true" pass, 3 failures block, "false" is final
 FL="$SANDBOX/flaky"; mkdir -p "$FL"
 cat > "$FL/gh" <<'STUBEOF'
 #!/bin/sh
 n=$(cat "$GH_COUNT" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$GH_COUNT"
 if [ "$n" -le "$GH_FAILS" ]; then echo "TLS handshake timeout" >&2; exit 1; fi
+[ "$*" = "api repos/someone/Core --jq .private" ] || exit 1
 echo "$GH_ANSWER"
 STUBEOF
 chmod +x "$FL/gh"
