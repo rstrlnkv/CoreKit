@@ -7,6 +7,11 @@ full detail.
 
 ## [Unreleased]
 
+### Changed
+
+- Codex hint: the nested classifier call no longer carries the project's `AGENTS.md`
+  (`project_doc_max_bytes=0`).
+
 ## [0.8.1] - 2026-11-10
 
 ### Fixed

@@ -98,7 +98,7 @@ Set by CoreModel for this chat · your default: Sonnet · Medium
 Model         [ Haiku ]  [ Sonnet ]  [ ● Opus ]  [ Fable ]
 Effort        [ Low ]  [ Medium ]  [ ● High ]  [ Extra high ]  [ Max ]
 ────────────────────────────────────────
-This session  Opus 2 · Sonnet 3 · High 4 · unchanged 2
+This session  Sonnet 3 · Opus 2 · High 4 · unchanged 2
 ```
 
 - The selected button carries **●**, so the selection does not rest on colour alone.
@@ -169,15 +169,22 @@ effort the prompt needs and adds one line, for example "this prompt needs gpt-6-
 switch with /model if the current one differs". You switch yourself with `/model`. Mapping: Haiku to
 `gpt-6-luna`, Sonnet to `gpt-6.1-sol`, Opus and Fable to `gpt-6-astra`.
 
+Install: `codex plugin marketplace add rstrlnkv/CoreKit`, then `codex plugin add coremodel@corekit`.
+
 - Turn it on with `codex_hint: on` in `~/.config/coremodel/settings` (`$XDG_CONFIG_HOME/coremodel/settings`
   when that is set; `COREMODEL_CONFIG` names another file). Without that key, `coremodel_mode: on` in
   the corecrew settings file (`~/.config/corecrew/settings`) turns it on too; `codex_hint: off` wins.
 - It stays silent when your current model is the one it would name or a stronger one; on
-  `gpt-6-astra` it makes no call at all.
+  `gpt-6-astra` it makes no call at all. The hint ranks only `gpt-6-luna`, `gpt-6.1-sol` and
+  `gpt-6-astra`; on any other model it cannot compare and names its pick each time (except when the
+  answer is "keep").
 - Codex shows "coremodel: choosing a model" while it runs. The nested call takes about 8 seconds; it
   runs with `--ignore-user-config` and low reasoning effort, so it does not load your config, MCP
   servers or other plugins' hooks (your login still works). It waits at most 20 seconds
-  (`COREMODEL_HINT_TIMEOUT`); any failure is silent and the prompt goes on.
+  (`COREMODEL_HINT_TIMEOUT`); any failure is silent and the prompt goes on. The nested call also
+  ignores the `model_provider` of your Codex config, so it always goes to OpenAI with your Codex
+  login, whatever provider your config names; without an OpenAI login (Bedrock, a gateway, a local
+  model) leave the hint off, because it gives no hint and holds each prompt up to 20 seconds.
 - Codex asks you to trust the hook the first time, and again after each update: review and enable
   it in `/hooks`.
 
@@ -192,7 +199,7 @@ switch with /model if the current one differs". You switch yourself with `/model
 ## Uninstall
 
 `claude plugin uninstall coremodel@corekit` (or `/plugin` → Installed → coremodel → Uninstall). Your
-model and effort settings were never changed, so nothing needs undoing. For Codex, remove the
+model and effort settings were never changed, so nothing needs undoing. In Codex: `codex plugin remove coremodel@corekit`. For Codex, remove the
 `codex_hint` line from `~/.config/coremodel/settings` if you added it.
 
 ## Development

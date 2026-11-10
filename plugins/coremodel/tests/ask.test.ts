@@ -196,3 +196,13 @@ test('haiku when the setting says so', { options: { classifier: 'haiku' } }, asy
   await step($, 'medium')
   expect(w.model).toEqual(['haiku'])
 })
+
+// Every call, the second try included: the classifier only sorts the prompt, it does not do the work.
+test('the classifier is asked at low effort, on the second try too', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  w.answers = [{ fail: true }, HIGH]
+  await start($)
+  await submit($, 'fix the login')
+  await step($, 'xhigh')
+  expect(w.classifierEfforts).toEqual(['low', 'low'])
+})

@@ -1,7 +1,7 @@
 // The pane's buttons: mode, level, model and Release, and a press against a pick on its way.
 import { expect, test } from 'claude-code/testing'
 
-import { ABOVE, engineParts, pane, pressPane, SURFACES, switchTo, undoButton } from './surfaces'
+import { ABOVE, engineParts, MID, OPUS_HIGH, pane, pressPane, SURFACES, switchTo, undoButton } from './surfaces'
 import { start, step, submit, world, type World } from './world'
 
 async function waitForQuestion(w: World) {
@@ -161,4 +161,41 @@ test('Release pressed in the pane while the classifier runs is not overridden by
   await second
   await step($, 'medium', 1)
   expect(w.efforts.at(-1)).toBe('medium')
+})
+
+test('a dismissed cost question after a model press mid-chat keeps the current model', async ($, on) => {
+  const w = world(on)
+  w.lastReply = MID
+  w.reply = null
+  await start($)
+  await step($, 'medium')
+  await pressPane($, 'model-opus')
+  await waitForQuestion(w)
+  await w.clock.settle()
+  expect(w.asked).toEqual([['Switch to Opus', 'Keep Sonnet']])
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
+  const ui = await pane($)
+  expect((await ui.find({ type: 'Button', key: 'model-sonnet' }))?.props.variant).toBe('primary')
+  await ui.unmount()
+})
+
+test('a model pressed in the pane while the classifier runs is not overridden by the late pick', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  let answer!: (r: string) => void
+  w.answer = new Promise<string>(r => (answer = r))
+  await start($)
+  await submit($, 'fix the login')
+  const first = step($, 'medium')
+  for (let i = 0; w.model.length < 1; i += 1) {
+    if (i > 500) throw new Error('the classifier was never asked')
+    await w.clock.settle()
+  }
+  await pressPane($, 'model-haiku')
+  answer(OPUS_HIGH)
+  await first
+  await step($, 'medium', 1)
+  expect(w.models).toEqual(['haiku', 'haiku'])
+  expect(w.efforts).toEqual(['medium', 'medium'])
+  expect(w.placed).toEqual([])
 })

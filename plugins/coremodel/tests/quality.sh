@@ -5,8 +5,7 @@
 # Usage: bash plugins/coremodel/tests/quality.sh haiku|sonnet [tune|hold|all]
 #   RUNS=3 (asks per prompt), JOBS=8 (calls at once), CASES=<file> (default quality-cases.txt)
 case "$1" in
-  haiku) model=claude-haiku-5-5 ;;
-  sonnet) model=claude-sonnet-5-5 ;;
+  haiku|sonnet) model="$1" ;;
   *) echo "usage: $0 haiku|sonnet [tune|hold|all]" >&2; exit 2 ;;
 esac
 only="${2:-all}"
@@ -16,7 +15,7 @@ jobs="${JOBS:-8}"
 here="$(cd "$(dirname "$0")" && pwd)"
 src="$here/../hooks/classifier.ts"
 cases_file="${CASES:-$here/quality-cases.txt}"
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/ep-quality.XXXXXX")"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/coremodel-quality.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 
 # The template between the marker lines, without the opening `export const TEMPLATE = \`` and the closing backtick.
