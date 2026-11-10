@@ -78,8 +78,9 @@ never run `adopt.sh` before "ok".
    (old layout: only `--purpose`).
    Relay every `warning:` line and every `WARN:` line (from the hook install) in plain words:
    a `WARN:` means a hook of the user's own was left in place, so the corecrew guard is not
-   installed in that repo; say so. A non-zero exit: show its lines and stop (exit 1 means a
-   step after the repo commit failed: nothing was deleted, and the lines say where the files are).
+   installed in that repo; say so. A non-zero exit: show its lines and stop (exit 1 is a failed
+   step and its lines say which: before the repo commit nothing was changed; after it nothing
+   was deleted, and the lines say where the files are).
 8. **Verify** with `bash "<scripts>/wiki-check.sh" "<Core>/<name>"`.
    Red: say which pages and why; the usual cause is a link in an old page that
    no longer resolves, or a `warning:` line from `wiki-migrate.sh` (a page with no known type). Pages the script gave new front matter hold `TODO` descriptions and

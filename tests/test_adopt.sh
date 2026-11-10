@@ -392,6 +392,15 @@ assert_eq "$rc" "1" "missing reader exit"
 echo "$OUT" | grep -q "could not read .claude/rules/r.md" && pass || fail "missing reader message: $OUT"
 assert_eq "$(snap_tree "$SANDBOX")" "$before" "a missing reader changed something"
 assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "temp folder left in the Core (missing reader)"
+# the same for the first step of all: a Core adopt cannot write to (no temp folder) is exit 1 with nothing changed
+if [ "$(id -u)" -ne 0 ]; then
+  chmod 555 "$CORE_DIR"; OUT="$(bash "$AD" --from "$F" 2>&1)"; rc=$?; chmod 755 "$CORE_DIR"
+  assert_eq "$rc" "1" "read-only Core exit"
+  echo "$OUT" | grep -qxF "adopt: cannot create a temp folder in $CORE_DIR" && pass || fail "read-only Core message: $OUT"
+  assert_eq "$(snap_tree "$SANDBOX")" "$before" "a read-only Core: something changed"
+else
+  skip "read-only Core" "running as root"
+fi
 }
 bg part_refusals
 
