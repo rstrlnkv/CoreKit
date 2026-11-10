@@ -267,15 +267,15 @@ for k in $(printf '%s\n' "$step2" | grep -oE '`[A-Za-z_]+`' | tr -d '`' | sort -
     || fail "docs/migration-0.3.md Step 2 names \`$k\`, which is no userConfig key of corecrew or coremodel"
 done
 
-# Nothing only a contributor uses ships in a plugin: a plugin's tests live in tests/<plugin>/ at the repo root,
-# so an install does not carry them.
-for d in "$ROOT"/plugins/*/tests; do assert_no_file "$d"; done
+# Nothing only a contributor uses ships in a plugin: a plugin's tests live in tests/<plugin>/ and its trigger
+# evals in evals/<plugin>/ at the repo root, so an install does not carry them.
+for d in "$ROOT"/plugins/*/tests "$ROOT"/plugins/*/evals; do assert_no_file "$d"; done
 
 # trigger evals (claude plugin eval): every case has a prompt and a grader; the frontmatter
-# description is quoted (a bare ": " breaks the YAML); results stay out of git
+# description is quoted (a bare ": " breaks the YAML); results stay out of git. scripts/eval.sh runs them.
 for pl in corecrew coreopinion; do
   n=0
-  for c in "$ROOT/plugins/$pl/evals"/*/; do
+  for c in "$ROOT/evals/$pl"/*/; do
     [ -f "$c/prompt.md" ] || continue
     n=$((n + 1))
     ls "$c"graders/*.md >/dev/null 2>&1 && pass || fail "$c: no grader"
@@ -283,7 +283,7 @@ for pl in corecrew coreopinion; do
     case "$d" in '"'*'"') pass ;; *) fail "$c/prompt.md: description not quoted" ;; esac
   done
   [ "$n" -ge 3 ] && pass || fail "$pl: fewer than 3 trigger eval cases ($n)"
-  assert_contains "$ROOT/plugins/$pl/evals/.gitignore" 'results/'
+  assert_contains "$ROOT/evals/$pl/.gitignore" 'results/'
 done
 # Codex manifest: Codex reads .codex-plugin/plugin.json instead of .claude-plugin/plugin.json, so the
 # shared fields must not drift. No root plugin.json: Codex treats it as an AgentPlugin manifest and
