@@ -49,9 +49,11 @@ assert_eq "$own" "\"$CODEX_HOME/plugins/cache/corekit\" = \"read\"
 \"$XDG_CONFIG_HOME/corecrew/settings\" = \"read\"
 \"$XDG_CONFIG_HOME/corecrew/state/hooks-seen-codex\" = \"read\"
 \"$HOME/.gitconfig\" = \"read\"
-\"$XDG_CONFIG_HOME/git/config\" = \"read\"" "the six read lines: plugin folder, tools copy, settings file, hooks marker, two git config files"
-assert_eq "$(grep -c '^"/' "$FRAG")" "6" "no other absolute path in the fragment"
+\"$XDG_CONFIG_HOME/git/config\" = \"read\"
+\"$XDG_CONFIG_HOME/git/ignore\" = \"read\"" "the seven read lines: plugin folder, tools copy, settings file, hooks marker, two git config files, git ignore file"
+assert_eq "$(grep -c '^"/' "$FRAG")" "7" "no other absolute path in the fragment"
 assert_eq "$(XDG_CONFIG_HOME= bash "$SCRIPTS/lib.sh" codex-profile | grep -F '/git/config')" "\"$HOME/.config/git/config\" = \"read\"" "no XDG_CONFIG_HOME: the git config line is ~/.config/git/config"
+assert_eq "$(XDG_CONFIG_HOME= bash "$SCRIPTS/lib.sh" codex-profile | grep -F '/git/ignore')" "\"$HOME/.config/git/ignore\" = \"read\"" "no XDG_CONFIG_HOME: the git ignore line is ~/.config/git/ignore"
 assert_eq "$(grep -v '^#' "$FRAG" | grep -cE '/git"|\.config"|/plugins/data/corecrew-corekit"|/state"')" "0" "no folder of those files is opened"
 prof() { bash "$SCRIPTS/lib.sh" codex-profile; }
 assert_eq "$(CORECREW_CONFIG="$SANDBOX/my conf" prof | grep -F 'my conf')" "\"$SANDBOX/my conf\" = \"read\"" "the settings line follows CORECREW_CONFIG (the file, not its folder)"
@@ -60,9 +62,9 @@ assert_eq "$(CODEX_HOME= prof | grep -F '/plugins/cache/')" "\"$HOME/.codex/plug
 assert_eq "$(CODEX_HOME='/x/a "q" \b' prof | grep -F '/plugins/cache/')" '"/x/a \"q\" \\b/plugins/cache/corekit" = "read"' "a quote and a backslash are escaped"
 # no usable home: each line is left out with a comment, the rest is printed, exit 0
 out="$(CODEX_HOME=rel HOME=rel XDG_CONFIG_HOME= prof)"; assert_eq "$?" "0" "no usable home: exit 0"
-assert_eq "$(printf '%s\n' "$out" | grep -v '^#' | grep -cE 'rel|plugins/cache|plugins/data|settings|hooks-seen|gitconfig|git/config')" "0" "no usable home: no path line"
-assert_eq "$(printf '%s\n' "$out" | grep -c '^# (left out: ')" "6" "no usable home: a comment for each line left out"
-assert_eq "$(printf '%s\n' "$out" | grep -v '^#' | grep -c .)" "$(($(grep -v '^#' "$FRAG" | grep -c .) - 6))" "no usable home: the rest of the fragment is there"
+assert_eq "$(printf '%s\n' "$out" | grep -v '^#' | grep -cE 'rel|plugins/cache|plugins/data|settings|hooks-seen|gitconfig|git/config|git/ignore')" "0" "no usable home: no path line"
+assert_eq "$(printf '%s\n' "$out" | grep -c '^# (left out: ')" "7" "no usable home: a comment for each line left out"
+assert_eq "$(printf '%s\n' "$out" | grep -v '^#' | grep -c .)" "$(($(grep -v '^#' "$FRAG" | grep -c .) - 7))" "no usable home: the rest of the fragment is there"
 out="$(CODEX_HOME="$SANDBOX/a
 b" prof)"; assert_eq "$(printf '%s\n' "$out" | grep -cE 'plugins/(cache|data)')" "0" "a home path with a newline is left out"
 assert_eq "$(printf '%s\n' "$out" | grep -vE '^[[:space:]]*(#.*)?$|^\[[^]]+\]$|^"[^"]+" = "[a-z]+"$|^default_permissions = "corecrew"$')" "" "...and the fragment stays well formed"
@@ -216,6 +218,15 @@ rc=0" "XDG git config: git status works in the sandbox"
 out="$(sbx cat "$XDG_CONFIG_HOME/git/credentials")"; case "$out" in *"not permitted"*) pass ;; *) fail "git credentials beside the XDG git config: $out" ;; esac
 out="$(sbx sh -c "echo y >> '$XDG_CONFIG_HOME/git/config'")"; case "$out" in *"not permitted"*) pass ;; *) fail "git config: writable: $out" ;; esac
 closed "git config"
+# git's default global ignore file ($XDG_CONFIG_HOME/git/ignore, beside the config): readable, so sandboxed git prints no
+# warning and does not count a globally ignored file as a change (save and prepare read status --porcelain)
+rm -f .env; echo '*.log' > "$XDG_CONFIG_HOME/git/ignore"; echo l > a.log   # (.env: left by closed above)
+assert_eq "$(unset GIT_CONFIG_GLOBAL; codex sandbox -- "$GITBIN" status --short 2>&1; echo "rc=$?")" " M app.txt
+rc=0" "global git ignore file: git status in the sandbox has no warning and no ignored file"
+out="$(sbx sh -c "echo y >> '$XDG_CONFIG_HOME/git/ignore'")"; case "$out" in *"not permitted"*) pass ;; *) fail "git ignore file: writable: $out" ;; esac
+out="$(sbx cat "$XDG_CONFIG_HOME/git/credentials")"; case "$out" in *"not permitted"*) pass ;; *) fail "git credentials beside the git ignore file: $out" ;; esac
+closed "git ignore"
+rm -f a.log
 # --- code_dir_of in the sandbox: <Projects> cannot be listed (not opened, it holds other projects' secrets), so the
 # lookup falls back to the cwd when that is the project's code folder. The Core gets write (a stand-in for --add-dir).
 P="$SANDBOX/P"; mkdir -p "$P/Core/demo" "$P/Demo/src" "$P/Other"; echo x > "$P/Core/demo/CLAUDE.md"; echo OTHERSECRET > "$P/Other/notes.txt"
