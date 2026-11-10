@@ -25,15 +25,18 @@ while [ $# -gt 0 ]; do
        ARG="$1"; shift ;;
   esac
 done
-[ -z "$ARG" ] || CORE_DIR="$ARG"
-load_settings
-# The argument was rejected by load_settings (its SETTINGS_WARN record, source "env"): stop, never set up
-# the default Core in its place. An invalid plugin option or settings file keeps the documented default.
+# An invalid argument stops the run: never set up the default Core in its place. It is judged as
+# _resolve_setting judges a value (trailing newlines dropped; the "${user_config." placeholder is no
+# value). An invalid plugin option or settings file keeps the documented default.
 if [ -n "$ARG" ]; then
-  case $'\n'"$SETTINGS_WARN" in *$'\n'core_dir$'\t'"$ARG"$'\t'env$'\t'*)
-    echo "setup-core: $ARG: the Core path must be absolute or start with ~/; nothing was created." >&2; exit 2 ;;
-  esac
+  _nl_trim "$ARG"
+  # shellcheck disable=SC2016  # the placeholder text is literal
+  case "$ARG" in *'${user_config.'*) _NT="" ;; esac
+  _setting_valid core_dir "$_NT" || {
+    echo "setup-core: $ARG: the Core path must be absolute or start with ~/; nothing was created." >&2; exit 2; }
+  CORE_DIR="$ARG"
 fi
+load_settings
 [ -n "$CORE_DIR" ] || { echo "setup-core: no Core path (give <core_dir>, or set core_dir, CORE_DIR or HOME); nothing was created." >&2; exit 2; }
 
 # The setup files as "template|path in the Core", in the order their lines are printed (.coredev is written below).

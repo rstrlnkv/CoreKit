@@ -221,6 +221,32 @@ assert_no_file "$W/rel"; assert_no_file "$HOME/Projects/Core"
 assert_exit 2 in_dir "$W" env -u CORE_DIR bash "$SC" --dry-run rel
 assert_eq "$OUT" "setup-core: rel: the Core path must be absolute or start with ~/; nothing was created." "relative argument message (dry run)"
 assert_no_file "$W/rel"; assert_no_file "$HOME/Projects/Core"
+# the argument is judged as the settings judge it: trailing newlines dropped, the "${user_config." placeholder is no value
+assert_exit 2 in_dir "$W" env -u CORE_DIR bash "$SC" $'rel\n'
+assert_eq "$OUT" "setup-core: rel"$'\n'": the Core path must be absolute or start with ~/; nothing was created." "relative argument with a newline"
+assert_no_file "$W/rel"; assert_no_file "$HOME/Projects/Core"
+assert_exit 2 in_dir "$W" env -u CORE_DIR bash "$SC" --dry-run $'rel\n'
+echo "$OUT" | grep -q '^would create' && fail "relative argument with a newline (dry run) offered a Core: $OUT" || pass
+# shellcheck disable=SC2016  # the placeholder text is literal
+PH='x${user_config.core_dir}'
+assert_exit 2 in_dir "$W" env -u CORE_DIR bash "$SC" "$PH"
+assert_eq "$OUT" "setup-core: $PH: the Core path must be absolute or start with ~/; nothing was created." "placeholder argument"
+assert_no_file "$HOME/Projects/Core"
+assert_exit 2 in_dir "$W" env -u CORE_DIR bash "$SC" --dry-run "$PH"
+echo "$OUT" | grep -q '^would create' && fail "placeholder argument (dry run) offered a Core: $OUT" || pass
+# an absolute path holding the placeholder is no value either (load_settings would fall back to the default Core)
+PH="$SANDBOX/"'${user_config.core_dir}'
+assert_exit 2 in_dir "$W" env -u CORE_DIR bash "$SC" "$PH"
+assert_eq "$OUT" "setup-core: $PH: the Core path must be absolute or start with ~/; nothing was created." "absolute placeholder argument"
+assert_no_file "$HOME/Projects/Core"; assert_no_file "$PH"
+assert_no_file "$HOME/Projects/Core"; assert_eq "$(ls -A "$W")" "" "the work folder after the refused arguments"
+# "~" with a trailing newline is the home folder, as the settings judge it: offered, not refused
+assert_exit 0 in_dir "$W" env -u CORE_DIR bash "$SC" --dry-run '~'$'\n'
+assert_eq "$(echo "$OUT" | grep -c '^would create')" "7" "~ with a newline: the Core in HOME is offered"
+assert_no_file "$HOME/.coredev"
+# an absolute argument with a trailing newline still sets up that Core (the newline is dropped)
+assert_exit 0 in_dir "$W" env -u CORE_DIR bash "$SC" "$SANDBOX/nl/Core"$'\n'
+assert_file "$SANDBOX/nl/Core/.coredev"; assert_no_file "$HOME/Projects/Core"
 # a valid argument is not refused because the plugin option holds an invalid value
 assert_exit 0 in_dir "$W" env -u CORE_DIR CLAUDE_PLUGIN_OPTION_CORE_DIR=rel-option bash "$SC" "$SANDBOX/abs/Core"
 assert_file "$SANDBOX/abs/Core/.coredev"; assert_no_file "$HOME/Projects/Core"
