@@ -77,6 +77,24 @@ assert_exit 1 bash "$S" --file "$f"
 printf 'fix: %sa\n' "$(printf 'é%.0s' $(seq 1 33))" > "$f"  # 5 + 66 + 1 = 72
 assert_exit 0 bash "$S" --file "$f"
 
+# The types live in two places: the script's RE line and the "types: ..." sentence of CONTRIBUTING.md (which wraps
+# over two lines). Both lists are read here and compared in both directions; each type is run through the script.
+types="$(sed -n "s/^RE='^(\([a-z|]*\)).*/\1/p" "$S" | tr '|' ' ')"
+doc_types="$(tr -s '\n ' '  ' < "$ROOT/CONTRIBUTING.md" | sed -n 's/.*(types: \([a-z, ]*\);.*/\1/p' | tr -d ',')"
+[ -n "$types" ] && pass || fail "no type list read from the RE line of scripts/commit-subjects.sh"
+[ -n "$doc_types" ] && pass || fail "no type list read from the '(types: ...;' sentence of CONTRIBUTING.md"
+for t in $types; do
+  printf '%s: x\n' "$t" > "$f"
+  bash "$S" --file "$f" 2>/dev/null && pass || fail "the script refuses its own type $t ('$t: x')"
+  case " $doc_types " in *" $t "*) pass ;; *) fail "the script accepts the type $t, CONTRIBUTING.md does not name it" ;; esac
+done
+for t in $doc_types; do
+  printf '%s: x\n' "$t" > "$f"
+  bash "$S" --file "$f" 2>/dev/null && pass || fail "CONTRIBUTING.md names the type $t, the script refuses it ('$t: x')"
+done
+# a type neither list holds is refused
+printf 'wip: x\n' > "$f"; assert_exit 1 bash "$S" --file "$f"
+
 # arguments: none, one, an unknown mode, a missing file → 2
 assert_exit 2 bash "$S"
 assert_exit 2 bash "$S" --range

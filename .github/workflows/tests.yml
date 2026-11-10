@@ -51,14 +51,15 @@ jobs:
           command -v claude
           command -v codex || echo "no codex: those parts are skipped"
       - name: Run the suite
-        # a SKIP for lack of claude is a failure here, and on macOS every SKIP that names codex: the steps above
-        # installed both, and a codex part skipped for any reason (nested sandbox, root) went unchecked
+        # every SKIP that names claude is a failure here, and on macOS every SKIP that names codex: the steps above
+        # installed both, and a part skipped for any reason (nested sandbox, root) went unchecked.
+        # The explicit shell runs with pipefail, which the pipe to tee needs: without it a red suite passes
         shell: bash
         run: |
           # one file per core; run.sh starts the largest files first
           bash tests/run.sh -j "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)" 2>&1 | tee "$RUNNER_TEMP/suite.out"
-          if grep -F 'claude not on PATH' "$RUNNER_TEMP/suite.out"; then
-            echo '::error::the claude CLI is installed, yet tests skipped for lack of it'; exit 1
+          if grep -E '^SKIP .*claude' "$RUNNER_TEMP/suite.out"; then
+            echo '::error::the claude CLI is installed, yet claude parts of the suite skipped'; exit 1
           fi
           if [ "$RUNNER_OS" = macOS ] \
              && grep -E '^SKIP .*codex' "$RUNNER_TEMP/suite.out"; then
@@ -85,6 +86,8 @@ jobs:
               done | sort > "$RUNNER_TEMP/shell-files"
           cat "$RUNNER_TEMP/shell-files"
           tr '\n' '\0' < "$RUNNER_TEMP/shell-files" | xargs -0 shellcheck --severity=warning
+          # the shipped scripts also quote every expansion (SC2086, an info-level note)
+          grep '^plugins/' "$RUNNER_TEMP/shell-files" | tr '\n' '\0' | xargs -0 shellcheck --severity=info --include=SC2086
 
   # the subjects of the new commits only (CONTRIBUTING.md, Commits), never the old history: a PR checks
   # base..head; a push checks before..sha, or origin/<default>..sha when before is unknown (a new branch,
