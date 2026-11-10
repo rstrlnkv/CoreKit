@@ -12,9 +12,13 @@ note "$(codex --version)"
 
 assert_exit 0 cx plugin marketplace add "$ROOT"
 assert_exit 0 cx plugin add corecrew@corekit
-# coreopinion is Claude Code only, but the marketplace offers it to Codex too: once installed, its skill must not be
-# offered to the model (skills/second-opinion/agents/openai.yaml)
-assert_exit 0 cx plugin add coreopinion@corekit
+# coreopinion is Claude Code only (P1): Codex reads .agents/plugins/marketplace.json, which lists corecrew and
+# coremodel only, so Codex neither offers nor installs coreopinion.
+lst="$(cx plugin list 2>&1)"
+case "$lst" in *'.agents/plugins/marketplace.json'*) pass ;; *) fail "Codex reads the Codex marketplace file: $lst" ;; esac
+case "$lst" in *'coremodel@corekit'*) pass ;; *) fail "Codex lists coremodel: $lst" ;; esac
+case "$lst" in *coreopinion*) fail "Codex lists coreopinion: $lst" ;; *) pass ;; esac
+assert_exit 1 cx plugin add coreopinion@corekit
 ver="$(sed -n 's/^ *"version": *"\(.*\)",\{0,1\}$/\1/p' "$PLUGIN/.codex-plugin/plugin.json" | head -1)"
 inst="$CODEX_HOME/plugins/cache/corekit/corecrew/$ver"
 assert_file "$inst/.codex-plugin/plugin.json"

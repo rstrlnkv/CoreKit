@@ -38,6 +38,15 @@ assert_contains "$M" '"effort-picker": "coremodel"'
 assert_contains "$M" '"coreeffort": "coremodel"'
 assert_not_contains "$M" 'allowCrossMarketplaceDependenciesOn'
 assert_contains "$M" '"name": "coremodel"'
+# The Codex marketplace (P1): Codex reads .agents/plugins/marketplace.json before .claude-plugin's. It lists
+# exactly the plugins that have a .codex-plugin manifest (so not coreopinion, Claude Code only), each from its folder.
+XM="$ROOT/.agents/plugins/marketplace.json"
+assert_file "$XM"
+assert_contains "$XM" '"name": "corekit"'
+want="$(cd "$ROOT/plugins" && for d in */; do [ -f "$d.codex-plugin/plugin.json" ] && printf '%s\n' "${d%/}"; done)"
+got="$(sed -n 's/.*"path": *"\.\/plugins\/\([a-z]*\)".*/\1/p' "$XM")"
+assert_eq "$got" "$want" "the Codex marketplace lists the plugins with a .codex-plugin manifest"
+assert_not_contains "$XM" 'coreopinion'
 assert_contains "$M" '"source": "./plugins/corecrew"'
 assert_contains "$M" '"source": "./plugins/coremodel"'
 

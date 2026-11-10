@@ -11,7 +11,7 @@ A Claude Code plugin (Claude Code only: it is not supported in Codex) that asks 
 /plugin install coreopinion@corekit
 ```
 
-It is in the `corekit` marketplace and does not depend on `corecrew` or `coremodel`. Codex: not supported. The plugin calls the Codex CLI from Claude Code; it has no Codex manifest. `codex plugin add coreopinion@corekit` still installs it, but Codex does not offer its skill on its own, and its run script refuses to run inside a Codex session (nothing is sent).
+It is in the `corekit` marketplace and does not depend on `corecrew` or `coremodel`. Codex: not supported. The plugin calls the Codex CLI from Claude Code; it has no Codex manifest. Codex does not list it: the marketplace gives Codex its own list without coreopinion. A copy installed in Codex before 0.5.0 stays until you run `codex plugin remove coreopinion@corekit`; Codex does not offer its skill on its own, and its run script refuses to run inside a Codex session (nothing is sent).
 
 Update:
 `claude plugin marketplace update corekit`, `claude plugin update coreopinion@corekit`, then restart Claude Code.

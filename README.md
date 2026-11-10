@@ -29,7 +29,8 @@ the boundary; the plugins' hooks only back it up.
 
 ### Codex
 
-corecrew and coremodel also run in the Codex CLI; coreopinion does not.
+corecrew and coremodel also run in the Codex CLI; coreopinion does not, and Codex does not list it.
+Codex reads its own list of the plugins, `.agents/plugins/marketplace.json`.
 
 ```bash
 codex plugin marketplace add rstrlnkv/CoreKit

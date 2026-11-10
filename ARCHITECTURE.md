@@ -7,7 +7,8 @@ except the TypeScript module of `coremodel`.
 ## Where things live
 
 ```
-.claude-plugin/marketplace.json   the marketplace: lists the three plugins (both hosts read it)
+.claude-plugin/marketplace.json   the marketplace: lists the three plugins (Claude Code reads it)
+.agents/plugins/marketplace.json  the Codex marketplace: corecrew and coremodel only (Codex reads it first)
 plugins/corecrew/                 project workflow
   .claude-plugin/plugin.json      Claude Code manifest: name, version, settings (userConfig), icon
   .codex-plugin/plugin.json       Codex manifest: the same name, version and description, Codex listing fields
