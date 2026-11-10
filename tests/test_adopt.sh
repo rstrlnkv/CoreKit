@@ -135,6 +135,10 @@ refuses "target exists: $CORE_DIR/foo" --from "$F"
 # is left as is with a warning
 new_sandbox; setup_core
 F="$SANDBOX/Projects/my-app"; mkrepo "$F"
+# a .gitignore with no final newline; an internal file whose name, read as a git pattern, also matches
+# .claude/settings.local.json, which stays in the repo
+printf 'build' > "$F/.gitignore"; printf '{}\n' > "$F/.claude/[s]*.json"
+git -C "$F" add -A && git -C "$F" commit -q -m "odd names"
 N0="$(git -C "$F" rev-list --count HEAD)"
 assert_exit 0 bash "$AD" --from "$F"
 OUT1="$OUT"
@@ -149,7 +153,11 @@ assert_no_file "$P/.claude/settings.local.json"
 assert_no_file "$P/.claude/worktrees"
 assert_eq "$(git -C "$F" rev-list --count HEAD)" "$((N0 + 1))" "commit count"
 assert_eq "$(git -C "$F" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ';')" \
-  ".claude/settings.json;.gitignore;.worktreeinclude;CLAUDE.md;docs/guide.md;" "removed files (and the .gitignore lines)"
+  ".claude/[s]*.json;.claude/settings.json;.gitignore;.worktreeinclude;CLAUDE.md;docs/guide.md;" "removed files (and the .gitignore lines)"
+assert_eq "$(git -C "$F" ls-files -- .claude | tr '\n' ';')" ".claude/settings.local.json;.claude/worktrees/w/f.txt;" "a file name was read as a git pattern"
+assert_file "$P/.claude/[s]*.json"
+grep -qxF build "$F/.gitignore" && pass || fail "the last user line of a .gitignore with no final newline was joined: $(cat "$F/.gitignore")"
+grep -qx '# corecrew: .*' "$F/.gitignore" && pass || fail "the corecrew comment is not a whole line: $(cat "$F/.gitignore")"
 assert_eq "$(cat "$F/.claude/settings.local.json")" '{"local":true}' "settings.local.json changed"
 echo "$OUT1" | grep -qF "warning: $F/.claude/settings.local.json exists and was left as is; add \"$P\" to permissions.additionalDirectories in it" && pass || fail "no settings warning: $OUT1"
 assert_file "$F/.claude/worktrees/w/f.txt"
@@ -243,9 +251,11 @@ bash "$WC" "$P" >/dev/null 2>&1 && pass || fail "wiki-check (public docs): $(bas
 # --- rules folding: a CLAUDE.md with a Rules section in the middle; a list of paths; front matter dropped
 new_sandbox; setup_core
 F="$SANDBOX/Projects/rules-app"; mkdir -p "$F/.claude/rules/web"; git init -q "$F" && git -C "$F" symbolic-ref HEAD refs/heads/main
-printf '# R\n\n## Rules\n- Mine.\n\n## Later\nText.\n' > "$F/CLAUDE.md"
+# the Rules section holds a code fence with a "## " line, and a rule after the fence
+printf '# R\n\n## Rules\n- Mine.\n\n```\n## not a heading\n```\n- After the fence.\n\n## Later\nText.\n' > "$F/CLAUDE.md"
 printf -- '---\ndescription: web\npaths:\n  - "src/**/*.{ts,tsx}"\n  - lib/**\n---\nUse tabs.\n' > "$F/.claude/rules/web/style.md"
-printf -- '---\npaths: [ "a/**", '"'"'b/**'"'"' ]\n---\n## Sub\nB.\n' > "$F/.claude/rules/two.md"
+printf -- '---\npaths: [ "a/**", '"'"'b/**'"'"' ]\n---\n## Sub\nB.\n```\n# x\n```\n' > "$F/.claude/rules/two.md"
+printf -- '---\r\npaths: win/**\r\n---\r\n# Head\r\nCRLF body.\r\n' > "$F/.claude/rules/crlf.md"
 git -C "$F" add -A && git -C "$F" commit -q -m initial
 assert_exit 0 bash "$AD" --from "$F"
 C="$CORE_DIR/rules-app/CLAUDE.md"
@@ -257,6 +267,13 @@ assert_not_contains "$C" "description: web"
 assert_eq "$(grep -c '^## Rules$' "$C")" "1" "one Rules section"
 awk '/^## Rules$/ { r = NR } /^- Mine\.$/ { m = NR } /^### two$/ { t = NR } /^### web\/style$/ { w = NR } /^## Later$/ { l = NR }
   END { exit !(r < m && m < t && t < w && w < l) }' "$C" && pass || fail "rules not inside ## Rules: $(cat "$C")"
+# a "## " line inside a code fence does not end the Rules section: the rule after the fence stays above the folded rules
+awk '/^## not a heading$/ { n = NR } /^- After the fence\.$/ { a = NR } /^### crlf$/ { c = NR }
+  END { exit !(n && n < a && a < c) }' "$C" && pass || fail "the fold cut the Rules section at a fenced '## ' line: $(cat "$C")"
+grep -qx '# x' "$C" && pass || fail "a '# ' line inside a rule's code fence was shifted like a heading: $(cat "$C")"
+# a rule file with CRLF line ends: read like any other, and no CR reaches CLAUDE.md
+grep -qx '#### Head' "$C" && grep -qx 'CRLF body\.' "$C" && grep -qx 'Applies to: win/\*\*' "$C" && pass || fail "CRLF rule not folded cleanly: $(cat -v "$C")"
+assert_eq "$(tr -cd '\r' < "$C" | wc -c | tr -d ' ')" "0" "a CR byte reached the folded CLAUDE.md"
 assert_contains "$C" "Text."
 
 # --- --dry-run changes nothing, prints the plan
