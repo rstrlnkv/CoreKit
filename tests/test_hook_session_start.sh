@@ -293,14 +293,13 @@ corecrew: could not create $NC/CLAUDE.local.md, so the private CLAUDE.md is not 
 corecrew: could not create $NC/AGENTS.md, so tools that read AGENTS.md do not get the private CLAUDE.md. Run: ln -s \"$NP/CLAUDE.md\" \"$NC/AGENTS.md\"" \
   "unreadable code folder: the context, then the two link lines"
 
-# --- cost: in a project with the tools current, the hook starts one bash (sync-tools.sh) and at most 34 programs
-# (the hook itself, started here by its full path, is not counted)
+# --- cost: in a project with the tools current, the hook starts one bash (sync-tools.sh); the hook itself, started
+# here by its full path, is not counted. The total of programs is pinned in tests/test_hook_cost.sh.
 REALBASH="$(command -v bash)"
 ss_count() { hook_event claude SessionStart "$NC" source=startup | CORE_DIR="$CD0" "$REALBASH" "$H" >/dev/null 2>&1; }
 ss_count
 count_execs ss_count
 assert_eq "$(grep -cx bash "$EXEC_LOG")" "1" "bash starts in a project with the tools current"
-[ "$EXECS" -le 34 ] && pass || fail "programs started in a project with the tools current: $EXECS (at most 34): $(LC_ALL=C sort "$EXEC_LOG" | uniq -c | tr -s ' \n' ' ')"
 
 # --- letter case: Core path typed in another case than on disk (macOS volumes are case-insensitive)
 mkdir -p "$SANDBOX/cs/a"
