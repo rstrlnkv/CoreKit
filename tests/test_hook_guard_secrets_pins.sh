@@ -34,7 +34,7 @@ p() { run_bash "$1"; hook_ok "Bash passes: $1"; }
 # --- the hook: ~/.ssh as typed and as resolved, the cd rule, the raw scan, path and glob joined
 sec_hook() {
   # HOME is reached through a link, so the folder as typed ($HOME/.ssh) and the resolved one differ
-  HOME="$SANDBOX/hlink" run_read "$SANDBOX/home/.ssh/config"; blocked "HOME is a link: the resolved ~/.ssh" "$SANDBOX/home/.ssh/config"
+  rh="$HOME/.ssh/config"; HOME="$SANDBOX/hlink" run_read "$rh"; blocked "HOME is a link: the resolved ~/.ssh" "$rh"
   HOME="$SANDBOX/hlink" run_read "$SANDBOX/hlink/.ssh/out";   blocked "HOME is a link: a link in ~/.ssh that leaves it, as typed" "$SANDBOX/hlink/.ssh/out"
   HOME="$SANDBOX/hlink" run_read "$SANDBOX/hlink/notes.txt";  hook_ok "HOME is a link: a home file passes"
   run_read "$HOME/.ssh/out";                    blocked "a link in ~/.ssh that leaves it" "$HOME/.ssh/out"
@@ -43,8 +43,8 @@ sec_hook() {
   HOME=/ run_read "/.ssh/config";               hook_ok "HOME=/: /.ssh/config is not under a home"
   HOME=/ run_read "$C/.env";                    blocked "HOME=/: .env is still a secret" "$C/.env"
   # after a cd a relative path has no known folder: only its name is judged
-  b 'cat ../../../../home/.ssh/id_rsa' '../../../../home/.ssh/id_rsa'
-  p 'cd /tmp && cat ../../../../home/.ssh/id_rsa'
+  up="../../../../${HOME##*/}/.ssh/id_rsa"; b "cat $up" "$up"
+  p "cd /tmp && cat $up"
   b 'cd /tmp && cat ~/.ssh/id_rsa' '~/.ssh/id_rsa'
   b 'cd /tmp && cat sub/.env' 'sub/.env'
   # the word shown is the word as typed, also for a glob
