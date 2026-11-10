@@ -90,7 +90,9 @@ done
 LEFT=""; for f in "$proj"/.wiki-migrate.*; do { [ -e "$f" ] || [ -L "$f" ]; } && LEFT="$LEFT$f
 "; done
 if [ "$dry" -eq 1 ]; then S="$(mktemp -d "${TMPDIR:-/tmp}/wiki-migrate.XXXXXX")" || die "cannot create a temp folder"
-else S="$(mktemp -d "$proj/.wiki-migrate.XXXXXX" 2>/dev/null)" || { S=""; die "cannot create a temp folder in $proj; nothing was changed"; }; fi
+else S="$(mktemp -d "$proj/.wiki-migrate.XXXXXX" 2>/dev/null)" || { S=""; die "cannot create a temp folder in $proj; nothing was changed"; }
+  # A killed run leaves this folder: git must not see it, also in a Core whose .gitignore lacks the staging lines.
+  printf '*\n' > "$S/.gitignore" || die "cannot write in $S; nothing was changed"; fi
 SP="$S/new/$name"; SD="$SP/docs"; W="$S/.work"
 mkdir -p "$SP" && mkdir "$W" && cp -Rp "$docs" "$SD" 2>/dev/null || die "could not copy $docs (unreadable file?); nothing was changed"
 : > "$W/lines"; : > "$W/warn"; : > "$W/moved"
@@ -108,7 +110,7 @@ for k in specs plans; do
 done
 rmdir "$SD/superpowers" 2>/dev/null
 
-"$HERE/wiki-pages.sh" "$SD" > "$W/pages" || die "could not list the pages"
+bash "$HERE/wiki-pages.sh" "$SD" > "$W/pages" || die "could not list the pages"
 # Page names, and "name<TAB>heading" for every # to ###### heading outside front matter and fences.
 LC_ALL=C awk -v D="$SD" '
   function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
@@ -155,7 +157,6 @@ while IFS='|' read -r new old; do
   [ -n "$new" ] || continue
   grep -qxF -- "$new" "$W/pages" || printf 'moved docs/%s -> docs/%s\n' "$old" "$new" >> "$W/lines"
 done < "$W/moved"
-cp "$W/lines" "$W/sorted" || die "could not write a temp file"   # already in page order
 
 # The Obsidian files; an existing one is kept.
 for pair in "wiki.base|wiki.base" "obsidian-app.json|.obsidian/app.json" "obsidian-gitignore|.obsidian/.gitignore"; do
@@ -163,9 +164,9 @@ for pair in "wiki.base|wiki.base" "obsidian-app.json|.obsidian/app.json" "obsidi
   if [ -e "$SD/$dst" ] || [ -L "$SD/$dst" ]; then echo "skipped docs/$dst"
   else mkdir -p "$(dirname "$SD/$dst")" && cp "$TPL/$src" "$SD/$dst" || die "could not create docs/$dst; nothing was changed"
     echo "created docs/$dst"; fi
-done >> "$W/sorted"
+done >> "$W/lines"
 # (the pages' type warnings are above; wiki-index's own notes about them would repeat them)
-WIKI_INDEX_UNTYPED=1 bash "$HERE/wiki-index.sh" "$SP" >> "$W/sorted" 2>/dev/null || die "wiki-index.sh failed; nothing was changed"
+WIKI_INDEX_UNTYPED=1 bash "$HERE/wiki-index.sh" "$SP" >> "$W/lines" 2>/dev/null || die "wiki-index.sh failed; nothing was changed"
 # 0.6 instructions in CLAUDE.md, and leftovers of a killed run: named, never touched.
 if [ -f "$proj/CLAUDE.md" ]; then
   awk '/docs\/superpowers/ { print "warning: CLAUDE.md:" NR ": still says docs/superpowers; update it by hand"; next }
@@ -178,7 +179,7 @@ done >> "$W/warn"
 
 # The swap: the old docs/ goes into the temp folder, the copy takes its place. TERM, INT and HUP wait
 # until both moves are done; a signal that came in between undoes the swap (docs/ as it was).
-if [ "$dry" -eq 0 ] && grep -qE '^(moved|updated|created) ' "$W/sorted"; then
+if [ "$dry" -eq 0 ] && grep -qE '^(moved|updated|created) ' "$W/lines"; then
   GOT=0; trap 'GOT=1' TERM INT HUP
   mv "$docs" "$S/old" 2>/dev/null || die "could not replace $docs; nothing was changed"
   if ! mv "$SD" "$docs" 2>/dev/null; then
@@ -191,5 +192,5 @@ if [ "$dry" -eq 0 ] && grep -qE '^(moved|updated|created) ' "$W/sorted"; then
   fi
   trap - TERM INT HUP
 fi
-cat "$W/sorted" "$W/warn"
+cat "$W/lines" "$W/warn"
 exit 0

@@ -277,6 +277,20 @@ cp "$P/docs/features/broken.md" "$SANDBOX/broken.orig"
 run "$P"
 case "$RC" in 0|1) pass ;; *) fail "unclosed front matter: exit $RC (want 0 or 1): $ERR" ;; esac
 cmp -s "$P/docs/features/broken.md" "$SANDBOX/broken.orig" && pass || fail "unclosed front matter page was rewritten: $(cat "$P/docs/features/broken.md")"
+assert_eq "$(printf '%s\n' "$OUT" | grep '^warning: broken:')" "warning: broken: front matter not closed" "unclosed front matter: the warning"
+
+# --- a reference to a heading that does not exist stays as written and is warned about, in both backtick forms:
+# a code span that is one reference, and the path alone in backticks
+new_sandbox
+mkproj "$SANDBOX/nr"
+printf -- '---\ntype: feature\nstatus: active\ndescription: Reference forms that stay.\nfiles: []\nrelated: []\nupdated: 2026-01-01\n---\n\nSpan: `docs/architecture.md § Nope span` stays.\nTick: `docs/architecture.md` § Nope tick.\n' > "$P/docs/features/w.md"
+cp "$P/docs/features/w.md" "$SANDBOX/w.orig"
+run "$P"
+assert_eq "$RC" "0" "references with no heading: exit"
+assert_eq "$(printf '%s\n' "$OUT" | grep '^warning: w:')" "warning: w: reference to architecture § Nope span not converted
+warning: w: reference to architecture § Nope tick. not converted" "references with no heading: warnings"
+cmp -s "$P/docs/features/w.md" "$SANDBOX/w.orig" && pass || fail "a page with unconverted references was rewritten: $(cat "$P/docs/features/w.md")"
+printf '%s\n' "$OUT" | grep -qxF "updated docs/features/w.md" && fail "an unchanged page is reported as updated" || pass
 
 # --- failure path: a step fails, the project is exactly as it was (files, folders, repo status)
 fails() { # <label> — expects RC=1, one non-empty stderr, project unchanged; the repo stays clean
@@ -369,6 +383,32 @@ STUB
   assert_eq "$RC" "1" "second mv fails: exit"
   [ -n "$ERR" ] && pass || fail "second mv fails: nothing on stderr"
   assert_eq "$(snap_tree "$P")" "$before" "second mv fails: docs/ not restored"
+  # a run killed at the swap (KILL: no trap runs) in a Core whose .gitignore predates the staging lines: the
+  # staging folder stays, git does not see it (so save cannot commit it), and the next run still names it
+  new_sandbox
+  cp -R "$PLUGIN" "$SANDBOX/plug"; mkdir "$SANDBOX/stub"
+  cat > "$SANDBOX/stub/mv" <<STUB
+#!/bin/bash
+case "\$1" in
+  */docs) if [ ! -e "$SANDBOX/kill.done" ]; then : > "$SANDBOX/kill.done"; kill -KILL \$PPID; sleep 1; exit 0; fi ;;
+esac
+exec "$REALMV" "\$@"
+STUB
+  chmod +x "$SANDBOX/stub/mv"
+  CORE="$SANDBOX/core"; mkproj "$CORE"; printf '.DS_Store\n.env\n.env.*\n' > "$CORE/.gitignore"
+  gitify "$CORE" || fail "could not build the git fixture"
+  ( PATH="$SANDBOX/stub:$PATH" bash "$SANDBOX/plug/scripts/wiki-migrate.sh" "$P" >/dev/null 2>&1; : ) 2>/dev/null
+  [ -e "$SANDBOX/kill.done" ] && pass || fail "the mv stub never saw the swap (nothing to test)"
+  left="$(ls -d "$P"/.wiki-migrate.* 2>/dev/null)"
+  [ -n "$left" ] && [ -d "$left/new/wiki-old/docs" ] && pass || fail "the killed run left no staging folder (nothing to test): $(ls -A "$P")"
+  assert_eq "$(git -C "$CORE" status --porcelain --untracked-files=all | grep -c '\.wiki-migrate')" "0" "killed run, old .gitignore: git sees the staging folder"
+  assert_eq "$(git -C "$CORE" status --porcelain --untracked-files=all)" "" "killed run, old .gitignore: repo status"
+  git -C "$CORE" add -A -- wiki-old && assert_eq "$(git -C "$CORE" diff --cached --name-only)" "" "killed run, old .gitignore: git add stages the staging folder"
+  run "$P"
+  assert_eq "$RC" "0" "run after a killed one: exit"
+  printf '%s\n' "$OUT" | grep -qxF "warning: leftover $left from an interrupted run; check and remove it by hand" && pass || fail "leftover of the killed run not named: $OUT"
+  assert_dir "$left/new/wiki-old/docs"
+  [ -z "$(git -C "$CORE" status --porcelain --untracked-files=all | grep '\.wiki-migrate')" ] && pass || fail "after the next run git sees a staging folder"
 else
   skip "mv-stub tests" "running as root"
 fi
@@ -397,6 +437,20 @@ for m in --dry-run ""; do
   assert_eq "$(tree_sum "$EXT")" "$ext_before" "superpowers link ${m:-real}: the link target changed"
   assert_eq "$(snap_tree "$P")" "$docs_before" "superpowers link ${m:-real}: the project changed"
   assert_eq "$OUT" "" "superpowers link ${m:-real}: stdout"
+done
+# docs/ itself a link to a real folder: refused the same way, the link and its target as they were
+mkproj "$SANDBOX/dl"; DT="$SANDBOX/dl-target"; mkdir "$DT"; mv "$P/docs" "$DT/docs"; ln -s "$DT/docs" "$P/docs"
+dt_before="$(tree_sum "$DT")"; dl_before="$(snap_tree "$P")"
+[ -n "$(find "$DT/docs" -type f -name '*.md')" ] && pass || fail "the docs/ link target holds no pages (nothing to test)"
+for m in --dry-run ""; do
+  run "$P" $m
+  assert_eq "$RC" "1" "docs link ${m:-real}: exit"
+  assert_eq "$ERR" "wiki-migrate: $P/docs is a symlink; nothing was changed" "docs link ${m:-real}: message"
+  assert_eq "$OUT" "" "docs link ${m:-real}: stdout"
+  assert_eq "$(tree_sum "$DT")" "$dt_before" "docs link ${m:-real}: the link target changed"
+  assert_eq "$(snap_tree "$P")" "$dl_before" "docs link ${m:-real}: the project changed"
+  [ -L "$P/docs" ] && pass || fail "docs link ${m:-real}: docs/ is no longer a link"
+  assert_eq "$(ls -d "$P"/.wiki-migrate.* 2>/dev/null)" "" "docs link ${m:-real}: a staging folder was left"
 done
 # the other folders, each a link to an outside folder
 for l in superpowers/specs superpowers/plans specs plans .obsidian; do
@@ -474,5 +528,19 @@ OUT="$(bash "$SANDBOX/plugin-copy/scripts/wiki-migrate.sh" "$P" 2>"$SANDBOX/err"
 assert_eq "$RC" "1" "no wiki-migrate.awk: exit"
 assert_contains "$SANDBOX/err" "nothing was changed"
 assert_eq "$(tree_sum "$P")" "$before" "no wiki-migrate.awk: the project changed"
+
+# --- an install without exec bits: wiki-migrate runs wiki-pages.sh with bash, so it prints what the install with
+# exec bits prints and leaves the same tree
+new_sandbox
+cp -R "$PLUGIN" "$SANDBOX/noexec"; find "$SANDBOX/noexec" -type f -exec chmod a-x {} +
+[ ! -x "$SANDBOX/noexec/scripts/wiki-pages.sh" ] && pass || fail "the copy still has exec bits (nothing to test)"
+mkproj "$SANDBOX/nx1"; run "$P"; want_out="$OUT"; want_tree="$(tree_sum "$P")"
+assert_eq "$RC" "0" "with exec bits: exit"
+mkproj "$SANDBOX/nx2"
+OUT="$(bash "$SANDBOX/noexec/scripts/wiki-migrate.sh" "$P" 2>"$SANDBOX/err")"; RC=$?
+assert_eq "$RC" "0" "no exec bits: exit"
+assert_eq "$(cat "$SANDBOX/err")" "" "no exec bits: stderr"
+assert_eq "$OUT" "$want_out" "no exec bits: output"
+assert_eq "$(tree_sum "$P")" "$want_tree" "no exec bits: the migrated tree"
 
 finish

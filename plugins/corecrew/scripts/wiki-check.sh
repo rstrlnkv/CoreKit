@@ -34,7 +34,7 @@
 # <file> is relative to docs/ ("features/login.md"); CLAUDE.md is printed as "../CLAUDE.md".
 # Pages are read for wikilinks (body and the related: field) and Markdown links; CLAUDE.md for
 # Markdown links only; all outside code fences and `inline code`. Markdown links ignore other
-# schemes (http:, mailto:...) and pure "#anchor"; "page.md#anchor" checks the file only.
+# schemes (http:, mailto:...) and pure "#anchor"; "page.md#anchor" checks the file only; %XX is decoded.
 # A wikilink [[t]], [[t#h]], [[t|alias]] or ![[t]] resolves: t with a "/" to docs/t.md or the file
 # docs/t; t without one to the page named t, else a file named t anywhere under docs/; an empty
 # t to the page itself. h is the exact text of a # to ###### heading of that page, outside fences.
@@ -85,7 +85,7 @@ trap 'rm -rf "$T"' EXIT
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 # Wiki pages (docs-relative, one per line) and every file under docs/ (wikilinks may name any).
-"$HERE/wiki-pages.sh" "$DOCS" > "$T/pages" || exit 2
+bash "$HERE/wiki-pages.sh" "$DOCS" > "$T/pages" || exit 2
 ( set -o pipefail; cd "$DOCS" && find . -type f | sed 's|^\./||' | LC_ALL=C sort ) > "$T/files" || exit 2
 
 # Changed paths: "C <code path>" or "P <docs-relative page>".
@@ -119,7 +119,7 @@ run_checked() { run_awk "$@" || echo "$2" >> "$T/failed"; }
 OUT="$(
   if [ ! -f "$DOCS/INDEX.md" ]; then echo "wiki-check: INDEX.md: missing"
   else
-    "$HERE/wiki-index.sh" "$PROJ" --check > /dev/null 2>&1; rc=$?      # (no "case" here: bash 3.2 misparses it in $( ))
+    bash "$HERE/wiki-index.sh" "$PROJ" --check > /dev/null 2>&1; rc=$?      # (no "case" here: bash 3.2 misparses it in $( ))
     if [ "$rc" = 1 ]; then echo "wiki-check: INDEX.md: INDEX.md stale"
     elif [ "$rc" != 0 ]; then echo INDEX.md >> "$T/failed"; fi
   fi

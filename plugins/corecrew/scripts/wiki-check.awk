@@ -37,14 +37,14 @@ function norm(p,   n, parts, i, k, st, out, abs) {
   return (abs ? "/" : "") out
 }
 
-# %XX -> character for ASCII (so "my%20page.md" works); other bytes stay as written.
+# %XX -> that byte (so "my%20page.md" and a UTF-8 name such as "caf%C3%A9.png" work); %00 stays as written.
 function unpct(s,   out, i, h, v) {
   out = ""
   while ((i = index(s, "%")) > 0) {
     h = tolower(substr(s, i + 1, 2))
     if (h ~ /^[0-9a-f][0-9a-f]$/) {
       v = (index("0123456789abcdef", substr(h, 1, 1)) - 1) * 16 + index("0123456789abcdef", substr(h, 2, 1)) - 1
-      if (v < 128 && v > 0) { out = out substr(s, 1, i - 1) sprintf("%c", v); s = substr(s, i + 3); continue }
+      if (v > 0) { out = out substr(s, 1, i - 1) sprintf("%c", v); s = substr(s, i + 3); continue }
     }
     out = out substr(s, 1, i); s = substr(s, i + 1)
   }
