@@ -115,6 +115,8 @@ if [ "$(id -u)" != 0 ]; then
   touch -t 200001020000 "$C/noread.txt"
   input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "2" "fingerprint: mtime change of an unreadable file missed"
   chmod 600 "$C/noread.txt"; rm -f "$C/noread.txt"
+else
+  skip "fingerprint of an unreadable file" "running as root"
 fi
 # an edit of the same size within the same minute is noticed (the file is newer than the last reminder)
 input "$C" false | bash "$H" >/dev/null 2>&1

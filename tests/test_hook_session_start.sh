@@ -23,12 +23,12 @@ if command -v python3 >/dev/null 2>&1; then
   rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
   J="$(hook_event claude SessionStart "$SANDBOX/elsewhere" source=startup | CORE_DIR="$SANDBOX/we\\ird \"q\"" bash "$H" 2>&1)"
   printf '%s' "$J" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); assert "ird" in d["systemMessage"]' && pass || fail "hint is not valid JSON: $J"
-fi
-# a TAB and a CR in the text (JSON allows no raw control character in a string): each becomes a blank
-if command -v python3 >/dev/null 2>&1; then
+  # a TAB and a CR in the text (JSON allows no raw control character in a string): each becomes a blank
   rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
   J="$(hook_event claude SessionStart "$SANDBOX/elsewhere" source=startup | CORE_DIR="$SANDBOX/ta"$'\t'"b"$'\r'"cr" bash "$H" 2>&1)"
   printf '%s' "$J" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); assert "/ta b cr " in d["systemMessage"]' && pass || fail "hint with a TAB and a CR is not valid JSON with blanks: $J"
+else
+  skip hint-json "python3 not on PATH"
 fi
 assert_file "$CLAUDE_PLUGIN_DATA/tools/VERSION"
 assert_file "$CLAUDE_PLUGIN_DATA/tools/save"
@@ -335,6 +335,8 @@ if command -v python3 >/dev/null 2>&1; then
   rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
   J="$(hook_event claude SessionStart "$SANDBOX/ss/el" source=startup | env -u CORE_DIR HOME="$SANDBOX/ss/nohome" XDG_CONFIG_HOME="$SANDBOX/ss/none" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
   printf '%s' "$J" | python3 -I -c 'import json,sys; d=json.loads(sys.stdin.read()); m=d["systemMessage"]; assert "core_dir" in m and "Core not found" in m' && pass || fail "warning + hint is not one valid JSON line: $J"
+else
+  skip warning-json "python3 not on PATH"
 fi
 # Core not set up and the hint already shown on this machine: the warning still comes, alone, and at startup only
 mkdir -p "$CLAUDE_PLUGIN_DATA/state"; : > "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"

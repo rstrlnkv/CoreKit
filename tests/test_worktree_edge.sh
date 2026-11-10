@@ -16,7 +16,10 @@ guard() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","t
 # --- the .git file of a worktree, rewritten: relative gitdir, trailing blanks, CRLF
 W="$SANDBOX/ext/w1"; git -C "$C" worktree add -q "$W" -b e1 || fail "worktree add"
 GD="$(sed -n 's/^gitdir: //p' "$W/.git")"
-printf 'gitdir: %s\n' "$(python3 -c 'import os,sys;print(os.path.relpath(sys.argv[1],sys.argv[2]))' "$GD" "$W")" > "$W/.git"
+# the relative form of $GD seen from $W: both are under $SANDBOX, and $W is two folders below it
+REL="../../${GD#"$SANDBOX"/}"
+assert_eq "$(cd "$W" && cd -P "$REL" 2>/dev/null && pwd)" "$GD" "the relative gitdir names the same folder"
+printf 'gitdir: %s\n' "$REL" > "$W/.git"
 assert_eq "$(wt_of "$W/src")" "0 $W $C" "relative gitdir"
 guard Write "$W/docs/a.md" "$W"; assert_eq "$RC" "2" "guard blocks docs/ with a relative gitdir"
 printf 'gitdir: %s   \n' "$GD" > "$W/.git"
