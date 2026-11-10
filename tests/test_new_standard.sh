@@ -62,6 +62,27 @@ assert_exit 0 bash "$C" "$E/l120.md"
 assert_eq "$(wc -l < "$E/l121.md" | tr -d ' ')" 121 "fixture line count"
 assert_exit 1 bash "$C" "$E/l121.md"
 assert_eq "$OUT" "check-standard: over 120 lines" "l121 output"
+# A file over 120 lines whose front matter never closes: both problems are named.
+{ printf -- '---\nname: x\n'; i=0; while [ $i -lt 119 ]; do echo "l$i: v"; i=$((i+1)); done; } > "$E/unclosed-long.md"
+assert_exit 1 bash "$C" "$E/unclosed-long.md"
+assert_eq "$OUT" "check-standard: unclosed front matter
+check-standard: over 120 lines" "unclosed and long"
+# ## Rule without a numbered line.
+awk '/^## Rule/{print; print "Be kind."; r=1; next} /^## /{r=0} !r' "$FX/standard-good.md" > "$E/norules.md"
+assert_exit 1 bash "$C" "$E/norules.md"
+assert_eq "$OUT" "check-standard: no rules in ## Rule" "no rules"
+# A check with nothing after the arrow, and a "no guard" with no risk: both malformed.
+MALFORMED='(want "<command> → <expected>" or "no guard — <risk>")'
+sed -e 's/^2\. .* → .*/2. true → /' -e 's/^3\. no guard — .*/3. no guard — /' "$FX/standard-good.md" > "$E/halfchecks.md"
+assert_contains "$E/halfchecks.md" "2. true → "; assert_contains "$E/halfchecks.md" "3. no guard — "
+assert_exit 1 bash "$C" "$E/halfchecks.md"
+assert_eq "$OUT" "check-standard: check 2 is malformed $MALFORMED
+check-standard: check 3 is malformed $MALFORMED" "half-written checks"
+# The same two with nothing but the arrow or the dash before the end of the line.
+sed -e 's/^2\. .* → .*/2. true →/' -e 's/^3\. no guard — .*/3. no guard —/' "$FX/standard-good.md" > "$E/halfchecks2.md"
+assert_exit 1 bash "$C" "$E/halfchecks2.md"
+assert_eq "$OUT" "check-standard: check 2 is malformed $MALFORMED
+check-standard: check 3 is malformed $MALFORMED" "half-written checks, no trailing space"
 # All seven roles are accepted.
 sed 's/^applies-to:.*/applies-to: [engineer, tester, security, verifier, localizer, designer, release]/' \
   "$FX/standard-good.md" > "$E/roles.md"
@@ -82,6 +103,7 @@ assert_exit 1 bash "$C" "$E/template-fm.md"
 assert_eq "$OUT" "check-standard: placeholder left: <Title>
 check-standard: placeholder left: <imperative rule>
 check-standard: placeholder left: <the failure this rule prevents>
+check-standard: placeholder left: <command>
 check-standard: placeholder left: <expected output>
 check-standard: placeholder left: <the risk that stays>
 check-standard: placeholder left: <what the rules rest on: a link, a document, or your own experience>
@@ -92,7 +114,19 @@ assert_exit 1 bash "$C" "$E/comment.md"
 assert_eq "$OUT" "check-standard: comment left" "comment left"
 sed 's|^- The owner.s own habit.|- Legitimate <Core>/standards/<name>.md text is not a placeholder|' "$FX/standard-good.md" > "$E/angle.md"
 assert_exit 0 bash "$C" "$E/angle.md"
+# The template's <command> left in a check line is a placeholder like the others.
+sed 's/^1\. .* → .*/1. <command> → 0 failed/' "$FX/standard-good.md" > "$E/command.md"
+assert_contains "$E/command.md" "1. <command> → 0 failed"
+assert_exit 1 bash "$C" "$E/command.md"
+assert_eq "$OUT" "check-standard: placeholder left: <command>" "<command> left"
 assert_exit 1 bash "$C" "$TPL"        # the raw template is never green
+# Every <...> text of the template outside its comments is reported, so a new placeholder cannot be missed.
+PHS="$(awk '/<!--/{c=1} !c{print} c&&/-->/{c=0}' "$TPL" | grep -o '<[^>]*>' | sort -u)"
+[ "$(printf '%s\n' "$PHS" | grep -c .)" -ge 10 ] && pass || fail "placeholders read from the template: $PHS"
+while IFS= read -r ph; do
+  printf '%s\n' "$OUT" | grep -qxF "check-standard: placeholder left: $ph" && pass || fail "template placeholder not reported: $ph"
+done <<< "$PHS"
+assert_eq "$(printf '%s\n' "$OUT" | grep -c 'placeholder left: ')" "$(printf '%s\n' "$PHS" | grep -c .)" "placeholders reported for the raw template"
 assert_not_contains <(printf '%s' "$OUT") "missing section"
 assert_not_contains <(printf '%s' "$OUT") "out of order"
 for w in '→' 'no guard —' 'engineer' 'release' 'designer'; do assert_contains "$TPL" "$w"; done

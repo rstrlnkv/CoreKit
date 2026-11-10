@@ -59,7 +59,7 @@ function scan(l,   t) {
   for (t = 1; t <= nph; t++) if (index(l, PH[t]) > 0 && !(PH[t] in PHSEEN)) { PHSEEN[PH[t]] = 1; PHORD[++nphseen] = PH[t] }
 }
 BEGIN {
-  nph = split("<kebab-case>|<one line: what it rules and when an agent needs it>|<roles that must read it>|<Title>|<imperative rule>|<the failure this rule prevents>|<expected output>|<the risk that stays>|<what the rules rest on: a link, a document, or your own experience>", PH, "|")
+  nph = split("<kebab-case>|<one line: what it rules and when an agent needs it>|<roles that must read it>|<Title>|<imperative rule>|<the failure this rule prevents>|<command>|<expected output>|<the risk that stays>|<what the rules rest on: a link, a document, or your own experience>", PH, "|")
 
   nsec = split("Rule|Why|How to check|Exceptions|Sources", SEC, "|")
   nfld = split("name description applies-to updated", FLD, " ")
