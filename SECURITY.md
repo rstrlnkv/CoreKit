@@ -94,8 +94,11 @@ not the rest of that data folder), the corecrew settings file and its hooks mark
 the global git config files `~/.gitconfig` and `$XDG_CONFIG_HOME/git/config` (git stops when
 it cannot read one) and git's default global ignore file `$XDG_CONFIG_HOME/git/ignore` (patterns
 only). A `core.excludesFile` set to another path is not opened: sandboxed git then warns
-`unable to access` and lists globally ignored files as untracked. Keep tokens out of those two git files (a credential helper, not a token in a
-URL): sandboxed commands can read them. Their folders stay closed, so `~/.config/git/credentials`
+`unable to access` and lists globally ignored files as untracked. A file a git config includes
+(`[include]` or `[includeIf]` path) is not opened either, so sandboxed git stops: add its line,
+`"<file>" = "read"`, to the `[permissions.corecrew.filesystem]` table by hand (again after a new
+paste). Keep tokens out of the global git config files and any file they include (a credential helper, not a
+token in a URL): sandboxed commands can read them. Their folders stay closed, so `~/.config/git/credentials`
 does too. The folder that holds your projects is not opened (other projects' secrets): corecrew
 finds the project's code folder from the current folder instead. The rest of your home folder and
 of the Codex home (`auth.json`, `config.toml`) stays closed. Print and paste the fragment again if

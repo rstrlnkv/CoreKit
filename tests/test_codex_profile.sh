@@ -17,6 +17,13 @@ for w in '--sandbox' '--dangerously-bypass-approvals-and-sandbox' 'sandbox_mode'
   grep -qF -- "$w" "$FRAG" && pass || fail "comment names: $w"
 done
 grep -qiE 'real boundary|drop that line' "$FRAG" && fail "comment still promises a boundary or advises dropping the line" || pass
+# a file a git config includes stays closed (the profile cannot know it): the comment and the docs say to add its line by
+# hand, in the form the fragment uses, and to keep tokens out of it; codex-host.md names it as a cause of `unable to access`
+grep -q '^#.*includes' "$FRAG" && grep -qF '"<file>" = "read"' "$FRAG" && pass || fail "comment: an included git file needs a hand-added line"
+for d in "$ROOT/plugins/corecrew/reference/codex-host.md" "$ROOT/SECURITY.md"; do
+  grep -qF '"<file>" = "read"' "$d" && grep -qi 'includes' "$d" && pass || fail "${d##*/}: an included git file needs a hand-added line"
+done
+grep -qi 'tokens.*includ\|includ.*tokens' "$ROOT/SECURITY.md" && pass || fail "SECURITY.md: keep tokens out of an included git file"
 # the broad name patterns are gone: they blocked tokenizer.py, secret_santa.py
 for g in '*[tT]oken*' '*TOKEN*' '*[sS]ecret*' '*SECRET*'; do grep -qF "\"**/$g\"" "$FRAG" && fail "broad pattern still denied: $g" || pass; done
 for g in '.env' '.env.*' '*.env' '*.pem' 'id_rsa*' 'id_ecdsa*' 'id_dsa*' '.npmrc' '.aws/**' '.kube/**' '.docker/config.json' '.htpasswd' '.pgpass' '*.token' '[tT]oken' '[sS]ecrets*' '*.secret' '*_[tT]oken' '*-[tT]oken' '*_[tT]oken.*' '.*[tT]oken' '.secrets*' '*client_secret*.json' '.dockercfg' '*-secret.*' '*_secret.*'; do assert_contains "$FRAG" "\"**/$g\" = \"deny\""; done
@@ -227,6 +234,16 @@ out="$(sbx sh -c "echo y >> '$XDG_CONFIG_HOME/git/ignore'")"; case "$out" in *"n
 out="$(sbx cat "$XDG_CONFIG_HOME/git/credentials")"; case "$out" in *"not permitted"*) pass ;; *) fail "git credentials beside the git ignore file: $out" ;; esac
 closed "git ignore"
 rm -f a.log
+# a file a git config includes is not opened by the profile: git stops (KNOWN LIMIT); the line the docs tell the user to
+# add by hand opens it, and git works again
+rm -f .env; printf '[include]\n\tpath = %s\n' "$H/.gitconfig.local" > "$H/.gitconfig"; printf '[user]\n\tname = L\n' > "$H/.gitconfig.local"
+out="$(unset GIT_CONFIG_GLOBAL; codex sandbox -- "$GITBIN" status --short 2>&1)"
+case "$out" in *"unable to access"*".gitconfig.local"*) pass ;; *) fail "KNOWN LIMIT: an included git file is closed: $out" ;; esac
+awk -v f="$H/.gitconfig.local" '{print} /^":tmpdir" = "write"$/{printf "\"%s\" = \"read\"\n", f}' "$SANDBOX/profile.toml" > "$CODEX_HOME/config.toml"
+assert_eq "$(unset GIT_CONFIG_GLOBAL; codex sandbox -- "$GITBIN" status --short 2>&1; echo "rc=$?")" " M app.txt
+rc=0" "an included git file with its hand-added line: git status works in the sandbox"
+closed "git include"
+cp "$SANDBOX/profile.toml" "$CODEX_HOME/config.toml"; rm -f "$H/.gitconfig" "$H/.gitconfig.local"
 # --- code_dir_of in the sandbox: <Projects> cannot be listed (not opened, it holds other projects' secrets), so the
 # lookup falls back to the cwd when that is the project's code folder. The Core gets write (a stand-in for --add-dir).
 P="$SANDBOX/P"; mkdir -p "$P/Core/demo" "$P/Demo/src" "$P/Other"; echo x > "$P/Core/demo/CLAUDE.md"; echo OTHERSECRET > "$P/Other/notes.txt"

@@ -70,12 +70,15 @@ session-start hook and an approved `install-hooks.sh` refresh the copy.
 The corecrew sandbox profile lets sandboxed commands read the plugin folder, the tools copy
 (`<Codex home>/plugins/data/corecrew-<marketplace>/tools`), the settings file, the hooks marker
 the global git config files and git's default global ignore file (`~/.config/git/ignore`).
-`Operation not permitted` on one of these (git's `unable to access '<home>/.gitconfig'` or
-`'<home>/.config/git/ignore'` too) means the pasted profile is older: tell the user to
-print it again with `bash "<scripts>/lib.sh" codex-profile` and paste it over the old one.
+Git's `unable to access '<file>'` has two causes. On one of these (`<home>/.gitconfig`,
+`<home>/.config/git/ignore` too) the pasted profile is older: tell the user to print it again with
+`bash "<scripts>/lib.sh" codex-profile` and paste it over the old one. On a file a git config
+includes (`[include]` or `[includeIf]` path) the profile cannot know it: tell the user to add the
+line `"<file>" = "read"` under `[permissions.corecrew.filesystem]` by hand, and to keep tokens out
+of that file.
 Known limit: a `core.excludesFile` set to another path stays closed, so sandboxed git warns about
 it and lists those ignored files as untracked. Leave such files out of commits; do not widen the
-profile.
+profile yourself.
 
 ## Questions
 Codex has no AskUserQuestion tool. Ask in plain chat instead: at most three questions in one message,
