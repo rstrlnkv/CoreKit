@@ -86,11 +86,20 @@ to Bash commands as well. A deny rule wins over an allow rule, so `Read(**/.env.
 **Codex.** corecrew prints a permission profile that keeps `.env*`, keys, credentials and `~/.ssh`
 unreadable: run `bash <plugin folder>/scripts/lib.sh codex-profile` and paste the output into
 `~/.codex/config.toml`. corecrew never writes that file. The profile also lets sandboxed commands
-read two places of corecrew, written into the fragment as paths of your machine: the folder Codex
-keeps this marketplace's plugins in (`<Codex home>/plugins/cache/<marketplace>`, public plugin
-code) and the corecrew settings file (no secrets). The rest of your home folder and of the Codex
-home (`auth.json`, `config.toml`) stays closed. Print and paste the fragment again if yours lacks these
-two lines, and when the Codex home or the settings file moves. The profile is a default, not a hard
+read three places of corecrew and three files of git, written into the fragment as paths of your
+machine, each one alone and read-only: the folder Codex keeps this marketplace's plugins in
+(`<Codex home>/plugins/cache/<marketplace>`, public plugin code), the corecrew tools copy
+(`<Codex home>/plugins/data/corecrew-<marketplace>/tools`, the `save` and `undo-step` commands;
+not the rest of that data folder), the corecrew settings file and its hooks marker (no secrets),
+the global git config files `~/.gitconfig` and `$XDG_CONFIG_HOME/git/config` (git stops when
+it cannot read one) and git's default global ignore file `$XDG_CONFIG_HOME/git/ignore` (patterns
+only). A `core.excludesFile` set to another path is not opened: sandboxed git then warns
+`unable to access` and lists globally ignored files as untracked. Keep tokens out of those two git files (a credential helper, not a token in a
+URL): sandboxed commands can read them. Their folders stay closed, so `~/.config/git/credentials`
+does too. The folder that holds your projects is not opened (other projects' secrets): corecrew
+finds the project's code folder from the current folder instead. The rest of your home folder and
+of the Codex home (`auth.json`, `config.toml`) stays closed. Print and paste the fragment again if
+yours lacks these seven lines, and when the Codex home or the settings file moves. The profile is a default, not a hard
 boundary. These switch it off: `--sandbox`, `--dangerously-bypass-approvals-and-sandbox` or
 `-c sandbox_mode=...` on the command line, `sandbox_mode` in any config layer (a profile, the
 system config), and the `.codex/config.toml` of a trusted project (a cloned repository can bring
