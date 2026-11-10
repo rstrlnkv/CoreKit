@@ -244,6 +244,16 @@ if [ "$(id -u)" != 0 ]; then
   assert_eq "$RC" "1" "read-only parent, no copy yet: exit 1"
   [ ! -e "$SANDBOX/sleep.n" ] && pass || fail "read-only parent, no copy yet: no sleep"
   assert_eq "$(ls -A "$SANDBOX/ro2")" "" "read-only parent, no copy yet: something was made"
+  # A dead lock in a read-only parent cannot be renamed away: each takeover try counts, so the run gives up as busy
+  # instead of looping. Run in the background under a 5 s watchdog so a regression fails here and does not hang.
+  mkdir "$RO/tools.lock"; echo 99999999 > "$RO/tools.lock/pid"; chmod 555 "$RO"
+  bash "$SYNC" "$PLUGIN" "$RO/tools" > "$SANDBOX/ro3.out" 2>&1 &
+  BGPID=$!; n=0
+  while kill -0 "$BGPID" 2>/dev/null && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+  if kill -0 "$BGPID" 2>/dev/null; then kill "$BGPID" 2>/dev/null; wait "$BGPID" 2>/dev/null; RC=hung; : > "$SANDBOX/ro3.out"
+  else wait "$BGPID"; RC=$?; fi
+  chmod 755 "$RO"; rm -rf "$RO/tools.lock"
+  assert_eq "$RC $(cat "$SANDBOX/ro3.out")" "0 tools busy $V" "read-only parent, dead lock: tools busy, no endless loop"
   assert_exit 0 bash "$SYNC" "$PLUGIN" "$RO/tools"
   assert_eq "$OUT" "tools updated $V" "parent writable again: updated"
 else
