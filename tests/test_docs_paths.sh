@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 # The public docs (READMEs, SECURITY.md, ARCHITECTURE.md, CONTRIBUTING.md, docs/*.md, .github/) name repo
 # paths: every one must exist, so a file that was moved or removed cannot stay in the text.
-# A root doc names paths from the repo root (plugins/, docs/, tests/, evals/). A plugin's README may
+# A root doc names paths from the repo root (plugins/, docs/, tests/, evals/, scripts/, .github/); its scripts/
+# path may also be one of corecrew's (ARCHITECTURE.md names scripts/git-hooks/ that way). A plugin's README may
 # also name paths inside its plugin (skills/, scripts/, hooks/, ...) or inside one of its skills,
 # which are looked up there first.
 # Paths with a placeholder (<name>, *, $) are skipped.
 source "$(dirname "$0")/lib.sh"
 
-ROOT_DIRS='plugins|docs|tests|evals'
+ROOT_DIRS='plugins|docs|tests|evals|scripts|\.github'
 PLUGIN_DIRS='plugins|docs|tests|evals|skills|scripts|hooks|agents|reference|codex|assets|templates'
 
-# paths_in <file> <dirs> — path-like tokens that start at one of <dirs> (an ERE alternation)
+# paths_in <file> <dirs> — path-like tokens that start at one of <dirs> (an ERE alternation). The one character
+# before a token is matched too (it must not be part of a longer path) and then dropped: that character only,
+# so the dot of a .github/ path at the start of a line stays.
 paths_in() {
   LC_ALL=C grep -oE "(^|[^A-Za-z0-9_./~<-])($2)/[A-Za-z0-9_./*<>\$-]*[A-Za-z0-9_*>/]" "$1" \
-    | LC_ALL=C sed -E 's/^[^a-z]//' | LC_ALL=C grep -v '[*<>$]' | LC_ALL=C sort -u
+    | LC_ALL=C sed -E 's/^[^A-Za-z0-9_./~<-]//' | LC_ALL=C grep -v '[*<>$]' | LC_ALL=C sort -u
 }
 
 # The documents, one glob a line; "optional" marks a glob that may match nothing (the translations).
@@ -34,6 +37,8 @@ docs_of() {
   # shellcheck disable=SC2086 # $2 is a glob on purpose; the root is quoted, so its own characters stay literal
   for f in "$1"/$2; do [ -f "$f" ] && printf '%s\n' "${f#"$1"/}"; done
 }
+# in_corecrew <root> <path> — a root doc's scripts/ path that is not at the root but is one of corecrew's
+in_corecrew() { case "$2" in scripts/*) [ -e "$1/plugins/corecrew/$2" ] ;; *) return 1 ;; esac; }
 docs=""
 while read -r g opt; do
   got="$(docs_of "$ROOT" "$g")"
@@ -55,6 +60,7 @@ for doc in $docs; do
     if [ -n "$base" ] && [ -e "$base/$q" ]; then pass
     elif [ -n "$base" ] && ls -d "$base"/skills/*/"$q" >/dev/null 2>&1; then pass   # relative to one of its skills
     elif [ -e "$ROOT/$q" ]; then pass
+    elif [ -z "$base" ] && in_corecrew "$ROOT" "$q"; then pass
     else fail "$doc names $p, which does not exist"
     fi
   done < <(paths_in "$ROOT/$doc" "$dirs")
@@ -220,7 +226,20 @@ assert_eq "$got" "docs/migration-0.3.md evals/gone/evals.json " "path extraction
 [ -e "$ROOT/evals/gone/evals.json" ] && fail "self-check path exists" || pass
 printf 'Run `scripts/ask-gpt.sh` (see skills/x/SKILL.md).\n' > "$SANDBOX/y.md"
 assert_eq "$(paths_in "$SANDBOX/y.md" "$PLUGIN_DIRS" | tr '\n' ' ')" "scripts/ask-gpt.sh skills/x/SKILL.md " "plugin-relative paths"
-assert_eq "$(paths_in "$SANDBOX/y.md" "$ROOT_DIRS")" "" "root docs ignore plugin-relative paths"
+printf 'See skills/x/SKILL.md and hooks/h.sh.\n' > "$SANDBOX/y2.md"
+assert_eq "$(paths_in "$SANDBOX/y2.md" "$ROOT_DIRS")" "" "root docs ignore plugin-relative paths"
+# a root doc's scripts/ and .github/ paths are read, at the start of a line (the dot stays) and inside one;
+# a path that is the tail of a longer one, or of a URL, is not a path of its own
+printf '%s\n' '.github/workflows/gone.yml runs `scripts/gone.sh`,' 'scripts/at-start.sh and (.github/x.md);' \
+  'not plugins/p/scripts/in.sh, ~/.github/home.md or https://example.com/o/r/.github/web.md.' > "$SANDBOX/y3.md"
+assert_eq "$(paths_in "$SANDBOX/y3.md" "$ROOT_DIRS" | tr '\n' ' ')" \
+  ".github/workflows/gone.yml .github/x.md plugins/p/scripts/in.sh scripts/at-start.sh scripts/gone.sh " "scripts/ and .github/ paths of a root doc"
+# a root doc's scripts/ path may be corecrew's; no other folder of corecrew is looked up for a root doc
+mkdir -p "$SANDBOX/rr/plugins/corecrew/scripts" "$SANDBOX/rr/plugins/corecrew/hooks"
+: > "$SANDBOX/rr/plugins/corecrew/scripts/a.sh"; : > "$SANDBOX/rr/plugins/corecrew/hooks/h.sh"
+in_corecrew "$SANDBOX/rr" scripts/a.sh && pass || fail "in_corecrew: a script of corecrew is not found"
+in_corecrew "$SANDBOX/rr" scripts/gone.sh && fail "in_corecrew: a script that does not exist is found" || pass
+in_corecrew "$SANDBOX/rr" hooks/h.sh && fail "in_corecrew: a path outside scripts/ is looked up in corecrew" || pass
 # anchors: a heading inside a fence is none; a link to a missing anchor, or a missing file, fails
 printf '%s\n' '# Doc' '## Host settings' '### `new-project` and `task`' '```' '## Not a heading' '```' \
   '[a](#host-settings) [b](#new-project-and-task) [c](other.md#there) [d](https://example.com/x.md#web)' > "$SANDBOX/a.md"
