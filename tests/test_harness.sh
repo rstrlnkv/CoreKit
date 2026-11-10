@@ -311,7 +311,9 @@ has "x_bg.sh: 3 passed, 1 failed" "bg sections that set n"; lacks "did not finis
 # --- a part behind a tool or root gate says so when it does not run (R4-114): every `if command -v <tool>` and every
 # `if [ "$(id -u)" ...` block of a test file holds a skip call (the block: from the `if` line that ends in `then` to
 # the `fi` at the same indent; a one-line `if ...; fi` holds it itself). A gate that only picks one of two tools
-# inside one line is no block and is not read. test_manifest.sh is read once its own gates are closed.
+# inside one line is no block and is not read. The short form `command -v <tool> >/dev/null 2>&1 && ...` outside an
+# `if` is a gate with no place for a skip call, so it is always open; `... || <fallback>` is a choice and is not read.
+# test_manifest.sh is read once its own gates are closed.
 # open_gates <file> — the line numbers of the gate blocks with no skip call, on one line
 open_gates() {
   awk '
@@ -323,6 +325,7 @@ open_gates() {
         if ($0 ~ ("^" ind "fi([ \t;]|$)")) { if (!ok) printf "%d ", start; inb = 0 }
         next
       }
+      if ($0 !~ /^[ \t]*(#|if |elif |while )/ && $0 ~ /command -v [A-Za-z0-9_.-]+ >\/dev\/null( 2>&1)?[ \t]*&&/) { printf "%d ", NR; next }
       if (!isgate($0)) next
       if ($0 ~ /then[ \t]*$/) { inb = 1; ok = 0; start = NR; ind = $0; sub(/[^ \t].*$/, "", ind); next }
       if ($0 ~ /;[ \t]*fi[ \t]*$/ && !hasskip($0)) printf "%d ", NR
@@ -342,6 +345,16 @@ printf '%s\n' 'if command -v zsh >/dev/null 2>&1; then' '  zsh -c :' 'else' '  s
   'if command -v zsh >/dev/null 2>&1; then' '  # skip nothing here' '  zsh -c :' 'fi' \
   'f() {' '  if command -v node >/dev/null 2>&1; then node "$1"' '  else python3 "$1"; fi' '}' > "$G"
 assert_eq "$(open_gates "$G")" "10 " "gates that skip and a one-line choice between two tools pass; a comment is no skip"
+# the fixture is written with %s for the tool check, so that these lines are not short gates of this file themselves
+cv='command -v'
+{ printf 'shells="bash"; %s zsh >/dev/null 2>&1 && shells="bash zsh"\n' "$cv"
+  printf '%s timeout >/dev/null 2>&1 || timeout() { shift; "$@"; }\n' "$cv"
+  printf '# %s zsh >/dev/null 2>&1 && shells="bash zsh"\n' "$cv"
+  printf 'shells="bash"; if %s zsh >/dev/null 2>&1; then shells="bash zsh"; else skip zsh "zsh not on PATH"; fi\n' "$cv"
+  printf 'if %s git >/dev/null 2>&1 && %s zsh >/dev/null 2>&1; then skip x "y"; fi\n' "$cv" "$cv"
+  printf '  %s node >/dev/null && node x\n' "$cv"
+} > "$G"
+assert_eq "$(open_gates "$G")" "1 6 " "a short '&&' gate is open; a fallback, a comment and an if with a skip are not"
 for f in "$ROOT"/tests/test_*.sh; do
   case "${f##*/}" in test_manifest.sh) continue ;; esac
   assert_eq "$(open_gates "$f")" "" "$(basename "$f"): gated parts with no skip call, at lines"

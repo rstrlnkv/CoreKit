@@ -17,7 +17,8 @@ done
 # skill as the model would run it: <scripts>, <plugin>, <skill> filled in (see subst), ${user_config.*} left literal.
 # subst <skill dir>: what the model does with the placeholders after `lib.sh plugin-root`
 subst() { sed -e "s|<scripts>|$PLUGIN/scripts|g" -e "s|<plugin>|$PLUGIN|g" -e "s|<skill>|$1|g"; }
-shells="bash"; command -v zsh >/dev/null 2>&1 && shells="bash zsh"
+shells="bash"
+if command -v zsh >/dev/null 2>&1; then shells="bash zsh"; else skip zsh-commands "zsh not on PATH"; fi
 n=0
 for sk in "$PLUGIN"/skills/*/SKILL.md; do
   d="$(dirname "$sk")"
