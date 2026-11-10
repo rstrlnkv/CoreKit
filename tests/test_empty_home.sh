@@ -44,6 +44,7 @@ done
 # a Core path set by CORE_DIR but a bad HOME: the hint is shown, nothing is written, no tools sync
 OUT="$(printf '{"session_id":"s","cwd":"%s","hook_event_name":"SessionStart","source":"startup"}' "$SCR" | (cd "$SCR" && CORE_DIR="$SANDBOX/nocore" HOME=rel PATH="$SANDBOX/stub:$PATH" bash "$HOOKS/session-start.sh") 2>&1)"
 case "$OUT" in *"Core not found at $SANDBOX/nocore"*) pass ;; *) fail "session-start HOME=rel CORE_DIR set: no hint: $OUT" ;; esac
+if grep -qE '(^| )/state' "$SANDBOX/mkdir.log" 2>/dev/null; then fail "session-start HOME=rel, CORE_DIR set: mkdir asked for /state (the hint marker with no data folder)"; else pass; fi
 untouched "session-start HOME=rel, CORE_DIR set"
 # legitimate: a normal HOME writes the marker and the tools under it
 OUT="$(SS "$SANDBOX/home2")"
@@ -82,6 +83,18 @@ mkdir -p "$SBX_CORE/inner" && git -C "$SBX_CORE/inner" init -q && git -C "$SBX_C
 OUT="$(CORE_DIR="$SBX_CORE" bash "$SCRIPTS/adopt.sh" --from "$SBX_CORE/inner" --dry-run 2>&1)"; RC=$?
 assert_eq "$RC" "2" "adopt of a folder inside Core: exit"
 assert_eq "$OUT" "already inside Core" "adopt of a folder inside Core: message"
+
+# --- 3b. session-start in a project: with no tools folder known (HOME=rel) the context has no save and undo-step
+# line, and nothing is written; with a normal HOME the line names the tools copy
+mkdir -p "$SBX_CORE/p/docs"; : > "$SBX_CORE/p/CLAUDE.md"
+SSP() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"SessionStart","source":"startup"}' "$SBX_CORE/p" | (cd "$SCR" && CORE_DIR="$SBX_CORE" HOME="$1" PATH="$SANDBOX/stub:$PATH" bash "$HOOKS/session-start.sh") 2>&1; }
+OUT="$(SSP rel)"
+case "$OUT" in *"$SBX_CORE/p/docs/INDEX.md"*) pass ;; *) fail "session-start in a project, HOME=rel: no project context: $OUT" ;; esac
+case "$OUT" in *undo-step*|*/save*) fail "session-start in a project, HOME=rel: a save line without a tools folder: $OUT" ;; *) pass ;; esac
+untouched "session-start in a project, HOME=rel"
+OUT="$(SSP "$SANDBOX/home2")"
+case "$OUT" in *"$SANDBOX/home2/.claude/plugins/data/corecrew-corekit/tools/undo-step"*) pass ;; *) fail "session-start in a project, normal HOME: no save line: $OUT" ;; esac
+rm -f "$SANDBOX/mkdir.log"
 
 # --- 4. guard-code: the reader printed nothing -> refused outright
 CP="$SANDBOX/plugin-copy"; mkdir -p "$CP"; cp -R "$PLUGIN/." "$CP/"; rm -f "$CP/scripts/patch-paths.awk"

@@ -60,8 +60,24 @@ run codex --cwd "$SANDBOX/elsewhere"; assert_eq "$OUT" "" "current marker, outsi
 rm -f "$MARK"; run codex --cwd "$SANDBOX/elsewhere"
 echo "$OUT" | grep -qF "open /hooks" && pass || fail "trust note outside a project: $OUT"
 assert_no_file "$MARK"   # prepare never writes the marker: only the hook can prove it ran
+rm -rf "$COREDEV_TOOLS"; rm -f "$C/AGENTS.md"
 OUT="$(COREKIT_HOST=codex bash "$PREP" --part host --cwd "$C" 2>&1)"
 echo "$OUT" | grep -qF "/hooks" && pass || fail "--part host: $OUT"
+# only that part ran: no tools copy made, no link made or named
+[ ! -e "$COREDEV_TOOLS" ] && [ ! -L "$C/AGENTS.md" ] && ! echo "$OUT" | grep -qF "AGENTS.md" && pass || fail "--part host ran another part: $OUT"
+run claude --cwd "$C"; assert_file "$COREDEV_TOOLS/VERSION"; assert_eq "$(readlink "$C/AGENTS.md")" "$P/CLAUDE.md" "all parts again: the link is back"
+# no marker path known (no settings folder), or no plugin version known (a plugin root with no manifest): the trust
+# note. With no version, an absent marker must not count as current, with or without a marker path.
+echo "$VER" > "$MARK"
+OUT="$(env -u XDG_CONFIG_HOME -u CORECREW_CONFIG HOME="" COREKIT_HOST=codex bash "$PREP" --part host 2>&1)"
+echo "$OUT" | grep -qF "open /hooks" && pass || fail "no marker path: trust note expected: $OUT"
+OUT="$(CLAUDE_PLUGIN_ROOT="$SANDBOX/elsewhere" COREKIT_HOST=codex bash "$PREP" --part host 2>&1)"
+echo "$OUT" | grep -qF "open /hooks" && pass || fail "no plugin version: trust note expected: $OUT"
+rm -f "$MARK"
+OUT="$(CLAUDE_PLUGIN_ROOT="$SANDBOX/elsewhere" COREKIT_HOST=codex bash "$PREP" --part host 2>&1)"
+echo "$OUT" | grep -qF "open /hooks" && pass || fail "no plugin version, no marker: trust note expected: $OUT"
+OUT="$(env -u XDG_CONFIG_HOME -u CORECREW_CONFIG HOME="" CLAUDE_PLUGIN_ROOT="$SANDBOX/elsewhere" COREKIT_HOST=codex bash "$PREP" --part host 2>&1)"
+echo "$OUT" | grep -qF "open /hooks" && pass || fail "no plugin version, no marker path: trust note expected: $OUT"
 OUT="$(COREKIT_HOST=codex CLAUDE_PLUGIN_OPTION_UI_LANGUAGE=ru bash "$PREP" --part host 2>&1)"
 echo "$OUT" | grep -qF "Защита corecrew" && pass || fail "ru trust note: $OUT"
 
@@ -93,7 +109,7 @@ for body in 'default_permissions = "my profile"\n' 'default_permissions = ":work
   '[profiles.x]\ndefault_permissions = "corecrew"\n' 'x = """\ndefault_permissions = "corecrew"\n"""\n' "x = '''\ndefault_permissions = 'corecrew'\n'''\n" \
   'default_permissions = corecrew\n' 'xdefault_permissions = "corecrew"\n' \
   'x = """\n\\"""\ndefault_permissions = "corecrew"\n"""\n' 'x = """a \\""" b\ndefault_permissions = "corecrew"\n' \
-  "x = '''\n\"\"\"\ndefault_permissions = 'corecrew'\n'''\n"; do
+  "x = '''\n\"\"\"\ndefault_permissions = 'corecrew'\n'''\n" 'x = "a \\" b"\ndefault_permissions = "corecrew"\n'; do
   printf "$body" > "$CFG"; run codex --part host
   assert_eq "$(printf '%s\n' "$OUT" | grep -c 'codex-profile')" "1" "corecrew profile not the default or unsure ($body): the note once"
 done
@@ -161,6 +177,11 @@ run claude --cwd "$C"; assert_eq "$OUT" "" "after the rerun: silent"
 # --- layout note and old git hooks (same texts as session-start)
 printf 'schema: 1\n' > "$CORE_DIR/.coredev"
 run claude --cwd "$C"; echo "$OUT" | grep -qF "Layout note" && pass || fail "layout note: $OUT"
+# a schema written with a leading zero is read as a decimal number: 08 is not older, no note and no shell error
+printf 'schema: 08\n' > "$CORE_DIR/.coredev"
+run claude --cwd "$C"; assert_eq "$OUT" "" "schema 08: silent"
+printf 'schema: 01\n' > "$CORE_DIR/.coredev"
+run claude --cwd "$C"; echo "$OUT" | grep -qF "Layout note" && pass || fail "schema 01: layout note: $OUT"
 printf 'schema: 2\n' > "$CORE_DIR/.coredev"
 mkdir -p "$C/.git/hooks"; printf '#!/bin/sh\n# new-project hook\n' > "$C/.git/hooks/pre-commit"
 run claude --cwd "$C"; echo "$OUT" | grep -qF "Old git hooks" && pass || fail "stale hook note: $OUT"
@@ -185,6 +206,8 @@ for H in "" "relhome"; do
   assert_eq "$(ls -A "$SANDBOX/cwdempty")" "" "HOME='$H': nothing written in the cwd"
   [ ! -e "/.claude" ] && [ ! -e "/.codex" ] && [ ! -e "/.config" ] && pass || fail "HOME='$H': wrote at /"
   assert_no_file "$COREDEV_TOOLS"
+  OUT="$(cd "$SANDBOX/cwdempty" && env -u COREDEV_TOOLS -u CLAUDE_PLUGIN_DATA -u XDG_CONFIG_HOME -u CODEX_HOME -u CORECREW_CONFIG HOME="$H" CORE_DIR="$CORE_DIR" COREKIT_HOST=codex bash "$PREP" --part tools 2>&1)"
+  assert_eq "$OUT" "" "HOME='$H', --part tools: no data folder known, silent"
 done
 
 # --- host, tools_dir, hooks_marker_path; session-start writes the marker on Codex only
@@ -193,6 +216,9 @@ assert_eq "$(. "$CP/scripts/lib.sh"; host)" "codex" "host: plugin under CODEX_HO
 assert_eq "$(. "$SCRIPTS/lib.sh"; host)" "claude" "host: plugin elsewhere"
 assert_eq "$(. "$SCRIPTS/lib.sh"; COREKIT_HOST=codex host)" "codex" "host: COREKIT_HOST"
 assert_eq "$(. "$CP/scripts/lib.sh"; COREKIT_HOST=claude host)" "claude" "host: COREKIT_HOST wins"
+ln -s "$CODEX_HOME" "$SANDBOX/cx-link"
+assert_eq "$(. "$CP/scripts/lib.sh"; CODEX_HOME="$SANDBOX/cx-link" host)" "codex" "host: CODEX_HOME given through a link"
+assert_eq "$(. "$CP/scripts/lib.sh"; CODEX_HOME="$SANDBOX/elsewhere" host)" "claude" "host: plugin not under that CODEX_HOME"
 assert_eq "$(. "$SCRIPTS/lib.sh"; tools_dir)" "$COREDEV_TOOLS" "tools_dir: COREDEV_TOOLS"
 assert_eq "$(. "$SCRIPTS/lib.sh"; unset COREDEV_TOOLS; tools_dir)" "$CLAUDE_PLUGIN_DATA/tools" "tools_dir: CLAUDE_PLUGIN_DATA"
 assert_eq "$(. "$SCRIPTS/lib.sh"; unset COREDEV_TOOLS CLAUDE_PLUGIN_DATA; tools_dir)" "$HOME/.claude/plugins/data/corecrew-corekit/tools" "tools_dir: claude default"
@@ -208,6 +234,9 @@ assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name /h/Projects/CoreKit/plugins/c
 assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name /h/.claude/plugins/cache/shop/other/1.2.3)" "corekit" "marketplace_name: another plugin's cache path"
 assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name /h/.claude/plugins/cache/shop)" "corekit" "marketplace_name: cache path without the plugin"
 assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name "/h/.claude/plugins/cache/bad name/corecrew/1.2.3")" "corekit" "marketplace_name: a name with a space"
+assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name /x/plugins/cache/a/b/corecrew/1)" "corekit" "marketplace_name: a nested cache path"
+assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name /x/plugins/cache/../corecrew/1)" "corekit" "marketplace_name: .. is no marketplace"
+assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name /x/plugins/cache/./corecrew/1)" "corekit" "marketplace_name: . is no marketplace"
 assert_eq "$(. "$SCRIPTS/lib.sh"; marketplace_name)" "corekit" "marketplace_name: this checkout, no argument"
 assert_eq "$(. "$CP/scripts/lib.sh"; marketplace_name)" "mart" "marketplace_name: the plugin under a cache path, no argument"
 assert_eq "$(. "$SCRIPTS/lib.sh"; default_data_dir /h/.claude/plugins/cache/shop/corecrew/1.2.3)" "$HOME/.claude/plugins/data/corecrew-shop" "default_data_dir: claude"
@@ -215,12 +244,23 @@ assert_eq "$(. "$SCRIPTS/lib.sh"; COREKIT_HOST=codex default_data_dir /h/.codex/
 assert_eq "$(. "$SCRIPTS/lib.sh"; default_data_dir)" "$HOME/.claude/plugins/data/corecrew-corekit" "default_data_dir: this checkout"
 assert_eq "$(. "$SCRIPTS/lib.sh"; HOME=rel default_data_dir /h/.claude/plugins/cache/shop/corecrew/1.2.3)" "" "default_data_dir: relative HOME"
 assert_eq "$(. "$CP/scripts/lib.sh"; unset COREDEV_TOOLS CLAUDE_PLUGIN_DATA; tools_dir)" "$CODEX_HOME/plugins/data/corecrew-mart/tools" "tools_dir: codex default follows the cache marketplace"
+# a tools copy whose .data-dir holds a relative path does not follow it (never a folder under the cwd): the host default
+TC="$SANDBOX/tcopy"; cp -R "$SCRIPTS" "$TC"; echo "rel/data" > "$TC/.data-dir"
+assert_eq "$(cd "$SANDBOX/elsewhere" && . "$TC/lib.sh"; unset COREDEV_TOOLS CLAUDE_PLUGIN_DATA; COREKIT_HOST=claude tools_dir)" "$HOME/.claude/plugins/data/corecrew-corekit/tools" "tools_dir: a relative .data-dir is not followed"
+echo "$SANDBOX/dd/" > "$TC/.data-dir"
+assert_eq "$(. "$TC/lib.sh"; unset COREDEV_TOOLS CLAUDE_PLUGIN_DATA; tools_dir)" "$SANDBOX/dd/tools" "tools_dir: an absolute .data-dir is followed"
+# the version comes from the Codex manifest when the plugin root has no Claude Code one
+mkdir -p "$SANDBOX/cxonly/.codex-plugin"; printf '{\n  "name": "corecrew",\n  "version": "9.8.7"\n}\n' > "$SANDBOX/cxonly/.codex-plugin/plugin.json"
+assert_eq "$(. "$SCRIPTS/lib.sh"; plugin_version "$SANDBOX/cxonly")" "9.8.7" "plugin_version: only a Codex manifest"
+assert_eq "$(. "$SCRIPTS/lib.sh"; plugin_version "$PLUGIN")" "$VER" "plugin_version: this plugin"
+assert_eq "$(. "$SCRIPTS/lib.sh"; plugin_version "$SANDBOX/elsewhere")" "" "plugin_version: no manifest"
 assert_eq "$(. "$SCRIPTS/lib.sh"; COREKIT_HOST=codex hooks_marker_path)" "$MARK" "hooks_marker_path"
 assert_eq "$(. "$SCRIPTS/lib.sh"; unset XDG_CONFIG_HOME; HOME=""; COREKIT_HOST=codex hooks_marker_path)" "" "hooks_marker_path: no settings folder"
 SS="{\"session_id\":\"s\",\"cwd\":\"$C\",\"hook_event_name\":\"SessionStart\",\"source\":\"startup\"}"
 rm -f "$MARK"
 printf '%s' "$SS" | COREKIT_HOST=claude CLAUDE_PLUGIN_ROOT="$PLUGIN" bash "$HOOKS/session-start.sh" >/dev/null 2>&1
 assert_no_file "$MARK"
+assert_eq "$(ls -A "$XDG_CONFIG_HOME/corecrew/state" 2>/dev/null | grep -c '^hooks-seen')" "0" "session-start on Claude Code writes no hooks-seen marker"
 printf '%s' "$SS" | COREKIT_HOST=codex CLAUDE_PLUGIN_ROOT="$PLUGIN" bash "$HOOKS/session-start.sh" >/dev/null 2>&1
 assert_eq "$(cat "$MARK")" "$VER" "session-start writes the version on Codex"
 touch -t 200001010000 "$MARK"; printf '%s' "$SS" | COREKIT_HOST=codex CLAUDE_PLUGIN_ROOT="$PLUGIN" bash "$HOOKS/session-start.sh" >/dev/null 2>&1

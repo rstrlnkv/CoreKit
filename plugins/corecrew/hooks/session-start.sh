@@ -52,28 +52,19 @@ esac
 # Newlines (between several warnings) become the JSON escape \n.
 json_text() { printf '%s' "$1" | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | LC_ALL=C tr '\r\t' '  ' | LC_ALL=C awk 'NR>1{printf "\\n"} {printf "%s",$0}'; }
 
-# 2. No Core yet, session elsewhere: the hint, once per machine.
-if ! core_ready && [ -z "$proj" ]; then
-  # No Core path at all (the settings_no_home warning says why): no hint with an empty path.
-  if [ -z "$CORE_DIR" ]; then
-    [ -z "$warn" ] || printf '{"systemMessage":"%s"}\n' "$(json_text "$warn")"
-    exit 0
-  fi
-  if [ -z "$DATA" ] || [ ! -e "$DATA/state/core-hint-shown" ]; then
-    # For the person, once: a systemMessage. Plain stdout would go to the model only, and the marker
-    # below would then mark a hint nobody read.
+# 2. Session elsewhere. Core not set up: the hint, once per machine; with no Core path at all (the settings_no_home
+# warning says why) there is no hint with an empty path. The hint is for the person: a systemMessage (plain stdout would
+# go to the model only, and the marker written after it would then mark a hint nobody read). Core set up: nothing to
+# say but a setting problem.
+if [ -z "$proj" ]; then
+  hinted=""
+  if ! core_ready && [ -n "$CORE_DIR" ] && { [ -z "$DATA" ] || [ ! -e "$DATA/state/core-hint-shown" ]; }; then
     if [ -d "$CORE_DIR" ]; then hint="$(msg hint_not_set_up "$CORE_DIR")"
     else hint="$(msg hint_not_found "$CORE_DIR")"; fi
-    printf '{"systemMessage":"%s"}\n' "$(json_text "${warn:+$warn$WNL}$hint")"
-    [ -z "$DATA" ] || { mkdir -p "$DATA/state" && : > "$DATA/state/core-hint-shown"; } 2>/dev/null
-    exit 0
+    warn="${warn:+$warn$WNL}$hint"; hinted=1
   fi
   [ -z "$warn" ] || printf '{"systemMessage":"%s"}\n' "$(json_text "$warn")"
-  exit 0
-fi
-# Core set up, session elsewhere: nothing to say but a setting problem.
-if [ -z "$proj" ]; then
-  [ -z "$warn" ] || printf '{"systemMessage":"%s"}\n' "$(json_text "$warn")"
+  [ -z "$hinted" ] || [ -z "$DATA" ] || { mkdir -p "$DATA/state" && : > "$DATA/state/core-hint-shown"; } 2>/dev/null
   exit 0
 fi
 

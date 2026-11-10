@@ -24,6 +24,12 @@ if command -v python3 >/dev/null 2>&1; then
   J="$(hook_event claude SessionStart "$SANDBOX/elsewhere" source=startup | CORE_DIR="$SANDBOX/we\\ird \"q\"" bash "$H" 2>&1)"
   printf '%s' "$J" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); assert "ird" in d["systemMessage"]' && pass || fail "hint is not valid JSON: $J"
 fi
+# a TAB and a CR in the text (JSON allows no raw control character in a string): each becomes a blank
+if command -v python3 >/dev/null 2>&1; then
+  rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
+  J="$(hook_event claude SessionStart "$SANDBOX/elsewhere" source=startup | CORE_DIR="$SANDBOX/ta"$'\t'"b"$'\r'"cr" bash "$H" 2>&1)"
+  printf '%s' "$J" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); assert "/ta b cr " in d["systemMessage"]' && pass || fail "hint with a TAB and a CR is not valid JSON with blanks: $J"
+fi
 assert_file "$CLAUDE_PLUGIN_DATA/tools/VERSION"
 assert_file "$CLAUDE_PLUGIN_DATA/tools/save"
 run_rc "$SANDBOX/elsewhere"
@@ -293,14 +299,13 @@ corecrew: could not create $NC/CLAUDE.local.md, so the private CLAUDE.md is not 
 corecrew: could not create $NC/AGENTS.md, so tools that read AGENTS.md do not get the private CLAUDE.md. Run: ln -s \"$NP/CLAUDE.md\" \"$NC/AGENTS.md\"" \
   "unreadable code folder: the context, then the two link lines"
 
-# --- cost: in a project with the tools current, the hook starts one bash (sync-tools.sh) and at most 34 programs
-# (the hook itself, started here by its full path, is not counted)
+# --- cost: in a project with the tools current, the hook starts one bash (sync-tools.sh); the hook itself, started
+# here by its full path, is not counted. The total of programs is pinned in tests/test_hook_cost.sh.
 REALBASH="$(command -v bash)"
 ss_count() { hook_event claude SessionStart "$NC" source=startup | CORE_DIR="$CD0" "$REALBASH" "$H" >/dev/null 2>&1; }
 ss_count
 count_execs ss_count
 assert_eq "$(grep -cx bash "$EXEC_LOG")" "1" "bash starts in a project with the tools current"
-[ "$EXECS" -le 34 ] && pass || fail "programs started in a project with the tools current: $EXECS (at most 34): $(LC_ALL=C sort "$EXEC_LOG" | uniq -c | tr -s ' \n' ' ')"
 
 # --- letter case: Core path typed in another case than on disk (macOS volumes are case-insensitive)
 mkdir -p "$SANDBOX/cs/a"
@@ -331,6 +336,14 @@ if command -v python3 >/dev/null 2>&1; then
   J="$(hook_event claude SessionStart "$SANDBOX/ss/el" source=startup | env -u CORE_DIR HOME="$SANDBOX/ss/nohome" XDG_CONFIG_HOME="$SANDBOX/ss/none" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
   printf '%s' "$J" | python3 -I -c 'import json,sys; d=json.loads(sys.stdin.read()); m=d["systemMessage"]; assert "core_dir" in m and "Core not found" in m' && pass || fail "warning + hint is not one valid JSON line: $J"
 fi
+# Core not set up and the hint already shown on this machine: the warning still comes, alone, and at startup only
+mkdir -p "$CLAUDE_PLUGIN_DATA/state"; : > "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"
+OUT="$(hook_event claude SessionStart "$SANDBOX/ss/el" source=startup | env -u CORE_DIR HOME="$SANDBOX/ss/nohome" XDG_CONFIG_HOME="$SANDBOX/ss/none" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
+case "$OUT" in "{\"systemMessage\":\""*"core_dir"*"Core"*) pass ;; *) fail "no Core, hint shown before, startup: expected the warning, got: $OUT" ;; esac
+case "$OUT" in *"Core not found"*) fail "no Core, hint shown before: the hint again: $OUT" ;; *) pass ;; esac
+assert_eq "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "1" "no Core, hint shown before: one line"
+OUT="$(hook_event claude SessionStart "$SANDBOX/ss/el" source=resume | env -u CORE_DIR HOME="$SANDBOX/ss/nohome" XDG_CONFIG_HOME="$SANDBOX/ss/none" CLAUDE_PLUGIN_OPTION_CORE_DIR=Core bash "$H" 2>&1)"
+assert_eq "$OUT" "" "no Core, hint shown before, resume: silent"
 # several warnings: one per line (JSON \n), in the person's language
 printf 'core_dir: %s\nattribution: yes\nmodel_profile: fast\nui_language: ru\n' "$SSC" > "$SANDBOX/ss/xdg/corecrew/settings"
 rm -f "$CLAUDE_PLUGIN_DATA/state/core-hint-shown"

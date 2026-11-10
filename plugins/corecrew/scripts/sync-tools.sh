@@ -9,7 +9,8 @@
 # VERSION file, or a <tools_dir> that is not a folder, is not ours: exit 2, nothing is touched.
 # A <tools_dir> named tools also gets <tools_dir>/.data-dir: its parent, the plugin's data folder (lib.sh tools_dir reads it).
 # Runs at the same time take turns (a lock folder <tools_dir>.lock); one that cannot get it in about 10 s prints
-# "tools busy <version>" and exits 0.
+# "tools busy <version>" and exits 0. A stale copy in a folder that cannot be written (no lock folder can be made
+# there and none is held) is exit 1 at once, with no wait.
 set -u
 ROOT="${1:?usage: sync-tools.sh <plugin_root> <tools_dir>}"
 T="${2:?usage: sync-tools.sh <plugin_root> <tools_dir>}"
@@ -64,9 +65,16 @@ if is_current; then echo "tools current $VER"; exit 0; fi
 # next to the tools folder holding the owner's pid; a dead owner's lock is taken over. Up to 10 tries of one second,
 # then a clean skip (the run that holds the lock is making the copy).
 mkdir -p "$TP" || exit 1
-LOCK="$T.lock"; got=0; tries=0
+LOCK="$T.lock"; got=0; tries=0; nolock=0
 while [ "$tries" -lt 10 ]; do
   if mkdir "$LOCK" 2>/dev/null; then got=1; break; fi
+  # No lock could be made and none is there: the folder cannot be written (a read-only data folder, the Codex sandbox),
+  # so waiting would not help. Three times, not one: a holder may have let go between the mkdir and this look.
+  # (these looks do not count as tries: a fresh lock with no pid yet still gets its three waits)
+  if [ ! -e "$LOCK" ] && [ ! -L "$LOCK" ]; then
+    nolock=$((nolock + 1)); [ "$nolock" -lt 3 ] || exit 1
+    continue
+  fi
   holder="$(cat "$LOCK/pid" 2>/dev/null)"
   # (no pid yet is a fresh lock for the first seconds, after that an owner that died before writing it)
   if { [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; } || { [ -z "$holder" ] && [ "$tries" -ge 3 ]; }; then
@@ -98,22 +106,23 @@ if [ -d "$T" ] && [ ! -f "$T/VERSION" ] && [ -n "$(ls -A "$T" 2>/dev/null)" ]; t
   exit 2
 fi
 
-# Copy into a temp dir next to the target, then swap it in, so a half copy never stays.
+# Copy into a temp dir next to the target, then swap it in, so a half copy never stays (the EXIT trap above removes
+# the temp dirs on every way out).
 rm -rf "$NEW" "$OLD"
 mkdir -p "$NEW/git-hooks" || exit 1
 for f in $FILES; do
-  cp -p "$S/$f" "$NEW/$f" || { rm -rf "$NEW"; echo "corecrew: copy of $S/$f failed; tools not updated." >&2; exit 1; }
+  cp -p "$S/$f" "$NEW/$f" || { echo "corecrew: copy of $S/$f failed; tools not updated." >&2; exit 1; }
 done
 # Executable regardless of how the plugin cache stored the modes.
 chmod +x "$NEW/save" "$NEW/undo-step" "$NEW/install-hooks.sh" "$NEW"/git-hooks/* 2>/dev/null
 chmod -x "$NEW/git-hooks/blocked-patterns" "$NEW/git-hooks/allowed-patterns" 2>/dev/null
 D="$(data_dir)"
-if [ -n "$D" ]; then printf '%s\n' "$D" > "$NEW/.data-dir" || { rm -rf "$NEW"; exit 1; }; fi
+if [ -n "$D" ]; then printf '%s\n' "$D" > "$NEW/.data-dir" || exit 1; fi
 printf '%s\n%s\n' "$VER" "$(sum_of "$NEW")" > "$NEW/VERSION"
-if [ -e "$T" ]; then mv "$T" "$OLD" || { rm -rf "$NEW"; exit 1; }; fi
+if [ -e "$T" ]; then mv "$T" "$OLD" || exit 1; fi
 if ! mv "$NEW" "$T"; then
   [ -e "$OLD" ] && mv "$OLD" "$T"
-  rm -rf "$NEW"; echo "corecrew: could not replace $T." >&2; exit 1
+  echo "corecrew: could not replace $T." >&2; exit 1
 fi
 rm -rf "$OLD"
 echo "tools updated $VER"

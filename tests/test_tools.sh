@@ -90,6 +90,16 @@ assert_file "$T2/save"; assert_file "$T2/git-hooks/blocked-patterns"
 # a tools folder not named tools has no .data-dir (its parent's tools/ would be another folder)
 assert_no_file "$T2/.data-dir"
 
+# a tools dir given with a trailing slash is the same folder: the copy, its lock and its temp folders are not put inside it
+assert_exit 0 bash "$SYNC" "$PLUGIN" "$SANDBOX/ts/tools/"
+assert_eq "$OUT" "tools updated $V" "trailing slash: updated"
+assert_file "$SANDBOX/ts/tools/VERSION"
+assert_eq "$(cat "$SANDBOX/ts/tools/.data-dir" 2>/dev/null)" "$SANDBOX/ts" "trailing slash: .data-dir names the data folder"
+assert_eq "$(ls -A "$SANDBOX/ts")" "tools" "trailing slash: something left beside tools"
+assert_eq "$(ls -A "$SANDBOX/ts/tools" | grep -c '^\.lock\|^\.new\.\|^\.old\.')" "0" "trailing slash: a lock or temp folder inside tools"
+assert_exit 0 bash "$SYNC" "$PLUGIN" "$SANDBOX/ts/tools/"
+assert_eq "$OUT" "tools current $V" "trailing slash: current on the second run"
+
 # the synced save runs standalone (reads _locate.sh next to itself)
 (cd "$SANDBOX" && bash "$T2/save" 2>&1 | grep -q 'Usage') && pass || fail "synced save does not run"
 
@@ -151,6 +161,12 @@ PATH="$MVF:$PATH" bash "$SYNC" "$R" "$T3" >/dev/null 2>"$SANDBOX/mvfail.err"; as
 assert_eq "$(tree_sum "$T3")" "$before" "mv of the new copy fails: the old copy is not back as it was"
 assert_eq "$(ls -A "$(dirname "$T3")")" "tools" "mv of the new copy fails: something left beside tools"
 assert_contains "$SANDBOX/mvfail.err" "could not replace"
+# (3) mv fails to move the old copy away: exit 1, the old copy as it was, the new one not put inside it
+MVO="$SANDBOX/mvoldfail"; mkdir -p "$MVO"
+printf '#!/bin/sh\ncase "$2" in *.old.*) exit 1 ;; esac\nexec "%s" "$@"\n' "$REALMV" > "$MVO/mv"; chmod +x "$MVO/mv"
+PATH="$MVO:$PATH" bash "$SYNC" "$R" "$T3" >/dev/null 2>&1; assert_eq "$?" "1" "mv of the old copy fails: exit 1"
+assert_eq "$(tree_sum "$T3")" "$before" "mv of the old copy fails: the old copy changed"
+assert_eq "$(ls -A "$(dirname "$T3")")" "tools" "mv of the old copy fails: something left beside tools"
 assert_exit 0 bash "$SYNC" "$R" "$T3"
 assert_eq "$OUT" "tools updated $V" "after the failures: updated"
 assert_eq "$(tail -1 "$T3/save")" "# changed again" "after the failures: the new save was copied"
@@ -182,6 +198,57 @@ PATH="$STUB:$PATH" bash "$SYNC" "$PLUGIN" "$SL/tools" > "$SANDBOX/stale.out" 2>&
 assert_contains "$SANDBOX/stale.out" "tools updated" "stale lock: tools made"
 assert_contains "$SANDBOX/mv.log" "$SL/tools.lock $SL/tools.lock.dead." "stale lock: taken over with an atomic mv"
 assert_eq "$(ls -A "$SL" | grep -c 'lock\|\.dead\|\.new')" "0" "stale lock: no leftovers"
+# a lock folder with no pid file (its owner died before writing it) is taken over too, after a few tries. A sleep
+# stub that only counts keeps the waits short.
+SLP="$SANDBOX/sleepstub"; mkdir -p "$SLP"
+printf '#!/bin/sh\necho x >> "%s/sleep.n"\n' "$SANDBOX" > "$SLP/sleep"; chmod +x "$SLP/sleep"
+rm -rf "$SL/tools"; mkdir "$SL/tools.lock"
+OUT="$(PATH="$SLP:$PATH" bash "$SYNC" "$PLUGIN" "$SL/tools" 2>&1)"
+assert_eq "$OUT" "tools updated $V" "lock with no pid file: taken over"
+assert_eq "$(ls -A "$SL" | grep -vc '^tools$')" "0" "lock with no pid file: nothing but tools in the folder"
+[ -s "$SANDBOX/sleep.n" ] && pass || fail "lock with no pid file: taken over without a wait (a fresh lock has no pid yet)"
+# legitimate: one mkdir of the lock that fails while no lock is there (its holder let go in between) is not a folder
+# that cannot be written: the run tries again and makes the copy
+MKS="$SANDBOX/mkdirstub"; mkdir -p "$MKS"; REALMKDIR="$(command -v mkdir)"
+printf '#!/bin/sh\ncase "$*" in *tools.lock) [ -e "%s/mkdir.once" ] || { : > "%s/mkdir.once"; exit 1; } ;; esac\nexec "%s" "$@"\n' \
+  "$SANDBOX" "$SANDBOX" "$REALMKDIR" > "$MKS/mkdir"; chmod +x "$MKS/mkdir"
+rm -rf "$SL/tools"
+OUT="$(PATH="$MKS:$PATH" bash "$SYNC" "$PLUGIN" "$SL/tools" 2>&1)"; RC=$?
+assert_file "$SANDBOX/mkdir.once"
+assert_eq "$RC $OUT" "0 tools updated $V" "one failed mkdir of the lock, no lock there: tried again"
+# those looks at no lock do not shorten the wait on a fresh lock (one with no pid yet): two failed mkdirs with no lock,
+# then a lock with no pid appears, and it is still waited on three times before it is taken for dead
+printf '#!/bin/sh\ncase "$*" in *tools.lock) n=$(wc -l < "%s/mkdir.n" 2>/dev/null | tr -d " "); echo x >> "%s/mkdir.n"\n  case "${n:-0}" in 0|1) exit 1 ;; 2) "%s" "$@"; exit 1 ;; esac ;; esac\nexec "%s" "$@"\n' \
+  "$SANDBOX" "$SANDBOX" "$REALMKDIR" "$REALMKDIR" > "$MKS/mkdir"
+rm -rf "$SL/tools" "$SANDBOX/sleep.n"
+OUT="$(PATH="$MKS:$SLP:$PATH" bash "$SYNC" "$PLUGIN" "$SL/tools" 2>&1)"; RC=$?
+assert_eq "$RC $OUT" "0 tools updated $V" "two failed mkdirs, then a fresh lock: the copy is made"
+assert_eq "$(wc -l < "$SANDBOX/sleep.n" 2>/dev/null | tr -d ' ')" "3" "two failed mkdirs, then a fresh lock: waited on three times"
+assert_eq "$(ls -A "$SL" | grep -vc '^tools$')" "0" "two failed mkdirs, then a fresh lock: nothing but tools in the folder"
+# A stale copy whose folder cannot be written (the Codex sandbox, a read-only data folder): no lock can be made and
+# none is held, so the run fails at once (exit 1, no wait, not "tools busy") and the copy stays as it was. The same
+# with no copy yet. Skipped as root (it can write anyway). With the folder writable again the copy is refreshed.
+if [ "$(id -u)" != 0 ]; then
+  RO="$SANDBOX/ro"; mkdir -p "$RO"; bash "$SYNC" "$PLUGIN" "$RO/tools" >/dev/null; echo 0.1.0 > "$RO/tools/VERSION"
+  before="$(tree_sum "$RO/tools")"; rm -f "$SANDBOX/sleep.n"; chmod 555 "$RO"
+  OUT="$(PATH="$SLP:$PATH" bash "$SYNC" "$PLUGIN" "$RO/tools" 2>&1)"; RC=$?
+  chmod 755 "$RO"
+  assert_eq "$RC" "1" "read-only parent: exit 1"
+  case "$OUT" in *"tools busy"*) fail "read-only parent: reported as busy: $OUT" ;; *) pass ;; esac
+  [ ! -e "$SANDBOX/sleep.n" ] && pass || fail "read-only parent: no sleep (it waited $(wc -l < "$SANDBOX/sleep.n" | tr -d ' ') times)"
+  assert_eq "$(tree_sum "$RO/tools")" "$before" "read-only parent: the copy changed"
+  assert_eq "$(ls -A "$RO")" "tools" "read-only parent: something left beside tools"
+  mkdir -p "$SANDBOX/ro2"; chmod 555 "$SANDBOX/ro2"
+  OUT="$(PATH="$SLP:$PATH" bash "$SYNC" "$PLUGIN" "$SANDBOX/ro2/tools" 2>&1)"; RC=$?
+  chmod 755 "$SANDBOX/ro2"
+  assert_eq "$RC" "1" "read-only parent, no copy yet: exit 1"
+  [ ! -e "$SANDBOX/sleep.n" ] && pass || fail "read-only parent, no copy yet: no sleep"
+  assert_eq "$(ls -A "$SANDBOX/ro2")" "" "read-only parent, no copy yet: something was made"
+  assert_exit 0 bash "$SYNC" "$PLUGIN" "$RO/tools"
+  assert_eq "$OUT" "tools updated $V" "parent writable again: updated"
+else
+  skip "sync-tools read-only parent folder" "running as root"
+fi
 for i in 1 2 3 4 5 6; do
   rm -rf "$SL/tools"; mkdir "$SL/tools.lock"; echo 99999999 > "$SL/tools.lock/pid"
   bash "$SYNC" "$PLUGIN" "$SL/tools" > "$SANDBOX/w1" 2>&1 & bash "$SYNC" "$PLUGIN" "$SL/tools" > "$SANDBOX/w2" 2>&1 & wait
@@ -301,6 +368,47 @@ assert_eq "$(cat "$C/.git/hooks/pre-push")" "$(printf '#!/bin/sh\necho mine')" "
 first="$(cat "$C/.git/hooks/pre-commit")"
 assert_exit 0 bash "$IH" "$P"
 assert_eq "$(cat "$C/.git/hooks/pre-commit")" "$first" "second run changed the shim"
+# a user's hook that is a link to a missing file is the user's too: the link stays, the WARN line names it, and for that
+# hook no corecrew shim is installed (as for any hook of the user's own)
+scaffold_old ihdl; P="$CORE_DIR/ihdl"; C="$P/code"
+ln -s "$SANDBOX/ihdl-gone-hook" "$C/.git/hooks/pre-commit"
+assert_exit 0 bash "$IH" "$P"
+assert_eq "$(readlink "$C/.git/hooks/pre-commit")" "$SANDBOX/ihdl-gone-hook" "dangling hook link: the user's link was replaced, no shim for it"
+assert_no_file "$SANDBOX/ihdl-gone-hook"
+echo "$OUT" | grep -qF "$C/.git/hooks/pre-commit exists and is not a corecrew hook; left unchanged" && pass || fail "dangling hook link: no WARN line: $OUT"
+assert_contains "$C/.git/hooks/pre-push" "# corecrew hook shim"
+# A stale tools copy that cannot be refreshed. In a data folder that cannot be written (the Codex sandbox, a read-only
+# data folder) the copy that is there goes on running: the shims are installed, exit 0. Skipped as root (it can write
+# anyway). With no copy there, or when the refresh fails in a folder that can be written (cp fails), nothing is
+# installed: exit 1 and one line.
+scaffold_old ihro; P="$CORE_DIR/ihro"; C="$P/code"; DATA="$(dirname "$COREDEV_TOOLS")"
+if [ "$(id -u)" != 0 ]; then
+  echo 0.1.0 > "$COREDEV_TOOLS/VERSION"; before="$(tree_sum "$COREDEV_TOOLS")"; chmod 555 "$DATA"
+  OUT="$(bash "$IH" "$P" 2>&1)"; RC=$?
+  chmod 755 "$DATA"
+  assert_eq "$RC $OUT" "0 hooks installed" "stale copy, data folder read-only: hooks installed on the copy that is there"
+  assert_contains "$C/.git/hooks/pre-commit" "# corecrew hook shim"
+  assert_contains "$C/.git/hooks/pre-push" "# corecrew hook shim"
+  assert_eq "$(tree_sum "$COREDEV_TOOLS")" "$before" "stale copy, data folder read-only: the copy changed"
+  assert_eq "$(ls -A "$DATA" | grep -c '^tools\.')" "0" "stale copy, data folder read-only: something left beside tools"
+  rm -f "$C/.git/hooks/pre-commit" "$C/.git/hooks/pre-push"
+  mv "$COREDEV_TOOLS" "$SANDBOX/ihro-tools"; chmod 555 "$DATA"
+  OUT="$(bash "$IH" "$P" 2>&1)"; RC=$?
+  chmod 755 "$DATA"; mv "$SANDBOX/ihro-tools" "$COREDEV_TOOLS"
+  assert_eq "$RC $OUT" "1 corecrew: could not update the tools in $COREDEV_TOOLS; hooks not installed." "no copy, data folder read-only"
+  assert_no_file "$C/.git/hooks/pre-commit"; assert_no_file "$C/.git/hooks/pre-push"
+else
+  skip "install-hooks with a read-only data folder" "running as root"
+fi
+CPF="$SANDBOX/cpfail"; mkdir -p "$CPF"; printf '#!/bin/sh\nexit 1\n' > "$CPF/cp"; chmod +x "$CPF/cp"
+echo 0.1.0 > "$COREDEV_TOOLS/VERSION"; rm -f "$C/.git/hooks/pre-commit" "$C/.git/hooks/pre-push"
+OUT="$(PATH="$CPF:$PATH" bash "$IH" "$P" 2>/dev/null)"; RC=$?
+ERR="$(PATH="$CPF:$PATH" bash "$IH" "$P" 2>&1 >/dev/null)"
+assert_eq "$RC $OUT" "1 " "stale copy, the refresh fails in a writable folder: exit 1, no success line"
+echo "$ERR" | grep -qF "corecrew: could not update the tools in $COREDEV_TOOLS; hooks not installed." && pass || fail "refresh fails in a writable folder: no line: $ERR"
+assert_no_file "$C/.git/hooks/pre-commit"; assert_no_file "$C/.git/hooks/pre-push"
+assert_eq "$(ls -A "$DATA" | grep -c '^tools\.')" "0" "refresh fails in a writable folder: something left beside tools"
+sync_tools && pass || fail "tools copy refreshed after the stale cases"
 
 # 5. An empty core.hooksPath (set to cancel a global one): git then runs no hooks from .git/hooks and
 #    rev-parse names the work tree root. Nothing is written anywhere, exit 4, no success line.
@@ -311,6 +419,8 @@ assert_no_file "$C/pre-commit"; assert_no_file "$C/pre-push"
 assert_no_file "$C/.git/hooks/pre-commit"; assert_no_file "$C/.git/hooks/pre-push"
 git -C "$C" status --porcelain | grep -qE 'pre-(commit|push)' && fail "an empty hooksPath left hook files in the work tree" || pass
 echo "$OUT" | grep -qF "core.hooksPath" && pass || fail "message does not name core.hooksPath: $OUT"
+echo "$OUT" | grep -qF "git -C '$C' config --unset core.hooksPath" && pass || fail "empty hooksPath: the note says to unset it: $OUT"
+echo "$OUT" | grep -qF "To chain them" && fail "empty hooksPath: chaining lines: $OUT" || pass
 echo "$OUT" | grep -qF "hooks installed" && fail "claims success with an empty hooksPath: $OUT" || pass
 git -C "$C" config --unset core.hooksPath
 
