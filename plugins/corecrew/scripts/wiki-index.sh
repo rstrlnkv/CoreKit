@@ -2,7 +2,7 @@
 # wiki-index.sh — generate docs/INDEX.md, one line per page, from the pages' front matter.
 #
 # Usage: wiki-index.sh <project_dir> [--check]
-#   <project_dir>  the Core project folder (has docs/); the title uses its folder name.
+#   <project_dir>  the Core project folder (has docs/); the title uses its resolved folder name.
 #   --check        write nothing; compare with the file on disk.
 #
 # Output (write mode): "created docs/INDEX.md", "updated docs/INDEX.md" or "skipped docs/INDEX.md".
@@ -55,8 +55,10 @@ if [ -s "$rows" ] && [ "${WIKI_INDEX_UNTYPED:-0}" != 1 ] && ! awk -F'\t' '$1 != 
 fi
 awk -F'\t' '$1 == "" { print "wiki-index: skipped " $5 ": no type" }' "$rows" >&2
 
+# the title is the resolved folder's name, so ".", ".." and a trailing slash title it like the absolute path
+name="$(basename "$(cd "$proj" && pwd)")"
 {
-  printf '# %s wiki\nOne line per page; open only the page you need.\n' "$(basename "$proj")"
+  printf '# %s wiki\nOne line per page; open only the page you need.\n' "$name"
   echo
   for t in brief architecture decision feature spec plan glossary; do
     awk -F'\t' -v t="$t" '$1 == t && $3 != "done" && $3 != "superseded" { print $2 "\t" $4 }' "$rows" \
