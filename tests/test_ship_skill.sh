@@ -47,6 +47,11 @@ tg="$(printf '%s\n' "$steps" | awk '/\*\*Tag and release\.\*\*/{f=1} f')"
 case "$tg" in *'yes'*) pass ;; *) fail "the tag step waits for the user's yes" ;; esac
 case "$st$steps" in *'refs/tags/'*) pass ;; *) fail "an existing tag is found before anything changes (refs/tags/)" ;; esac
 for w in 'git tag -f' 'tag -d' 'push --delete' '--force'; do assert_not_contains "$SK" "$w"; done
+# The tag form is a name contract (the versioning standard and every later release lookup use it):
+# step 1 gives `v<version>` for a repo with one versioned part and `<part>-v<version>` for several.
+s1="$(printf '%s\n' "$steps" | awk '/\*\*Version and tag names\.\*\*/{f=1} /\*\*Release\.\*\*/{f=0} f')"
+case "$s1" in *'`v<version>`'*) pass ;; *) fail "step 1 does not contain the one-part tag form \`v<version>\`" ;; esac
+case "$s1" in *'`<part>-v<version>`'*) pass ;; *) fail "step 1 does not contain the several-parts tag form \`<part>-v<version>\`" ;; esac
 for l in 'Merged:' 'Pushed:' 'Version:' 'Tag:' 'Release:' 'Open:'; do
   printf '%s\n' "$steps" | grep -qF -- "$l" && pass || fail "the report has $l"
 done
@@ -69,6 +74,12 @@ REL="$PLUGIN/skills/task/references/release.md"; PATHS="$PLUGIN/skills/task/refe
 assert_eq "$(cat "$SK" "$REL" "$PATHS" | grep -c 'where the version lives')" "1" "the version question is asked in one place"
 rp="$(awk '/^\*\*Release path/{f=1} f && /^$/{exit} f' "$REL")"
 case "$rp" in *ship*) pass ;; *) fail "release.md Release path defers the version question to ship" ;; esac
+# release.md states the same order for `/corecrew:task release`: the version edit is labelled as coming
+# before postcondition 1, and the paragraph stands above the postcondition list.
+case "$rp" in '**Release path, before postcondition 1:**'*) pass ;; *) fail "release.md: the version edit comes before postcondition 1" ;; esac
+nrp="$(grep -n '^\*\*Release path' "$REL" | head -1 | cut -d: -f1)"
+np1="$(grep -n '^1\. \*\*Tests\.\*\*' "$REL" | head -1 | cut -d: -f1)"
+[ -n "$nrp" ] && [ -n "$np1" ] && [ "$nrp" -lt "$np1" ] && pass || fail "release.md: the Release path paragraph stands above postcondition 1 (lines $nrp $np1)"
 
 # Protected default branch (B1): after the go-ahead ship pushes the branch itself and waits for the CI
 # checks on that commit; only green goes on to the fast-forward merge and the push of <main>, then the tag.
