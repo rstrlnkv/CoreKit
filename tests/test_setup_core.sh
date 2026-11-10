@@ -159,6 +159,13 @@ assert_exit 0 bash "$SC" "$CORE_DIR"
 assert_eq "$(git -C "$CORE_DIR" rev-list --count HEAD)" "1" "commit after identity was set"
 # nothing to create: no identity needed
 assert_exit 0 no_git_identity bash "$SC" "$CORE_DIR"
+# one setup file missing is work to do: without an identity the run stops before it writes anything
+for f in .gitignore README.md PROJECTS.md standards/README.md knowledge/README.md; do
+  mv "$CORE_DIR/$f" "$SANDBOX/moved"
+  assert_exit 1 no_git_identity bash "$SC" "$CORE_DIR"
+  assert_no_file "$CORE_DIR/$f"
+  mv "$SANDBOX/moved" "$CORE_DIR/$f"
+done
 
 # --- the commit fails (a failing pre-commit hook): files exist, exit 1; the next run commits them
 new_sandbox

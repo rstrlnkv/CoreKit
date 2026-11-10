@@ -36,6 +36,10 @@ if [ -n "$ARG" ]; then
 fi
 [ -n "$CORE_DIR" ] || { echo "setup-core: no Core path (give <core_dir>, or set core_dir, CORE_DIR or HOME); nothing was created." >&2; exit 2; }
 
+# The setup files as "template|path in the Core", in the order their lines are printed (.coredev is written below).
+FILES=("gitignore|.gitignore" "README.md|README.md" "PROJECTS.md|PROJECTS.md"
+       "standards-README.md|standards/README.md" "knowledge-README.md|knowledge/README.md")
+
 # schema_old — true when .coredev holds a schema number below this plugin's (core_ready is true).
 schema_old() {
   local sv; sv="$(coredev_get schema | tr -d '[:space:]')"
@@ -49,8 +53,8 @@ need_work() {
   core_ready || return 0
   ! schema_old || return 0
   local f
-  for f in .gitignore README.md PROJECTS.md standards/README.md knowledge/README.md; do
-    [ -e "$CORE_DIR/$f" ] || return 0
+  for f in "${FILES[@]}"; do
+    [ -e "$CORE_DIR/${f#*|}" ] || return 0
   done
   return 1
 }
@@ -70,11 +74,9 @@ fi
 
 if [ "$DRY" -eq 0 ]; then mkdir -p "$CORE_DIR" || exit 1; fi
 git_init "$CORE_DIR" || exit 1
-put "$TPL/gitignore"           "$CORE_DIR/.gitignore" copy || exit 1
-put "$TPL/README.md"           "$CORE_DIR/README.md" copy || exit 1
-put "$TPL/PROJECTS.md"         "$CORE_DIR/PROJECTS.md" copy || exit 1
-put "$TPL/standards-README.md" "$CORE_DIR/standards/README.md" copy || exit 1
-put "$TPL/knowledge-README.md" "$CORE_DIR/knowledge/README.md" copy || exit 1
+for pair in "${FILES[@]}"; do
+  put "$TPL/${pair%%|*}" "$CORE_DIR/${pair#*|}" copy || exit 1
+done
 
 # .coredev: "schema: 2" first; lines already there (e.g. app-id-prefix) follow.
 F="$CORE_DIR/.coredev"
@@ -110,12 +112,8 @@ if [ "$DRY" -eq 0 ]; then
     [ -n "$(git -C "$CORE_DIR" status --porcelain -- "$1" 2>/dev/null)" ] || return 0
     PENDING[${#PENDING[@]}]="$1"
   }
-  pend .gitignore           "$TPL/gitignore"
-  pend README.md            "$TPL/README.md"
-  pend PROJECTS.md          "$TPL/PROJECTS.md"
-  pend standards/README.md  "$TPL/standards-README.md"
-  pend knowledge/README.md  "$TPL/knowledge-README.md"
-  pend .coredev             ""
+  for pair in "${FILES[@]}"; do pend "${pair#*|}" "$TPL/${pair%%|*}"; done
+  pend .coredev ""
   if [ "${#PENDING[@]}" -gt 0 ]; then
     git -C "$CORE_DIR" add -- "${PENDING[@]}" \
       && git -C "$CORE_DIR" commit -q -m "Set up Core" -- "${PENDING[@]}" \
