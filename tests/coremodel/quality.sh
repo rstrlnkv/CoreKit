@@ -2,7 +2,7 @@
 # Manual check of the classifier on the real model: the labelled prompts of quality-cases.txt, each
 # asked RUNS times (the model does not always answer the same), compared with the right answers.
 # Needs the claude CLI and the network, so tests/run.sh does not call it. About 1,500 input tokens a call.
-# Usage: bash plugins/coremodel/tests/quality.sh haiku|sonnet [tune|hold|all]
+# Usage: bash tests/coremodel/quality.sh haiku|sonnet [tune|hold|all]
 #   RUNS=3 (asks per prompt), JOBS=8 (calls at once), CASES=<file> (default quality-cases.txt)
 case "$1" in
   haiku|sonnet) model="$1" ;;
@@ -13,7 +13,7 @@ case "$only" in tune|hold|all) ;; *) echo "usage: $0 haiku|sonnet [tune|hold|all
 runs="${RUNS:-3}"
 jobs="${JOBS:-8}"
 here="$(cd "$(dirname "$0")" && pwd)"
-src="$here/../hooks/classifier.ts"
+src="$here/../../plugins/coremodel/hooks/classifier.ts"
 cases_file="${CASES:-$here/quality-cases.txt}"
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/coremodel-quality.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT

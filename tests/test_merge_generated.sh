@@ -82,6 +82,8 @@ if [ "$(id -u)" != 0 ]; then
   assert_eq "$(tree_sum "$D3")" "$before" "the third run changed the code folder"
   assert_eq "$(grep -cxF '# From the stack generator' "$D3/.gitignore")" "1" "the generator block was added again"
   assert_eq "$(grep -cxF 'build/' "$D3/.gitignore")" "1" "a generator line was added again"
+else
+  skip "a file that cannot be copied" "running as root"
 fi
 # nested .gitignore files are kept, and what they ignore stays ignored
 new_sandbox; setup_core; scaffold_old mg-app; G="$SANDBOX/g"; mkdir -p "$G/android"

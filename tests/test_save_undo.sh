@@ -270,6 +270,8 @@ if [ "$(id -u)" != 0 ]; then
   assert_eq "$(commit_count "$C")" "$nc"; assert_eq "$(commit_count "$CORE_DIR")" "$nd"
   git -C "$C" status --porcelain | grep -q 'ro.txt' && pass || fail "ro.txt not left uncommitted"
   rm -f "$C/ro.txt"
+else
+  skip "save with a read-only .git" "running as root"
 fi
 
 # A missing code pre-commit shim and a read-only hooks folder: install-hooks cannot write it, so save
@@ -360,6 +362,8 @@ if [ "$(id -u)" != 0 ]; then
   [ "$rc" != 0 ] && pass || fail "save exited 0 with a read-only Core .git"
   assert_eq "$(commit_count "$C")" "$nc" "code commit made although the Core .git is read-only"
   assert_contains "$SANDBOX/out" "save: git could not write $CORE_DIR/.git"
+else
+  skip "save with a read-only Core .git" "running as root"
 fi
 assert_eq "$(cat "$C/id.txt")" "id" "a refused save changed a file"
 # the legitimate save of the same changes goes through

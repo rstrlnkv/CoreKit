@@ -11,9 +11,7 @@ PR="$(dirname "$CORE_DIR")"; C="$PR/wtapp"
 git -C "$C" commit -q --allow-empty -m init
 mkdir -p "$SANDBOX/elsewhere"
 
-# proj and wt_of: tests/lib-hook.sh
-guard() { # guard <tool> <path> <cwd> — guard-code rc in RC, stderr in ERR
-  printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"file_path":"%s","content":"x"}}' "$3" "$1" "$2" | bash "$HOOKS/guard-code.sh" >/dev/null 2>"$SANDBOX/err"; RC=$?; ERR="$(<"$SANDBOX/err")"; }
+# proj, wt_of and guard: tests/lib-hook.sh
 
 # --- a worktree outside Projects (the Codex place)
 W="$SANDBOX/codex-home/worktrees/ab12/wtapp"

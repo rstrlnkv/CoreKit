@@ -46,7 +46,7 @@ plugins/*.awk                                             lines  300
 plugins/coremodel/hooks/*.ts                              lines  500
 plugins/coremodel/hooks/*.tsx                             lines  500
 tests/*.sh                                                lines  1000
-plugins/coremodel/tests/*                                 lines  1000
+tests/coremodel/*                                         lines  1000
 EOF
 
 # The rows, in order: PAT, UNIT, LIM, and USED (1 once a file matched the row).

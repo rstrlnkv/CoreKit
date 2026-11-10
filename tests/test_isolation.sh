@@ -27,13 +27,17 @@ assert_contains "$SANDBOX/gitconfig" "isolation = yes"
 # Every test file calls new_sandbox. A file run on its own has no throwaway HOME from run.sh, so without new_sandbox
 # it would write the developer's files. Only the presence of the call is checked, not its position: code that a file
 # runs before its new_sandbox is not seen.
-has_sandbox() { grep -qE '(^|[;&(]|then |do )[[:space:]]*new_sandbox' "$1"; }
+has_sandbox() { grep -qE '(^|[;&(]|then |do )[[:space:]]*new_sandbox([[:space:];&|)]|$)' "$1"; }
 # self-check on fixtures: the call counts; the word in a comment or in an assert's text does not
 F="$SANDBOX/fx"; mkdir -p "$F"
 printf 'source "$(dirname "$0")/lib.sh"\nnew_sandbox\nbash "$HOOKS/guard-code.sh" < x\n' > "$F/sandboxed"
 printf 'source "$(dirname "$0")/lib.sh"\n# new_sandbox\nassert_contains "$f" new_sandbox\ngit config --global x.y z\n' > "$F/bare"
 has_sandbox "$F/sandboxed" && pass || fail "has_sandbox misses new_sandbox"
 has_sandbox "$F/bare" && fail "has_sandbox sees a sandbox in a file without one" || pass
+printf 'source "$(dirname "$0")/lib.sh"\nnew_sandbox_dir=x\nnew_sandboxes\ngit config --global x.y z\n' > "$F/longer"
+has_sandbox "$F/longer" && fail "has_sandbox takes a longer name that starts with new_sandbox for the call" || pass
+printf 'source "$(dirname "$0")/lib.sh"\nif true; then new_sandbox; setup_core; fi\n' > "$F/inline"
+has_sandbox "$F/inline" && pass || fail "has_sandbox misses new_sandbox followed by ;"
 for t in "$ROOT"/tests/test_*.sh; do
   has_sandbox "$t" && pass || fail "$(basename "$t") runs without new_sandbox"
 done

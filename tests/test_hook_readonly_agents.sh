@@ -81,9 +81,11 @@ refused $V 'git -C /tmp/review config --global user.name x'
 refused $V 'git -C /tmp/review push origin main'
 refused $V 'git -C /tmp/review --git-dir=.git add -A'
 refused $V 'git -C /tmp/review worktree add /tmp/w'
-ln -s "$C/src/a.txt" "$TMPD/ro-link-a.txt" 2>/dev/null
-refused $V "cp src/ro-link-a.txt $TMPD"                  # the file lands on a link that leads into the project
-rm -f "$TMPD/ro-link-a.txt"
+RL="ro-link-$$.txt"   # a name of this run alone: two runs of this file may share one temp folder
+ln -s "$C/src/a.txt" "$TMPD/$RL" || fail "could not make the link $TMPD/$RL"
+refused $V "cp src/$RL $TMPD"                            # the file lands on a link that leads into the project
+rm -f "$TMPD/$RL"
+allowed $V "cp src/$RL $TMPD"                            # the same command with no link there
 refused $V "sed -n 'w src/out.txt' src/a.txt"
 refused $V "sed 's/a/b/w src/out.txt' src/a.txt"
 refused $V 'sed -f /tmp/script.sed src/a.txt'

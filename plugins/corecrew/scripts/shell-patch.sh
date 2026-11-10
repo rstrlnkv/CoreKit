@@ -14,8 +14,8 @@ shell_patch_host() {
 # shell_patch_refused <command> — exit 0 when a Bash command applies a patch through the shell, which no hook can
 # judge (a path may be built by cd, quoting, $(...) or a variable); SHELL_PATCH_HIT is then what matched (the spelling as
 # written, "*** Begin Patch", "$'\...'" or the glob word, at most 80 bytes). The hooks call it only when shell_patch_host
-# says Codex. The rule reads no shell syntax (seven review passes in all,
-# five of them against the tokenizer rule); it is a substring hit plus a narrow allowlist.
+# says Codex. The rule is no shell parser (seven review passes in all, five of them against the tokenizer rule): it is
+# a substring hit plus a narrow allowlist, with a scan of quotes, heredocs and arithmetic and a command-word reader.
 # BEST EFFORT, NOT A SECURITY BOUNDARY: it catches plain and accidental shell patches and many disguised ones; it cannot
 # see a name the shell builds at run time. The apply_patch tool form is the checked path. Known ways past it: variables
 # and ${...}; $(...) and backticks (also empty ones); brace expansion; $'...' / $"..." splitting ($'apply'$'_patch');

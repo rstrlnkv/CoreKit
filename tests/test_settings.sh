@@ -302,6 +302,8 @@ if command -v zsh >/dev/null 2>&1; then
   sfw 'attribution: forbid\nmodel_profile: strong\n'
   assert_eq "$(zsh -c 'bash "$1" settings attribution='"'"'${user_config.attribution}'"'"' model_profile='"'"'${user_config.model_profile}'"'"'' _ "$LIB")" "attribution: forbid
 model_profile: strong" "zsh: literal placeholders fall to the file"
+else
+  skip zsh-placeholders "zsh not on PATH"
 fi
 
 # --- load_settings (every hook, save, undo-step and adopt run it) starts no program and no subshell but canon_dir's

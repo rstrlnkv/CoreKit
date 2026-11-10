@@ -15,7 +15,7 @@ tree_state() {
       printf '%s ' "$f"
       if [ -L "$1/$f" ]; then readlink "$1/$f"
       elif [ -d "$1/$f" ]; then bash "$_LIB_DIR/lib.sh" tree-state "$1/$f" 2>/dev/null   # untracked nested repo
-      else cksum < "$1/$f" 2>/dev/null; fi
+      else cksum 2>/dev/null < "$1/$f"; fi
     done
   } | cksum | tr ' ' '-'
 }
