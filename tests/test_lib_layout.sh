@@ -211,6 +211,38 @@ assert_eq "$(CODEX_HOME= HOME=/h ch)" "/h/.codex" "codex_home from HOME"
 assert_eq "$(CODEX_HOME=rel HOME=/h ch)" "" "codex_home: a relative CODEX_HOME is none"
 assert_eq "$(CODEX_HOME= HOME=rel ch)" "" "codex_home: a relative HOME is none"
 
+# --- what counts as a project inside the Core, each rule alone with its neighbour that does count
+new_sandbox; P="$SANDBOX/Projects"
+mkdir -p "$CORE_DIR/docsonly/sub" "$CORE_DIR/onlycode/code" "$CORE_DIR/bare/sub" "$CORE_DIR/standards/sub" "$CORE_DIR/knowledge" \
+  "$CORE_DIR/.hidden/code" "$CORE_DIR/core"
+for d in docsonly standards knowledge .hidden core; do : > "$CORE_DIR/$d/CLAUDE.md"; done
+mkdir -p "$CORE_DIR/standards/code" "$CORE_DIR/knowledge/code"
+assert_exit 0 bash "$LIB" project-of "$CORE_DIR/docsonly/sub";  assert_eq "$OUT" "docsonly" "a folder with only CLAUDE.md is a project"
+assert_exit 0 bash "$LIB" project-of "$CORE_DIR/onlycode";      assert_eq "$OUT" "onlycode" "a folder with only code/ is a project"
+assert_exit 0 bash "$LIB" project-of "$CORE_DIR/onlycode/code"; assert_eq "$OUT" "onlycode" "...and so is a path in its code/"
+assert_exit 1 bash "$LIB" project-of "$CORE_DIR/bare/sub";      assert_eq "$OUT" "" "a folder with neither is no project"
+assert_exit 1 bash "$LIB" project-of "$CORE_DIR/standards";     assert_eq "$OUT" "" "standards/ with a CLAUDE.md and code/ is no project"
+assert_exit 1 bash "$LIB" project-of "$CORE_DIR/standards/sub"; assert_eq "$OUT" "" "a path below standards/ is in no project"
+assert_exit 1 bash "$LIB" project-of "$CORE_DIR/knowledge";     assert_eq "$OUT" "" "knowledge/ with a CLAUDE.md and code/ is no project"
+assert_exit 1 bash "$LIB" project-of "$CORE_DIR/.hidden";       assert_eq "$OUT" "" "a dot-folder with a CLAUDE.md and code/ is no project"
+# the Core root is in no project, even when the Core holds a folder named like the Core folder in lower case
+: > "$CORE_DIR/CLAUDE.md"
+assert_eq "$(basename "$CORE_DIR")" "Core" "the sandbox Core folder is named Core"
+assert_exit 0 bash "$LIB" project-of "$CORE_DIR/core";          assert_eq "$OUT" "core" "the folder core/ inside the Core is found by its path"
+assert_exit 1 bash "$LIB" project-of "$CORE_DIR";               assert_eq "$OUT" "" "the Core root is no project"
+# ...and the Core folder is never that project's code folder; a folder beside the Core is
+assert_exit 1 bash "$LIB" code-dir core;                        assert_eq "$OUT" "" "code-dir: the Core is not the code folder of core"
+assert_exit 1 bash "$LIB" layout core
+mkdir -p "$P/Docsonly"
+assert_exit 0 bash "$LIB" code-dir docsonly;                    assert_eq "$OUT" "$P/Docsonly" "code-dir: a folder beside the Core is"
+# the name rule: 3 to 40 characters
+vpn() { ( . "$LIB"; valid_project_name "$1" ); }
+N40="a123456789b123456789c123456789d123456789"; assert_eq "${#N40}" "40" "the 40-character name"
+vpn "$N40" && pass || fail "a 40-character name is refused"
+vpn "${N40}e" && fail "a 41-character name is accepted" || pass
+vpn "abc" && pass || fail "a 3-character name is refused"
+vpn "ab" && fail "a 2-character name is accepted" || pass
+
 # case clash: only on a case-sensitive disk
 new_sandbox; P="$SANDBOX/Projects"; mkdir -p "$P/Foo/src"
 if mkdir "$P/foo" 2>/dev/null && [ "$(ls "$P" | grep -ci '^foo$')" -eq 2 ]; then
