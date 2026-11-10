@@ -191,7 +191,7 @@ check_path() {
 # --- The read-only checkers: the second rule of the header.
 ro_agent() {
   local a="$agent_type"
-  case "$a" in corecrew:*) a="${a#corecrew:}" ;; *:*) return 1 ;; esac
+  case "$a" in corecrew:*) a="${a#corecrew:}" ;; esac
   case "$a" in designer|localizer|security|verifier) printf '%s\n' "$a" ;; *) return 1 ;; esac
 }
 in_temp() {   # in_temp <absolute path>
