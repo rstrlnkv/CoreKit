@@ -17,6 +17,8 @@ export type World = {
   answers: (string | { fail: true } | { after: number; text?: string; cut?: boolean })[]
   /** The timeoutMs of each classifier call. */
   timeouts: (number | undefined)[]
+  /** The effort of each classifier call. */
+  classifierEfforts: (string | undefined)[]
   /**
    * One answer for every question, or a queue answered in order, one entry per question of a dialog
    * (null leaves that question unanswered; a dialog with no answer at all is dismissed, as is an empty queue).
@@ -74,6 +76,7 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     drop: null,
     answers: [],
     timeouts: [],
+    classifierEfforts: [],
     reply: null,
     dialogs: [],
     questions: [],
@@ -157,6 +160,7 @@ export function world(on: On, store: Record<string, unknown> = {}): World {
     w.model.push(e.model)
     w.prompts.push(e.prompt)
     w.timeouts.push(e.timeoutMs)
+    w.classifierEfforts.push(e.effort)
     const next = w.answers.shift()
     if (typeof next === 'object' && 'fail' in next) return { value: { isAnswered: false, reason: 'api-error', status: 529 } } as never
     if (typeof next === 'object') {

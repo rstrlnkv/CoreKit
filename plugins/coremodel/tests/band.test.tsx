@@ -316,3 +316,89 @@ test('on the terminal and the desktop a silent switch raises no toast: the band 
   await switchTo($, w, 'high', 'medium')
   expect(w.toasts).toEqual([])
 })
+
+test('a dismissed cost question after Switch mid-chat keeps the model and takes the effort', { options: { mode: 'suggest' } }, async ($, on) => {
+  const w = world(on)
+  engineParts(on)
+  w.lastReply = MID
+  await start($)
+  await pick($, w, OPUS_HIGH)
+  w.reply = null
+  await pressBand($, 'switch')
+  expect(w.asked).toEqual([['Switch to Opus', 'Keep Sonnet']])
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('claude-sonnet-5-5')
+  expect(w.efforts.at(-1)).toBe('high')
+})
+
+test('/coremodel undo leaves a model the person chose since and takes back the effort', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineParts(on)
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  await pressPane($, 'model-haiku')
+  expect(await run($, 'undo')).not.toContain('Nothing to undo')
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('haiku')
+  expect(w.efforts.at(-1)).toBe('medium')
+})
+
+test('undo holds the previous held model', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineParts(on)
+  await start($)
+  await pressPane($, 'model-haiku')
+  await pick($, w, '{"level":"medium","model":"opus","why":"a design choice"}')
+  expect(w.models.at(-1)).toBe('opus')
+  expect(String((await undoButton($))?.props.label)).toMatch(/Back to Haiku/)
+  await pressUndo($)
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('haiku')
+})
+
+test('the timer of an older band does not take a newer band down', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineParts(on)
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  await w.clock.advance(10_000)
+  await switchTo($, w, 'low', 'medium', 'rename a variable')
+  await w.clock.advance(6_000)
+  expect(String((await undoButton($))?.props.label)).toMatch(/Back to High/)
+  await w.clock.advance(9_000)
+  expect((await band($)).texts).toEqual(['engine'])
+})
+
+test('the band gives way to a survey', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  engineParts(on)
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  const ui = await $.ui.mount({ ...ABOVE, props: { ...ABOVE.props, hasSurvey: true }, surface: 'desktop' })
+  expect((await ui.findAll({ type: 'Text' })).map(t => String(t.text))).toEqual(['engine'])
+  expect(await ui.find({ type: 'Button', key: 'undo' })).toBe(undefined)
+  await ui.unmount()
+  expect(await undoButton($)).not.toBe(undefined)
+})
+
+test('Switch pressed while the classifier runs is not followed by a suggestion from the late pick', { options: { mode: 'suggest' } }, async ($, on) => {
+  const w = world(on)
+  engineParts(on)
+  await start($)
+  await pick($, w, OPUS_HIGH)
+  let answer!: (r: string) => void
+  w.answer = new Promise<string>(r => (answer = r))
+  await submit($, 'now fix the typo')
+  const second = step($, 'medium', 0)
+  for (let i = 0; w.model.length < 2; i += 1) {
+    if (i > 500) throw new Error('the classifier was never asked')
+    await w.clock.settle()
+  }
+  await pressBand($, 'switch')
+  answer('{"level":"low","model":"haiku","why":"a typo"}')
+  await second
+  expect((await band($)).texts).toEqual(['engine'])
+  await step($, 'medium', 1)
+  expect(w.models.at(-1)).toBe('opus')
+  expect(w.efforts.at(-1)).toBe('high')
+})

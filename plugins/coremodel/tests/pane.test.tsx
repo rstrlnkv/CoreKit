@@ -203,6 +203,15 @@ test('pane counts per model', { options: { mode: 'auto' } }, async ($, on) => {
   await ui.unmount()
 })
 
+// The README draws this line: the models weakest first, whatever order they were picked in.
+test('the session line lists the models from the lightest up, not in the order they were picked', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  await switchPair($, w, 'sonnet', 'high')
+  for (const surface of SURFACES) expect(await has($, /^Sonnet 1 · Opus 1 · High 1$/, surface)).toBe(true)
+})
+
 test('with pickModel off the pane shows no model buttons or model counts', { options: { mode: 'auto', pickModel: 'off' } }, async ($, on) => {
   const w = world(on)
   await start($)

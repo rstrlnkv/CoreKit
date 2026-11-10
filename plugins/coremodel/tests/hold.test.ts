@@ -248,3 +248,13 @@ test('a prompt sent before the new chat hook fires still gets its pick', { optio
   expect(w.model.length).toBe(1)
   expect(w.efforts).toEqual(['high'])
 })
+
+// Remote Control (the phone or the web) sends its prompts as `bridge`: they are the person's own.
+test('a Remote Control prompt gets its pick like a typed one', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await submit($, 'fix the login', 'bridge')
+  await step($, 'medium')
+  expect(w.model.length).toBe(1)
+  expect(w.efforts).toEqual(['high'])
+})
