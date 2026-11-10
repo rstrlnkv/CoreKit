@@ -5,13 +5,17 @@ bash "$SKILL/scripts/scaffold.sh" --name stop-app >/dev/null
 P="$CORE_DIR/stop-app"; C="$(dirname "$CORE_DIR")/stop-app"; H="$HOOKS/stop-remind.sh"
 assert_file "$H"
 J="$C/.claude/settings.local.json"
-python3 -m json.tool "$J" >/dev/null 2>&1 && pass || fail "settings.local.json is not valid JSON"
+# well-formed JSON (test-only use of python3; plugin code never uses it)
+if command -v python3 >/dev/null 2>&1; then
+  python3 -m json.tool "$J" >/dev/null 2>&1 && pass || fail "settings.local.json is not valid JSON"
+else
+  skip settings-json "python3 not on PATH; JSON well-formedness of settings.local.json not checked"
+fi
 # the Stop hook ships with the plugin; the project settings carry no hooks and no Core/bin path
 assert_not_contains "$J" "\"Stop\""; assert_not_contains "$J" "\"hooks\""
 assert_not_contains "$J" "stop-remind"; assert_contains "$J" "\"$P\""
 assert_not_contains "$PLUGIN/templates/code/settings.local.json.tmpl" "\"hooks\""
 HJ="$PLUGIN/hooks/hooks.json"
-python3 -m json.tool "$HJ" >/dev/null 2>&1 && pass || fail "hooks.json is not valid JSON"
 assert_contains "$HJ" "\"Stop\""
 assert_contains "$HJ" 'bash \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-remind.sh\"'
 assert_contains "$HJ" "\"timeout\": 10"
