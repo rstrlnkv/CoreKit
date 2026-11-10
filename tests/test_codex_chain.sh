@@ -174,6 +174,18 @@ changed "a new untracked nested repo"
 git -C "$R/nested repo" add -A; git -C "$R/nested repo" -c user.name=t -c user.email=t@t commit -q -m i; changed "a commit inside the nested repo"
 printf 'n2\n' > "$R/nested repo/n.txt"; changed "editing a tracked file inside the nested repo"
 printf 'u\n' > "$R/nested repo/u.txt"; changed "a new untracked file inside the nested repo"
+# an untracked file that cannot be read: one line still, exit 0, and no shell error reaches the caller
+if [ "$(id -u)" != "0" ]; then
+  printf 'secret\n' > "$R/noread.txt"; chmod 000 "$R/noread.txt"
+  out="$(bash "$LIB" tree-state "$R" 2>"$SANDBOX/ts.err")"; rc=$?
+  chmod 600 "$R/noread.txt"
+  assert_eq "$rc" "0" "tree-state with an unreadable untracked file exits 0"
+  assert_eq "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" "1" "tree-state with an unreadable untracked file prints one line"
+  assert_eq "$(cat "$SANDBOX/ts.err")" "" "tree-state with an unreadable untracked file: stderr"
+  rm -f "$R/noread.txt"; base="$(ts)"
+else
+  skip tree-state-unreadable "running as root"
+fi
 # not a work tree
 N="$SANDBOX/plain"; mkdir -p "$N"
 out="$(bash "$LIB" tree-state "$N" 2>/dev/null)"; rc=$?
@@ -188,7 +200,7 @@ assert_file "$CX"
 for w in spawn_agent role-model tree-state '<plugin>/agents/<role>.md' '<plugin>/reference/codex-host.md'; do
   assert_contains "$CX" "$w"
 done
-# the shared Codex reference: both multi-agent tool sets , a clear stop
+# the shared Codex reference: both multi-agent tool sets, a clear stop
 # without spawn_agent, the --add-dir restart and the approval to leave the sandbox
 CH="$PLUGIN/reference/codex-host.md"
 sec() { awk -v n="$2" '$0 == "## " n {f=1; next} /^## /{f=0} f' "$1"; }
