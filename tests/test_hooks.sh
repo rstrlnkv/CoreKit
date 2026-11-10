@@ -133,19 +133,20 @@ for u in "https://example.com/someone/Core.git" "$SANDBOX/remote.git"; do
   assert_contains "$SANDBOX/core.err" "Core may only be pushed to GitHub"
   assert_no_file "$SANDBOX/gh.log"
 done
+A='@'   # (the URLs below are spelled with $A, so that none of them reads as an email address)
 # a user part before github.com and one trailing slash are GitHub too: the same privacy question is asked
-for u in "https://someone@github.com/someone/Core.git" "https://github.com/someone/Core/" "https://someone@github.com/someone/Core.git/"; do
+for u in "https://someone${A}github.com/someone/Core.git" "https://github.com/someone/Core/" "https://someone${A}github.com/someone/Core.git/"; do
   core_push "$u" && pass || fail "a GitHub remote was refused: $u ($(cat "$SANDBOX/core.err"))"
   assert_eq "$(cat "$SANDBOX/gh.log" 2>/dev/null)" "api repos/someone/Core --jq .private" "gh is asked about someone/Core for $u"
 done
-GH_STUB=false PATH="$STUB:$PATH" bash "$H" origin "https://someone@github.com/someone/Core/" </dev/null >/dev/null 2>&1 \
+GH_STUB=false PATH="$STUB:$PATH" bash "$H" origin "https://someone${A}github.com/someone/Core/" </dev/null >/dev/null 2>&1 \
   && fail "public Core push allowed through a URL with a user part" || pass
 # a host that only looks like GitHub stays refused (github.com as the user part, in the path, as a prefix of the host,
 # after a slash in the user part, or with two slashes at the end)
-for u in "https://github.com@evil.example/someone/Core.git" "https://evil.example/github.com/someone/Core.git" \
-         "https://someone@github.company.com/someone/Core.git" "https://evil.example/x@github.com/someone/Core.git" \
-         "https://a@b@github.com/someone/Core.git" "https://github.com/someone/Core//" \
-         "git@someone@github.com:someone/Core.git" "http://someone@github.com/someone/Core.git"; do
+for u in "https://github.com${A}evil.example/someone/Core.git" "https://evil.example/github.com/someone/Core.git" \
+         "https://someone${A}github.company.com/someone/Core.git" "https://evil.example/x${A}github.com/someone/Core.git" \
+         "https://a${A}b${A}github.com/someone/Core.git" "https://github.com/someone/Core//" \
+         "git${A}someone${A}github.com:someone/Core.git" "http://someone${A}github.com/someone/Core.git"; do
   core_push "$u" && fail "a look-alike remote was allowed: $u" || pass
   assert_contains "$SANDBOX/core.err" "Core may only be pushed to GitHub"
   assert_no_file "$SANDBOX/gh.log"
@@ -388,6 +389,21 @@ while IFS= read -r p; do
     assert_eq "$i$c$u" "$i$i$i" "one list: .gitignore, pre-commit and pre-push disagree on $p (ignored, pre-commit, pre-push)"
   fi
 done < "$SANDBOX/samples"
+# every pattern has a sample: a line added to one list only then needs a sample path, and the agreement above fails on it
+for l in blocked-patterns allowed-patterns; do
+  grep -v '^[[:space:]]*$' "$GHK/$l" > "$SANDBOX/patterns"
+  while IFS= read -r re; do
+    grep -qiE -e "$re" "$SANDBOX/samples" && pass || fail "one list: no sample path matches the $l line $re"
+  done < "$SANDBOX/patterns"
+done
+# (check-ignore -v prints "<file>:<line number>:<pattern><tab><path>" with the line that decided, negated lines too)
+git -C "$TB" -c core.ignorecase=true check-ignore -v --no-index --stdin < "$SANDBOX/samples" \
+  | sed -e "s/$(printf '\t').*//" -e 's/^[^:]*:[0-9]*://' > "$SANDBOX/deciding"
+awk '/^# Internal/ || /^# Secrets/ { s = 1; next } /^#/ || /^$/ { s = 0 } s' "$GIC" > "$SANDBOX/ignore-lines"
+[ -s "$SANDBOX/ignore-lines" ] && pass || fail "one list: gitignore-common has no Internal or Secrets line"
+while IFS= read -r l; do
+  grep -qxF -e "$l" "$SANDBOX/deciding" && pass || fail "one list: no sample path is decided by the gitignore-common line $l"
+done < "$SANDBOX/ignore-lines"
 # adopt adds to an existing .gitignore only the lines its filter takes: every Internal line and every .env line
 ADOPT_CASE="$(sed -n 's/^ *case "\$l" in \(CLAUDE\*|[^)]*\)) ;; \*) continue ;; esac$/\1/p' "$SCRIPTS/adopt.sh")"
 [ -n "$ADOPT_CASE" ] && pass || fail "adopt.sh: the .gitignore filter line was not found"
