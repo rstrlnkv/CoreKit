@@ -403,13 +403,14 @@ refuse() { # <folder> <label> [env...]
   out="$(env "$@" CODEX_THREAD_ID= PATH="$SANDBOX/stub:$PATH" bash "$A" "$d" 2>&1 >/dev/null)"; assert_eq "$?" "2" "$l: refused"
   assert_file "$d/keep.txt"
 }
-# A hand-made tmp.* folder (a bare `mktemp -d`) is not one of --new's: refused with the temp-folder message, left as it
-# was, and codex is not run. On macOS a bare `mktemp -d` lands in the system temp folder whatever TMPDIR says; GNU
-# mktemp honours TMPDIR, so there the folder is inside the sandbox (refused all the same).
+# A hand-made tmp.* folder (a bare `mktemp -d`) is not one of --new's: refused with the "not a folder made by
+# ask-gpt.sh --new" message, left as it was, and codex is not run. On macOS a bare `mktemp -d` lands in the system
+# temp folder whatever TMPDIR says; GNU mktemp honours TMPDIR, so there the folder is inside the sandbox (refused all
+# the same).
 refuse_tmp() { # <folder> <label>
   rm -f "$SANDBOX/args.txt"
   refuse "$1" "$2"
-  case "$out" in *"is not a mktemp -d folder in the temp folder"*) pass ;; *) fail "$2: the message: $out" ;; esac
+  case "$out" in *"is not a folder made by ask-gpt.sh --new"*) pass ;; *) fail "$2: the message: $out" ;; esac
   assert_no_file "$SANDBOX/args.txt"
   rm -rf "$1"
 }
