@@ -2,7 +2,7 @@
 # Installs corecrew git hook shims into the project's code folder (beside the Core, or
 # <project_dir>/code in the old layout) and the Core repo. A shim is a tiny script that runs the hook
 # body kept in the tools folder (see sync-tools.sh), so hooks stay current after plugin updates.
-# Usage: bash install-hooks.sh <project_dir> [--tools <dir>]   (project_dir = <Core>/<name>)
+# Usage: bash install-hooks.sh <project_dir>   (project_dir = <Core>/<name>)
 # Env:   CORE_DIR (default: parent of project_dir)
 #        COREDEV_TOOLS (default: lib.sh tools_dir: $CLAUDE_PLUGIN_DATA/tools, else the host's data folder under an
 #        absolute HOME or CODEX_HOME, else the data folder is unknown and nothing is written)
@@ -18,13 +18,12 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 TOOLS="$(tools_dir)"   # COREDEV_TOOLS, else the host's data folder; empty when HOME is not absolute
 while [ $# -gt 0 ]; do
   case "$1" in
-    --tools) [ $# -ge 2 ] || { echo "usage: install-hooks.sh <project_dir> [--tools <dir>]" >&2; exit 2; }
-             TOOLS="$2"; shift 2 ;;
+    -*) echo "usage: install-hooks.sh <project_dir>" >&2; exit 2 ;;
     *) P="$1"; shift ;;
   esac
 done
-[ -n "$P" ] || { echo "usage: install-hooks.sh <project_dir> [--tools <dir>]" >&2; exit 2; }
-[ -n "$TOOLS" ] || { echo "corecrew: the data folder is unknown (HOME is empty or not an absolute path, and CLAUDE_PLUGIN_DATA and --tools are not set); hooks not installed." >&2; exit 1; }
+[ -n "$P" ] || { echo "usage: install-hooks.sh <project_dir>" >&2; exit 2; }
+[ -n "$TOOLS" ] || { echo "corecrew: the data folder is unknown (HOME is empty or not an absolute path, and CLAUDE_PLUGIN_DATA and COREDEV_TOOLS are not set); hooks not installed." >&2; exit 1; }
 case "$TOOLS" in /*) ;; *) TOOLS="$PWD/$TOOLS" ;; esac
 TOOLS="${TOOLS%/}"
 CORE_DIR="${CORE_DIR:-$(dirname "$P")}"

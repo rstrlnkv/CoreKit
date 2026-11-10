@@ -17,6 +17,9 @@ Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off
   branch, or the default branch itself (through a new `release/<part>` branch), can release a part
   whose changelog has lines under Unreleased.
 
+### Removed
+- `install-hooks.sh --tools <dir>`: set `COREDEV_TOOLS` instead; the flag is now refused.
+
 ### Fixed
 - A release no longer stops once at the wiki check: after the version edit, the release path
   updates the wiki pages whose `files:` name the edited manifests or changelog.
