@@ -4,6 +4,8 @@ source "$(dirname "$0")/lib.sh"
 new_sandbox
 WF="$ROOT/.github/workflows/tests.yml"
 assert_file "$WF"
+# Read without its comment lines (YAML and shell alike start one with #): a line that is commented out does not count.
+grep -vE '^[[:space:]]*#' "$WF" > "$SANDBOX/tests.yml"; WF="$SANDBOX/tests.yml"
 
 # block <file> <key> — a top-level block: from the line `<key>:` to the next line that does not start with a space
 block() { awk -v k="$2" '$0 == k ":" {f=1; next} f && /^[^ ]/ {f=0} f' "$1"; }
