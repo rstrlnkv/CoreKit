@@ -4,9 +4,10 @@
 # quote escaped). An empty path, or one with a control character (a one-line string cannot hold it), gives a comment
 # line that names what is left out instead.
 _toml_read_line() {
-  local s="$1" bs='\' q='"'
+  local s="$1"
   case "$s" in ""|*[[:cntrl:]]*) printf '# (left out: no usable path for %s; sandboxed commands cannot read it)\n' "$2"; return 0 ;; esac
-  s="${s//"$bs"/$bs$bs}"; s="${s//"$q"/$bs$q}"
+  # sed, not ${s//x/$y}: bash 5.2 reads a backslash that an expansion puts into the replacement, bash 3.2 does not
+  case "$s" in *[\\\"]*) s=$(printf '%s\n' "$s" | sed 's/[\\"]/\\&/g') ;; esac
   printf '"%s" = "read"\n' "$s"
 }
 
