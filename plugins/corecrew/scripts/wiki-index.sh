@@ -33,7 +33,8 @@ rows="$tmp.rows"; out="$tmp.out"
 trap 'rm -f "$tmp" "$rows" "$out"' EXIT
 : > "$rows"
 
-# one awk reads the front matter: prints type, name, status, description, page (tab separated)
+# one awk reads the front matter (fences and keys as wiki-check.awk reads them: blanks after ---, blanks before
+# the colon): prints type, name, status, description, page (tab separated)
 while IFS= read -r page; do
   name="$(basename "$page" .md)"
   awk -v n="$name" -v p="$page" '
@@ -41,11 +42,11 @@ while IFS= read -r page; do
       if (length(s) >= 2 && ((s ~ /^".*"$/) || (s ~ /^'"'"'.*'"'"'$/))) s = substr(s, 2, length(s) - 2)
       return s }
     { sub(/\r$/, "") }
-    NR == 1 { if ($0 != "---") exit; next }
-    $0 == "---" { exit }
-    /^type:/ { t = val($0) }
-    /^status:/ { s = val($0) }
-    /^description:/ { d = val($0) }
+    NR == 1 { if ($0 !~ /^---[ \t]*$/) exit; next }
+    /^---[ \t]*$/ { exit }
+    /^type[ \t]*:/ { t = val($0) }
+    /^status[ \t]*:/ { s = val($0) }
+    /^description[ \t]*:/ { d = val($0) }
     END { printf "%s\t%s\t%s\t%s\t%s\n", t, n, s, d, p }
   ' "$docs/$page" >> "$rows"
 done < <(bash "$HERE/wiki-pages.sh" "$docs")
