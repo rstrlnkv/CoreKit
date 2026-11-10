@@ -19,14 +19,14 @@
     "attribution": {
       "type": "string",
       "title": "Commit attribution",
-      "description": "allow: Claude may add Co-Authored-By and Generated-with lines to commits and pull requests. forbid: never.",
+      "description": "allow: corecrew's commits (save) may carry Co-Authored-By and Generated-with lines. forbid: save strips them.",
       "options": ["allow", "forbid"],
       "default": "allow"
     },
     "model_profile": {
       "type": "string",
       "title": "Model profile",
-      "description": "Which models the crew uses: economy (cheapest), balanced, or strong (best model for every role).",
+      "description": "Which models the crew uses: economy (cheapest), balanced, or strong (the strongest model for the checkers).",
       "options": ["economy", "balanced", "strong"],
       "default": "balanced"
     },

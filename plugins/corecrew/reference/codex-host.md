@@ -39,6 +39,11 @@ there, and that they must restart Codex from the same folder with `codex --add-d
 (new-project: `codex --add-dir "<Projects>"`); then stop. The probe file is removed at once. A
 `<Projects>` folder that does not exist yet: ask the user to create it, then restart the same way.
 
+A non-interactive run: in a folder Codex does not trust yet, a plain `codex exec` is a read-only
+session, so this check exits 1 there. The command that works is
+`codex exec --sandbox workspace-write --add-dir "<Core>"`. With the corecrew secrets profile as the
+default it is `codex exec --add-dir "<Core>"`, because `--sandbox` switches the profile off.
+
 ## Approval outside the sandbox
 The Codex sandbox keeps `.git` read-only and has no network. Run these as commands that ask for
 approval to leave the sandbox (escalated permissions), and let the user approve each:
@@ -57,6 +62,10 @@ stay uncommitted, and the report says
 `Commit: stopped — Codex sandbox keeps .git read-only`. Never look for a way around the sandbox.
 `save` printing `save: git could not write ...` means it ran inside the sandbox: run it again with
 approval once. If it still prints that line, the commit stops with the report above.
+
+Inside the sandbox `prepare.sh` cannot refresh the tools copy: the line
+`corecrew: tools not refreshed: could not update ...` is expected there, go on. The trusted
+session-start hook and an approved `install-hooks.sh` refresh the copy.
 
 ## Questions
 Codex has no AskUserQuestion tool. Ask in plain chat instead: at most three questions in one message,
