@@ -456,36 +456,19 @@ mkdir -p "$FW/code"; git -C "$FW/code" init -q; echo "wt2" > "$FW/wt.txt"
 assert_contains "$SANDBOX/out" "saved code"
 assert_eq "$(git -C "$FW" log -1 --format=%s)" "Nested code repo, worktree" "nested code repo in a worktree: the code commit"
 
-# An empty Core folder that save's path list names (hooks/), or one that holds only an ignored file (bin/):
-# git knows no file there. The docs are still committed, a renamed docs file with both its names.
-mkdir "$CORE_DIR/hooks"
-echo "eh" > "$C/eh.txt"; mv "$P/docs/features/f.md" "$P/docs/features/g.md"
-(cd "$C" && bash "$SAVE" "Empty hooks folder") > "$SANDBOX/out" 2>&1; rc=$?
-assert_eq "$rc" "0" "save with an empty <Core>/hooks: $(cat "$SANDBOX/out")"
-assert_contains "$SANDBOX/out" "saved code"; assert_contains "$SANDBOX/out" "saved docs"
-assert_eq "$(git -C "$CORE_DIR" status --porcelain -- save-app)" "" "docs left uncommitted beside an empty <Core>/hooks"
-assert_eq "$(git -C "$CORE_DIR" show --name-only --no-renames --format= HEAD | LC_ALL=C sort | tr '\n' ' ')" \
-  "save-app/docs/features/f.md save-app/docs/features/g.md " "the renamed docs file in the step commit"
-rmdir "$CORE_DIR/hooks"; mkdir "$CORE_DIR/bin"; echo local > "$CORE_DIR/bin/local"; echo "bin/local" >> "$CORE_DIR/.git/info/exclude"
-echo "eb" > "$C/eh.txt"; echo "eb" >> "$P/docs/brief.md"
-(cd "$C" && bash "$SAVE" "Ignored file in bin") > "$SANDBOX/out" 2>&1; rc=$?
-assert_eq "$rc" "0" "save with only an ignored file in <Core>/bin: $(cat "$SANDBOX/out")"
-assert_contains "$SANDBOX/out" "saved docs"
-assert_eq "$(git -C "$CORE_DIR" status --porcelain -- save-app)" "" "docs left uncommitted beside an ignored <Core>/bin file"
-assert_file "$CORE_DIR/bin/local"
-
-# The Core folders bin/ and hooks/ that corecrew 0.1.x wrote (reference/older-formats.md): corecrew no longer
-# writes there, but a change or a deletion there still rides along with the step.
-mkdir -p "$CORE_DIR/hooks"; echo x > "$CORE_DIR/bin/x"; echo y > "$CORE_DIR/hooks/y"
-(cd "$C" && bash "$SAVE" "0.1.x folders") >/dev/null 2>&1
-echo x2 > "$CORE_DIR/bin/x"; rm -r "$CORE_DIR/hooks"
+# corecrew 1.0 (P3): the Core folders bin/ and hooks/ of corecrew 0.1.x are no longer Core paths. A file there,
+# tracked or not, is left out of a step: core-paths does not list them and save leaves a change there uncommitted.
+mkdir -p "$CORE_DIR/bin" "$CORE_DIR/hooks"; echo x > "$CORE_DIR/bin/x"; echo y > "$CORE_DIR/hooks/y"
+git -C "$CORE_DIR" add bin/x hooks/y && git -C "$CORE_DIR" commit -q -m "0.1.x folders" --no-verify
+echo x2 > "$CORE_DIR/bin/x"; echo "eh" > "$C/eh.txt"
 cps="$(CORE_DIR="$CORE_DIR" bash "$LIB" core-paths save-app | tr ' ' '\n')"
 for f in bin hooks; do
-  printf '%s\n' "$cps" | grep -qx "$f" && pass || fail "core-paths does not list the 0.1.x folder $f: $cps"
+  printf '%s\n' "$cps" | grep -qx "$f" && fail "core-paths still lists the 0.1.x folder $f: $cps" || pass
 done
-(cd "$C" && bash "$SAVE" "0.1.x folders changed") > "$SANDBOX/out" 2>&1
-assert_eq "$(git -C "$CORE_DIR" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ' ')" "bin/x hooks/y " "save did not commit the 0.1.x folders"
-assert_eq "$(git -C "$CORE_DIR" status --porcelain -- bin hooks)" "" "0.1.x folders left uncommitted"
+(cd "$C" && bash "$SAVE" "0.1.x folders left out") > "$SANDBOX/out" 2>&1
+assert_contains "$SANDBOX/out" "saved code"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain -- bin)" " M bin/x" "save left the 0.1.x folder bin/ as it was"
+git -C "$CORE_DIR" checkout -q -- bin/x; git -C "$CORE_DIR" rm -rq bin hooks; git -C "$CORE_DIR" commit -q -m "rm 0.1.x" --no-verify
 
 # A step with thousands of docs files on long paths: their names together are longer than one command line may
 # be (ARG_MAX), so the docs commit must not take the files as arguments. All of them land in one docs commit.

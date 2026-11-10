@@ -54,16 +54,6 @@ An older project keeps its code repo inside the Core, at `<Core>/<name>/code`. `
 prints `old` for it. `/corecrew:task adopt <path>` moves it beside the Core, to `<Projects>/<name>`
 (`<plugin>/skills/task/references/adopt.md` has the steps).
 
-## Core bin/ and hooks/ folders (0.1.x)
-Made by corecrew 0.1.0-0.1.1.
-Supported until corecrew 1.0.
-
-corecrew 0.1.x put copies of `save`, `undo-step` and its git hooks into the Core, in `<Core>/bin/`
-and `<Core>/hooks/`. corecrew no longer writes there or runs those copies; only a git hook from 0.1
-still does, until it is replaced (next section). A Core that tracks the folders keeps them: `save`
-still commits a change or a deletion there with the step, and the clean-tree check of a task chain
-names them.
-
 ## Core without a schema
 Made by corecrew 0.1.0-0.4.0.
 Supported until corecrew 1.0.

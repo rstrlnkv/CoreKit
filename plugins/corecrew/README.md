@@ -298,7 +298,7 @@ Outside adopt, which moves those files into the Core, corecrew never overwrites 
 - Auto-triggering competes with other planning skills. Start it with `/corecrew:new-project`, or
   add to `~/.claude/CLAUDE.md`: `When I want to start a new project from scratch, use the new-project skill.`
 - `bin/` and `hooks/` copies that 0.1.x put into your Core stay where they are; corecrew no
-  longer writes there.
+  longer writes there, and `save` no longer commits a change there. Delete them by hand.
 
 ## Uninstall
 

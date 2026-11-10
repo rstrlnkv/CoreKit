@@ -13,6 +13,8 @@ commit log has the full detail.
 - Git hooks of corecrew 0.1 and 0.2 (`new-project hook`, `# coredev hook shim`) are no longer
   replaced or named at session start: `install-hooks.sh` leaves them as a hook of your own, with a
   warning. Remove such a hook and run `install-hooks.sh` again.
+- The Core folders `bin/` and `hooks/` of corecrew 0.1 are no longer part of a step: `save` leaves
+  a change there uncommitted. Delete the folders by hand.
 
 ## [0.15.0] - 2026-11-10
 

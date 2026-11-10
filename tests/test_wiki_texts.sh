@@ -115,7 +115,7 @@ done
 # older-formats.md covers every older format; each section names the versions that made it ("Made by corecrew
 # <first>-<last>.") and its support deadline (Decision 12 A: until corecrew 1.0).
 secs="$(grep '^## ' "$OF" | tr '\n' '|')"
-assert_eq "$secs" "## Wiki without types|## Brief with a stage field|## Knowledge with sections|## Old layout|## Core bin/ and hooks/ folders (0.1.x)|## Core without a schema|" "older-formats.md sections"
+assert_eq "$secs" "## Wiki without types|## Brief with a stage field|## Knowledge with sections|## Old layout|## Core without a schema|" "older-formats.md sections"
 for w in 'Made by corecrew ' 'Supported until corecrew 1.0'; do
   miss="$(awk -v w="$w" '/^## /{if (n != "" && !h) m = m n "|"; n = $0; h=0; next} index($0, w) == 1 {h=1}
     END {if (n != "" && !h) m = m n "|"; print m}' "$OF")"

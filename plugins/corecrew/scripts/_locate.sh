@@ -73,7 +73,7 @@ _name_splits() {
 # component, the entry it is under. The output keeps the fixed order of the list.
 core_paths() {
   local core="$1" out="$2" f p missing="" tracked=" " IFS=$' \t\n'
-  local list="PROJECTS.md README.md .gitignore .coredev standards knowledge session-rules.md bin hooks"
+  local list="PROJECTS.md README.md .gitignore .coredev standards knowledge session-rules.md"
   for f in $list; do
     [ -e "$core/$f" ] || missing="$missing $f"
   done
