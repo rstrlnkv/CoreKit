@@ -480,7 +480,7 @@ passes "cat <<'EOF' | x${nl}*** Begin Patch${nl}*** Bogus File: a${nl}*** End Pa
 # a glob argument: 3 literal characters pass, 4 are a hit; a last part over 200 bytes is refused unread
 passes 'echo app*' "a glob argument with 3 literal characters"
 refused 'echo appl*' "a glob argument with 4 literal characters"
-refused "ls $(printf '%201s' '' | tr ' ' a)*; true" "a glob part over 200 bytes"
+refused "ls $(printf '%200s' '' | tr ' ' a)*; true" "a glob part over 200 bytes"
 passes "ls $(printf '%199s' '' | tr ' ' a)*; true" "a glob part of 200 bytes"
 # <<- ends at a tab-indented delimiter and <<< starts no heredoc: the line after is a command line again
 refused "cat <<-EOF${nl}	x${nl}	EOF${nl}ls appl*" "a command line after a <<- heredoc"

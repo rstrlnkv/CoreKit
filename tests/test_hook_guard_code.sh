@@ -881,6 +881,7 @@ sec_rules() {
   sh 'ln -s ../CLAUDE.md' "$C/src";              blocked "ln -s ../CLAUDE.md (one operand) in src/" "$C/src/CLAUDE.md" "$CORE_DIR/p/src/CLAUDE.md"
   sh 'cp -r .. AGENTS.md/sub/';                  hook_ok "cp -r .. AGENTS.md/sub/ (a .. source names no file)"
   sh 'cp -r . src/';                             hook_ok "cp -r . src/"
+  sh 'cp -r . .claude/worktrees/w/';             hook_ok "cp -r . .claude/worktrees/w/ (a . source names no file)"
 }
 bg sec_rules
 
@@ -900,9 +901,14 @@ sec_rows() {
   done <<'ROWS'
 p#touch -r docs/ref src/a
 p#touch -d now src/a
+p#touch -d docs src/a
 p#mkdir -m 755 src/x
+p#mkdir -m docs src/x
 p#install -m 644 a src/a
 p#install -m 644 -g docs a .
+p#install -m docs a .
+p#install -o docs a .
+p#install -S docs a .
 r#install -o root a docs/a#docs/a
 r#cp -S .bak a docs/a#docs/a
 p#cp -b -S .claude settings.json .
@@ -915,6 +921,7 @@ r#ln -s -t src /tmp/CLAUDE.md#src/CLAUDE.md
 r#cp -- a docs/a#docs/a
 r#mv -- -old/CLAUDE.md src/#src/CLAUDE.md
 p#sed -e s/a/b/ src/a
+p#%S -e s/x/CLAUDE.md/ src/a.c
 p#%S -f docs/fix.sed src/a.c
 r#%S -f fix.sed docs/a.md#docs/a.md
 p#perl -e 1 src/a
