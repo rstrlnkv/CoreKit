@@ -4,6 +4,7 @@
 # that reads an internal file fails in a fresh clone, or passes without checking anything, so no
 # test may read one, and no public README may name one.
 source "$(dirname "$0")/lib.sh"
+new_sandbox
 
 # private_reads <dir> — lines of <dir>/test_*.sh that read an internal file of the repo root
 private_reads() {

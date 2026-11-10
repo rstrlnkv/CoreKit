@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The six corecrew agents: frontmatter, sections, tools, reply format, wording.
 source "$(dirname "$0")/lib.sh"
+new_sandbox
 AG="$PLUGIN/agents"
 ROLES="engineer tester security verifier localizer designer"
 READONLY="security verifier localizer designer"

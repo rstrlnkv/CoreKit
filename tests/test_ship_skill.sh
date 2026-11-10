@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The ship skill: release a branch, then merge it into main and push, only after the user's go-ahead.
 source "$(dirname "$0")/lib.sh"
+new_sandbox
 SK="$PLUGIN/skills/ship/SKILL.md"
 assert_file "$SK"
 

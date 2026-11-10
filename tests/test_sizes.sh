@@ -13,6 +13,7 @@
 # - the Core's standards/README.md and knowledge/README.md at most 15 lines (tests/test_setup_core.sh: a limit on
 #   scaffold output, not on a tracked file).
 source "$(dirname "$0")/lib.sh"
+new_sandbox
 
 IFS= read -r -d '' TABLE <<'EOF'
 # Named exceptions: each says what keeps it.

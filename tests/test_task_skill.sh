@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The task skill: frontmatter, paths, brief, report, flags.
 source "$(dirname "$0")/lib.sh"
+new_sandbox
 T="$PLUGIN/skills/task"
 SK="$T/SKILL.md"
 PA="$T/references/paths.md"

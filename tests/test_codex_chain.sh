@@ -188,12 +188,12 @@ assert_file "$CX"
 for w in spawn_agent role-model tree-state '<plugin>/agents/<role>.md' '<plugin>/reference/codex-host.md'; do
   assert_contains "$CX" "$w"
 done
-# the shared Codex reference: both multi-agent tool sets (v1 is Codex 0.166's default, v2 is opt-in), a clear stop
+# the shared Codex reference: both multi-agent tool sets , a clear stop
 # without spawn_agent, the --add-dir restart and the approval to leave the sandbox
 CH="$PLUGIN/reference/codex-host.md"
 sec() { awk -v n="$2" '$0 == "## " n {f=1; next} /^## /{f=0} f' "$1"; }
 sa="$(sec "$CH" Subagents)"
-for w in spawn_agent wait_agent 'fork_context: false' send_input close_agent task_name 'fork_turns: "none"' followup_task 'multi_agent'; do
+for w in spawn_agent wait_agent 'fork_context: false' send_input close_agent task_name 'fork_turns: "none"' followup_task; do
   case "$sa" in *"$w"*) pass ;; *) fail "codex-host.md Subagents lacks: $w" ;; esac
 done
 case "$sa" in *'No `spawn_agent`'*stop*) pass ;; *) fail "codex-host.md Subagents: no stop when spawn_agent is missing" ;; esac

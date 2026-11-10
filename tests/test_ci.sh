@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The CI workflow (.github/workflows/tests.yml), read with awk and grep: what it runs on and what its jobs do.
 source "$(dirname "$0")/lib.sh"
+new_sandbox
 WF="$ROOT/.github/workflows/tests.yml"
 assert_file "$WF"
 
