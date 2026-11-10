@@ -60,13 +60,6 @@ coredev_set() {
   mv "$tmp" "$f"
 }
 
-# opt_value <value> — the value, or nothing when it is empty or still holds the literal text
-# "${user_config." (Claude Code leaves placeholders unsubstituted while the plugin is not configured).
-opt_value() {
-  case "$1" in *'${user_config.'*) return 0 ;; esac
-  printf '%s' "$1"
-}
-
 # _sfp_r — sets _SFP to the settings file: $CORECREW_CONFIG (absolute; a relative one is ignored, as it would follow
 # the cwd), else $XDG_CONFIG_HOME/corecrew/settings (an empty or relative XDG_CONFIG_HOME is ignored), else
 # ~/.config/corecrew/settings. With no usable HOME there is no file: _SFP empty, exit 1.
@@ -151,7 +144,7 @@ _resolve_setting() {
       3:*) _sf_get_r "$key" || :; v="$_SF_V"; src="file" ;;
       *) continue ;;
     esac
-    # as opt_value: a placeholder is no value; trailing newlines are dropped
+    # a value that still holds the placeholder text "${user_config." is no value; trailing newlines are dropped
     # shellcheck disable=SC2016  # the placeholder text is literal
     case "$v" in *'${user_config.'*) v="" ;; *) _nl_trim "$v"; v="$_NT" ;; esac
     [ -n "$v" ] || continue
