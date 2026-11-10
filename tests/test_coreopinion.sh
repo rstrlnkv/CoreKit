@@ -236,9 +236,10 @@ A="$P/skills/second-opinion/scripts/ask-gpt.sh"
 assert_file "$A"
 # the profile is built from secret-patterns.txt: take it from a run with a stub codex that records its arguments
 mkdir -p "$SANDBOX/stub"; printf '#!/bin/sh\nprintf "%%s\\n" "$@" > "$STUB_ARGS"\necho "GPT says hi" > "$(dirname "$STUB_ARGS")/last"\nfor a; do case "$p" in --output-last-message) echo "GPT says hi" > "$a" ;; esac; p="$a"; done\ncat > "$(dirname "$STUB_ARGS")/stdin.txt"\n' > "$SANDBOX/stub/codex"; chmod +x "$SANDBOX/stub/codex"
+export STUB_ARGS="$SANDBOX/args.txt"   # every run of the stub writes inside the sandbox, whatever the call site passes
 GR="$SANDBOX/gitrepo"; git init -q "$GR"
 TP="$(tmpf)"; printf '%s' "$GR" > "$TP/dir"; printf 'p\n' > "$TP/prompt.md"
-( STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$TP" >/dev/null 2>&1 )
+( PATH="$SANDBOX/stub:$PATH" bash "$A" "$TP" >/dev/null 2>&1 )
 profile="$(grep '^permissions\.review\.filesystem=' "$SANDBOX/args.txt" 2>/dev/null | head -1)"
 assert_eq "${profile:+found}" "found" "ask-gpt.sh passes the review permission profile"
 # (a) every pattern is in the profile, denied
@@ -254,7 +255,7 @@ assert_eq "${missing:-none}" "none" "every secret pattern also denies the folder
 # the list is required: without it codex is never run
 rm -f "$SANDBOX/args.txt"; cp "$A" "$NL/"; rm -f "$NL/secret-patterns.txt"
 TP="$(tmpf)"; printf '%s' "$GR" > "$TP/dir"; printf 'p\n' > "$TP/prompt.md"
-( STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$NL/ask-gpt.sh" "$TP" >/dev/null 2>&1 ); rc=$?
+( PATH="$SANDBOX/stub:$PATH" bash "$NL/ask-gpt.sh" "$TP" >/dev/null 2>&1 ); rc=$?
 [ "$rc" -ne 0 ] && pass || fail "no pattern list: ask-gpt.sh must fail"
 assert_no_file "$SANDBOX/args.txt"
 assert_no_file "$TP"   # the temp folder (it holds the diff) is still removed
@@ -293,7 +294,7 @@ assert_not_contains "$S" '-C "<project dir>"'
 assert_not_contains "$S" 'codex exec --ignore-user-config'   # one copy of the command: the script's
 BAD="$SANDBOX/we ird\"\$(touch PWNED)\`touch PWNED2\`dir"; mkdir -p "$BAD"; git -C "$BAD" init -q
 T2="$(tmpf)"; printf '%s' "$BAD" > "$T2/dir"; printf 'p\n' > "$T2/prompt.md"
-OUT="$(cd "$SANDBOX" && STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$T2" 2>&1)"
+OUT="$(cd "$SANDBOX" && PATH="$SANDBOX/stub:$PATH" bash "$A" "$T2" 2>&1)"
 assert_eq "$([ -e "$SANDBOX/PWNED" ] || [ -e "$SANDBOX/PWNED2" ] && echo ran || echo safe)" "safe" "a hostile project path runs nothing"
 assert_contains "$SANDBOX/args.txt" 'PWNED'
 assert_not_contains "$SANDBOX/args.txt" '--skip-git-repo-check'
@@ -302,12 +303,12 @@ assert_no_file "$T2"   # the temp folder (it holds the diff) is gone after the r
 grep -qx 'model_reasoning_effort=medium' "$SANDBOX/args.txt" && pass || fail "default effort is medium"
 # high on request; anything else falls back to medium
 T3="$(tmpf)"; printf '%s' "$BAD" > "$T3/dir"; printf 'p\n' > "$T3/prompt.md"
-( STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$T3" xhigh >/dev/null 2>&1 )
+( PATH="$SANDBOX/stub:$PATH" bash "$A" "$T3" xhigh >/dev/null 2>&1 )
 grep -qx 'model_reasoning_effort=medium' "$SANDBOX/args.txt" && pass || fail "an unknown effort falls back to medium"
 # outside a git repository: the flag, and an empty folder instead of the project
 NR="$SANDBOX/norepo"; mkdir -p "$NR"; printf 'x\n' > "$NR/f.txt"
 T4="$(tmpf)"; printf '%s' "$NR" > "$T4/dir"; printf 'p\n' > "$T4/prompt.md"
-( STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$T4" >/dev/null 2>&1 )
+( PATH="$SANDBOX/stub:$PATH" bash "$A" "$T4" >/dev/null 2>&1 )
 assert_contains "$SANDBOX/args.txt" '--skip-git-repo-check'
 assert_eq "$(grep -A1 -x -- '-C' "$SANDBOX/args.txt" | tail -1)" "$T4/empty" "no repo: Codex gets an empty folder"
 # a missing prompt is refused, and the folder is not removed then
@@ -326,7 +327,7 @@ assert_dir "$TD/inner"; rm -rf "$TD"
 # a bare `mktemp -d` lands whatever TMPDIR says) or in /tmp, compared after resolving links (/tmp vs /private/tmp).
 okrun() { # <folder> <label>: accepted, run, and removed
   printf '%s' "$GR" > "$1/dir"; printf 'p\n' > "$1/prompt.md"
-  out="$(CODEX_THREAD_ID= STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$1" 2>&1)"
+  out="$(CODEX_THREAD_ID= PATH="$SANDBOX/stub:$PATH" bash "$A" "$1" 2>&1)"
   case "$out" in exit=0*) pass ;; *) fail "$2: refused: $out" ;; esac
   assert_no_file "$1"
 }
@@ -350,7 +351,7 @@ L="$SANDBOX/tmplink"; ln -s "${TMPDIR:-/tmp}" "$L" 2>/dev/null && okrun "$(mktem
 refuse() { # <folder> <label> [env...]
   local d="$1" l="$2"; shift 2
   printf '%s' "$GR" > "$d/dir"; printf 'p\n' > "$d/prompt.md"; printf 'keep\n' > "$d/keep.txt"
-  ( env "$@" CODEX_THREAD_ID= STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$d" >/dev/null 2>&1 ); assert_eq "$?" "2" "$l: refused"
+  ( env "$@" CODEX_THREAD_ID= PATH="$SANDBOX/stub:$PATH" bash "$A" "$d" >/dev/null 2>&1 ); assert_eq "$?" "2" "$l: refused"
   assert_file "$d/keep.txt"
 }
 mkdir -p "$HOME/coreopinion.home1"; refuse "$HOME/coreopinion.home1" "a coreopinion.* folder in HOME"
@@ -373,7 +374,7 @@ assert_eq "$(cat "$NEWT/dir" 2>/dev/null)" "$(cd "$SANDBOX/from here" && pwd -P)
 assert_no_file "$NEWT/prompt.md"
 # the prompt comes on stdin, taken as it is; the folder is removed after the run as before
 rm -f "$SANDBOX/stdin.txt"
-OUT="$(STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$NEWT" medium 2>&1 <<'COREOPINION_PROMPT'
+OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$A" "$NEWT" medium 2>&1 <<'COREOPINION_PROMPT'
 Review this, $HOME and `x` stay as they are.
 COREOPINION_PROMPT
 )"
@@ -381,7 +382,7 @@ case "$OUT" in exit=0*) pass ;; *) fail "a prompt on stdin runs: $OUT" ;; esac
 assert_eq "$(cat "$SANDBOX/stdin.txt" 2>/dev/null)" 'Review this, $HOME and `x` stay as they are.' "codex reads the prompt given on stdin"
 assert_no_file "$NEWT"
 # --check: codex there, exit 0; without codex, exit 4 and nothing on stdout
-OUT="$(STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" --check </dev/null 2>&1)"; rc=$?
+OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$A" --check </dev/null 2>&1)"; rc=$?
 assert_eq "$rc" "0" "--check with codex: exit 0 ($OUT)"
 mkdir -p "$SANDBOX/nocodex"; for b in bash cat dirname; do ln -sf "$(command -v "$b")" "$SANDBOX/nocodex/$b"; done
 OUT="$(PATH="$SANDBOX/nocodex" "$SANDBOX/nocodex/bash" "$A" --check </dev/null 2>/dev/null)"; rc=$?
@@ -398,14 +399,14 @@ assert_eq "$(grep -c '^policy:' "$OY")" "1" "openai.yaml: one policy table"
 rm -f "$SANDBOX/args.txt"
 mkdir -p "$SANDBOX/rofs"; printf '#!/bin/sh\necho "rm: $2: Operation not permitted" >&2\nexit 1\n' > "$SANDBOX/rofs/rm"; chmod +x "$SANDBOX/rofs/rm"
 T6="$(tmpf)"; printf '%s' "$GR" > "$T6/dir"; printf 'p\n' > "$T6/prompt.md"
-OUT="$(CODEX_THREAD_ID=019a-test STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/rofs:$SANDBOX/stub:$PATH" bash "$A" "$T6" </dev/null 2>&1)"; rc=$?
+OUT="$(CODEX_THREAD_ID=019a-test PATH="$SANDBOX/rofs:$SANDBOX/stub:$PATH" bash "$A" "$T6" </dev/null 2>&1)"; rc=$?
 assert_eq "$rc" "3" "inside Codex: ask-gpt.sh exits 3"
 case "$OUT" in *"Claude Code"*) pass ;; *) fail "inside Codex: the refusal names Claude Code: $OUT" ;; esac
 assert_eq "$(printf '%s\n' "$OUT" | grep -c .)" "1" "inside Codex: one line, no cleanup noise"
 assert_no_file "$SANDBOX/args.txt"
 assert_file "$T6/prompt.md"; rm -rf "$T6"   # left alone: nothing was run or removed
 for m in --check --new; do
-  OUT="$(cd "$GR" && CODEX_THREAD_ID=019a-test STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$m" </dev/null 2>/dev/null)"; rc=$?
+  OUT="$(cd "$GR" && CODEX_THREAD_ID=019a-test PATH="$SANDBOX/stub:$PATH" bash "$A" "$m" </dev/null 2>/dev/null)"; rc=$?
   assert_eq "$rc:$OUT" "3:" "inside Codex: $m exits 3 and prints nothing on stdout"
 done
 assert_no_file "$SANDBOX/args.txt"
@@ -417,7 +418,7 @@ first_code="$(grep -n '^```' "$S" | head -1 | cut -d: -f1)"
 tid="$(grep -n 'CODEX_THREAD_ID' "$S" | head -1 | cut -d: -f1)"
 if [ -n "$tid" ] && [ "$tid" -gt "$first_sec" ] && [ "$tid" -lt "$next_sec" ] && [ "$tid" -lt "$first_code" ]; then pass
 else fail "SKILL.md: the Codex stop (CODEX_THREAD_ID) is in section 1, before the first command (line ${tid:-none})"; fi
-OUT="$(CODEX_THREAD_ID= STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$(T7="$(tmpf)"; printf '%s' "$GR" > "$T7/dir"; printf 'p\n' > "$T7/prompt.md"; printf '%s' "$T7")" 2>&1)"
+OUT="$(CODEX_THREAD_ID= PATH="$SANDBOX/stub:$PATH" bash "$A" "$(T7="$(tmpf)"; printf '%s' "$GR" > "$T7/dir"; printf 'p\n' > "$T7/prompt.md"; printf '%s' "$T7")" 2>&1)"
 case "$OUT" in *"exit=0"*) pass ;; *) fail "an empty CODEX_THREAD_ID is not a Codex session: $OUT" ;; esac
 # the log tail: 20 lines after a good run, more after a failed one (the skill reads stdout only: the folder is gone)
 mkdir -p "$SANDBOX/stubfail"; printf '#!/bin/sh\ni=1; while [ $i -le 100 ]; do echo "log line $i" >&2; i=$((i+1)); done\nexit 1\n' > "$SANDBOX/stubfail/codex"; chmod +x "$SANDBOX/stubfail/codex"
