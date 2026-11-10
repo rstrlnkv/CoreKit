@@ -7,12 +7,17 @@ full detail.
 
 ## [Unreleased]
 
+Codex: the hook changed, so Codex keeps it off until you trust it again in `/hooks`.
+
 ### Changed
 
+- The plugin's module tests moved out of the plugin to `tests/coremodel/`, so an install no longer
+  carries them. Run them with `bash tests/test_coremodel.sh`; the classifier quality check is
+  `bash tests/coremodel/quality.sh`.
+- The plugin icon is 103 kB smaller, with the same pixels.
 - Codex hint: the nested classifier call no longer carries the project's `AGENTS.md`
   (`project_doc_max_bytes=0`), so project rules cannot bend the pick and each prompt costs fewer
-  tokens. Your global `AGENTS.md` and Codex's own instructions still ride along. Codex asks you to
-  trust the hook again after the update.
+  tokens. Your global `AGENTS.md` and Codex's own instructions still ride along.
 
 ### Removed
 

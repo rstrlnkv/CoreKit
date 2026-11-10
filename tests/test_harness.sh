@@ -313,7 +313,6 @@ has "x_bg.sh: 3 passed, 1 failed" "bg sections that set n"; lacks "did not finis
 # the `fi` at the same indent; a one-line `if ...; fi` holds it itself). A gate that only picks one of two tools
 # inside one line is no block and is not read. The short form `command -v <tool> >/dev/null 2>&1 && ...` outside an
 # `if` is a gate with no place for a skip call, so it is always open; `... || <fallback>` is a choice and is not read.
-# test_manifest.sh is read once its own gates are closed.
 # open_gates <file> — the line numbers of the gate blocks with no skip call, on one line
 open_gates() {
   awk '
@@ -356,7 +355,6 @@ cv='command -v'
 } > "$G"
 assert_eq "$(open_gates "$G")" "1 6 " "a short '&&' gate is open; a fallback, a comment and an if with a skip are not"
 for f in "$ROOT"/tests/test_*.sh; do
-  case "${f##*/}" in test_manifest.sh) continue ;; esac
   assert_eq "$(open_gates "$f")" "" "$(basename "$f"): gated parts with no skip call, at lines"
 done
 finish

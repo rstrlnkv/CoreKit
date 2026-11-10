@@ -120,6 +120,13 @@ for pl in $plugins; do
   assert_eq "$(check_changelog "$CL")" "" "$pl CHANGELOG format"
   top="$(top_version "$CL")"
   assert_eq "$(jf "$CJ" version)" "$top" "$pl .claude-plugin version vs CHANGELOG"
+  # A plugin with Codex hooks: every update drops Codex's hook trust, so the newest section that has
+  # text (Unreleased, or the first released one) tells the user to trust the hooks again in /hooks.
+  if [ -f "$XJ" ]; then
+    newest="$(awk '/^## \[/ { if (seen && body) exit; seen = 1; body = 0; next } seen && NF { body = 1; print }' "$CL")"
+    case "$newest" in *'/hooks'*) pass "$pl CHANGELOG: the newest section names /hooks" ;;
+      *) fail "$pl CHANGELOG: the newest section with text does not tell a Codex user to trust the hooks again in /hooks" ;; esac
+  fi
   [ -f "$XJ" ] && assert_eq "$(jf "$XJ" version)" "$top" "$pl .codex-plugin version vs CHANGELOG"
   # every plugin is listed, with the same one-sentence description as its manifests
   desc="$(jf "$CJ" description)"

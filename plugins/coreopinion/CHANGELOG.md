@@ -7,6 +7,9 @@ All notable changes to `coreopinion` are listed here. The format follows
 ## [Unreleased]
 
 ### Changed
+- The trigger evals moved out of the plugin to `evals/coreopinion/`, so an install no longer
+  carries them. Run them with `bash scripts/eval.sh coreopinion`.
+- The plugin icon is 90 kB smaller, with the same pixels.
 - `ask-gpt.sh` accepts only a folder made by `ask-gpt.sh --new` (`coreopinion.*`); a hand-made
   `tmp.*` folder is refused and left alone instead of run and removed.
 

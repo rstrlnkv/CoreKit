@@ -9,7 +9,19 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+Codex: the hooks changed, so Codex keeps them off until you trust them again in `/hooks`. Print the
+sandbox profile again (`lib.sh codex-profile`) and paste the new fragment (see Fixed).
+
 ### Changed
+- The trigger evals moved out of the plugin to `evals/corecrew/`, so an install no longer carries
+  them. Run them with `bash scripts/eval.sh corecrew`.
+- The descriptions of the `attribution` and `model_profile` options say what they do: `attribution`
+  covers only corecrew's own commits (`save`), and `strong` gives the strongest model to the
+  checkers, not to every role.
+- The plugin icon is 98 kB smaller, with the same pixels.
+- The Codex host reference names the command for a non-interactive run
+  (`codex exec --sandbox workspace-write --add-dir "<Core>"`) and says that `tools not refreshed`
+  is expected inside the sandbox.
 - Codex: when a session has no `spawn_agent` tool, the stop message no longer points to
   `codex features list` or the `multi_agent` feature, and the text no longer calls multi-agent v1
   Codex's default. Both tool sets stay described.
@@ -67,6 +79,8 @@ commit log has the full detail.
   with a percent-encoded non-ASCII name is no longer reported as `broken link`.
 - `reference/wiki.md`: the command that lists the changed pages prints `docs/<page>.md`, a form
   `wiki-check.sh --changed` reads as a page (the old output gave a false `drift` line).
+- `lib.sh tree-state` no longer prints a shell `Permission denied` line when an untracked file
+  cannot be read; it still prints its one line and exits 0.
 - Reading a large settings file (up to the 64 KB limit) stays fast when the keys are near its end.
 - The adopt guide and the `adopt.sh` header no longer say that exit 1 always means a step after
   the repo commit failed.
