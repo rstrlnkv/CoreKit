@@ -28,7 +28,7 @@ ARCHITECTURE.md
 CONTRIBUTING.md
 plugins/*/README.md
 plugins/*/README.*.md optional
-docs/*.md
+docs/*.md optional
 .github/*.md
 .github/ISSUE_TEMPLATE/*.md'
 # docs_of <root> <glob> — the files of <glob> under <root>, relative to it

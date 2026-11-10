@@ -15,7 +15,7 @@ ARCHITECTURE.md
 CONTRIBUTING.md
 plugins/*/README.md
 plugins/*/README.*.md optional
-docs/*.md'
+docs/*.md optional'
 # claim_docs <root> <glob> — the files of <glob> under <root>, relative to it
 claim_docs() {
   local f

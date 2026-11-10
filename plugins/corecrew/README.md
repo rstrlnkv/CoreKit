@@ -103,8 +103,9 @@ Then restart the host. An update never touches your Core, standards or knowledge
 Auto-update is off for third-party marketplaces by default; turn it on in `/plugin` → Marketplaces
 → corekit → Enable auto-update.
 
-Coming from `coredev` (0.2.x) or `corekit` (0.1.x): follow
-[docs/migration-0.3.md](../../docs/migration-0.3.md).
+Coming from `coredev` (0.2.x), `corekit` (0.1.x) or a project made by corecrew 0.4 or older: corecrew
+1.0 no longer converts those. Install corecrew 0.15 first and follow the upgrade guide and the
+0.15.0 notes of the tag `corecrew-v0.15.0`.
 
 ## Features
 

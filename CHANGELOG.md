@@ -28,6 +28,8 @@ Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off
   `install-hooks.sh` refuse such a project with nothing changed, and the code guard no longer
   watches `<Core>/<name>/code/`. `lib.sh layout` is gone; `lib.sh code-dir` and `code-root` exit 4
   for such a project.
+- `reference/older-formats.md` and the upgrade guide `docs/migration-0.3.md` (from `coredev` 0.2 and
+  `corekit` 0.1): upgrade with corecrew 0.15 first; its tag `corecrew-v0.15.0` keeps the guide.
 
 ## [0.15.0] - 2026-11-10
 

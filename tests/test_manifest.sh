@@ -271,20 +271,11 @@ assert_not_contains "$T/CLAUDE.md.tmpl" '/bin/'
 assert_contains "$T/CLAUDE.md.tmpl" 'undo-step'
 assert_contains "$T/CLAUDE.md.tmpl" 'printed at session start'
 
-# the upgrade guide, one and current: it exists, the corecrew README links it, the 0.2 guide is gone,
-# and every option key that Step 2 names in backticks is a userConfig key of corecrew or coremodel
-M3="$ROOT/docs/migration-0.3.md"
-assert_file "$M3"
+# corecrew 1.0 (P3): the upgrade guide from coredev 0.2 and corekit 0.1 is gone; the README sends such a user
+# to corecrew 0.15, whose tag still holds it
+assert_no_file "$ROOT/docs/migration-0.3.md"
 assert_no_file "$ROOT/docs/migration-0.2.md"
-assert_contains "$CR" '](../../docs/migration-0.3.md)'
-uc_keys() { sed -n 's/^    "\([A-Za-z_]*\)": {$/\1/p' "$@"; }
-keys="$(uc_keys "$P" "$ROOT/plugins/coremodel/.claude-plugin/plugin.json")"
-step2="$(awk '/^### Step 2[.]/ { on = 1; next } /^#/ { on = 0 } on' "$M3")"
-[ -n "$step2" ] && pass || fail "docs/migration-0.3.md has no Step 2"
-for k in $(printf '%s\n' "$step2" | grep -oE '`[A-Za-z_]+`' | tr -d '`' | sort -u); do
-  printf '%s\n' "$keys" | grep -qxF "$k" && pass \
-    || fail "docs/migration-0.3.md Step 2 names \`$k\`, which is no userConfig key of corecrew or coremodel"
-done
+assert_contains "$CR" 'corecrew-v0.15.0'
 
 # Nothing only a contributor uses ships in a plugin: a plugin's tests live in tests/<plugin>/ and its trigger
 # evals in evals/<plugin>/ at the repo root, so an install does not carry them.

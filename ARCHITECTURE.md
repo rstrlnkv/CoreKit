@@ -51,7 +51,6 @@ plugins/corecrew/                 project workflow
   reference/                      texts the skills share: wiki.md and knowledge.md (the rules the
                                   agents follow), and these two:
     codex-host.md                 the Codex host reference that every skill follows in Codex
-    older-formats.md              how a project made by an older version is brought up to date
   templates/                      what new-project, adopt, setup-core and wiki-migrate copy or fill in:
                                   CLAUDE.md.tmpl, code/, core/, docs/
 plugins/coremodel/                model and effort picker
@@ -84,7 +83,7 @@ tests/                            bash tests, run by tests/run.sh; lib.sh gives 
                                   `claude plugin test` on a copy that tests/test_coremodel.sh assembles;
                                   world.ts is the host beneath them and surfaces.tsx what they draw and
                                   press; quality.sh is the manual check of the classifier
-docs/                             the upgrade guide (migration-0.3.md) and icon sources (icons/)
+docs/                             icon sources (icons/)
 ```
 
 ## Hosts
