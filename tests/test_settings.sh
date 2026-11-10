@@ -354,6 +354,32 @@ attribution: allow" "nothing writable: the settings file is read"
 else
   skip nothing-writable "no usable sandbox-exec (macOS only)"
 fi
+# a large settings file under the 64 KB limit with the keys on its last lines: the lookup is linear, so a hook (15 s)
+# does not time out. The bound is on the CPU time of the run, which a loaded machine does not stretch.
+awk -v d="$RS/sf-large" 'BEGIN { for (i = 0; i < 1150; i++) printf "key%05d: value-%05d-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n", i, i
+  print "attribution: forbid"; print "model_profile: strong"; print "ui_language: ru"; print "core_dir: " d }' > "$SF"
+[ "$(wc -c < "$SF" | tr -d ' ')" -gt 55000 ] && [ "$(wc -c < "$SF" | tr -d ' ')" -le 65536 ] && pass || fail "the large settings file is not between 55 KB and 64 KB"
+for loc in C en_US.UTF-8; do
+  out="$SANDBOX/sf-large.out"
+  cpu="$( { TIMEFORMAT=%U; time LC_ALL="$loc" /bin/bash "$LIB" settings core_dir attribution model_profile ui_language > "$out" 2>/dev/null; } 2>&1 )"
+  assert_eq "$(cat "$out")" "core_dir: $RS/sf-large
+attribution: forbid
+model_profile: strong
+ui_language: ru" "large settings file, keys last ($loc)"
+  cpu="${cpu%%[.,]*}"
+  case "$cpu" in ''|*[!0-9]*) fail "large settings file ($loc): no CPU time measured: $cpu" ;;
+    *) [ "$cpu" -lt 3 ] && pass || fail "large settings file ($loc): the lookup took ${cpu}s of CPU time (limit 3)" ;; esac
+done
+# a value keeps its glob characters and inner blanks, and the caller's noglob state survives a lookup
+mkdir -p "$SANDBOX/globdir"; : > "$SANDBOX/globdir/a1"; : > "$SANDBOX/globdir/a2"
+sfw 'first: x\nglobby:   '"$SANDBOX"'/globdir/a*   [b]  ?\nempty:\nlast: z\n'
+assert_eq "$(cd "$SANDBOX/globdir" && bash -c '. "$1"; load_settings; _sf_get globby' _ "$LIB")" "$SANDBOX/globdir/a*   [b]  ?" "a value with glob characters is data"
+assert_eq "$(bash -c '. "$1"; load_settings; _sf_get_r empty; echo "rc=$? [$_SF_V]"; _sf_get_r nokey; echo "rc=$? [$_SF_V]"; _sf_get_r las; echo "rc=$?"' _ "$LIB")" "rc=0 []
+rc=1 []
+rc=1" "an empty value is found, a missing key and a key prefix are not"
+assert_eq "$(bash -c '. "$1"; load_settings; _sf_get_r last; case $- in *f*) echo off ;; *) echo on ;; esac; set -f; _sf_get_r last; case $- in *f*) echo off ;; *) echo on ;; esac; IFS=:; _sf_get_r last; printf "%s" "$IFS"' _ "$LIB")" "on
+off
+:" "a lookup leaves globbing and IFS as the caller set them"
 # load_settings and resolve_setting return 0 when a key, the settings file or .coredev is missing: a caller may run
 # under set -e (as on 2104bfb)
 rm -f "$SF"; mkdir -p "$SANDBOX/core-nofacts"; printf 'schema: 2\n' > "$SANDBOX/core-nofacts/.coredev"

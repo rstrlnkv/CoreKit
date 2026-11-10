@@ -107,7 +107,12 @@ _sf_load() {
 _sf_get_r() {
   _SF_V=""
   case $'\n'"$_SF_DATA" in *$'\n'"$1"$'\t'*) ;; *) return 1 ;; esac
-  _SF_V=$'\n'"$_SF_DATA"; _SF_V="${_SF_V#*$'\n'"$1"$'\t'}"; _SF_V="${_SF_V%%$'\n'*}"
+  local IFS=$'\n' l g=""
+  case $- in *f*) ;; *) g=1; set -f ;; esac
+  for l in $_SF_DATA; do   # one linear walk: a prefix removal over the whole text is quadratic in bash 3.2
+    case "$l" in "$1"$'\t'*) _SF_V="${l#*$'\t'}"; break ;; esac
+  done
+  [ -z "$g" ] || set +f
 }
 # _tab_cut_r <text> — sets _TC to the first tab-separated field of the text and _TR to the rest, as
 # `IFS=<TAB> read -r first rest` does (tabs before either are dropped).
