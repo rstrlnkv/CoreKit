@@ -369,6 +369,32 @@ STUB
   assert_eq "$RC" "1" "second mv fails: exit"
   [ -n "$ERR" ] && pass || fail "second mv fails: nothing on stderr"
   assert_eq "$(snap_tree "$P")" "$before" "second mv fails: docs/ not restored"
+  # a run killed at the swap (KILL: no trap runs) in a Core whose .gitignore predates the staging lines: the
+  # staging folder stays, git does not see it (so save cannot commit it), and the next run still names it
+  new_sandbox
+  cp -R "$PLUGIN" "$SANDBOX/plug"; mkdir "$SANDBOX/stub"
+  cat > "$SANDBOX/stub/mv" <<STUB
+#!/bin/bash
+case "\$1" in
+  */docs) if [ ! -e "$SANDBOX/kill.done" ]; then : > "$SANDBOX/kill.done"; kill -KILL \$PPID; sleep 1; exit 0; fi ;;
+esac
+exec "$REALMV" "\$@"
+STUB
+  chmod +x "$SANDBOX/stub/mv"
+  CORE="$SANDBOX/core"; mkproj "$CORE"; printf '.DS_Store\n.env\n.env.*\n' > "$CORE/.gitignore"
+  gitify "$CORE" || fail "could not build the git fixture"
+  ( PATH="$SANDBOX/stub:$PATH" bash "$SANDBOX/plug/scripts/wiki-migrate.sh" "$P" >/dev/null 2>&1; : ) 2>/dev/null
+  [ -e "$SANDBOX/kill.done" ] && pass || fail "the mv stub never saw the swap (nothing to test)"
+  left="$(ls -d "$P"/.wiki-migrate.* 2>/dev/null)"
+  [ -n "$left" ] && [ -d "$left/new/wiki-old/docs" ] && pass || fail "the killed run left no staging folder (nothing to test): $(ls -A "$P")"
+  assert_eq "$(git -C "$CORE" status --porcelain --untracked-files=all | grep -c '\.wiki-migrate')" "0" "killed run, old .gitignore: git sees the staging folder"
+  assert_eq "$(git -C "$CORE" status --porcelain --untracked-files=all)" "" "killed run, old .gitignore: repo status"
+  git -C "$CORE" add -A -- wiki-old && assert_eq "$(git -C "$CORE" diff --cached --name-only)" "" "killed run, old .gitignore: git add stages the staging folder"
+  run "$P"
+  assert_eq "$RC" "0" "run after a killed one: exit"
+  printf '%s\n' "$OUT" | grep -qxF "warning: leftover $left from an interrupted run; check and remove it by hand" && pass || fail "leftover of the killed run not named: $OUT"
+  assert_dir "$left/new/wiki-old/docs"
+  [ -z "$(git -C "$CORE" status --porcelain --untracked-files=all | grep '\.wiki-migrate')" ] && pass || fail "after the next run git sees a staging folder"
 else
   skip "mv-stub tests" "running as root"
 fi

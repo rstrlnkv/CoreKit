@@ -90,7 +90,9 @@ done
 LEFT=""; for f in "$proj"/.wiki-migrate.*; do { [ -e "$f" ] || [ -L "$f" ]; } && LEFT="$LEFT$f
 "; done
 if [ "$dry" -eq 1 ]; then S="$(mktemp -d "${TMPDIR:-/tmp}/wiki-migrate.XXXXXX")" || die "cannot create a temp folder"
-else S="$(mktemp -d "$proj/.wiki-migrate.XXXXXX" 2>/dev/null)" || { S=""; die "cannot create a temp folder in $proj; nothing was changed"; }; fi
+else S="$(mktemp -d "$proj/.wiki-migrate.XXXXXX" 2>/dev/null)" || { S=""; die "cannot create a temp folder in $proj; nothing was changed"; }
+  # A killed run leaves this folder: git must not see it, also in a Core whose .gitignore lacks the staging lines.
+  printf '*\n' > "$S/.gitignore" || die "cannot write in $S; nothing was changed"; fi
 SP="$S/new/$name"; SD="$SP/docs"; W="$S/.work"
 mkdir -p "$SP" && mkdir "$W" && cp -Rp "$docs" "$SD" 2>/dev/null || die "could not copy $docs (unreadable file?); nothing was changed"
 : > "$W/lines"; : > "$W/warn"; : > "$W/moved"
