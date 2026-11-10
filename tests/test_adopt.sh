@@ -16,16 +16,13 @@ mkrepo() {
   printf 'echo a\n' > "$1/src/a.sh"
   git -C "$1" add -A && git -C "$1" commit -q -m "initial"
 }
-# mkold <name> — an old-layout project: <Core>/<name>/ (committed in the Core, PROJECTS.md line
-# "<name>/code/") and its code repo in <Core>/<name>/code with one commit and an old .gitignore.
+# mkold <name> — a project in the old layout of corecrew 0.4 and older, which corecrew 1.0 refuses:
+# <Core>/<name>/ committed in the Core and its code repo in <Core>/<name>/code, one commit.
 mkold() {
-  scaffold_old "$1" || return 1
-  local c="$CORE_DIR/$1/code" t
-  t="$CORE_DIR/PROJECTS.md.tmp"
-  grep -v "^- $1 " "$CORE_DIR/PROJECTS.md" > "$t"; printf -- '- %s — Old app — %s/code/\n' "$1" "$1" >> "$t"
-  mv "$t" "$CORE_DIR/PROJECTS.md"
+  local c="$CORE_DIR/$1/code"
+  bash "$SKILL/scripts/scaffold.sh" --name "$1" >/dev/null || return 1
   git -C "$CORE_DIR" add -A && git -C "$CORE_DIR" commit -q -m "old $1"
-  grep -vxF 'CLAUDE.local.md' "$c/.gitignore" > "$c/.gitignore.tmp"; mv "$c/.gitignore.tmp" "$c/.gitignore"
+  mv "$(dirname "$CORE_DIR")/$1" "$c" && rm -f "$c/CLAUDE.local.md" "$c/AGENTS.md" || return 1
   echo 'echo a' > "$c/main.sh"
   git -C "$c" add -A && git -C "$c" commit -q -m "initial"
 }
@@ -597,137 +594,22 @@ bg part_names_and_files
 
 part_old_layout() {
 # =====================================================================================
-# Old layout: <Core>/<name>/code moves to <Projects>/<name>
+# Old layout (<Core>/<name>/code, corecrew 0.4 and older): corecrew 1.0 refuses it, exit 2, nothing changed
 # =====================================================================================
 
 new_sandbox; setup_core; sync_tools
 mkold old-app
-C0="$CORE_DIR/old-app/code"; K="$SANDBOX/Projects/old-app"
-echo '.claude/worktrees/w1/' >> "$C0/.git/info/exclude"
-git -C "$C0" worktree add -q "$C0/.claude/worktrees/w1" -b w1
-assert_exit 0 bash "$AD" --from "$C0" --dry-run
-echo "$OUT" | grep -qxF "move: $C0 -> $K" && pass || fail "plan lacks the move: $OUT"
-assert_dir "$C0"; assert_no_file "$K"
-assert_exit 0 bash "$AD" --from "$C0"
-assert_eq "$(last_line "$OUT")" "open: $K" "last line (old layout)"
-echo "$OUT" | grep -q '^warning:' && fail "warning: $OUT" || pass
-assert_no_file "$C0"
-assert_dir "$K/.git"; assert_file "$K/main.sh"
-git -C "$K/.claude/worktrees/w1" status >/dev/null 2>&1 && pass || fail "worktree broken: $(git -C "$K/.claude/worktrees/w1" status 2>&1)"
-assert_eq "$(git -C "$K/.claude/worktrees/w1" rev-parse --path-format=absolute --git-common-dir)" "$K/.git" "worktree points at the moved repo"
-assert_eq "$(readlink "$K/CLAUDE.local.md")" "$CORE_DIR/old-app/CLAUDE.md" "link (old layout)"
-assert_contains "$K/.claude/settings.local.json" "\"$CORE_DIR/old-app\""
-assert_eq "$(git -C "$K" status --porcelain)" "" "moved repo dirty"
-assert_eq "$(git -C "$K" log -1 --format=%s)" "Move internal Claude files to Core" "ignore lines commit"
-assert_eq "$(git -C "$K" show --name-only --format= HEAD)" ".gitignore" "the repo commit holds only .gitignore"
-grep -qxF CLAUDE.local.md "$K/.gitignore" && pass || fail ".gitignore lacks CLAUDE.local.md"
-grep -qxF -- "- old-app — Old app — old-app/" "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md line: $(cat "$CORE_DIR/PROJECTS.md")"
-assert_eq "$(grep -c '^- old-app ' "$CORE_DIR/PROJECTS.md")" "1" "one PROJECTS.md line"
-assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "Adopt old-app" "Core commit (old layout)"
-assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "Core dirty (old layout)"
-assert_contains "$K/.git/hooks/pre-commit" "corecrew hook shim"
-assert_eq "$(bash "$SCRIPTS/lib.sh" layout old-app)" "new" "layout after the move"
-bash "$WC" "$CORE_DIR/old-app" >/dev/null 2>&1 && pass || fail "wiki-check (old layout): $(bash "$WC" "$CORE_DIR/old-app" 2>&1)"
-
-# old layout: adopt runs wiki-migrate on <Core>/<name> after the move (typed front matter, wikilinks,
-# generated INDEX)
-new_sandbox; setup_core; sync_tools
-mkold mig-old
-MP="$CORE_DIR/mig-old"
-printf -- '---\ntitle: Old page\ndescription: An old page.\nstatus: active\nfiles: []\nrelated: [docs/brief.md]\nupdated: 2026-01-01\n---\n\n# Old page\n\nSee [brief](../brief.md).\n' > "$MP/docs/features/oldpage.md"
-printf -- '- [Old page](features/oldpage.md) — hand-written.\n' >> "$MP/docs/INDEX.md"
-git -C "$CORE_DIR" add -A && git -C "$CORE_DIR" commit -q -m "old format page"
-assert_exit 0 bash "$AD" --from "$MP/code"
-assert_not_contains "$MP/docs/features/oldpage.md" "title:"
-assert_contains "$MP/docs/features/oldpage.md" "type: feature"
-assert_contains "$MP/docs/features/oldpage.md" "See [[brief]]."
-assert_contains "$MP/docs/features/oldpage.md" 'related: ["[[brief]]"]'
-assert_contains "$MP/docs/INDEX.md" "[[oldpage]] An old page."
-assert_not_contains "$MP/docs/INDEX.md" "hand-written"
-bash "$SCRIPTS/wiki-index.sh" "$MP" --check && pass || fail "INDEX.md is not the generated one (old layout)"
-assert_file "$MP/docs/.obsidian/app.json"
-wiki_only "$MP" ""
-
-# old layout: <Core>/<name>/.claude/rules/*.md (0.4 and older) stop loading after the move, so they are
-# folded into <Core>/<name>/CLAUDE.md under ## Rules in the "Adopt <name>" commit; the files are kept
-new_sandbox; setup_core; sync_tools
-mkold rule-old
-RP="$CORE_DIR/rule-old"; mkdir -p "$RP/.claude/rules/web"
-printf -- '---\npaths: ["src/**"]\n---\n\n# Tests\n\nWrite the test first.\n' > "$RP/.claude/rules/tests.md"
-printf 'Use tabs.\n' > "$RP/.claude/rules/web/style.md"
-printf '{}\n' > "$RP/.claude/settings.json"
-git -C "$CORE_DIR" add -A && git -C "$CORE_DIR" commit -q -m "old rules"
-assert_exit 0 bash "$AD" --from "$RP/code" --dry-run
-echo "$OUT" | grep -qxF "fold into $RP/CLAUDE.md under ## Rules:" && pass || fail "old-layout plan lacks the fold: $OUT"
-echo "$OUT" | grep -qxF "  .claude/rules/tests.md" && pass || fail "old-layout plan lacks tests.md: $OUT"
-echo "$OUT" | grep -qxF "  .claude/rules/web/style.md" && pass || fail "old-layout plan lacks web/style.md: $OUT"
-assert_eq "$(printf '%s\n' "$OUT" | sed -n '/^kept in Core, no longer loaded:$/,/^[^ ]/p' | grep -c 'rules/')" "0" "folded rules listed as kept: $OUT"
-echo "$OUT" | grep -qxF "  .claude/settings.json" && pass || fail "old-layout plan lacks settings.json as kept: $OUT"
-assert_not_contains "$RP/CLAUDE.md" "### tests"
-assert_exit 0 bash "$AD" --from "$RP/code"
-echo "$OUT" | grep -qxF "folded 2 rule file(s) into $RP/CLAUDE.md (## Rules)" && pass || fail "old-layout report lacks the fold: $OUT"
-assert_contains "$RP/CLAUDE.md" "### tests"
-assert_contains "$RP/CLAUDE.md" "Applies to: src/**"
-assert_contains "$RP/CLAUDE.md" "#### Tests"
-assert_contains "$RP/CLAUDE.md" "### web/style"
-assert_contains "$RP/CLAUDE.md" "Use tabs."
-assert_eq "$(grep -c '^## Rules$' "$RP/CLAUDE.md")" "1" "one Rules section (old layout)"
-assert_file "$RP/.claude/rules/tests.md"; assert_file "$RP/.claude/rules/web/style.md"
-assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "Adopt rule-old" "Core commit (old-layout rules)"
-git -C "$CORE_DIR" show --name-only --format= HEAD | grep -qxF rule-old/CLAUDE.md && pass || fail "the fold is not in the Adopt commit"
-assert_eq "$(git -C "$CORE_DIR" status --porcelain)" "" "Core dirty (old-layout rules)"
-assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "temp folder left in the Core"
-
-# old layout: the target folder exists (in any letter case) -> refuse, nothing changed
-new_sandbox; setup_core
-mkold old-app
-mkdir -p "$SANDBOX/Projects/old-app"
-refuses "target exists: $SANDBOX/Projects/old-app" --from "$CORE_DIR/old-app/code"
-refuses "target exists: $SANDBOX/Projects/old-app" --from "$CORE_DIR/old-app/code" --dry-run
-rmdir "$SANDBOX/Projects/old-app"; mkdir -p "$SANDBOX/Projects/Old-App"
-refuses "target exists: $SANDBOX/Projects/Old-App" --from "$CORE_DIR/old-app/code"
-rmdir "$SANDBOX/Projects/Old-App"
-# old layout: --name, --public-docs and --check do not apply
-refuses "old layout: only --purpose and --dry-run apply" --from "$CORE_DIR/old-app/code" --check "make"
-refuses "old layout: only --purpose and --dry-run apply" --from "$CORE_DIR/old-app/code" --name other-app
-
-# old layout: df gives nothing usable -> the disk check fails closed; another disk -> refuse
-mkdir -p "$SANDBOX/stub"; printf '#!/bin/sh\nexit 0\n' > "$SANDBOX/stub/df"; chmod +x "$SANDBOX/stub/df"
-SAVE_PATH="$PATH"; PATH="$SANDBOX/stub:$PATH"
-refuses "different disk: could not compare the disks of $CORE_DIR and $SANDBOX/Projects" --from "$CORE_DIR/old-app/code"
-PATH="$SAVE_PATH"
-cat > "$SANDBOX/stub/df" <<'STUB'
-#!/bin/sh
-case "$*" in
-  */Projects/Core*) printf 'Filesystem 512-blocks Used Available Capacity Mounted on\n/dev/fake 100 1 99 1%% /Volumes/Other Disk\n' ;;
-  *) exec /bin/df "$@" ;;
-esac
-STUB
-chmod +x "$SANDBOX/stub/df"
-PATH="$SANDBOX/stub:$PATH"
-refuses "different disk: $CORE_DIR and $SANDBOX/Projects are on different disks; put the Core on the same disk as $SANDBOX/Projects first" --from "$CORE_DIR/old-app/code"
-refuses "different disk: $CORE_DIR and $SANDBOX/Projects are on different disks; put the Core on the same disk as $SANDBOX/Projects first" --from "$CORE_DIR/old-app/code" --dry-run
-# the new layout moves no folder: another disk for the Core does not matter
-mkrepo "$SANDBOX/Projects/disk-app"
-assert_exit 0 bash "$AD" --from "$SANDBOX/Projects/disk-app" --dry-run
-PATH="$SAVE_PATH"
-rm -rf "$SANDBOX/stub"
-
-# old layout: a failing mv -> nothing deleted, the output says where the project is
-cat > "$SANDBOX/mvstub" <<'STUB'
-#!/bin/sh
-if [ "$1" = "$FAIL_MV_SRC" ]; then echo "mv: stub failure" >&2; exit 1; fi
-exec /bin/mv "$@"
-STUB
-mkdir -p "$SANDBOX/stub"; mv "$SANDBOX/mvstub" "$SANDBOX/stub/mv"; chmod +x "$SANDBOX/stub/mv"
 C0="$CORE_DIR/old-app/code"
-SAVE_PATH="$PATH"; PATH="$SANDBOX/stub:$PATH"; export FAIL_MV_SRC="$C0"
-OUT="$(bash "$AD" --from "$C0" 2>&1)"; rc=$?
-PATH="$SAVE_PATH"; unset FAIL_MV_SRC
-assert_eq "$rc" "1" "old layout mv failure exit"
-echo "$OUT" | grep -qF "$C0" && pass || fail "message lacks the folder: $OUT"
-assert_file "$C0/main.sh"; assert_no_file "$SANDBOX/Projects/old-app"
-grep -qxF -- "- old-app — Old app — old-app/code/" "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md changed after a failed move"
+OLDMSG="old layout: $C0 keeps the code inside the Core, the layout of corecrew 0.4 and older, which corecrew 1.0 no longer supports; move the project beside the Core with corecrew 0.15 first (/corecrew:task adopt $C0)"
+refuses "$OLDMSG" --from "$C0"
+refuses "$OLDMSG" --from "$C0" --dry-run
+refuses "$OLDMSG" --from "$C0" --purpose "New text"
+# the old-layout line comes before the other refusals: uncommitted changes do not hide it
+echo 'echo b' >> "$C0/main.sh"
+refuses "$OLDMSG" --from "$C0"
+git -C "$C0" checkout -q -- main.sh
+assert_no_file "$SANDBOX/Projects/old-app"
+assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "temp folder left in the Core (old layout)"
 
 # =====================================================================================
 # The corecrew ignore lines
@@ -807,17 +689,6 @@ assert_exit 0 bash "$AD" --from "$F" --dry-run
 echo "$OUT" | grep -qxF "  ... and 2 more" && pass || fail "plan lacks the count: $OUT"
 # the count is the full number
 echo "$OUT" | grep -q "git tracks 17 CLAUDE.md" && pass || fail "plan count: $OUT"
-
-# --- old layout: a CLAUDE.md that still names ../docs/ or `code/` paths gets a warning (not rewritten)
-new_sandbox; setup_core
-mkold stale-app
-printf '\nSee ../docs/INDEX.md and `code/`.\n' >> "$CORE_DIR/stale-app/CLAUDE.md"
-git -C "$CORE_DIR" add -A && git -C "$CORE_DIR" commit -q -m stale
-BEFORE="$(cat "$CORE_DIR/stale-app/CLAUDE.md")"
-SW="warning: $CORE_DIR/stale-app/CLAUDE.md still names ../docs/ or \`code/\` paths from the old layout; they now point to the wrong place: write them as $CORE_DIR/stale-app/docs/... and the code folder $SANDBOX/Projects/stale-app"
-assert_exit 0 bash "$AD" --from "$CORE_DIR/stale-app/code"
-echo "$OUT" | grep -qxF "$SW" && pass || fail "no stale-path warning: $OUT"
-assert_eq "$(cat "$CORE_DIR/stale-app/CLAUDE.md")" "$BEFORE" "CLAUDE.md rewritten"
 
 # --- AGENTS.md moves to the Core like CLAUDE.md (personal agent instructions; guard-code blocks it)
 new_sandbox; setup_core
@@ -986,12 +857,14 @@ else
   assert_no_file "$F/.worktreeinclude"
 fi
 
-# --- old layout with --purpose: the PROJECTS.md line gets the new text and the new entry, and stays one line
+# --- a PROJECTS.md line for the name already there: adopt with --purpose rewrites it (new text, new entry), one line
 new_sandbox; setup_core
-mkold old-app
-assert_exit 0 bash "$AD" --from "$CORE_DIR/old-app/code" --purpose "New text"
-grep -qxF -- "- old-app — New text — old-app/" "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md line (--purpose): $(cat "$CORE_DIR/PROJECTS.md")"
-assert_eq "$(grep -c '^- old-app ' "$CORE_DIR/PROJECTS.md")" "1" "one PROJECTS.md line (--purpose)"
+F="$SANDBOX/Projects/line-app"; mkrepo "$F"
+printf -- '- line-app — Old text — line-app/code/\n' >> "$CORE_DIR/PROJECTS.md"
+git -C "$CORE_DIR" add -A && git -C "$CORE_DIR" commit -q -m "stale line"
+assert_exit 0 bash "$AD" --from "$F" --purpose "New text"
+grep -qxF -- "- line-app — New text — line-app/" "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md line (--purpose): $(cat "$CORE_DIR/PROJECTS.md")"
+assert_eq "$(grep -c '^- line-app ' "$CORE_DIR/PROJECTS.md")" "1" "one PROJECTS.md line (--purpose)"
 echo "$OUT" | grep -qxF "updated PROJECTS.md entry" && pass || fail "no 'updated PROJECTS.md entry' line: $OUT"
 }
 bg part_late_phases

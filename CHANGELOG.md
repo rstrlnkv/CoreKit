@@ -20,6 +20,9 @@ Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off
 - `/corecrew:task` no longer converts a wiki of corecrew 0.6 and older: it stops and gives the
   `wiki-migrate.sh` command to run once. The notes on a brief with a `stage:` field and on knowledge
   files with sections are gone; such files are still read as they are.
+- `/corecrew:task adopt` no longer moves a project of corecrew 0.4 and older (the code in
+  `<Core>/<name>/code/`): it refuses with nothing changed. Move such a project with corecrew 0.15
+  first.
 
 ## [0.15.0] - 2026-11-10
 

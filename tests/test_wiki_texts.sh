@@ -132,11 +132,10 @@ assert_contains "$WK" 'no page has a type'
 # wiki.md: only ## headings must be unique
 grep -qiE 'all headings|every heading|(^|[^#`] )Headings are unique' "$WK" && fail "wiki.md says all headings are unique; only ## headings are" || pass
 grep -qE '`##` headings are unique|## headings are unique' "$WK" && pass || fail "wiki.md does not say the ## headings are unique"
-# adopt.md: a wiki-migrate failure is not only a warning in the new layout
+# adopt.md: a wiki-migrate failure stops adopt with nothing changed (it is not only a warning)
 grep -q 'wiki-migrate' "$ADO" && pass || fail "adopt.md never names wiki-migrate"
 grep -E 'wiki-migrate' "$ADO" | grep -qiE 'a failure is a `warning:` line\)?;?$' && fail "adopt.md claims a wiki-migrate failure is only a warning" || pass
-grep -qiE 'new layout[^.]*(stops|nothing (is )?changed)|(stops|nothing (is )?changed)[^.]*new layout' "$ADO" && pass || fail "adopt.md does not say adopt stops with nothing changed when wiki-migrate fails in the new layout"
-grep -qiE 'old layout[^.]*warning|warning[^.]*old layout' "$ADO" && pass || fail "adopt.md does not say a failure is a warning in the old layout"
+grep -E 'wiki-migrate' "$ADO" | grep -qiE 'failure stops adopt with nothing changed' && pass || fail "adopt.md does not say adopt stops with nothing changed when wiki-migrate fails"
 # no plugin file points at the private spec path
 if grep -rlF 'md-structure-design' "$PLUGIN" >/dev/null 2>&1; then
   for f in $(grep -rlF 'md-structure-design' "$PLUGIN"); do fail "$f names the private spec path md-structure-design"; done

@@ -157,6 +157,24 @@ layout_of() {
   case "$d" in "$CORE_DIR"/*) echo old ;; *) echo new ;; esac
 }
 
+# old_code_of <name> — prints <Core>/<name>/code and exits 0 when it holds a git repo (a .git folder or file): a project
+# in the old layout of corecrew 0.4 and older, which this version does not support (session start names it; adopt,
+# save, undo-step and code_dir_of refuse it). Else exit 1.
+old_code_of() {
+  [ -n "${CORE_DIR:-}" ] && [ -n "${1:-}" ] || return 1
+  { [ -e "$CORE_DIR/$1/code/.git" ] || [ -L "$CORE_DIR/$1/code/.git" ]; } || return 1
+  printf '%s\n' "$CORE_DIR/$1/code"
+}
+
+# old_layout_msg <code folder> — the line that refuses an old-layout code folder (adopt, save, undo-step, code_dir_of).
+# Session start says the same in the person's language (messages.sh old_layout).
+old_layout_msg() {
+  local t=/corecrew:task
+  # shellcheck disable=SC2016  # $corecrew is literal text: Codex calls the skill so
+  [ "$(host)" != codex ] || t='$corecrew:task'
+  printf '%s keeps the code inside the Core, the layout of corecrew 0.4 and older, which corecrew 1.0 no longer supports; move the project beside the Core with corecrew 0.15 first (%s adopt %s)\n' "$1" "$t" "$1"
+}
+
 # valid_project_name <name> — exit 0 when it is 3-40 Latin lowercase letters, digits and hyphens,
 # starting with a letter and not ending with a hyphen (the rule for <Core>/<name>/), and is not
 # core, standards or knowledge.
