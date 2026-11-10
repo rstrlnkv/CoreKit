@@ -100,7 +100,7 @@ function glob_hits(comp, want,   re, k, ns, smp) {
 }
 # cand(a) — a word to judge. Prints "P\t<word as typed>\t<cd>\t<word to judge>": the last form is the same word, or
 # with a glob component that can match .ssh or a secret name replaced by that name (~/.s*/id_rsa -> ~/.ssh/id_rsa).
-function cand(a,   l, t, x, nc, comp, k, j, hit, norm, rest) {
+function cand(a,   l, t, x, nc, comp, k, hit, norm) {
   if (nomore || full || a == "") return
   if (index(a, "\t") || index(a, "\002")) return
   l = tolower(a)
@@ -111,7 +111,7 @@ function cand(a,   l, t, x, nc, comp, k, j, hit, norm, rest) {
   if (!(x ~ /^\.env([*?\[{]|$)/ || (x ~ /^\.env\./ && x !~ /^\.env\.(example|sample|template)$/)) && t !~ /(^|\/)\.ssh(\/|$)/) {
     if (t !~ /[*?\[{]/) return
     # a glob: judge each component
-    nc = split(t, comp, "/"); rest = ""; hit = 0
+    nc = split(t, comp, "/"); hit = 0
     for (k = nc; k >= 1; k--) {
       if (glob_hits(comp[k], k == nc ? ".env" : ".ssh")) {
         if (k == nc) { hit = 1; comp[k] = ".env" }
@@ -146,7 +146,7 @@ function short_opt(a,   p, n, l, kind) {
   }
   return 0
 }
-function finalize(   k, a, dd, pat, nm, v, nop, tdir, j, n, ops, key) {
+function finalize(   k, a, dd, pat, nm, v, nop, tdir, j, n, ops) {
   if (cmd == "" || cmd == "?") return
   dd = 0; pat = (cmd in PAT); nop = 0; tdir = ""
   for (k = 1; k <= na && !full; k++) {
