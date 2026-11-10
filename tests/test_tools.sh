@@ -90,6 +90,16 @@ assert_file "$T2/save"; assert_file "$T2/git-hooks/blocked-patterns"
 # a tools folder not named tools has no .data-dir (its parent's tools/ would be another folder)
 assert_no_file "$T2/.data-dir"
 
+# a tools dir given with a trailing slash is the same folder: the copy, its lock and its temp folders are not put inside it
+assert_exit 0 bash "$SYNC" "$PLUGIN" "$SANDBOX/ts/tools/"
+assert_eq "$OUT" "tools updated $V" "trailing slash: updated"
+assert_file "$SANDBOX/ts/tools/VERSION"
+assert_eq "$(cat "$SANDBOX/ts/tools/.data-dir" 2>/dev/null)" "$SANDBOX/ts" "trailing slash: .data-dir names the data folder"
+assert_eq "$(ls -A "$SANDBOX/ts")" "tools" "trailing slash: something left beside tools"
+assert_eq "$(ls -A "$SANDBOX/ts/tools" | grep -c '^\.lock\|^\.new\.\|^\.old\.')" "0" "trailing slash: a lock or temp folder inside tools"
+assert_exit 0 bash "$SYNC" "$PLUGIN" "$SANDBOX/ts/tools/"
+assert_eq "$OUT" "tools current $V" "trailing slash: current on the second run"
+
 # the synced save runs standalone (reads _locate.sh next to itself)
 (cd "$SANDBOX" && bash "$T2/save" 2>&1 | grep -q 'Usage') && pass || fail "synced save does not run"
 
@@ -151,6 +161,12 @@ PATH="$MVF:$PATH" bash "$SYNC" "$R" "$T3" >/dev/null 2>"$SANDBOX/mvfail.err"; as
 assert_eq "$(tree_sum "$T3")" "$before" "mv of the new copy fails: the old copy is not back as it was"
 assert_eq "$(ls -A "$(dirname "$T3")")" "tools" "mv of the new copy fails: something left beside tools"
 assert_contains "$SANDBOX/mvfail.err" "could not replace"
+# (3) mv fails to move the old copy away: exit 1, the old copy as it was, the new one not put inside it
+MVO="$SANDBOX/mvoldfail"; mkdir -p "$MVO"
+printf '#!/bin/sh\ncase "$2" in *.old.*) exit 1 ;; esac\nexec "%s" "$@"\n' "$REALMV" > "$MVO/mv"; chmod +x "$MVO/mv"
+PATH="$MVO:$PATH" bash "$SYNC" "$R" "$T3" >/dev/null 2>&1; assert_eq "$?" "1" "mv of the old copy fails: exit 1"
+assert_eq "$(tree_sum "$T3")" "$before" "mv of the old copy fails: the old copy changed"
+assert_eq "$(ls -A "$(dirname "$T3")")" "tools" "mv of the old copy fails: something left beside tools"
 assert_exit 0 bash "$SYNC" "$R" "$T3"
 assert_eq "$OUT" "tools updated $V" "after the failures: updated"
 assert_eq "$(tail -1 "$T3/save")" "# changed again" "after the failures: the new save was copied"
@@ -182,6 +198,48 @@ PATH="$STUB:$PATH" bash "$SYNC" "$PLUGIN" "$SL/tools" > "$SANDBOX/stale.out" 2>&
 assert_contains "$SANDBOX/stale.out" "tools updated" "stale lock: tools made"
 assert_contains "$SANDBOX/mv.log" "$SL/tools.lock $SL/tools.lock.dead." "stale lock: taken over with an atomic mv"
 assert_eq "$(ls -A "$SL" | grep -c 'lock\|\.dead\|\.new')" "0" "stale lock: no leftovers"
+# a lock folder with no pid file (its owner died before writing it) is taken over too, after a few tries. A sleep
+# stub that only counts keeps the waits short.
+SLP="$SANDBOX/sleepstub"; mkdir -p "$SLP"
+printf '#!/bin/sh\necho x >> "%s/sleep.n"\n' "$SANDBOX" > "$SLP/sleep"; chmod +x "$SLP/sleep"
+rm -rf "$SL/tools"; mkdir "$SL/tools.lock"
+OUT="$(PATH="$SLP:$PATH" bash "$SYNC" "$PLUGIN" "$SL/tools" 2>&1)"
+assert_eq "$OUT" "tools updated $V" "lock with no pid file: taken over"
+assert_eq "$(ls -A "$SL" | grep -vc '^tools$')" "0" "lock with no pid file: nothing but tools in the folder"
+[ -s "$SANDBOX/sleep.n" ] && pass || fail "lock with no pid file: taken over without a wait (a fresh lock has no pid yet)"
+# legitimate: one mkdir of the lock that fails while no lock is there (its holder let go in between) is not a folder
+# that cannot be written: the run tries again and makes the copy
+MKS="$SANDBOX/mkdirstub"; mkdir -p "$MKS"; REALMKDIR="$(command -v mkdir)"
+printf '#!/bin/sh\ncase "$*" in *tools.lock) [ -e "%s/mkdir.once" ] || { : > "%s/mkdir.once"; exit 1; } ;; esac\nexec "%s" "$@"\n' \
+  "$SANDBOX" "$SANDBOX" "$REALMKDIR" > "$MKS/mkdir"; chmod +x "$MKS/mkdir"
+rm -rf "$SL/tools"
+OUT="$(PATH="$MKS:$PATH" bash "$SYNC" "$PLUGIN" "$SL/tools" 2>&1)"; RC=$?
+assert_file "$SANDBOX/mkdir.once"
+assert_eq "$RC $OUT" "0 tools updated $V" "one failed mkdir of the lock, no lock there: tried again"
+# A stale copy whose folder cannot be written (the Codex sandbox, a read-only data folder): no lock can be made and
+# none is held, so the run fails at once (exit 1, no wait, not "tools busy") and the copy stays as it was. The same
+# with no copy yet. Skipped as root (it can write anyway). With the folder writable again the copy is refreshed.
+if [ "$(id -u)" != 0 ]; then
+  RO="$SANDBOX/ro"; mkdir -p "$RO"; bash "$SYNC" "$PLUGIN" "$RO/tools" >/dev/null; echo 0.1.0 > "$RO/tools/VERSION"
+  before="$(tree_sum "$RO/tools")"; rm -f "$SANDBOX/sleep.n"; chmod 555 "$RO"
+  OUT="$(PATH="$SLP:$PATH" bash "$SYNC" "$PLUGIN" "$RO/tools" 2>&1)"; RC=$?
+  chmod 755 "$RO"
+  assert_eq "$RC" "1" "read-only parent: exit 1"
+  case "$OUT" in *"tools busy"*) fail "read-only parent: reported as busy: $OUT" ;; *) pass ;; esac
+  [ ! -e "$SANDBOX/sleep.n" ] && pass || fail "read-only parent: no sleep (it waited $(wc -l < "$SANDBOX/sleep.n" | tr -d ' ') times)"
+  assert_eq "$(tree_sum "$RO/tools")" "$before" "read-only parent: the copy changed"
+  assert_eq "$(ls -A "$RO")" "tools" "read-only parent: something left beside tools"
+  mkdir -p "$SANDBOX/ro2"; chmod 555 "$SANDBOX/ro2"
+  OUT="$(PATH="$SLP:$PATH" bash "$SYNC" "$PLUGIN" "$SANDBOX/ro2/tools" 2>&1)"; RC=$?
+  chmod 755 "$SANDBOX/ro2"
+  assert_eq "$RC" "1" "read-only parent, no copy yet: exit 1"
+  [ ! -e "$SANDBOX/sleep.n" ] && pass || fail "read-only parent, no copy yet: no sleep"
+  assert_eq "$(ls -A "$SANDBOX/ro2")" "" "read-only parent, no copy yet: something was made"
+  assert_exit 0 bash "$SYNC" "$PLUGIN" "$RO/tools"
+  assert_eq "$OUT" "tools updated $V" "parent writable again: updated"
+else
+  skip "sync-tools read-only parent folder" "running as root"
+fi
 for i in 1 2 3 4 5 6; do
   rm -rf "$SL/tools"; mkdir "$SL/tools.lock"; echo 99999999 > "$SL/tools.lock/pid"
   bash "$SYNC" "$PLUGIN" "$SL/tools" > "$SANDBOX/w1" 2>&1 & bash "$SYNC" "$PLUGIN" "$SL/tools" > "$SANDBOX/w2" 2>&1 & wait
