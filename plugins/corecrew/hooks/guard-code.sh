@@ -2,7 +2,7 @@
 # Claude Code and Codex PreToolUse hook on Write|Edit|NotebookEdit|apply_patch (and Bash, best effort): a project's
 # internal files must not live in its code repo. It blocks writes of
 #   CLAUDE.md (and CLAUDE.local.md), AGENTS.md (the cross-tool agent instructions), docs/**, .claude/**
-# under the project's code folder (<Projects>/<Name>/**, or <Core>/<project>/code/** in the old layout),
+# under the project's code folder (<Projects>/<Name>/**),
 # with exit 2 and a message naming the right place:
 #   corecrew: <path> is an internal file and must not live in the code folder. Write it to <Core>/<project>/<relative path> instead.
 #   Docs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in <Core>/<project>/CLAUDE.md.
@@ -15,7 +15,7 @@
 # Rules, all compared on the canonical path (".." and symlinks resolved, letter case as on disk
 # for the part that exists, then folded to lower case for the comparison, ASCII only):
 # - The code root is <Projects>/<Name>/ (the first folder of the path under <Projects>; the CLAUDE.local.md symlink there resolves into the
-#   Core and so passes), or <Core>/<p>/code/ in the old layout, or a worktree root <code root>/.claude/worktrees/<w>/ or any other linked git worktree of the code folder (worktree_of);
+#   Core and so passes), or a worktree root <code root>/.claude/worktrees/<w>/ or any other linked git worktree of the code folder (worktree_of);
 #   inside a worktree the path relative to the worktree root is what counts.
 # - Blocked: docs and docs/** and .claude/** at the root, and CLAUDE.md / CLAUDE.local.md / AGENTS.md at
 #   ANY depth. The pre-commit hook is narrower (its list is scripts/git-hooks/blocked-patterns): of docs/ it blocks only
@@ -126,8 +126,8 @@ check_path() {
   case "/$abs_l/" in */docs/*|*/.claude/*|*/claude.md/*|*/claude.local.md/*|*/agents.md/*) ;; *) return 0 ;; esac
   need_settings
   proj="$(project_of "$ABS")" || return 0
-  # the code root: the project folder in <Projects> taken from the path itself (new layout; so no case
-  # clash between folders can switch the guard off), or <Core>/<p>/code for a path inside the Core (old)
+  # the code root: the project folder in <Projects> taken from the path itself (so no case clash between folders can
+  # switch the guard off). A path inside the Core is no code: the old layout (<Core>/<p>/code) is not supported.
   # A linked git worktree wherever it lives (Codex keeps them outside Projects) is its own code root.
   # Only a worktree its main folder knows, of this project's own code folder (worktree_of, wt_is_main_of). One inside
   # the main folder is its own root too, except under docs/ or .claude/ there (a worktree must not unprotect them;
@@ -137,7 +137,7 @@ check_path() {
     root="$WT_ROOT"
   else
     case "$ABS" in
-      "$CORE_DIR"/*) root="$CORE_DIR/$proj/code" ;;
+      "$CORE_DIR"|"$CORE_DIR"/*) return 0 ;;   # the Core is in <Projects> too: its files are the private place
       "$PROJECTS_DIR"/*) first="${ABS#"$PROJECTS_DIR"/}"; root="$PROJECTS_DIR/${first%%/*}" ;;
       *) return 0 ;;
     esac
@@ -312,7 +312,7 @@ while IFS="$TAB" read -r kind a b; do
       # A source made at run time ("$HOME/...", empty here) is unknown: given the same pass, and no name to put in a dir.
       if [ -z "$b" ]; then check_path "$a" corelink; continue; fi
       m="link"; resolve_abs "$b"
-      case "$ABS/" in "$CORE_DIR"/*/code/*) ;; "$CORE_DIR"/*) m=corelink ;; esac
+      case "$ABS/" in "$CORE_DIR"/*) m=corelink ;; esac
       check_path "$a" "$m"; into_dir "$a" "$b" "$m" ;;
   esac
 done <<< "$targets"

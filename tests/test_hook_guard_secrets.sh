@@ -11,9 +11,9 @@ H="$HOOKS/guard-secrets.sh"
 assert_file "$H"
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
 
-mkdir -p "$CORE_DIR/p/code/src" "$SANDBOX/elsewhere" "$HOME/.ssh"
+C="$(dirname "$CORE_DIR")/p"   # the code folder beside the Core
+mkdir -p "$C/src" "$CORE_DIR/p" "$SANDBOX/elsewhere" "$HOME/.ssh"
 : > "$CORE_DIR/p/CLAUDE.md"
-C="$CORE_DIR/p/code"
 echo "FAKE=1" > "$C/.env"; echo "FAKE=1" > "$C/.env.example"; echo "x" > "$HOME/.ssh/config"
 ln -s "$C/.env" "$C/notes.txt"                 # an innocent name that points at a .env
 ln -s "$C/.env" "$C/second-link"           # (same, second link)

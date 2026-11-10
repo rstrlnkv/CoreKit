@@ -175,11 +175,11 @@ for v in en ru; do
 done
 # inside a project with spaces, %s, quotes and Cyrillic in the names; no schema; session rules; two standards
 PN="my app %s 'q' проект"
-P="$CORE_DIR/$PN"; mkdir -p "$P/code/.git/hooks" "$CORE_DIR/standards" "$CORE_DIR/.git/hooks"
+P="$CORE_DIR/$PN"; mkdir -p "$P" "$CORE_DIR/standards" "$CORE_DIR/.git/hooks"
 : > "$P/CLAUDE.md"; : > "$CORE_DIR/standards/a.md"; : > "$CORE_DIR/standards/b.md"
 printf 'rule one\nrule two' > "$CORE_DIR/session-rules.md"
 for v in "${VARIANTS[@]}"; do
-  OUT="$(hook_event claude SessionStart "$P/code" source=startup | vrun "$v" bash "$H" 2>"$SANDBOX/err")"; RC=$?
+  OUT="$(hook_event claude SessionStart "$P" source=startup | vrun "$v" bash "$H" 2>"$SANDBOX/err")"; RC=$?
   assert_eq "$RC" "0" "session-start project exit [$v]"; assert_eq "$(cat "$SANDBOX/err")" "" "session-start project: stderr empty [$v]"
   check "$v" "project" "$OUT" "corecrew: you are in the Core project \"$PN\" (Core: $CORE_DIR)
 Project docs index: $P/docs/INDEX.md
@@ -197,17 +197,17 @@ Layout note: this Core has layout schema none, the plugin expects 2. Bring it up
 done
 rm -f "$CORE_DIR/standards/a.md" "$CORE_DIR/standards/b.md"
 for v in en ru; do
-  OUT="$(hook_event claude SessionStart "$P/code" source=startup | vrun "$v" bash "$H" 2>&1)"
+  OUT="$(hook_event claude SessionStart "$P" source=startup | vrun "$v" bash "$H" 2>&1)"
   check "$v" "no standards" "$OUT" "Standards: none" "Стандарты: нет"
 done
 # attribution=forbid adds the flag in both languages
-OUT="$(hook_event claude SessionStart "$P/code" source=startup | CLAUDE_PLUGIN_OPTION_ATTRIBUTION=forbid vrun ru bash "$H" 2>&1)"
+OUT="$(hook_event claude SessionStart "$P" source=startup | CLAUDE_PLUGIN_OPTION_ATTRIBUTION=forbid vrun ru bash "$H" 2>&1)"
 check ru "forbid flag" "$OUT" "" "\"<message>\" --no-attribution; отменить"
 # a failing tools refresh: on stdout inside a project, on stderr elsewhere
 mkdir -p "$SANDBOX/emptyroot"
-OUT="$(hook_event claude SessionStart "$P/code" source=startup | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" vrun ru bash "$H" 2>/dev/null)"
+OUT="$(hook_event claude SessionStart "$P" source=startup | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" vrun ru bash "$H" 2>/dev/null)"
 check ru "sync failed (project, stdout)" "$OUT" "" "corecrew: инструменты не обновлены: "
-OUT="$(hook_event claude SessionStart "$P/code" source=startup | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" vrun en bash "$H" 2>/dev/null)"
+OUT="$(hook_event claude SessionStart "$P" source=startup | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" vrun en bash "$H" 2>/dev/null)"
 check en "sync failed (project, stdout)" "$OUT" "corecrew: tools not refreshed: " ""
 OUT="$(hook_event claude SessionStart "$SANDBOX/elsewhere" source=startup | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" vrun ru bash "$H" 2>&1 >/dev/null)"
 check ru "sync failed (elsewhere, stderr)" "$OUT" "" "corecrew: инструменты не обновлены: "
@@ -215,8 +215,8 @@ rm -rf "$CORE_DIR" "$CLAUDE_PLUGIN_DATA/state"
 
 # --- a project for the remaining hooks
 PN2="app %s 'q' проект"
-mkdir -p "$CORE_DIR/$PN2/code/src" "$CORE_DIR/$PN2/docs"; : > "$CORE_DIR/$PN2/CLAUDE.md"
-C="$CORE_DIR/$PN2/code"
+C="$(dirname "$CORE_DIR")/$PN2"
+mkdir -p "$C/src" "$CORE_DIR/$PN2/docs"; : > "$CORE_DIR/$PN2/CLAUDE.md"
 
 # --- guard-code: two lines on stderr, nothing on stdout, exit 2
 H="$HOOKS/guard-code.sh"
@@ -299,8 +299,8 @@ done
 # --- stop-remind: the reminder on stderr, exit 2; the dirty-part words follow the language
 H="$HOOKS/stop-remind.sh"
 setup_core; sync_tools
-scaffold_old stop-app
-SP="$CORE_DIR/stop-app"; SC="$SP/code"
+bash "$SKILL/scripts/scaffold.sh" --name stop-app >/dev/null
+SP="$CORE_DIR/stop-app"; SC="$(dirname "$CORE_DIR")/stop-app"
 (cd "$SC" && bash "$SCRIPTS/save" "init") >/dev/null 2>&1
 sinput() { printf '{"session_id":"x","cwd":"%s","hook_event_name":"Stop","stop_hook_active":false}' "$SC"; }
 n=0

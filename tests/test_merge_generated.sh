@@ -86,9 +86,9 @@ else
   skip "a file that cannot be copied" "running as root"
 fi
 # nested .gitignore files are kept, and what they ignore stays ignored
-new_sandbox; setup_core; scaffold_old mg-app; G="$SANDBOX/g"; mkdir -p "$G/android"
+new_sandbox; setup_core; bash "$SKILL/scripts/scaffold.sh" --name mg-app >/dev/null; G="$SANDBOX/g"; mkdir -p "$G/android"
 printf 'key.properties\n' > "$G/android/.gitignore"; echo k > "$G/android/key.properties"
-bash "$SKILL/scripts/merge-generated.sh" "$G" "$CORE_DIR/mg-app/code" >/dev/null
-assert_file "$CORE_DIR/mg-app/code/android/.gitignore"
-git -C "$CORE_DIR/mg-app/code" status --porcelain | grep -q key.properties && fail "key.properties not ignored" || pass
+bash "$SKILL/scripts/merge-generated.sh" "$G" "$SANDBOX/Projects/mg-app" >/dev/null
+assert_file "$SANDBOX/Projects/mg-app/android/.gitignore"
+git -C "$SANDBOX/Projects/mg-app" status --porcelain | grep -q key.properties && fail "key.properties not ignored" || pass
 finish

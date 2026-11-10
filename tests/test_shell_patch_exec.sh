@@ -9,7 +9,7 @@ source "$(dirname "$0")/lib-hook.sh"
 new_sandbox
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
 W="$SANDBOX/work"; BIN="$SANDBOX/fakebin"; LOG="$SANDBOX/fake.log"
-mkdir -p "$W" "$BIN" "$CORE_DIR/p/code"
+mkdir -p "$W" "$BIN" "$CORE_DIR/p" "$(dirname "$CORE_DIR")/p"
 : > "$CORE_DIR/p/CLAUDE.md"
 printf '#!/bin/sh\necho "RAN $*" >> "%s"\ncat >/dev/null 2>&1 </dev/null\n' "$LOG" > "$BIN/apply_patch"
 chmod +x "$BIN/apply_patch"
@@ -17,7 +17,7 @@ chmod +x "$BIN/apply_patch"
   && printf 'one\n' > f.txt && git add f.txt && git commit -qm "apply_patch note" ) >/dev/null 2>&1
 
 # hook_rc <hook> <cmd> [claude] — the hook's exit code for a Bash PreToolUse input: Codex's shape, or Claude Code's
-hook_rc() { hook_event "${3:-codex}" PreToolUse "$CORE_DIR/p/code" tool=Bash command="$2" | bash "$HOOKS/$1" >/dev/null 2>&1; echo $?; }
+hook_rc() { hook_event "${3:-codex}" PreToolUse "$(dirname "$CORE_DIR")/p" tool=Bash command="$2" | bash "$HOOKS/$1" >/dev/null 2>&1; echo $?; }
 ran_fake() { # ran_fake <cmd> — run it for real with the fake first on PATH; 0 when the fake started
   : > "$LOG"
   ( cd "$W" && PATH="$BIN:$PATH" timeout 20 bash -c "$1" </dev/null >/dev/null 2>&1 ) 2>/dev/null
@@ -150,7 +150,7 @@ done
 # carries Codex's turn_id. Claude Code has no apply_patch tool, so there everyday glob commands, and even the word
 # apply_patch, pass. In Codex a wildcard argument passes, and a real shell patch is refused with the match named
 # (guard-secrets only inside a project: outside one it judges nothing).
-C="$CORE_DIR/p/code"; O="$SANDBOX/not a project"; mkdir -p "$O"
+C="$(dirname "$CORE_DIR")/p"; O="$SANDBOX/not a project"; mkdir -p "$O"
 gate() { run_hook "$HOOKS/$1" "$(hook_event "${4:-codex}" PreToolUse "$3" tool=Bash command="$2")"; } # gate <hook> <cmd> <cwd> [claude]
 gate_named() { # gate_named <label> <match> — the shell-patch refusal, and the message names the match
   hook_refused_patch "$1"

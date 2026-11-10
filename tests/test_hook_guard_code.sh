@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # hooks/guard-code.sh: a project's internal files (CLAUDE.md, docs/**, .claude/**) must not be
-# written under the project's code folder: <Projects>/<Name>/** (new layout, beside the Core) or
-# <Core>/<project>/code/** (old layout). Write|Edit|NotebookEdit read the path from the tool input;
+# written under the project's code folder: <Projects>/<Name>/** (beside the Core; the old layout of corecrew 0.4,
+# <Core>/<project>/code, is no code root any more). Write|Edit|NotebookEdit read the path from the tool input;
 # Bash is judged best effort for honest mistakes (ADR 009): redirects, tee, touch, mkdir, cp, mv, install, ln,
 # in-place sed and perl, git mv. Deliberate evasion is a documented limit (the LIMIT cases below). Inert outside the Core project.
 source "$(dirname "$0")/lib.sh"
@@ -11,9 +11,10 @@ H="$HOOKS/guard-code.sh"
 assert_file "$H"
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
 
-mkdir -p "$CORE_DIR/p/code/src" "$CORE_DIR/p/docs" "$CORE_DIR/q/code" "$SANDBOX/elsewhere"
+PRJ="$(dirname "$CORE_DIR")"   # <Projects>: the code folders <Projects>/<name> live beside the Core
+mkdir -p "$PRJ/p/src" "$CORE_DIR/p/docs" "$PRJ/q" "$CORE_DIR/q" "$SANDBOX/elsewhere"
 : > "$CORE_DIR/p/CLAUDE.md"; : > "$CORE_DIR/q/CLAUDE.md"
-C="$CORE_DIR/p/code"
+C="$PRJ/p"
 
 # The sections below that share nothing run at the same time (bg <function>, lib.sh): each in a subshell with
 # its own scratch folder OD and its own counts. This keeps the file near 5 s (a hook run is about 40 ms and
@@ -28,11 +29,13 @@ run_file() {
 }
 # run_bash <json-escaped command> [cwd]
 run_bash() { run_hook "$H" "$(printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"}}' "${2-$C}" "$1")"; }
-# The second line points at public-docs: in the project's CLAUDE.md (<Core>/<p>, the part of the shown
-# path before its first /code/).
+# The second line points at public-docs: in the project's CLAUDE.md: the Core project folder <Core>/<p> of the target,
+# the nearest folder above it that holds a CLAUDE.md (no fixture puts one deeper in a Core project).
 msg() {
+  local d="${2%/*}"
+  while [ -n "$d" ] && [ ! -f "$d/CLAUDE.md" ]; do d="${d%/*}"; done
   printf 'corecrew: %s is an internal file and must not live in the code folder. Write it to %s instead.\n' "$1" "$2"
-  printf 'Docs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in %s.' "${1%%/code/*}/CLAUDE.md"
+  printf 'Docs meant to stay public in the code folder: list them on a "public-docs: <paths>" line in %s.' "$d/CLAUDE.md"
 }
 # blocked <label> <path shown> <target in the Core> — exit 2, the exact message, nothing on stdout
 blocked() { assert_eq "$RC" "2" "$1"; assert_eq "$OUT" "" "$1: stdout"; assert_eq "$ERR" "$(msg "$2" "$3")" "$1: message"; }
@@ -61,7 +64,7 @@ run_file Write "$CORE_DIR/p/docs/a.md";          hook_ok "Core project docs/a.md
 run_file Write "$CORE_DIR/p/CLAUDE.md";          hook_ok "Core project CLAUDE.md"
 run_file Write "$CORE_DIR/p/.claude/rules/x.md"; hook_ok "Core project .claude/rules"
 run_file Write "$CORE_DIR/README.md";            hook_ok "Core root file"
-QW="$CORE_DIR/q/code"; mkdir -p "$QW/.claude/worktrees/w9/.claude/worktrees/v"   # a Write to a path that is not an existing dir is a file
+QW="$PRJ/q"; mkdir -p "$QW/.claude/worktrees/w9/.claude/worktrees/v"   # a Write to a path that is not an existing dir is a file
 run_file Write "$QW/.claude/worktrees/w9";       hook_ok "the worktree dir itself (it exists)"
 run_file Write "$C/.claude/worktrees/w2/";       hook_ok "another worktree dir, trailing slash"
 run_file Write "$QW/.claude/worktrees";          hook_ok "worktrees dir (it exists)"
@@ -101,15 +104,15 @@ run_file Edit "docs/a.md";                   blocked "Edit relative docs/a.md" "
 run_file Edit "src/a.sh";                    hook_ok "Edit relative src/a.sh"
 run_file Edit "a.md" "$C/docs";              blocked "Edit relative, cwd in docs/" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
 run_file Edit "../CLAUDE.md" "$C/src";       blocked "Edit ../CLAUDE.md from src/ (nested level)" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
-run_file Edit "../../CLAUDE.md" "$C/src";    hook_ok "Edit ../../CLAUDE.md from src/ is the Core's own file"
+run_file Edit "../../Core/p/CLAUDE.md" "$C/src"; hook_ok "Edit ../../Core/p/CLAUDE.md from src/ is the Core's own file"
 run_file Edit "docs/a.md" "$SANDBOX/elsewhere"; hook_ok "relative path, cwd outside the Core"
 run_file Edit "$C/docs/a.md" "$SANDBOX/elsewhere"; blocked "absolute path inside, cwd outside" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
 
 # --- .. is resolved; letter case is folded (also for a part that does not exist yet)
-run_file Write "$CORE_DIR/p/code/../code/CLAUDE.md"; blocked "path with .. back into code" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
+run_file Write "$PRJ/p/../p/CLAUDE.md";      blocked "path with .. back into code" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
 run_file Write "$C/src/../docs/x.md";        blocked ".. through an existing dir" "$C/docs/x.md" "$CORE_DIR/p/docs/x.md"
 run_file Write "$C/nope/../docs/x.md";       blocked ".. through a missing dir" "$C/docs/x.md" "$CORE_DIR/p/docs/x.md"
-run_file Write "$C/nope/../../docs/a.md";    hook_ok ".. out of code/ into the Core's docs/"
+run_file Write "$C/nope/../../Core/p/docs/a.md"; hook_ok ".. out of the code folder into the Core's docs/"
 run_file Write "$C/./docs/./a.md";           blocked "single dots" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
 run_file Write "$C//docs//a.md";             blocked "double slashes" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
 run_file Write "$C/claude.md";               blocked "claude.md lower case" "$C/claude.md" "$CORE_DIR/p/CLAUDE.md"
@@ -121,7 +124,7 @@ run_file Write "$C/.Claude/WorkTrees/w/CLAUDE.MD"
 blocked "worktree in other case" "$C/.Claude/WorkTrees/w/CLAUDE.MD" "$CORE_DIR/p/CLAUDE.md"
 
 # --- public-docs: in <Core>/<p>/CLAUDE.md
-Q="$CORE_DIR/q/code"
+Q="$PRJ/q"
 run_file Write "$Q/docs/x.md";               blocked "no public-docs line" "$Q/docs/x.md" "$CORE_DIR/q/docs/x.md"
 printf '# q\ncheck: true\npublic-docs: docs/\n' > "$CORE_DIR/q/CLAUDE.md"
 run_file Write "$Q/docs/x.md";               hook_ok "public-docs: docs/"
@@ -160,8 +163,8 @@ mkdir -p "$C/docs"
 run_file Write "$C/src/real/tocodedocs/a.md"; blocked "link into code/docs" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
 ln -s docs/x.md "$C/notes.md"
 run_file Write "$C/notes.md";                blocked "file link to code/docs/x.md" "$C/docs/x.md" "$CORE_DIR/p/docs/x.md"
-ln -s ../p/docs/x.md "$CORE_DIR/q/code/lnk.md"
-run_file Write "$CORE_DIR/q/code/lnk.md";    hook_ok "file link out of code/ into the Core"
+ln -s ../Core/p/docs/x.md "$PRJ/q/lnk.md"
+run_file Write "$PRJ/q/lnk.md";              hook_ok "file link out of the code folder into the Core"
 ln -s lnk-loop "$C/lnk-loop"
 run_file Write "$C/lnk-loop";                hook_ok "a link loop does not hang"
 
@@ -203,60 +206,62 @@ bg sec_bash_pass
 sec_json() {
 # --- JSON with escapes, extra whitespace and newlines: the real path is read
 # the Core folder with Cyrillic and a space, written as \u escapes
-CYR="$SANDBOX/Мои проекты/Ядро"
-mkdir -p "$CYR/app/code"; : > "$CYR/app/CLAUDE.md"
+CYR="$SANDBOX/Мои проекты/Ядро"; CYRP="$SANDBOX/Мои проекты"   # the Core, and the Projects folder that holds it
+mkdir -p "$CYRP/app" "$CYR/app"; : > "$CYR/app/CLAUDE.md"
 export CORE_DIR="$CYR"
-run_hook "$H" '{"cwd":"'"$CYR"'/app/code","tool_name":"Write","tool_input":{"file_path":"'"$CYR"'/app/code/CLAUDE.md"}}'
-blocked "core_dir with a space and Cyrillic: CLAUDE.md" "$CYR/app/code/CLAUDE.md" "$CYR/app/CLAUDE.md"
-run_file Write "$CYR/app/code/docs/a.md" "$CYR/app/code";     blocked "core_dir with a space and Cyrillic: docs" "$CYR/app/code/docs/a.md" "$CYR/app/docs/a.md"
-run_file Write "$CYR/app/code/.claude/rules/x.md" "$CYR/app/code"; blocked "core_dir with a space and Cyrillic: .claude" "$CYR/app/code/.claude/rules/x.md" "$CYR/app/.claude/rules/x.md"
-run_file Write "$CYR/app/code/src/a.sh" "$CYR/app/code";      hook_ok "core_dir with a space and Cyrillic: code"
-run_file Write "$CYR/app/docs/a.md" "$CYR/app/code";          hook_ok "core_dir with a space and Cyrillic: the Core's docs"
-run_bash 'echo x > \"docs/a b.md\"' "$CYR/app/code";          blocked "core_dir Cyrillic: Bash quoted" "$CYR/app/code/docs/a b.md" "$CYR/app/docs/a b.md"
-run_bash 'cp a docs/b.md' "$CYR/app/code";                    blocked "core_dir Cyrillic: Bash cp" "$CYR/app/code/docs/b.md" "$CYR/app/docs/b.md"
+run_hook "$H" '{"cwd":"'"$CYRP"'/app","tool_name":"Write","tool_input":{"file_path":"'"$CYRP"'/app/CLAUDE.md"}}'
+blocked "core_dir with a space and Cyrillic: CLAUDE.md" "$CYRP/app/CLAUDE.md" "$CYR/app/CLAUDE.md"
+run_file Write "$CYRP/app/docs/a.md" "$CYRP/app";     blocked "core_dir with a space and Cyrillic: docs" "$CYRP/app/docs/a.md" "$CYR/app/docs/a.md"
+run_file Write "$CYRP/app/.claude/rules/x.md" "$CYRP/app"; blocked "core_dir with a space and Cyrillic: .claude" "$CYRP/app/.claude/rules/x.md" "$CYR/app/.claude/rules/x.md"
+run_file Write "$CYRP/app/src/a.sh" "$CYRP/app";      hook_ok "core_dir with a space and Cyrillic: code"
+run_file Write "$CYR/app/docs/a.md" "$CYRP/app";          hook_ok "core_dir with a space and Cyrillic: the Core's docs"
+run_bash 'echo x > \"docs/a b.md\"' "$CYRP/app";          blocked "core_dir Cyrillic: Bash quoted" "$CYRP/app/docs/a b.md" "$CYR/app/docs/a b.md"
+run_bash 'cp a docs/b.md' "$CYRP/app";                    blocked "core_dir Cyrillic: Bash cp" "$CYRP/app/docs/b.md" "$CYR/app/docs/b.md"
 # the same path as \u escapes (Мои проекты/Ядро) and with newlines and spaces around the keys
-U='\u041c\u043e\u0438 \u043f\u0440\u043e\u0435\u043a\u0442\u044b/\u042f\u0434\u0440\u043e'
-run_hook "$H" '{"cwd":"'"$SANDBOX"'/'"$U"'/app/code","tool_name":"Write","tool_input":{"file_path":"'"$SANDBOX"'/'"$U"'/app/code/CLAUDE.md"}}'
-blocked "escaped (\\u) Cyrillic path" "$CYR/app/code/CLAUDE.md" "$CYR/app/CLAUDE.md"
-run_hook "$H" "$(printf '{\n  "tool_name" : "Write",\n  "cwd"\n  :\n  "%s/app/code",\n  "tool_input" : {\n    "content" : "a\\n\\"file_path\\": \\"/x\\"",\n    "file_path" :\n      "%s/app/code/docs/a.md"\n  }\n}\n' "$CYR" "$CYR")"
-blocked "pretty-printed JSON, a decoy key inside a string" "$CYR/app/code/docs/a.md" "$CYR/app/docs/a.md"
-run_hook "$H" '{"tool_name":"Bash","cwd":"'"$CYR"'/app/code","tool_input":{"command":"echo \"x\" > \"docs/q\\\"uote.md\""}}'
-blocked "escaped quotes in a Bash command" "$CYR/app/code/docs/q\"uote.md" "$CYR/app/docs/q\"uote.md"
-mkdir -p "$CYR/app/code/src/we\"ird"
-run_hook "$H" '{"cwd":"'"$CYR"'/app/code","tool_name":"Write","tool_input":{"file_path":"'"$CYR"'/app/code/src/we\"ird/a.sh"}}'; hook_ok "escaped quote in a folder name, ordinary code"
-run_hook "$H" '{"cwd":"'"$CYR"'/app/code","tool_name":"Write","tool_input":{"file_path":"'"$CYR"'/app/code/src/we\"ird/CLAUDE.md"}}'
-blocked "escaped quote in a folder name, nested CLAUDE.md" "$CYR/app/code/src/we\"ird/CLAUDE.md" "$CYR/app/src/we\"ird/CLAUDE.md"
-mkdir -p "$CYR/app/code/src/back\\slash"
-run_hook "$H" '{"cwd":"'"$CYR"'/app/code","tool_name":"Write","tool_input":{"file_path":"'"$CYR"'/app/code/src/back\\slash/CLAUDE.md"}}'
-blocked "escaped backslash in a folder name" "$CYR/app/code/src/back\\slash/CLAUDE.md" "$CYR/app/src/back\\slash/CLAUDE.md"
+U='\u041c\u043e\u0438 \u043f\u0440\u043e\u0435\u043a\u0442\u044b'   # Мои проекты, the Projects folder
+run_hook "$H" '{"cwd":"'"$SANDBOX"'/'"$U"'/app","tool_name":"Write","tool_input":{"file_path":"'"$SANDBOX"'/'"$U"'/app/CLAUDE.md"}}'
+blocked "escaped (\\u) Cyrillic path" "$CYRP/app/CLAUDE.md" "$CYR/app/CLAUDE.md"
+run_hook "$H" "$(printf '{\n  "tool_name" : "Write",\n  "cwd"\n  :\n  "%s/app",\n  "tool_input" : {\n    "content" : "a\\n\\"file_path\\": \\"/x\\"",\n    "file_path" :\n      "%s/app/docs/a.md"\n  }\n}\n' "$CYRP" "$CYRP")"
+blocked "pretty-printed JSON, a decoy key inside a string" "$CYRP/app/docs/a.md" "$CYR/app/docs/a.md"
+run_hook "$H" '{"tool_name":"Bash","cwd":"'"$CYRP"'/app","tool_input":{"command":"echo \"x\" > \"docs/q\\\"uote.md\""}}'
+blocked "escaped quotes in a Bash command" "$CYRP/app/docs/q\"uote.md" "$CYR/app/docs/q\"uote.md"
+mkdir -p "$CYRP/app/src/we\"ird"
+run_hook "$H" '{"cwd":"'"$CYRP"'/app","tool_name":"Write","tool_input":{"file_path":"'"$CYRP"'/app/src/we\"ird/a.sh"}}'; hook_ok "escaped quote in a folder name, ordinary code"
+run_hook "$H" '{"cwd":"'"$CYRP"'/app","tool_name":"Write","tool_input":{"file_path":"'"$CYRP"'/app/src/we\"ird/CLAUDE.md"}}'
+blocked "escaped quote in a folder name, nested CLAUDE.md" "$CYRP/app/src/we\"ird/CLAUDE.md" "$CYR/app/src/we\"ird/CLAUDE.md"
+mkdir -p "$CYRP/app/src/back\\slash"
+run_hook "$H" '{"cwd":"'"$CYRP"'/app","tool_name":"Write","tool_input":{"file_path":"'"$CYRP"'/app/src/back\\slash/CLAUDE.md"}}'
+blocked "escaped backslash in a folder name" "$CYRP/app/src/back\\slash/CLAUDE.md" "$CYR/app/src/back\\slash/CLAUDE.md"
 
 # --- core_dir given with ~, with a trailing slash, through a symlink
-mkdir -p "$HOME/MyCore/app/code" "$SANDBOX/real/app/code"; : > "$HOME/MyCore/app/CLAUDE.md"; : > "$SANDBOX/real/app/CLAUDE.md"
+mkdir -p "$HOME/MyCore/app" "$HOME/app" "$SANDBOX/real/app" "$SANDBOX/app"; : > "$HOME/MyCore/app/CLAUDE.md"; : > "$SANDBOX/real/app/CLAUDE.md"
+# the code folders beside each Core: $HOME/app (Core ~/MyCore) and $SANDBOX/app (Core $SANDBOX/real, also through linkcore);
+# linkapp is a link to the code folder
 export CORE_DIR='~/MyCore'
-run_file Write "$HOME/MyCore/app/code/docs/a.md" "$HOME/MyCore/app/code"; blocked "core_dir with ~" "$HOME/MyCore/app/code/docs/a.md" "$HOME/MyCore/app/docs/a.md"
+run_file Write "$HOME/app/docs/a.md" "$HOME/app"; blocked "core_dir with ~" "$HOME/app/docs/a.md" "$HOME/MyCore/app/docs/a.md"
 export CORE_DIR="$HOME/MyCore///"
-run_file Write "$HOME/MyCore/app/code/CLAUDE.md" "$HOME/MyCore/app/code"; blocked "core_dir with a trailing slash" "$HOME/MyCore/app/code/CLAUDE.md" "$HOME/MyCore/app/CLAUDE.md"
-ln -s "$SANDBOX/real" "$SANDBOX/linkcore"
+run_file Write "$HOME/app/CLAUDE.md" "$HOME/app"; blocked "core_dir with a trailing slash" "$HOME/app/CLAUDE.md" "$HOME/MyCore/app/CLAUDE.md"
+ln -s "$SANDBOX/real" "$SANDBOX/linkcore"; ln -s "$SANDBOX/app" "$SANDBOX/linkapp"
 export CORE_DIR="$SANDBOX/linkcore"
-run_file Write "$SANDBOX/real/app/code/docs/a.md" "$SANDBOX/real/app/code"; blocked "core_dir is a symlink, path real" "$SANDBOX/real/app/code/docs/a.md" "$SANDBOX/real/app/docs/a.md"
-run_file Write "$SANDBOX/linkcore/app/code/docs/a.md" "$SANDBOX/linkcore/app/code"; blocked "core_dir is a symlink, path through it" "$SANDBOX/real/app/code/docs/a.md" "$SANDBOX/real/app/docs/a.md"
+run_file Write "$SANDBOX/app/docs/a.md" "$SANDBOX/app"; blocked "core_dir is a symlink, path real" "$SANDBOX/app/docs/a.md" "$SANDBOX/real/app/docs/a.md"
+run_file Write "$SANDBOX/linkapp/docs/a.md" "$SANDBOX/linkapp"; blocked "core_dir is a symlink, path through a link to the code folder" "$SANDBOX/app/docs/a.md" "$SANDBOX/real/app/docs/a.md"
 export CORE_DIR="$SANDBOX/real"
-run_file Write "$SANDBOX/linkcore/app/code/docs/a.md" "$SANDBOX/real/app/code"; blocked "real core_dir, path through a symlink" "$SANDBOX/real/app/code/docs/a.md" "$SANDBOX/real/app/docs/a.md"
-run_file Write "docs/a.md" "$SANDBOX/linkcore/app/code";      blocked "relative path, cwd through a symlink" "$SANDBOX/real/app/code/docs/a.md" "$SANDBOX/real/app/docs/a.md"
+run_file Write "$SANDBOX/linkapp/docs/a.md" "$SANDBOX/app"; blocked "real core_dir, path through a symlink" "$SANDBOX/app/docs/a.md" "$SANDBOX/real/app/docs/a.md"
+run_file Write "docs/a.md" "$SANDBOX/linkapp";      blocked "relative path, cwd through a symlink" "$SANDBOX/app/docs/a.md" "$SANDBOX/real/app/docs/a.md"
 
 # --- core_dir typed in another letter case than on disk (macOS volumes are case-insensitive)
 mkdir -p "$SANDBOX/cs/a"
 if [ -d "$SANDBOX/cs/A" ]; then
-  mkdir -p "$SANDBOX/CaseCore/Ядро/MyApp/code"; : > "$SANDBOX/CaseCore/Ядро/MyApp/CLAUDE.md"
-  CP="$SANDBOX/CaseCore/Ядро/MyApp"
+  mkdir -p "$SANDBOX/CaseCore/Ядро/myapp" "$SANDBOX/CaseCore/MyApp"; : > "$SANDBOX/CaseCore/Ядро/myapp/CLAUDE.md"
+  CP="$SANDBOX/CaseCore/Ядро/myapp"; CC="$SANDBOX/CaseCore/MyApp"   # the Core project and its code folder
   export CORE_DIR="$SANDBOX/casecore/ядро"
-  run_file Write "$CP/code/docs/a.md" "$CP/code";             blocked "CORE_DIR in other case, path as on disk" "$CP/code/docs/a.md" "$CP/docs/a.md"
-  run_file Write "$SANDBOX/CASECORE/ЯДРО/myapp/code/CLAUDE.md" "$SANDBOX/casecore/ядро/MYAPP/CODE"
-  blocked "path and cwd in other case" "$CP/code/CLAUDE.md" "$CP/CLAUDE.md"
-  run_file Write "$SANDBOX/CASECORE/ЯДРО/MYAPP/Code/Docs/a.md" "$CP/code"
-  blocked "every part in other case, docs missing" "$CP/code/Docs/a.md" "$CP/docs/a.md"
-  run_bash 'echo x > DOCS/a.md' "$SANDBOX/casecore/ядро/myapp/code"; blocked "Bash, cwd in other case" "$CP/code/DOCS/a.md" "$CP/docs/a.md"
-  run_file Write "$SANDBOX/CASECORE/ЯДРО/myapp/docs/a.md" "$CP/code"; hook_ok "other case, the Core's own docs"
+  run_file Write "$CC/docs/a.md" "$CC";             blocked "CORE_DIR in other case, path as on disk" "$CC/docs/a.md" "$CP/docs/a.md"
+  run_file Write "$SANDBOX/CASECORE/myapp/CLAUDE.md" "$SANDBOX/casecore/MYAPP"
+  blocked "path and cwd in other case" "$CC/CLAUDE.md" "$CP/CLAUDE.md"
+  run_file Write "$SANDBOX/CASECORE/MYAPP/Docs/a.md" "$CC"
+  blocked "every part in other case, docs missing" "$CC/Docs/a.md" "$CP/docs/a.md"
+  run_bash 'echo x > DOCS/a.md' "$SANDBOX/casecore/myapp"; blocked "Bash, cwd in other case" "$CC/DOCS/a.md" "$CP/docs/a.md"
+  run_file Write "$SANDBOX/CASECORE/ЯДРО/myapp/docs/a.md" "$CC"; hook_ok "other case, the Core's own docs"
 else
   skip "core_dir letter case" "case-sensitive volume"; pass
 fi
@@ -318,7 +323,7 @@ bg sec_size
 # --- in the foreground: Bash cases that must be refused, and input that is not judged
 # --- Bash: redirects and the file commands (cwd = code/)
 run_bash 'echo x > CLAUDE.md';               blocked "Bash > CLAUDE.md" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
-run_bash 'echo x > code/CLAUDE.md' "$CORE_DIR/p"; blocked "Bash > code/CLAUDE.md from the project folder" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
+run_bash 'echo x > ../../p/CLAUDE.md' "$CORE_DIR/p"; blocked "Bash > ../../p/CLAUDE.md from the Core project folder" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
 run_bash 'echo x>CLAUDE.md';                 blocked "Bash no spaces" "$C/CLAUDE.md" "$CORE_DIR/p/CLAUDE.md"
 run_bash 'echo x >> docs/a.md';              blocked "Bash >>" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
 run_bash 'echo x 2> docs/err.log';           blocked "Bash 2>" "$C/docs/err.log" "$CORE_DIR/p/docs/err.log"
@@ -404,7 +409,14 @@ run_file Write "$SANDBOX/elsewhere/CLAUDE.md" "$SANDBOX/elsewhere";   hook_ok "W
 run_file Write "$SANDBOX/elsewhere/docs/a.md" "$SANDBOX/elsewhere";   hook_ok "Write docs/ outside the Core"
 run_file Write "$SANDBOX/elsewhere/code/docs/a.md" "$SANDBOX/elsewhere"; hook_ok "Write elsewhere/code/docs"
 run_file Write "$CORE_DIR/standards/code/docs/a.md" "$CORE_DIR";      hook_ok "standards/ is not a project"
-run_file Write "$CORE_DIR/nonproject/code/CLAUDE.md" "$CORE_DIR";     hook_ok "a folder without CLAUDE.md or code/ is not a project"
+run_file Write "$CORE_DIR/nonproject/code/CLAUDE.md" "$CORE_DIR";     hook_ok "a folder without CLAUDE.md is not a project"
+# the old layout of corecrew 0.4 (<Core>/<p>/code, a repo): no code root any more; writes there are Core writes and pass,
+# and so do the Core project's own files
+mkdir -p "$CORE_DIR/oldp/code/src" "$CORE_DIR/oldp/docs"; : > "$CORE_DIR/oldp/CLAUDE.md"; git init -q "$CORE_DIR/oldp/code"
+run_file Write "$CORE_DIR/oldp/code/src/a.sh" "$CORE_DIR/oldp/code"; hook_ok "old layout: ordinary code passes"
+run_bash 'echo x > src/b.sh' "$CORE_DIR/oldp/code";                 hook_ok "old layout: Bash ordinary code passes"
+run_file Write "$CORE_DIR/oldp/CLAUDE.md" "$CORE_DIR/oldp/code";    hook_ok "old layout: the Core project's CLAUDE.md passes"
+run_file Write "$CORE_DIR/oldp/docs/x.md" "$CORE_DIR/oldp/code";    hook_ok "old layout: the Core project's docs pass"
 run_file Write "$CORE_DIR/.git/code/CLAUDE.md" "$CORE_DIR";           hook_ok "dot-folder of the Core"
 run_file Write "$C" "$C";                                             hook_ok "the code folder itself"
 run_bash 'echo x > CLAUDE.md' "$SANDBOX/elsewhere";                   hook_ok "Bash outside the Core"
@@ -543,9 +555,9 @@ bg sec_new_odd_path
 
 # Codex: apply_patch and a patch handed to Bash (fixtures built from the rust-v0.166.0 structs)
 FX="$ROOT/tests/fixtures/codex"
-mkdir -p "$CORE_DIR/r/code/docs" "$CORE_DIR/r/code/sub"; printf 'public-docs: docs/pub/\n' > "$CORE_DIR/r/CLAUDE.md"
+mkdir -p "$PRJ/r/docs" "$PRJ/r/sub" "$CORE_DIR/r"; printf 'public-docs: docs/pub/\n' > "$CORE_DIR/r/CLAUDE.md"
 sec_codex() {
-  local R="$CORE_DIR/r/code"
+  local R="$PRJ/r"
   # fx <fixture> [cwd] — runs a fixture with @CWD@ replaced
   fx() { run_hook "$H" "$(sed "s|@CWD@|${2-$C}|g" "$FX/$1.json")"; }
   # patch <patch text> [cwd] [tool] — a Codex tool call with the given patch text
@@ -672,7 +684,7 @@ bg sec_codex
 # Bash through wrapper options and through another shell; a file directly under .claude/worktrees; a core_dir
 # that is a symlink. Own project folder bp, so the worktree folder it makes does not touch the other sections.
 sec_wrappers() {
-  local B="$CORE_DIR/bp/code"; mkdir -p "$B/src"; : > "$CORE_DIR/bp/CLAUDE.md"
+  local B="$PRJ/bp"; mkdir -p "$B/src" "$CORE_DIR/bp"; : > "$CORE_DIR/bp/CLAUDE.md"
   code() { run_bash "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" "$B"; }
   # wrapper options take their values
   code 'timeout 5 tee docs/a'; assert_eq "$RC" "2" "timeout 5 tee docs/a"
@@ -790,13 +802,13 @@ bg sec_writers
 # than 100 such targets past the first 100 refuse the whole command, so the hook stays well within its 15 s timeout.
 # And many deep new paths are judged well within that timeout too.
 sec_cap() {
-  local i O links n150="" n100="" deep="" deepd="" X="$CORE_DIR/cap/code" pub100="" pub101="" pub1000="" plain1000=""
+  local i O links n150="" n100="" deep="" deepd="" X="$PRJ/cap" pub100="" pub101="" pub1000="" plain1000=""
   i=1; while [ $i -le 1000 ]; do
     pub1000="$pub1000 docs/pub/x$i"; plain1000="$plain1000 src/x$i"
     [ $i -le 100 ] && pub100="$pub1000"; [ $i -le 101 ] && pub101="$pub1000"; i=$((i + 1))
   done
   # the project exists, with a public docs/, before any run: the passing runs below judge inside a project
-  mkdir -p "$X/src"; printf '# cap\npublic-docs: docs/\n' > "$CORE_DIR/cap/CLAUDE.md"
+  mkdir -p "$X/src" "$CORE_DIR/cap"; printf '# cap\npublic-docs: docs/\n' > "$CORE_DIR/cap/CLAUDE.md"
   cpu_run run_bash "touch$pub1000" "$X"; hook_blocked_any "1000 internal-looking targets are refused"
   grep -q 'too many files to check' "$OD/err" && pass || fail "the too-many message: $ERR"
   [ "$CPU_MS" -lt 5000 ] && pass || fail "1000 internal-looking targets took $CPU_MS ms of CPU (hook timeout 15 s)"
@@ -869,14 +881,14 @@ bg sec_cheap
 
 # Rules that one deleted line would drop: each case here is the only one that sees its rule.
 sec_rules() {
-  local G="$CORE_DIR/gl/code" n i many="" O="$SANDBOX/elsewhere"
+  local G="$PRJ/gl" n i many="" O="$SANDBOX/elsewhere"
   sh() { run_bash "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" "${2-$C}"; }
   patch() { run_hook "$H" "$(hook_event codex PreToolUse "${2-$C}" tool="${3-apply_patch}" command="$1")"; }
-  # a Core file outside code/ is not judged, whatever its name (the path must lie under the code root)
+  # a Core file is not judged, whatever its name (the path must lie under the code root)
   run_file Write "$CORE_DIR/p/docs/AGENTS.md";   hook_ok "Core project docs/AGENTS.md"
   run_file Write "$CORE_DIR/p/notes/CLAUDE.md";  hook_ok "Core project notes/CLAUDE.md"
   # public-docs: a glob is not expanded, even when the hook starts in a code folder that holds docs/
-  mkdir -p "$G/docs" "$G/src"; printf 'public-docs: *\n' > "$CORE_DIR/gl/CLAUDE.md"
+  mkdir -p "$G/docs" "$G/src" "$CORE_DIR/gl"; printf 'public-docs: *\n' > "$CORE_DIR/gl/CLAUDE.md"
   cd "$G" || return; run_file Write "$G/docs/x.md" "$G"; cd "$OLDPWD" || return
   blocked "public-docs: * is not expanded" "$G/docs/x.md" "$CORE_DIR/gl/docs/x.md"
   # docs/superpowers itself stays private under a public docs/
@@ -890,8 +902,8 @@ sec_rules() {
   done
   patch "*** ADD FILE: src/AGENTS.txt"; hook_ok "unreadable patch naming src/AGENTS.txt passes"
   # too many internal-looking targets: refused when a target names the folder that holds the Core, from any cwd
-  mkdir -p "$CORE_DIR/cap2/code/src"; printf 'public-docs: docs/\n' > "$CORE_DIR/cap2/CLAUDE.md"
-  i=1; while [ $i -le 201 ]; do many="$many $CORE_DIR/cap2/code/docs/pub/x$i"; i=$((i + 1)); done
+  mkdir -p "$PRJ/cap2/src" "$CORE_DIR/cap2"; printf 'public-docs: docs/\n' > "$CORE_DIR/cap2/CLAUDE.md"
+  i=1; while [ $i -le 201 ]; do many="$many $PRJ/cap2/docs/pub/x$i"; i=$((i + 1)); done
   run_bash "touch$many" "$O"; hook_blocked_any "201 internal-looking targets in a project, cwd outside"
   grep -q 'too many files to check' "$OD/err" && pass || fail "the too-many message, cwd outside: $ERR"
   # a link named .claude/worktrees/<name> passes like a worktree folder, also when it points into the Core
@@ -910,8 +922,8 @@ bg sec_rules
 # The writers' options, one row each: "p#<command>" passes, "r#<command>#<path refused, under the code folder>".
 # %W is the code folder, %K the project's folder in the Core, %S the in-place sed. Own project wr, with docs/ and src/.
 sec_rows() {
-  local W="$CORE_DIR/wr/code" K="$CORE_DIR/wr" SED=sed want c t i same="" n100="" n
-  mkdir -p "$W/docs" "$W/src"; : > "$K/CLAUDE.md"
+  local W="$PRJ/wr" K="$CORE_DIR/wr" SED=sed want c t i same="" n100="" n
+  mkdir -p "$W/docs" "$W/src" "$K"; : > "$K/CLAUDE.md"
   sh() { run_bash "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" "${2-$W}"; }
   while IFS="#" read -r want c t; do
     c="${c//%W/$W}"; c="${c//%K/$K}"; c="${c//%S/$SED -i}"

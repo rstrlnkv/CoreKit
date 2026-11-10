@@ -1,11 +1,10 @@
 # lib-layout.sh — where a path belongs, for lib.sh (source lib.sh, not this file): the project of a path, linked worktrees,
-# the code folder and layout of a project, and the project name rule.
+# the code folder of a project, the old layout it refuses, and the project name rule.
 
 # _project_of_path <path> — with CORE_DIR loaded (load_settings), prints <project> and exits 0 when the path is
 # inside a project; otherwise prints nothing and exits 1. Two places count:
-#  - inside the Core: <Core>/<project> or anything below it (old layout, worktrees under code/ included);
-#    a project is a top-level folder of the Core that holds a CLAUDE.md or a code/ folder; dot-folders,
-#    standards/ and knowledge/ never count.
+#  - inside the Core: <Core>/<project> or anything below it; a project is a top-level folder of the Core that
+#    holds a CLAUDE.md; dot-folders, standards/ and knowledge/ never count.
 #  - beside the Core: the first folder under <Projects> (the Core's parent) is <Name>; it is a project
 #    when lc <Name> (ASCII letters lowered, other bytes as they are) names a project of the Core: <Core>/<name>/CLAUDE.md
 #    exists, and <name> is no dot-folder, standards or knowledge. The name rule of valid_project_name is not applied here:
@@ -19,7 +18,7 @@ _project_of_path() {
       rest="${p#"$CORE_DIR"/}"; first="${rest%%/*}"
       case "$first" in ""|.*|standards|knowledge) return 1 ;; esac
       [ -d "$CORE_DIR/$first" ] || return 1
-      [ -f "$CORE_DIR/$first/CLAUDE.md" ] || [ -d "$CORE_DIR/$first/code" ] || return 1
+      [ -f "$CORE_DIR/$first/CLAUDE.md" ] || return 1
       printf '%s\n' "$first" ;;
     "$CORE_DIR") return 1 ;;
     *)
@@ -91,10 +90,12 @@ wt_is_main_of() {
 }
 
 # code_root_of <path> — prints the code root git sees from <path>: the worktree folder in a linked worktree, else the
-# project's main code folder; exit 1 when that is not a project's code folder. (git runs; for skills, not for hooks.)
+# project's main code folder; exit 1 when that is not a project's code folder; exit 4 (and old_layout_msg on stderr)
+# when the project is in the old layout. (git runs; for skills, not for hooks.)
 code_root_of() {
-  local t n r here
+  local t n r here o
   here="$(canon_dir "${1:-.}")"
+  if n="$(project_of "${1:-.}")" && o="$(old_code_of "$n")"; then old_layout_msg "$o" >&2; return 4; fi
   t="$(git -C "${1:-.}" rev-parse --show-toplevel 2>/dev/null)" || t=""
   if [ -n "$t" ] && project_of "$t" >/dev/null; then
     # only a root that holds the folder asked about: a forged gitfile or core.worktree must not point elsewhere
@@ -108,14 +109,14 @@ code_root_of() {
   code_dir_of "$n" 2>/dev/null
 }
 
-# code_dir_of <name> — prints the main code folder of a project: <Core>/<name>/code when that is a
-# directory (only the old layout has one, so an unrelated <Projects>/<Name> never takes its place); else
-# the one folder in <Projects> (not the Core) whose lower-case name is <name>. Exit 1 when there is
-# neither; exit 3 (and a line on stderr) when two folders there differ only in letter case.
+# code_dir_of <name> — prints the main code folder of a project: the one folder in <Projects> (not the Core) whose
+# lower-case name is <name>. Exit 1 when there is none; exit 3 (and a line on stderr) when two folders there differ
+# only in letter case; exit 4 (and old_layout_msg on stderr) when the project is in the old layout (old_code_of), so
+# an unrelated <Projects>/<Name> never takes the place of its code folder.
 code_dir_of() {
   local pd d b found="" n=0 second=""
   [ -n "${CORE_DIR:-}" ] && [ -n "${1:-}" ] || return 1
-  if [ -d "$CORE_DIR/$1/code" ]; then printf '%s\n' "$CORE_DIR/$1/code"; return 0; fi
+  if d="$(old_code_of "$1")"; then old_layout_msg "$d" >&2; return 4; fi
   pd="${PROJECTS_DIR:-$(dirname "$CORE_DIR")}"
   for d in "$pd"/*/; do
     d="${d%/}"; [ -d "$d" ] || continue
@@ -146,15 +147,6 @@ _code_dir_from_cwd() {
     printf '%s\n' "$1/$b"; return 0
   done
   return 1
-}
-
-# layout_of <name> — prints "new" (code folder beside the Core) or "old" (<Core>/<name>/code); exit 1
-# when the project has no code folder (or exit 3 on a case clash, from code_dir_of).
-layout_of() {
-  local d rc=0
-  d="$(code_dir_of "$1")" || rc=$?
-  [ $rc -eq 0 ] || return $rc
-  case "$d" in "$CORE_DIR"/*) echo old ;; *) echo new ;; esac
 }
 
 # old_code_of <name> — prints <Core>/<name>/code and exits 0 when it holds a git repo (a .git folder or file): a project

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/lib.sh"
 new_sandbox; setup_core; sync_tools
-scaffold_old save-app
-P="$CORE_DIR/save-app"; C="$P/code"; SAVE="$SCRIPTS/save"; UNDO="$SCRIPTS/undo-step"
+bash "$SKILL/scripts/scaffold.sh" --name save-app >/dev/null
+P="$CORE_DIR/save-app"; C="$SANDBOX/Projects/save-app"; SAVE="$SCRIPTS/save"; UNDO="$SCRIPTS/undo-step"
 assert_file "$SAVE"; assert_file "$UNDO"; assert_no_file "$CORE_DIR/bin"; assert_no_file "$CORE_DIR/hooks"
 step_ids() { git -C "$1" log --format=%B | sed -n 's/^Step-Id: //p'; }
 
@@ -226,16 +226,26 @@ assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s)" "From the Core folder" "sav
 assert_eq "$(cat "$F/n.txt")" "n1" "undo from <Core>/foo did not restore code"
 assert_eq "$(cat "$CORE_DIR/foo/d.md")" "doc1" "undo from <Core>/foo did not restore docs"
 
-# an old-layout project plus an unrelated repo of the same name beside the Core: save works in
-# <Core>/<name>/code and writes nothing into the unrelated repo
-scaffold_old twin-app
-T="$SANDBOX/Projects/Twin-App"; mkdir -p "$T"; git -C "$T" init -q
-echo "t1" > "$CORE_DIR/twin-app/code/t.txt"
-(cd "$CORE_DIR/twin-app/code" && bash "$SAVE" "Twin step") > "$SANDBOX/out" 2>&1; rc=$?
-assert_eq "$rc" "0" "save in an old-layout project with an unrelated twin: $(cat "$SANDBOX/out")"
-assert_eq "$(git -C "$CORE_DIR/twin-app/code" log -1 --format=%s 2>/dev/null)" "Twin step" "twin: code not saved"
-assert_file "$CORE_DIR/twin-app/code/.git/hooks/pre-commit"
-assert_no_file "$T/.git/hooks/pre-commit"; assert_no_file "$T/CLAUDE.local.md"
+# the old layout of corecrew 0.4 and older (<Core>/<name>/code), with an unrelated repo of the same name beside the
+# Core: save and undo-step refuse it with one line, from the code folder, the project folder and the unrelated repo,
+# and change nothing (no commit, no hook, no link anywhere)
+T="$SANDBOX/Projects/Twin-App"; TC="$CORE_DIR/twin-app/code"
+mkdir -p "$T" "$CORE_DIR/twin-app/docs"; echo "# twin-app" > "$CORE_DIR/twin-app/CLAUDE.md"
+git init -q "$T"; git init -q "$TC"; echo t0 > "$TC/t.txt"; git -C "$TC" add -A; git -C "$TC" commit -q -m t0
+echo "$(basename "$TC")/" > "$CORE_DIR/twin-app/.gitignore"; git -C "$CORE_DIR" add -A; git -C "$CORE_DIR" commit -q -m twin
+echo "t1" > "$TC/t.txt"; echo "t1" > "$T/t.txt"; echo "d1" > "$CORE_DIR/twin-app/docs/d.md"
+OLDLINE="$TC keeps the code inside the Core, the layout of corecrew 0.4 and older, which corecrew 1.0 no longer supports; move the project beside the Core with corecrew 0.15 first (/corecrew:task adopt $TC)"
+before="$(snap_tree "$SANDBOX/Projects")"
+for d in "$TC" "$CORE_DIR/twin-app" "$CORE_DIR/twin-app/docs" "$T"; do
+  for tool in "$SAVE" "$UNDO"; do
+    (cd "$d" && bash "$tool" "Twin step") > "$SANDBOX/out" 2>&1; rc=$?
+    assert_eq "$rc" "1" "$(basename "$tool") in an old-layout project ($d): $(cat "$SANDBOX/out")"
+    assert_eq "$(cat "$SANDBOX/out")" "$OLDLINE" "$(basename "$tool") in an old-layout project ($d): the line"
+  done
+done
+assert_eq "$(snap_tree "$SANDBOX/Projects")" "$before" "save or undo-step changed an old-layout project"
+assert_no_file "$TC/.git/hooks/pre-commit"; assert_no_file "$T/.git/hooks/pre-commit"; assert_no_file "$T/CLAUDE.local.md"
+rm -rf "$T" "$CORE_DIR/twin-app"; git -C "$CORE_DIR" add -A; git -C "$CORE_DIR" commit -q -m "no twin"
 
 # install-hooks lets a case-clash line through and exits non-zero (it does not swallow code_dir_of's exit 3)
 grep -q 'code_dir_of "$NAME" 2>/dev/null' "$SCRIPTS/install-hooks.sh" && fail "install-hooks swallows the case-clash line" || pass
@@ -450,6 +460,18 @@ assert_contains "$SANDBOX/out" "saved code"; assert_contains "$SANDBOX/out" "sav
 assert_eq "$(git -C "$F" log -1 --format=%s)" "Nested code repo" "nested code repo: the project's code commit"
 assert_eq "$(commit_count "$F/code")" "0" "save committed inside the nested repo"
 assert_no_file "$F/code/.git/hooks/pre-commit"
+# save and undo-step run inside that nested repo refuse: it is not the project's code folder (a nested repo named
+# code was once taken for an old-layout code folder, and save committed into it)
+echo "n5" > "$F/code/n.txt"; nc=$(commit_count "$F"); nd=$(commit_count "$CORE_DIR")
+for tool in "$SAVE" "$UNDO"; do
+  (cd "$F/code" && bash "$tool" "Inside the nested repo") > "$SANDBOX/out" 2>&1; rc=$?
+  assert_eq "$rc" "1" "$(basename "$tool") inside a nested code repo: $(cat "$SANDBOX/out")"
+  assert_contains "$SANDBOX/out" "This folder is not a corecrew project"
+done
+assert_eq "$(commit_count "$F/code")" "0" "save committed inside the nested repo (run there)"
+assert_eq "$(commit_count "$F")" "$nc" "save inside the nested repo committed in the project"
+assert_eq "$(commit_count "$CORE_DIR")" "$nd" "save inside the nested repo committed in the Core"
+rm -f "$F/code/n.txt"
 # the same from a linked worktree, whose .git is a file
 mkdir -p "$FW/code"; git -C "$FW/code" init -q; echo "wt2" > "$FW/wt.txt"
 (cd "$FW" && bash "$SAVE" "Nested code repo, worktree") > "$SANDBOX/out" 2>&1
@@ -498,28 +520,10 @@ rm -f "$C/.git/hooks/pre-commit"
 assert_eq "$rc" "0" "save after the refusing hook is gone: $(cat "$SANDBOX/out")"
 assert_eq "$(commit_count "$C")" "$((nc+1))"; assert_eq "$(commit_count "$CORE_DIR")" "$((nd+1))"
 
-# old layout with no Core setting at all (CORE_DIR unset, no Core at ~/Projects/Core): the code folder's
-# place inside the Core finds it
-echo "ne" > "$C/ne.txt"; echo "ne" >> "$P/docs/brief.md"
-(cd "$C" && env -u CORE_DIR -u CLAUDE_PLUGIN_OPTION_CORE_DIR bash "$SAVE" "Old layout, no env") > "$SANDBOX/out" 2>&1; rc=$?
-assert_eq "$rc" "0" "old-layout save with CORE_DIR unset: $(cat "$SANDBOX/out")"
-assert_contains "$SANDBOX/out" "saved code"; assert_contains "$SANDBOX/out" "saved docs"
-assert_no_file "$HOME/Projects/Core"
-
-# save inside the unrelated repo named like the old-layout project (twin-app, above): refused, no commit anywhere
-echo "t" > "$T/t.txt"; nc=$(commit_count "$CORE_DIR/twin-app/code"); nd=$(commit_count "$CORE_DIR")
-(cd "$T" && bash "$SAVE" "In the twin") > "$SANDBOX/out" 2>&1; rc=$?
-assert_eq "$rc" "1" "save inside an unrelated repo named like a project: $(cat "$SANDBOX/out")"
-assert_contains "$SANDBOX/out" "This folder is not a corecrew project"
-assert_eq "$(commit_count "$T")" "0" "save committed in the unrelated repo"
-assert_eq "$(commit_count "$CORE_DIR/twin-app/code")" "$nc" "save in the twin committed in the project"
-assert_eq "$(commit_count "$CORE_DIR")" "$nd" "save in the twin committed in the Core"
-assert_no_file "$T/.git/hooks/pre-commit"
-
 # a Core and a tools folder whose paths have spaces: save and undo-step still work
 SANDBOX="$(mktemp -d "$TEST_TMP/sb.XXXXXX")"; export CORE_DIR="$SANDBOX/my projects/Core"
 export CLAUDE_PLUGIN_DATA="$SANDBOX/plugin data"; export COREDEV_TOOLS="$CLAUDE_PLUGIN_DATA/tools"; sync_tools; setup_core
-scaffold_old sp-app; C="$CORE_DIR/sp-app/code"
+bash "$SKILL/scripts/scaffold.sh" --name sp-app >/dev/null; C="$SANDBOX/my projects/sp-app"
 (cd "$C" && bash "$SAVE" init) >/dev/null 2>&1
 echo s > "$C/s.txt"; (cd "$C" && bash "$SAVE" s) >/dev/null 2>&1
 (cd "$C" && bash "$UNDO") >/dev/null 2>&1
@@ -530,11 +534,10 @@ assert_no_file "$C/s.txt"
 assert_eq "$rc" "0" "save --push with no Core remote: $(cat "$SANDBOX/out")"
 assert_contains "$SANDBOX/out" "skipped push"; assert_not_contains "$SANDBOX/out" "pushed Core"
 
-# old layout, a Core without .coredev, save run from <Core>/<name>/: the code folder below is found
-git -C "$CORE_DIR" rm -q .coredev; git -C "$CORE_DIR" commit -q -m "no .coredev"
+# save run from the project folder <Core>/<name>/: the code folder beside the Core is found
 echo o > "$C/o.txt"
 (cd "$CORE_DIR/sp-app" && bash "$SAVE" "From the project folder") > "$SANDBOX/out" 2>&1
 assert_contains "$SANDBOX/out" "saved code"
-assert_eq "$(git -C "$C" log -1 --format=%s)" "From the project folder" "save from <Core>/<name>/ of an old-layout project"
+assert_eq "$(git -C "$C" log -1 --format=%s)" "From the project folder" "save from <Core>/<name>/"
 
 finish

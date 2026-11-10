@@ -3,7 +3,7 @@
 #
 # Usage: wiki-check.sh <project_dir> [--code <dir>] [--changed <path>...]
 #   <project_dir>  the Core project folder <Core>/<name>: CLAUDE.md, docs/ (map docs/INDEX.md).
-#                  The code lives elsewhere (beside the Core, or in the old layout in code/).
+#                  The code lives elsewhere (beside the Core).
 #   --code <dir>   the code root: every files: entry of an active page must exist there.
 #
 # Wiki pages are what wiki-pages.sh lists (docs/**/*.md except INDEX.md, knowledge/, standards/,
@@ -42,7 +42,7 @@
 # --changed paths: code files as code-root-relative paths (what "git diff --name-only" prints in
 # the code root). A changed wiki page is passed as "<project_dir>/docs/<page>.md" (absolute, the
 # unambiguous form), "../docs/<page>.md" or "docs/<page>.md"; all mean docs/<page>.md of the project. So a code file that lives in a
-# top-level docs/ folder of code/ cannot be told apart from a wiki page; it is taken as a page.
+# top-level docs/ folder of the code root cannot be told apart from a wiki page; it is taken as a page.
 # (An absolute path under another folder is a code path, not a page.) Any other "../<path>" lies
 # outside the project's code and docs and is ignored.
 # A page's files: entries match a changed path exactly, or by prefix when the entry ends in "/".

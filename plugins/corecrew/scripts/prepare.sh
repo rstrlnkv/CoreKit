@@ -5,8 +5,10 @@
 # Env:   CORE_DIR (the Core, as everywhere), COREKIT_HOST=claude|codex (tests)
 #  tools    sync the tools copy the git hook shims run (tools_dir); on error print the sync_not_ours (exit 2) or sync_failed line.
 #           Nothing happens when no data folder is known (no usable HOME).
-#  project  when --cwd is in a project: the layout note, the CLAUDE.local.md and AGENTS.md links in the main code
-#           folder and in the worktree root when that is a worktree outside the main folder, the old git hooks note.
+#  project  when --cwd is in a project: the layout note, the old-layout note (code in <Core>/<name>/code, which this
+#           version does not support; nothing else is done for such a project), the CLAUDE.local.md and AGENTS.md links
+#           in the main code folder and in the worktree root when that is a worktree outside the main folder, the
+#           core.hooksPath note.
 #  host     on Codex: the trust note until the hooks are known to have run (the marker session-start writes), and the
 #           sandbox profile note while config.toml names no default_permissions (read as data, never written).
 # Idempotent, silent when everything is current. Output lines are for the person (the model relays them). Exit 0 always.
@@ -52,7 +54,7 @@ link_notes() {
 
 # 2. The project.
 prepare_project() {
-  local cwd="$1" proj P sv old shown code hp
+  local cwd="$1" proj P sv old shown code hp oc
   proj="$(project_of "$cwd")" || proj=""
   if [ -n "$proj" ]; then
     P="$CORE_DIR/$proj"
@@ -65,18 +67,20 @@ prepare_project() {
     if [ "$old" -eq 1 ]; then
       printf '%s\n' "$(msg layout_note "$shown" "$COREDEV_SCHEMA" "$ROOT/scripts/setup-core.sh" "$CORE_DIR")"
     fi
-    # Code folder: new layout gets the links (the main folder, also from a worktree or the Core project folder);
-    # old layout is named. No code folder, or a case clash: nothing to do.
-    code=""; code="$(code_dir_of "$proj" 2>/dev/null)" || code=""
+    # Code folder: the links (in the main folder, also from a worktree or the Core project folder). The old layout
+    # (<Core>/<name>/code) is named and gets nothing (code_dir_of refuses it). No code folder, or a case clash:
+    # nothing to do.
+    code=""
+    if oc="$(old_code_of "$proj")"; then
+      printf '%s\n' "$(msg old_layout "$oc")"
+    else
+      code="$(code_dir_of "$proj" 2>/dev/null)" || code=""
+    fi
     if [ -n "$code" ]; then
-      if [ "$(layout_of "$proj" 2>/dev/null)" = old ]; then
-        printf '%s\n' "$(msg old_layout "$code" "$code" "$PROJECTS_DIR/$proj")"
-      else
-        link_notes "$code" "$P"
-        # A worktree outside the main folder does not find the main folder's links above it.
-        if worktree_of "$cwd" && wt_is_main_of "$proj"; then
-          case "$WT_ROOT" in "$(canon_dir "$code")"|"$(canon_dir "$code")"/*) ;; *) link_notes "$WT_ROOT" "$P" ;; esac
-        fi
+      link_notes "$code" "$P"
+      # A worktree outside the main folder does not find the main folder's links above it.
+      if worktree_of "$cwd" && wt_is_main_of "$proj"; then
+        case "$WT_ROOT" in "$(canon_dir "$code")"|"$(canon_dir "$code")"/*) ;; *) link_notes "$WT_ROOT" "$P" ;; esac
       fi
     fi
     # core.hooksPath: git runs the hooks of another folder (husky, lefthook, a global setting), so the corecrew

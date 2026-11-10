@@ -9,8 +9,8 @@ H="$HOOKS/one-suite.sh"
 assert_file "$H"
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
 
-mkdir -p "$CORE_DIR/app/code" "$SANDBOX/elsewhere"; : > "$CORE_DIR/app/CLAUDE.md"
-C="$CORE_DIR/app/code"
+C="$(dirname "$CORE_DIR")/app"
+mkdir -p "$CORE_DIR/app" "$C" "$SANDBOX/elsewhere"; : > "$CORE_DIR/app/CLAUDE.md"
 
 FAKE="onesuite-fake-run-$$"
 export ONE_SUITE_PROCS="$FAKE"
@@ -93,7 +93,7 @@ expect 0 "new layout: Projects/Brain is not a project" 'swift test' "$(dirname "
 expect 2 "a run in Foo does not hide the run in app (every match is looked at)" 'swift test' "$C"
 stop "$foo"
 # lsof prints a non-ASCII byte of a working folder as \xNN; the name must still match
-U="$CORE_DIR/uni проект q %s/code"; mkdir -p "$U/src"; : > "$CORE_DIR/uni проект q %s/CLAUDE.md"
+U="$(dirname "$CORE_DIR")/uni проект q %s"; mkdir -p "$U/src" "$CORE_DIR/uni проект q %s"; : > "$CORE_DIR/uni проект q %s/CLAUDE.md"
 fake "$U" "$FAKE"; uni=$FAKE_PID
 expect 2 "a run in a folder with a non-ASCII name holds a call there" 'swift test' "$U/src"
 stop "$uni"
@@ -562,28 +562,28 @@ at_exit 'rm -rf "$NT"'
 case "$NT" in
   *[tT]est*) skip "prefilter" "the temp path $NT holds \"test\"" ;;
   *)
-    mkdir -p "$NT/Core/app/code"; : > "$NT/Core/app/CLAUDE.md"
-    fake "$NT/Core/app/code" "$FAKE"; dummy=$FAKE_PID
+    mkdir -p "$NT/Core/app" "$NT/app"; : > "$NT/Core/app/CLAUDE.md"
+    fake "$NT/app" "$FAKE"; dummy=$FAKE_PID
     # a runner spelled through a \u escape (npm \u0074est = npm test) is still a run: the payload and the
     # cwd hold no "test", so only the prefilter's escape branch lets it through
-    CORE_DIR="$NT/Core" run_hook 'npm \u0074est' "$NT/Core/app/code"
+    CORE_DIR="$NT/Core" run_hook 'npm \u0074est' "$NT/app"
     assert_eq "$RC" "2" "a runner spelled through a \\u escape is still recognised"
-    if payload 'npm \u0074est' "$NT/Core/app/code" | grep -qi 'test'; then fail "the \\u case payload holds \"test\""; else pass; fi
-    CORE_DIR="$NT/Core" run_hook 'n\pm \u0074est' "$NT/Core/app/code"
+    if payload 'npm \u0074est' "$NT/app" | grep -qi 'test'; then fail "the \\u case payload holds \"test\""; else pass; fi
+    CORE_DIR="$NT/Core" run_hook 'n\pm \u0074est' "$NT/app"
     assert_eq "$RC" "2" "an unknown escape and a \\u escape: still recognised"
     # an unknown escape alone (t\est = test, no \u, no "test" in the payload) is the other half of that branch
-    CORE_DIR="$NT/Core" run_hook 'npm t\est' "$NT/Core/app/code"
+    CORE_DIR="$NT/Core" run_hook 'npm t\est' "$NT/app"
     assert_eq "$RC" "2" "a runner spelled through an unknown escape is still recognised"
-    if payload 'npm t\est' "$NT/Core/app/code" | grep -qi 'test'; then fail "the unknown-escape case payload holds \"test\""; else pass; fi
+    if payload 'npm t\est' "$NT/app" | grep -qi 'test'; then fail "the unknown-escape case payload holds \"test\""; else pass; fi
     # quoted text and (( )) are cut before the match, so they can join a runner word: bash runs go te''st as go test
     for c in "go te''st" 'swift te\"\"st' 'go te((1))st'; do
-      CORE_DIR="$NT/Core" run_hook "$c" "$NT/Core/app/code"
+      CORE_DIR="$NT/Core" run_hook "$c" "$NT/app"
       assert_eq "$RC" "2" "a runner word joined by a cut: $c"
     done
-    CORE_DIR="$NT/Core" run_hook 'git status' "$NT/Core/app/code"
+    CORE_DIR="$NT/Core" run_hook 'git status' "$NT/app"
     assert_eq "$RC" "0" "no test word: passes"
     # a payload with no runner word starts only the hook's own bash and cat
-    os_plain() { printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"git status"}}' "$NT/Core/app/code" | CORE_DIR="$NT/Core" bash "$H" >/dev/null 2>&1; }
+    os_plain() { printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"git status"}}' "$NT/app" | CORE_DIR="$NT/Core" bash "$H" >/dev/null 2>&1; }
     count_execs os_plain
     assert_eq "$(LC_ALL=C sort "$EXEC_LOG" | tr '\n' ' ')" "bash cat " "no-match payload: programs started ($EXECS)"
     stop "$dummy"; dummy="" ;;

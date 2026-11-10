@@ -11,9 +11,9 @@ H="$HOOKS/guard-secrets.sh"
 assert_file "$H"
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
 
-mkdir -p "$CORE_DIR/p/code/src" "$SANDBOX/elsewhere" "$HOME/.ssh"
+C="$(dirname "$CORE_DIR")/p"   # the code folder beside the Core
+mkdir -p "$C/src" "$CORE_DIR/p" "$SANDBOX/elsewhere" "$HOME/.ssh"
 : > "$CORE_DIR/p/CLAUDE.md"
-C="$CORE_DIR/p/code"
 echo "FAKE=1" > "$C/.env"; echo "x" > "$HOME/.ssh/config"; echo "x" > "$SANDBOX/elsewhere/plain"
 ln -s "$C/.env" "$C/notes.txt"                         # an innocent name that points at a .env
 ln -s "$SANDBOX/elsewhere/plain" "$HOME/.ssh/out"      # a file in ~/.ssh that is a link leaving it
@@ -43,7 +43,8 @@ sec_hook() {
   HOME=/ run_read "/.ssh/config";               hook_ok "HOME=/: /.ssh/config is not under a home"
   HOME=/ run_read "$C/.env";                    blocked "HOME=/: .env is still a secret" "$C/.env"
   # after a cd a relative path has no known folder: only its name is judged
-  up="../../../../${HOME##*/}/.ssh/id_rsa"; b "cat $up" "$up"
+  # from $C (<sandbox>/Projects/p) up to the sandbox home
+  up="../../${HOME##*/}/.ssh/id_rsa"; b "cat $up" "$up"
   p "cd /tmp && cat $up"
   b 'cd /tmp && cat ~/.ssh/id_rsa' '~/.ssh/id_rsa'
   b 'cd /tmp && cat sub/.env' 'sub/.env'

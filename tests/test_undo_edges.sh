@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/lib.sh"
 new_sandbox; setup_core; sync_tools
-scaffold_old edge-app
-C="$CORE_DIR/edge-app/code"; SAVE="$SCRIPTS/save"; UNDO="$SCRIPTS/undo-step"
+bash "$SKILL/scripts/scaffold.sh" --name edge-app >/dev/null
+C="$SANDBOX/Projects/edge-app"; SAVE="$SCRIPTS/save"; UNDO="$SCRIPTS/undo-step"
 cd "$C" || exit 1
 bash "$SAVE" "Scaffold" >/dev/null
 # two saves within the same second get different Step-Ids
@@ -30,7 +30,7 @@ git worktree add -q .claude/worktrees/w -b w 2>/dev/null
 assert_no_file "$B/.claude/worktrees/w/two.txt"; assert_file "$B/.claude/worktrees/w/one.txt"
 
 # --- the Core is shared: undo touches only the step's own paths, and finds its shared Core files ---
-scaffold_old u-app; P="$CORE_DIR/u-app"; C="$P/code"; K="$CORE_DIR/knowledge"
+bash "$SKILL/scripts/scaffold.sh" --name u-app >/dev/null; P="$CORE_DIR/u-app"; C="$SANDBOX/Projects/$(basename "$P")"; K="$CORE_DIR/knowledge"
 cd "$C" || exit 1
 bash "$SAVE" init >/dev/null 2>&1
 step_id() { git -C "$1" log -1 --format=%B | sed -n 's/^Step-Id: //p'; }
@@ -76,7 +76,7 @@ assert_exit 0 bash "$UNDO"
 assert_no_file "$C/k.txt"; assert_no_file "$K/git-undo.md"
 
 # another project's step (its folder plus a shared file) is never undone from this project
-(cd "$CORE_DIR/edge-app/code" && echo e > "$K/edge.md" && bash "$SAVE" "edge knowledge") >/dev/null 2>&1
+(cd "$SANDBOX/Projects/edge-app" && echo e > "$K/edge.md" && bash "$SAVE" "edge knowledge") >/dev/null 2>&1
 EDGE=$(step_id "$CORE_DIR")
 assert_exit 0 bash "$UNDO" "$EDGE"
 assert_file "$K/edge.md"; assert_contains "$CORE_DIR/edge-app/CLAUDE.md" edited
@@ -87,14 +87,14 @@ FD="$SANDBOX/fakedate"; mkdir -p "$FD"
 printf '#!/bin/sh\necho 20000101-000000\n' > "$FD/date"; chmod +x "$FD/date"
 echo s1 > "$C/same1.txt"; PATH="$FD:$PATH" bash "$SAVE" "same second A" >/dev/null 2>&1
 SA=$(git -C "$C" log -1 --format=%B | sed -n 's/^Step-Id: //p')
-(cd "$CORE_DIR/edge-app/code" && echo s2 > same2.txt && PATH="$FD:$PATH" bash "$SAVE" "same second B") >/dev/null 2>&1
-SB=$(git -C "$CORE_DIR/edge-app/code" log -1 --format=%B | sed -n 's/^Step-Id: //p')
+(cd "$SANDBOX/Projects/edge-app" && echo s2 > same2.txt && PATH="$FD:$PATH" bash "$SAVE" "same second B") >/dev/null 2>&1
+SB=$(git -C "$SANDBOX/Projects/edge-app" log -1 --format=%B | sed -n 's/^Step-Id: //p')
 [ -n "$SA" ] && [ -n "$SB" ] && [ "$SA" != "$SB" ] && pass || fail "same-second saves share a Step-Id: '$SA' '$SB'"
 
 # another project's step whose Core commit touches only shared files (its code + knowledge/): plain
 # undo-step here still undoes this project's own last step, the other step's Step-Id changes nothing,
 # and the other project undoes its step in full
-E="$CORE_DIR/edge-app/code"
+E="$SANDBOX/Projects/edge-app"
 echo a1 > "$C/a1.txt"; bash "$SAVE" "A step" >/dev/null 2>&1
 (cd "$E" && echo b1 > b1.txt && echo b > "$K/b.md" && bash "$SAVE" "B step") >/dev/null 2>&1
 BID=$(step_id "$CORE_DIR")
@@ -235,16 +235,16 @@ assert_eq "$OUT" "No saved step to undo." "undo-step in a repo with no commit pr
 
 # undo-step only touches the current project's steps: the other project's docs stay
 new_sandbox; setup_core; sync_tools
-scaffold_old app-a; scaffold_old app-b
-(cd "$CORE_DIR/app-a/code" && bash "$SAVE" init) >/dev/null 2>&1
-(cd "$CORE_DIR/app-b/code" && bash "$SAVE" init) >/dev/null 2>&1
-echo a1 > "$CORE_DIR/app-a/docs/a.md"; (cd "$CORE_DIR/app-a/code" && bash "$SAVE" a1) >/dev/null 2>&1
-echo b1 > "$CORE_DIR/app-b/docs/b.md"; (cd "$CORE_DIR/app-b/code" && bash "$SAVE" b1) >/dev/null 2>&1
-(cd "$CORE_DIR/app-a/code" && bash "$UNDO") >/dev/null 2>&1
+bash "$SKILL/scripts/scaffold.sh" --name app-a >/dev/null; bash "$SKILL/scripts/scaffold.sh" --name app-b >/dev/null
+(cd "$SANDBOX/Projects/app-a" && bash "$SAVE" init) >/dev/null 2>&1
+(cd "$SANDBOX/Projects/app-b" && bash "$SAVE" init) >/dev/null 2>&1
+echo a1 > "$CORE_DIR/app-a/docs/a.md"; (cd "$SANDBOX/Projects/app-a" && bash "$SAVE" a1) >/dev/null 2>&1
+echo b1 > "$CORE_DIR/app-b/docs/b.md"; (cd "$SANDBOX/Projects/app-b" && bash "$SAVE" b1) >/dev/null 2>&1
+(cd "$SANDBOX/Projects/app-a" && bash "$UNDO") >/dev/null 2>&1
 assert_no_file "$CORE_DIR/app-a/docs/a.md"; assert_file "$CORE_DIR/app-b/docs/b.md"
 
-# old layout: undo-step from a worktree reverts the worktree commit
-new_sandbox; setup_core; sync_tools; scaffold_old wt-app; C="$CORE_DIR/wt-app/code"
+# undo-step from a worktree reverts the step saved in that worktree
+new_sandbox; setup_core; sync_tools; bash "$SKILL/scripts/scaffold.sh" --name wt-app >/dev/null; C="$SANDBOX/Projects/wt-app"
 (cd "$C" && bash "$SAVE" init) >/dev/null 2>&1
 git -C "$C" worktree add -q .claude/worktrees/w -b w 2>/dev/null; W="$C/.claude/worktrees/w"
 echo w > "$W/w.txt"; (cd "$W" && bash "$SAVE" "wt step") >/dev/null 2>&1
@@ -252,7 +252,7 @@ echo w > "$W/w.txt"; (cd "$W" && bash "$SAVE" "wt step") >/dev/null 2>&1
 assert_no_file "$W/w.txt"
 
 # a conflict leaves neither repo half-undone
-new_sandbox; setup_core; sync_tools; scaffold_old cf-app; P="$CORE_DIR/cf-app"; C="$P/code"
+new_sandbox; setup_core; sync_tools; bash "$SKILL/scripts/scaffold.sh" --name cf-app >/dev/null; P="$CORE_DIR/cf-app"; C="$SANDBOX/Projects/$(basename "$P")"
 (cd "$C" && bash "$SAVE" init) >/dev/null 2>&1
 echo one > "$C/x.txt"; echo one > "$P/docs/f.md"; (cd "$C" && bash "$SAVE" X) >/dev/null 2>&1
 X=$(git -C "$C" log -1 --format=%B | sed -n 's/^Step-Id: //p')
@@ -267,7 +267,7 @@ assert_eq "$(git -C "$CORE_DIR" status --porcelain -- cf-app)" "" "docs left dir
 # in the Core, a stale Core index.lock). undo-step exits 1, says nothing was changed, and leaves both
 # repos as they were: files, HEADs, no revert in progress. With the cause gone, a plain undo-step
 # undoes the step in both repos.
-new_sandbox; setup_core; sync_tools; scaffold_old fc-app; P="$CORE_DIR/fc-app"; C="$P/code"
+new_sandbox; setup_core; sync_tools; bash "$SKILL/scripts/scaffold.sh" --name fc-app >/dev/null; P="$CORE_DIR/fc-app"; C="$SANDBOX/Projects/$(basename "$P")"
 cd "$C" || exit 1
 bash "$SAVE" init >/dev/null 2>&1
 git -C "$C" config user.name tester; git -C "$C" config user.email tester@example.com

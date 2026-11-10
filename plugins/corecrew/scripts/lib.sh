@@ -10,7 +10,7 @@
 # The helpers live in parts next to this file, which it sources (callers source only lib.sh):
 #   lib-paths.sh     expand_home canon_dir lc norm_path resolve_abs (and expand_home_r canon_dir_r, which set a variable)
 #   lib-settings.sh  coredev_get coredev_set core_ready settings_file_path resolve_setting load_settings ...
-#   lib-layout.sh    project_of worktree_of code_root_of code_dir_of layout_of valid_project_name
+#   lib-layout.sh    project_of worktree_of code_root_of code_dir_of old_code_of old_layout_msg valid_project_name
 #   lib-host.sh      codex_home host tools_dir hooks_marker_path plugin_version
 #   lib-scaffold.sh  rel_core render put mkdir_p git_init put_project_docs link_* projects_entry projects_upsert
 #   lib-json.sh      json_str json_fields (the hook JSON readers; their awk program is inline, so file tools need no awk file)
@@ -61,7 +61,7 @@ unset _lib_part
 #      | codex-profile | host | role-model <host> <profile> <role> | core-writable <dir> | tree-state <dir>
 #      | schema (the plugin's schema number) | core-paths <project> (the Core paths `save` commits for
 #      the project, one line, space-separated; from _locate.sh next to this file)
-#      | project-of <path> | code-root <path> | code-dir <name> | layout <name> (see project_of, code_root_of, code_dir_of, layout_of)
+#      | project-of <path> | code-root <path> | code-dir <name> (see project_of, code_root_of, code_dir_of)
 # shellcheck disable=SC2034  # SETTINGS_WARN and CLAUDE_PLUGIN_OPTION_* set here are read by the parts (lib-settings.sh)
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   # _warn_settings — the SETTINGS_WARN records as English lines (the texts of hooks/messages.sh). messages.sh is
@@ -122,12 +122,11 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     code-root) [ $# -eq 2 ] || { echo "Usage: lib.sh code-root <path>" >&2; exit 2; }; code_root_of "$2" ;;
     project-of) [ $# -eq 2 ] || { echo "Usage: lib.sh project-of <path>" >&2; exit 2; }; project_of "$2" ;;
     code-dir) [ $# -eq 2 ] || { echo "Usage: lib.sh code-dir <name>" >&2; exit 2; }; code_dir_of "$2" ;;
-    layout) [ $# -eq 2 ] || { echo "Usage: lib.sh layout <name>" >&2; exit 2; }; layout_of "$2" ;;
     core-paths)
       [ $# -eq 2 ] && [ -n "$2" ] || { echo "Usage: lib.sh core-paths <project>" >&2; exit 2; }
       [ -n "$CORE_DIR" ] || { echo "lib.sh core-paths: no Core path" >&2; exit 1; }
       . "$_LIB_DIR/_locate.sh" || exit 1
       core_paths "$CORE_DIR" "$2" ;;
-    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | settings [key[=value] ...] | setting-path | plugin-root | codex-profile | host | role-model <host> <profile> <role> | core-writable <dir> | tree-state <dir> | schema | core-paths <project> | project-of <path> | code-root <path> | code-dir <name> | layout <name>" >&2; exit 2 ;;
+    *) echo "Usage: lib.sh get <key> | set <key> <value> | ready | core-dir | settings [key[=value] ...] | setting-path | plugin-root | codex-profile | host | role-model <host> <profile> <role> | core-writable <dir> | tree-state <dir> | schema | core-paths <project> | project-of <path> | code-root <path> | code-dir <name>" >&2; exit 2 ;;
   esac
 fi

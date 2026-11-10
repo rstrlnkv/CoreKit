@@ -222,11 +222,13 @@ assert_contains "$BR" '<plugin>/reference/wiki.md'
 # New layout: the code lives beside the Core
 md_section_has "$SK" Start 'lib.sh" project-of'
 md_section_has "$SK" Start '<Projects>/<Name>'
-md_section_has "$SK" Start 'old layout'
-md_section_has "$SK" Start 'lib.sh" layout'
+md_section_has "$SK" Start 'lib.sh" code-root'
 md_section_has "$SK" Start 'lib.sh" code-dir'
-# a non-zero exit of layout / code-dir: no code folder (exit 1) or a case clash (exit 3)
-md_section_has "$SK" Start 'exit 1 from `layout` or `code-dir`'
+md_section "$SK" Start | grep -qF 'lib.sh" layout' && fail "Start still runs lib.sh layout (removed in 1.0)" || pass
+# a non-zero exit of code-root / code-dir: no code folder (exit 1), a case clash (exit 3), the old layout (exit 4)
+md_section_has "$SK" Start 'exit 1 from `code-dir`'
+md_section_has "$SK" Start 'exit 4 from `code-root` or `code-dir`'
+md_section_has "$SK" Start 'old layout'
 md_section_has "$SK" Start 'the code is not cloned'
 md_section_has "$SK" Start '`<Projects>/<Name>`'
 md_section_has "$SK" Start 'exit 3'

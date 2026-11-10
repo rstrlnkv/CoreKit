@@ -251,8 +251,8 @@ for k in hint_not_found hint_not_set_up; do
   out="$(COREKIT_HOST=claude hm "$k" /c)"
   case "$out" in *'/corecrew:new-project'*) pass ;; *) fail "claude $k: $out" ;; esac
 done
-out="$(COREKIT_HOST=codex UI_LANGUAGE=ru hm old_layout /a /b /c)"
-case "$out" in *'$corecrew:task adopt /b'*) pass ;; *) fail "codex ru old_layout: $out" ;; esac
+out="$(COREKIT_HOST=codex UI_LANGUAGE=ru hm old_layout /a)"
+case "$out" in *'$corecrew:task adopt /a'*) pass ;; *) fail "codex ru old_layout: $out" ;; esac
 out="$(COREKIT_HOST=codex hm guard_code_blocked '/x/corecrew:y' /z)"
 case "$out" in *'/x/corecrew:y'*) pass ;; *) fail "an argument is printed as given: $out" ;; esac
 finish

@@ -1,22 +1,22 @@
 # Shared by save and undo-step: locate repos from the current directory (locate), and check that a
 # repo can commit before anything changes (can_commit).
 # Sets: CODE (code repo or worktree toplevel), MAIN (main code checkout), PROJECT (<Core>/<name>),
-# NAME, CORE, CORE_PATHS. Two layouts: old (<Core>/<name>/code) and new (<Projects>/<Name> beside
-# the Core, with a CLAUDE.local.md symlink to <Core>/<name>/CLAUDE.md).
+# NAME, CORE, CORE_PATHS. The layout: the code repo at <Projects>/<Name> beside the Core, with a CLAUDE.local.md
+# symlink to <Core>/<name>/CLAUDE.md. A project in the old layout of corecrew 0.4 and older (<Core>/<name>/code,
+# old_code_of) is refused with old_layout_msg, whichever folder of it the session is in.
 # shellcheck disable=SC2034  # CODE MAIN PROJECT NAME CORE CORE_PATHS are read by save and undo-step, which source this file
 locate() {
-  local here="$PWD" common link ldir n
-  # old layout, a session in <Core>/<name>/: the code repo is the code folder below. A folder that is itself
-  # the root of a repo or worktree (.git, a folder or a file) is the project; its code/ is a nested repo.
-  [ -d "$here/code/.git" ] && [ ! -e "$here/.git" ] && here="$here/code"
+  local here="$PWD" common link ldir n o
   CODE=$(git -C "$here" rev-parse --show-toplevel 2>/dev/null) || {
     echo "Run this inside a project's code folder." >&2; return 1; }
-  # A session in <Core>/<name>/ (a new-layout project, or a subfolder of an old-layout one): git finds
-  # the Core repo (it has .coredev); the code folder is the project's, from code_dir_of.
+  # lib.sh sits next to this file (in the plugin and in the tools copy).
+  type project_of >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/lib.sh" || return 1
+  # A session in <Core>/<name>/: git finds the Core repo (it has .coredev); the code folder is the project's,
+  # from code_dir_of.
   if [ -f "$CODE/.coredev" ]; then
-    type project_of >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/lib.sh" || return 1
     CORE_DIR="$CODE"; load_settings
     if n=$(project_of "$here"); then
+      if o=$(old_code_of "$n"); then old_layout_msg "$o" >&2; return 1; fi
       here=$(code_dir_of "$n" 2>/dev/null) && CODE=$(git -C "$here" rev-parse --show-toplevel 2>/dev/null) || {
         echo "Run this inside a project's code folder." >&2; return 1; }
     fi
@@ -24,15 +24,6 @@ locate() {
   # CDPATH='' and >/dev/null: with CDPATH exported, cd to the relative .git could print the folder or go elsewhere
   common=$(cd "$CODE" && CDPATH='' cd -- "$(git rev-parse --git-common-dir)" >/dev/null && pwd)
   MAIN=$(dirname "$common")
-  PROJECT=$(dirname "$MAIN"); NAME=$(basename "$PROJECT")
-  CORE=$(git -C "$PROJECT" rev-parse --show-toplevel 2>/dev/null)
-  if [ "$(basename "$MAIN")" = "code" ] && [ -n "$CORE" ] && [ "$CORE" != "$MAIN" ]; then
-    _name_splits "$NAME" && return 1
-    CORE_PATHS="$(core_paths "$CORE" "$NAME")"
-    return 0
-  fi
-  # New layout. lib.sh sits next to this file (in the plugin and in the tools copy).
-  type project_of >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/lib.sh" || return 1
   link=$(readlink "$MAIN/CLAUDE.local.md" 2>/dev/null)
   case "$link" in
     /*/CLAUDE.md) ;;
@@ -43,6 +34,7 @@ locate() {
     ldir=$(cd "$(dirname "$link")/.." 2>/dev/null && pwd -P) && CORE_DIR="$ldir"
   fi
   load_settings
+  if n=$(project_of "$MAIN") && o=$(old_code_of "$n"); then old_layout_msg "$o" >&2; return 1; fi
   NAME=$(project_of "$MAIN") && [ "$(code_dir_of "$NAME" 2>/dev/null)" = "$(canon_dir "$MAIN")" ] \
     && [ -d "$CORE_DIR/.git" ] || {
     echo "This folder is not a corecrew project (<Projects>/<Name> with <Core>/<name>/CLAUDE.md)." >&2

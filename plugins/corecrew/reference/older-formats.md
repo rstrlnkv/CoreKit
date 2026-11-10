@@ -1,17 +1,8 @@
 # Older formats
 
 Projects made by older corecrew versions keep working; this file says how each older format is
-brought up to date. Most sections are reached from a skill, which sends you to one when it meets
-that format; the last ones are reported at session start. `<plugin>` and `<scripts>` are the paths
-the skill resolved under Paths.
-
-## Old layout
-Made by corecrew 0.1.0-0.4.0.
-Supported until corecrew 1.0.
-
-An older project keeps its code repo inside the Core, at `<Core>/<name>/code`. `lib.sh layout <name>`
-prints `old` for it. `/corecrew:task adopt <path>` moves it beside the Core, to `<Projects>/<name>`
-(`<plugin>/skills/task/references/adopt.md` has the steps).
+brought up to date. The formats here are reported at session start. `<plugin>` and `<scripts>` are
+the paths the skill resolved under Paths.
 
 ## Core without a schema
 Made by corecrew 0.1.0-0.4.0.

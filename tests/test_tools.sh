@@ -317,7 +317,7 @@ IH="$SCRIPTS/install-hooks.sh"
 setup_core && sync_tools && pass || fail "setup for install-hooks"
 # 1. A local core.hooksPath (husky): nothing is written to .git/hooks or the husky folder, the message
 #    names the folder and gives the chaining lines, exit 4, no success line. The Core has no hooksPath.
-scaffold_old ihp; P="$CORE_DIR/ihp"; C="$P/code"
+bash "$SKILL/scripts/scaffold.sh" --name ihp >/dev/null; P="$CORE_DIR/ihp"; C="$(dirname "$CORE_DIR")/ihp"
 mkdir -p "$C/.husky"; printf '#!/bin/sh\nnpx lint-staged\n' > "$C/.husky/pre-commit"
 git -C "$C" config core.hooksPath .husky
 husky_before="$(tree_sum "$C/.husky")"
@@ -341,7 +341,7 @@ git -C "$C" config --unset core.hooksPath
 # 2. A global core.hooksPath (only in the sandbox's own global config): both repos refused, nothing written
 case "$GIT_CONFIG_GLOBAL" in "$SANDBOX"/*) pass ;; *) fail "GIT_CONFIG_GLOBAL is not in the sandbox: $GIT_CONFIG_GLOBAL"; finish; exit 1 ;; esac
 GH="$SANDBOX/global hooks"; mkdir -p "$GH"
-scaffold_old ihg; P="$CORE_DIR/ihg"; C="$P/code"
+bash "$SKILL/scripts/scaffold.sh" --name ihg >/dev/null; P="$CORE_DIR/ihg"; C="$(dirname "$CORE_DIR")/ihg"
 rm -f "$CORE_DIR/.git/hooks/pre-push"
 git config --file "$GIT_CONFIG_GLOBAL" core.hooksPath "$GH"
 assert_exit 4 bash "$IH" "$P"
@@ -355,7 +355,7 @@ git config --file "$GIT_CONFIG_GLOBAL" --unset core.hooksPath
 
 # 3. The code folder is a linked worktree (.git is a file): the shims land in the common hooks folder
 #    git runs, and a commit in the worktree is checked by them.
-scaffold_old ihw; P="$CORE_DIR/ihw"; C="$P/code"; M="$SANDBOX/ihw main"
+bash "$SKILL/scripts/scaffold.sh" --name ihw >/dev/null; P="$CORE_DIR/ihw"; C="$(dirname "$CORE_DIR")/ihw"; M="$SANDBOX/ihw main"
 mv "$C" "$M" && git -C "$M" worktree add -q "$C" -b wt && pass || fail "linked worktree setup"
 [ -f "$C/.git" ] && pass || fail "the worktree's .git is not a file"
 assert_exit 0 bash "$IH" "$P"
@@ -369,7 +369,7 @@ git -C "$C" commit -q -m "add ok" >/dev/null 2>&1 && pass || fail "a legitimate 
 assert_exit 0 bash "$IH" "$P"
 
 # 4. No hooksPath: installs, prints the success line, is idempotent, and keeps a user's own hook
-scaffold_old ihok; P="$CORE_DIR/ihok"; C="$P/code"
+bash "$SKILL/scripts/scaffold.sh" --name ihok >/dev/null; P="$CORE_DIR/ihok"; C="$(dirname "$CORE_DIR")/ihok"
 printf '#!/bin/sh\necho mine\n' > "$C/.git/hooks/pre-push"
 assert_exit 0 bash "$IH" "$P"
 echo "$OUT" | grep -qF "hooks installed" && pass || fail "no success line: $OUT"
@@ -380,7 +380,7 @@ assert_exit 0 bash "$IH" "$P"
 assert_eq "$(cat "$C/.git/hooks/pre-commit")" "$first" "second run changed the shim"
 # a user's hook that is a link to a missing file is the user's too: the link stays, the WARN line names it, and for that
 # hook no corecrew shim is installed (as for any hook of the user's own)
-scaffold_old ihdl; P="$CORE_DIR/ihdl"; C="$P/code"
+bash "$SKILL/scripts/scaffold.sh" --name ihdl >/dev/null; P="$CORE_DIR/ihdl"; C="$(dirname "$CORE_DIR")/ihdl"
 ln -s "$SANDBOX/ihdl-gone-hook" "$C/.git/hooks/pre-commit"
 assert_exit 0 bash "$IH" "$P"
 assert_eq "$(readlink "$C/.git/hooks/pre-commit")" "$SANDBOX/ihdl-gone-hook" "dangling hook link: the user's link was replaced, no shim for it"
@@ -391,7 +391,7 @@ assert_contains "$C/.git/hooks/pre-push" "# corecrew hook shim"
 # data folder) the copy that is there goes on running: the shims are installed, exit 0. Skipped as root (it can write
 # anyway). With no copy there, or when the refresh fails in a folder that can be written (cp fails), nothing is
 # installed: exit 1 and one line.
-scaffold_old ihro; P="$CORE_DIR/ihro"; C="$P/code"; DATA="$(dirname "$COREDEV_TOOLS")"
+bash "$SKILL/scripts/scaffold.sh" --name ihro >/dev/null; P="$CORE_DIR/ihro"; C="$(dirname "$CORE_DIR")/ihro"; DATA="$(dirname "$COREDEV_TOOLS")"
 if [ "$(id -u)" != 0 ]; then
   echo 0.1.0 > "$COREDEV_TOOLS/VERSION"; before="$(tree_sum "$COREDEV_TOOLS")"; chmod 555 "$DATA"
   OUT="$(bash "$IH" "$P" 2>&1)"; RC=$?
@@ -422,7 +422,7 @@ sync_tools && pass || fail "tools copy refreshed after the stale cases"
 
 # 5. An empty core.hooksPath (set to cancel a global one): git then runs no hooks from .git/hooks and
 #    rev-parse names the work tree root. Nothing is written anywhere, exit 4, no success line.
-scaffold_old ihe; P="$CORE_DIR/ihe"; C="$P/code"
+bash "$SKILL/scripts/scaffold.sh" --name ihe >/dev/null; P="$CORE_DIR/ihe"; C="$(dirname "$CORE_DIR")/ihe"
 git -C "$C" config core.hooksPath ""
 assert_exit 4 bash "$IH" "$P"
 assert_no_file "$C/pre-commit"; assert_no_file "$C/pre-push"
@@ -437,7 +437,7 @@ git -C "$C" config --unset core.hooksPath
 # 6. The pre-push chaining line from the message, put in a user's own pre-push hook: it runs the
 #    corecrew check (a blocked file stops the push) and the rest of the user's hook still gets the
 #    refs on stdin (git lfs pre-push needs them).
-scaffold_old ihc; P="$CORE_DIR/ihc"; C="$P/code"; HPD="$SANDBOX/ihc hooks"; mkdir -p "$HPD"
+bash "$SKILL/scripts/scaffold.sh" --name ihc >/dev/null; P="$CORE_DIR/ihc"; C="$(dirname "$CORE_DIR")/ihc"; HPD="$SANDBOX/ihc hooks"; mkdir -p "$HPD"
 git -C "$C" config core.hooksPath "$HPD"
 assert_exit 4 bash "$IH" "$P"
 line="$(echo "$OUT" | sed -n 's/^    pre-push: //p')"
@@ -462,7 +462,7 @@ ro_refused() {
   echo "$OUT" | grep -qF "hooks installed" && fail "$1: claims success: $OUT" || pass
 }
 if [ "$(id -u)" != 0 ]; then
-  scaffold_old ihro; P="$CORE_DIR/ihro"; C="$P/code"; CH="$CORE_DIR/.git/hooks"
+  bash "$SKILL/scripts/scaffold.sh" --name ihro >/dev/null; P="$CORE_DIR/ihro"; C="$(dirname "$CORE_DIR")/ihro"; CH="$CORE_DIR/.git/hooks"
   rm -f "$CH/pre-push"; printf '#!/bin/sh\necho mine\n' > "$CH/pre-commit"; chmod +x "$CH/pre-commit"
   chmod a-w "$CH"
   assert_exit 1 bash "$IH" "$P"

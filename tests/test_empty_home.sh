@@ -78,7 +78,7 @@ OUT="$(CORE_DIR="$SBX_CORE" bash "$SCRIPTS/adopt.sh" --from "$LEGIT" --dry-run 2
 assert_eq "$RC" "0" "adopt with a Core, repo beside it: exit"
 assert_eq "$(printf '%s\n' "$OUT" | tail -1)" "dry run: nothing was changed" "adopt with a Core, repo beside it: last line"
 [ ! -e "$SBX_CORE/legitrepo" ] && pass || fail "adopt dry run created $SBX_CORE/legitrepo"
-# a folder inside the Core that is not <name>/code of a project is refused with exactly this reason
+# a folder inside the Core is refused with exactly this reason
 mkdir -p "$SBX_CORE/inner" && git -C "$SBX_CORE/inner" init -q && git -C "$SBX_CORE/inner" commit -q --allow-empty -m i
 OUT="$(CORE_DIR="$SBX_CORE" bash "$SCRIPTS/adopt.sh" --from "$SBX_CORE/inner" --dry-run 2>&1)"; RC=$?
 assert_eq "$RC" "2" "adopt of a folder inside Core: exit"
@@ -107,7 +107,7 @@ gp() {  # gp <cwd> <patch text with \n escapes already as real newlines>
 }
 TAB=$'\t'
 gp "$SBX_CORE/p/docs" "*** Begin Patch${nl}*** Add File: x.md${nl}+x${nl}*** End Patch"; assert_eq "$GRC" "2" "no reader: cwd-relative x.md in docs refused"
-gp "$SBX_CORE/p/code" "*** Begin Patch${nl}*** Add File: do${TAB}cs/a.md${nl}+x${nl}*** End Patch"; assert_eq "$GRC" "2" "no reader: do<TAB>cs/a.md refused"
+gp "$(dirname "$SBX_CORE")/p" "*** Begin Patch${nl}*** Add File: do${TAB}cs/a.md${nl}+x${nl}*** End Patch"; assert_eq "$GRC" "2" "no reader: do<TAB>cs/a.md refused"
 assert_contains "$SANDBOX/g.err" "patch-paths.awk is missing or failed"
 # guard-secrets, same copy: a missing reader refuses, even .e<TAB>nv (the raw *** check cannot see it)
 gs() {
@@ -115,13 +115,13 @@ gs() {
   printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"apply_patch","tool_input":{"command":"%s"}}' "$1" "$j" \
     | CORE_DIR="$SBX_CORE" bash "$3/hooks/guard-secrets.sh" >/dev/null 2>"$SANDBOX/s.err"; GRC=$?
 }
-gs "$SBX_CORE/p/code" "*** Begin Patch${nl}*** Add File: .e${TAB}nv${nl}+x${nl}*** End Patch" "$CP"; assert_eq "$GRC" "2" "guard-secrets, no reader: .e<TAB>nv refused"
+gs "$(dirname "$SBX_CORE")/p" "*** Begin Patch${nl}*** Add File: .e${TAB}nv${nl}+x${nl}*** End Patch" "$CP"; assert_eq "$GRC" "2" "guard-secrets, no reader: .e<TAB>nv refused"
 assert_contains "$SANDBOX/s.err" "patch-paths.awk is missing or failed"
-gs "$SBX_CORE/p/code" "*** Begin Patch${nl}*** Add File: src/a.txt${nl}+x${nl}*** End Patch" "$CP"; assert_eq "$GRC" "2" "guard-secrets, no reader: plain patch refused"
+gs "$(dirname "$SBX_CORE")/p" "*** Begin Patch${nl}*** Add File: src/a.txt${nl}+x${nl}*** End Patch" "$CP"; assert_eq "$GRC" "2" "guard-secrets, no reader: plain patch refused"
 # a patch that names no file: the reader ran, nothing to judge, both guards pass
-gs "$SBX_CORE/p/code" "*** Begin Patch${nl}*** End Patch" "$PLUGIN"; assert_eq "$GRC" "0" "guard-secrets, empty patch passes"
-gp "$SBX_CORE/p/code" "*** Begin Patch${nl}*** End Patch"; GP0="$GRC"
-CP_SAVE="$CP"; CP="$PLUGIN"; gp "$SBX_CORE/p/code" "*** Begin Patch${nl}*** End Patch"; assert_eq "$GRC" "0" "guard-code, empty patch passes"; CP="$CP_SAVE"
+gs "$(dirname "$SBX_CORE")/p" "*** Begin Patch${nl}*** End Patch" "$PLUGIN"; assert_eq "$GRC" "0" "guard-secrets, empty patch passes"
+gp "$(dirname "$SBX_CORE")/p" "*** Begin Patch${nl}*** End Patch"; GP0="$GRC"
+CP_SAVE="$CP"; CP="$PLUGIN"; gp "$(dirname "$SBX_CORE")/p" "*** Begin Patch${nl}*** End Patch"; assert_eq "$GRC" "0" "guard-code, empty patch passes"; CP="$CP_SAVE"
 assert_eq "$GP0" "2" "guard-code, empty patch with no reader refused"
 # legitimate: the reader present, the same plain patch in a code folder passes
 mkdir -p "$SBX_CORE/../code-p"

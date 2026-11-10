@@ -139,9 +139,9 @@ mkdir -p "$SANDBOX/real/My Проекты/Ядро"
 export CORE_DIR="$SANDBOX/real/My Проекты/Ядро/"   # trailing slash
 load_settings
 assert_eq "$CORE_DIR" "$SANDBOX/real/My Проекты/Ядро" "CORE_DIR canonical"
-mkdir -p "$CORE_DIR/p1/code/.claude/worktrees/w1/src" "$CORE_DIR/p1/docs" "$CORE_DIR/p2/code" "$CORE_DIR/standards" \
+mkdir -p "$CORE_DIR/p1/code/.claude/worktrees/w1/src" "$CORE_DIR/p1/docs" "$CORE_DIR/p2/code" "$CORE_DIR/p3/code" "$CORE_DIR/standards" \
   "$CORE_DIR/knowledge" "$CORE_DIR/.git" "$CORE_DIR/misc/sub" "$CORE_DIR/bin" "$CORE_DIR/пр оект"
-echo "# p1" > "$CORE_DIR/p1/CLAUDE.md"; echo "# n" > "$CORE_DIR/пр оект/CLAUDE.md"
+echo "# p1" > "$CORE_DIR/p1/CLAUDE.md"; echo "# p2" > "$CORE_DIR/p2/CLAUDE.md"; echo "# n" > "$CORE_DIR/пр оект/CLAUDE.md"
 assert_eq "$(project_of "$CORE_DIR/p1")" "p1" "project root"
 assert_eq "$(project_of "$CORE_DIR/p1/")" "p1" "trailing slash"
 assert_eq "$(project_of "$CORE_DIR/p1/code")" "p1" "code folder"
@@ -149,12 +149,12 @@ assert_eq "$(project_of "$CORE_DIR/p1/docs/INDEX.md")" "p1" "file that does not 
 assert_eq "$(project_of "$CORE_DIR/p1/code/.claude/worktrees/w1")" "p1" "worktree"
 assert_eq "$(project_of "$CORE_DIR/p1/code/.claude/worktrees/w1/src")" "p1" "inside a worktree"
 assert_eq "$(project_of "$CORE_DIR/p1/code/.claude/worktrees/w1/src/../../w1")" "p1" "dot-dot resolved"
-assert_eq "$(project_of "$CORE_DIR/p2/code")" "p2" "project with code/ only"
+assert_eq "$(project_of "$CORE_DIR/p2/code")" "p2" "a folder below a project"
 assert_eq "$(project_of "$CORE_DIR/пр оект/x")" "пр оект" "project name with a space and Cyrillic"
 assert_eq "$(project_of "$CORE_DIR/p1/../p2/code")" "p2" "dot-dot between projects"
 for np in "$CORE_DIR" "$CORE_DIR/" "$CORE_DIR/standards" "$CORE_DIR/standards/x.md" "$CORE_DIR/knowledge" \
           "$CORE_DIR/.git" "$CORE_DIR/.git/hooks" "$CORE_DIR/misc" "$CORE_DIR/misc/sub" "$CORE_DIR/bin" \
-          "$CORE_DIR/PROJECTS.md" "$CORE_DIR/nothing-here" "$CORE_DIR-other/p1" "${CORE_DIR}x/p1" \
+          "$CORE_DIR/PROJECTS.md" "$CORE_DIR/nothing-here" "$CORE_DIR/p3" "$CORE_DIR/p3/code" "$CORE_DIR-other/p1" "${CORE_DIR}x/p1" \
           "$SANDBOX" "$SANDBOX/real" "/" "/tmp" ""; do
   OUT="$(project_of "$np")"; rc=$?
   [ "$rc" = 1 ] && pass || fail "project_of '$np': exit $rc, expected 1"

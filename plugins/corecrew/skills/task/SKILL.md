@@ -86,23 +86,22 @@ attribution value resolved at Start" instead of placeholders:
    prints `<name>` (exit 1: the directory is not in a project). Not a project: for `adopt`
    follow `references/adopt.md`; for anything else say in one line that `/corecrew:new-project`
    (a new project) or `/corecrew:task adopt <folder>` (an existing one) brings it into the
-   layout, and stop. Then
-   `CORE_DIR="<Core>" bash "<scripts>/lib.sh" layout <name>`:
-   - `old`: say in one line "this project uses the old layout; run `/corecrew:task adopt <path>`"
-     and stop (`adopt` itself goes on, as above).
-   - `new`: the code root is the output of `CORE_DIR="<Core>" bash "<scripts>/lib.sh" code-root "$PWD"`
-     (the worktree folder in a linked git worktree, wherever it lives; else the project's main code folder
-     `<Projects>/<Name>` beside the Core; exit 1 means the directory is in neither: fall back to
-     `CORE_DIR="<Core>" bash "<scripts>/lib.sh" code-dir <name>`).
-     Use the code root for briefs, tests,
-     release and `git`. The wiki and `CLAUDE.md` stay in `<Core>/<name>/`.
-   - exit 1 from `layout` or `code-dir`: the project has no code folder (for example the Core is
+   layout, and stop. Then the code root is the output of
+   `CORE_DIR="<Core>" bash "<scripts>/lib.sh" code-root "$PWD"` (the worktree folder in a linked git
+   worktree, wherever it lives; else the project's main code folder `<Projects>/<Name>` beside the Core;
+   exit 1 means the directory is in neither: fall back to
+   `CORE_DIR="<Core>" bash "<scripts>/lib.sh" code-dir <name>`). Use the code root for briefs, tests,
+   release and `git`. The wiki and `CLAUDE.md` stay in `<Core>/<name>/`.
+   - exit 1 from `code-dir`: the project has no code folder (for example the Core is
      synced to this machine but the code is not cloned). Say so in one line, name where the code
      is expected (`<Projects>/<Name>`, a folder beside the Core whose lower-case name is `<name>`),
      and stop.
    - exit 3: two folders in `<Projects>` differ only in letter case. Show the
      `two folders differ only in case: …` line it printed, say one of them has to be renamed, and
      stop.
+   - exit 4 from `code-root` or `code-dir`: the project is in the old layout of corecrew 0.4 and
+     older (its code in `<Core>/<name>/code`), which this version no longer supports. Show the line it
+     printed, say the project has to be moved beside the Core with corecrew 0.15 first, and stop.
 3. **Architect and explorer.** In Codex see `references/codex.md`. The architect and explorer
    steps of paths.md use the optional feature-dev plugin when your Agent tool lists
    `feature-dev:code-architect` and `feature-dev:code-explorer`. Without it, use Claude Code's

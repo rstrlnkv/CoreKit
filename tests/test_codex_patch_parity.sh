@@ -12,7 +12,7 @@ new_sandbox
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR
 mkdir -p "$CODEX_HOME" "$CORE_DIR/p/docs" "$HOME/.ssh"
 : > "$CORE_DIR/p/CLAUDE.md"
-C="$CORE_DIR/p/code"
+C="$(dirname "$CORE_DIR")/p"   # the code folder beside the Core
 nl=$'\n'; B='*** Begin Patch'; E='*** End Patch'; TAB=$'\t'; CR=$'\r'
 
 reset() { rm -rf "$C"; mkdir -p "$C/src" "$C/docs" "$C/.claude"; printf 'one\n' > "$C/src/m.txt"; printf 'one\n' > "$C/docs/e.md"; printf 'K=1\n' > "$C/.env"; printf 'one\n' > "$C/CLAUDE.md"; rm -rf "$HOME/.ssh"; mkdir -p "$HOME/.ssh"; }

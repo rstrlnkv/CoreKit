@@ -107,8 +107,8 @@ _msg_text() {
     ru:local_link_wrong) MSG_T='corecrew: @1 уже существует и не ведёт на @2, поэтому приватный CLAUDE.md не загружается. Уберите этот файл и выполните: ln -s "@2" "@1"' ;;
     en:local_link_failed) MSG_T='corecrew: could not create @1, so the private CLAUDE.md is not loaded. Run: ln -s "@2" "@1"' ;;
     ru:local_link_failed) MSG_T='corecrew: не удалось создать @1, поэтому приватный CLAUDE.md не загружается. Выполните: ln -s "@2" "@1"' ;;
-    en:old_layout) MSG_T='corecrew: this project still lives in @1; run /corecrew:task adopt @2 to move it to @3' ;;
-    ru:old_layout) MSG_T='corecrew: этот проект всё ещё лежит в @1; выполните /corecrew:task adopt @2, чтобы перенести его в @3' ;;
+    en:old_layout) MSG_T='corecrew: this project keeps its code in @1, the layout of corecrew 0.4 and older, which corecrew 1.0 no longer supports; move it beside the Core with corecrew 0.15 first (/corecrew:task adopt @1)' ;;
+    ru:old_layout) MSG_T='corecrew: код этого проекта лежит в @1 — так его раскладывал corecrew 0.4 и более ранние версии, а corecrew 1.0 эту раскладку больше не поддерживает; сначала перенесите проект рядом с Core с помощью corecrew 0.15 (/corecrew:task adopt @1)' ;;
     en:one_suite_wait) MSG_T='one-suite: a test run is still in progress after @1 s of waiting (@2) — run the same command again: this hook waits for it. If it is a watcher you started, stop it first.' ;;
     ru:one_suite_wait) MSG_T='one-suite: тесты всё ещё идут после ожидания @1 с (@2) — запустите ту же команду ещё раз: хук дождётся. Если это процесс, который сам перезапускает тесты при изменении файлов, сначала остановите его.' ;;
     en:dirty_code) MSG_T='code' ;;

@@ -3,7 +3,7 @@
 #  1. refreshes the tools copy (scripts/prepare.sh prepare_tools; runs everywhere; it only touches the plugin's own folder);
 #  2. Core not set up and the session is not in a project: one hint per machine (marker in state/), shown to the person as a systemMessage;
 #  3. inside a project (<Core>/<project>/ or its code folder beside the Core, worktrees included): project name, docs index, tools, standards,
-#     session rules, then scripts/prepare.sh prepare_project's layout note, links and old git hooks note. On Codex it also records that the
+#     session rules, then scripts/prepare.sh prepare_project's layout and old-layout notes, links and core.hooksPath note. On Codex it also records that the
 #     hooks ran (the marker prepare.sh looks for).
 # Outside a project it prints nothing else.
 # Always exits 0: a hook must never block a session.
@@ -88,6 +88,6 @@ if [ -f "$CORE_DIR/session-rules.md" ]; then
   [ -z "$(tail -c 1 "$CORE_DIR/session-rules.md")" ] || echo   # no final newline: end the line
 fi
 
-# Layout note, the CLAUDE.local.md and AGENTS.md links, the old git hooks note: scripts/prepare.sh prepare_project.
+# Layout and old-layout notes, the CLAUDE.local.md and AGENTS.md links, the core.hooksPath note: scripts/prepare.sh prepare_project.
 prepare_project "$cwd"
 exit 0

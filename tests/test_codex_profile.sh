@@ -249,9 +249,8 @@ cp "$SANDBOX/profile.toml" "$CODEX_HOME/config.toml"; rm -f "$H/.gitconfig" "$H/
 P="$SANDBOX/P"; mkdir -p "$P/Core/demo" "$P/Demo/src" "$P/Other"; echo x > "$P/Core/demo/CLAUDE.md"; echo OTHERSECRET > "$P/Other/notes.txt"
 awk -v c="$P/Core" '{print} /^":tmpdir" = "write"$/{printf "\"%s\" = \"write\"\n", c}' "$SANDBOX/profile.toml" > "$CODEX_HOME/config.toml"
 cd "$P/Demo" || exit 1
-assert_eq "$(CORE_DIR="$P/Core" bash "$INST/scripts/lib.sh" layout demo)" "new" "code-dir outside the sandbox: layout new"
-assert_eq "$(CORE_DIR="$P/Core" sbx bash "$INST/scripts/lib.sh" layout demo; echo "rc=$?")" "new
-rc=0" "code-dir in the sandbox: layout new"
+assert_eq "$(CORE_DIR="$P/Core" bash "$INST/scripts/lib.sh" code-dir demo; echo "rc=$?")" "$P/Demo
+rc=0" "code-dir outside the sandbox"
 assert_eq "$(CORE_DIR="$P/Core" sbx bash "$INST/scripts/lib.sh" code-dir demo)" "$P/Demo" "code-dir in the sandbox: the cwd's project"
 assert_eq "$(cd src && CORE_DIR="$P/Core" sbx bash "$INST/scripts/lib.sh" code-dir demo)" "$P/Demo" "code-dir in the sandbox: from a subfolder"
 assert_eq "$(CORE_DIR="$P/Core" sbx bash "$INST/scripts/lib.sh" code-dir other; echo "rc=$?")" "rc=1" "code-dir in the sandbox: another project is not guessed"

@@ -2,6 +2,7 @@
 FAILS=0; PASSES=0
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGIN="$ROOT/plugins/corecrew"   # the corecrew plugin; the repo root holds the marketplace
+# shellcheck disable=SC2034  # SKILL is for the test files that source this one
 SKILL="$PLUGIN/skills/new-project"
 SCRIPTS="$PLUGIN/scripts"
 # shellcheck disable=SC2034  # HOOKS is for the test files that source this one
@@ -88,8 +89,6 @@ new_sandbox() {
 }
 
 # setup_core — creates the Core skeleton in $CORE_DIR (what scaffold.sh requires).
-# The Core template no longer ignores */code/ (code lives beside the Core); tests still built in the
-# old layout (<Core>/<name>/code) get the line back, folded into the setup commit.
 # The first Core a file builds in a fresh folder is published as a cache ($TEST_TMP/core-cache.<key>); a later
 # fresh Core with the same key is a copy of it (about 0.3 s less per call). A built Core holds no absolute path, so
 # a copy differs from a build only in its times: the commit's (and so its SHA) and the files'. The key holds what
@@ -105,8 +104,6 @@ setup_core() {
     fi
   fi
   bash "$SCRIPTS/setup-core.sh" "$CORE_DIR" >/dev/null || return 1
-  printf '*/code/\n' >> "$CORE_DIR/.gitignore"
-  git -C "$CORE_DIR" add .gitignore && git -C "$CORE_DIR" commit -q --amend --no-edit || return 1
   [ -z "$fresh" ] || core_cache_publish "$CORE_DIR" "$cache"
   return 0
 }
@@ -126,13 +123,6 @@ core_cache_publish() {
   local tmp
   tmp="$(mktemp -d "$TEST_TMP/corecache.XXXXXX")" || return 0
   cp -R "$1/." "$tmp/" && ln -sn "$tmp" "$2" 2>/dev/null || rm -rf "$tmp"
-}
-
-# scaffold_old <name> — scaffold, then put the code folder where the old layout had it
-# (<Core>/<name>/code), for tests of the old-layout paths. Silent.
-scaffold_old() {
-  bash "$SKILL/scripts/scaffold.sh" --name "$1" >/dev/null || return 1
-  mv "$(dirname "$CORE_DIR")/$1" "$CORE_DIR/$1/code" && rm -f "$CORE_DIR/$1/code/CLAUDE.local.md" "$CORE_DIR/$1/code/AGENTS.md"
 }
 
 # sync_tools — copies the plugin's scripts into $COREDEV_TOOLS (what session-start does),

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Detection helpers in scripts/lib.sh: project_of beside the Core, code_dir_of, layout_of.
+# Detection helpers in scripts/lib.sh: project_of beside the Core, code_dir_of, and the refusal of the old layout.
 source "$(dirname "$0")/lib.sh"
 LIB="$SCRIPTS/lib.sh"
 
 new_sandbox
 P="$SANDBOX/Projects"
-mkdir -p "$CORE_DIR/foo" "$CORE_DIR/old/code" "$P/Foo/src" "$P/Foo/.claude/worktrees/w" "$P/Brain" "$P/Claude outputs"
+mkdir -p "$CORE_DIR/foo" "$CORE_DIR/old" "$P/Foo/src" "$P/Foo/.claude/worktrees/w" "$P/Brain" "$P/Claude outputs"
 : > "$CORE_DIR/foo/CLAUDE.md"; : > "$CORE_DIR/old/CLAUDE.md"
-git init -q "$P/Foo"
+git init -q "$P/Foo"; git init -q "$CORE_DIR/old/code"
 
 assert_exit 0 bash "$LIB" project-of "$P/Foo";                           assert_eq "$OUT" "foo" "project-of Foo"
 assert_exit 0 bash "$LIB" project-of "$P/Foo/src";                       assert_eq "$OUT" "foo" "project-of Foo/src"
@@ -19,17 +19,22 @@ assert_exit 1 bash "$LIB" project-of "$P"
 assert_exit 0 bash "$LIB" project-of "$CORE_DIR/old/code";               assert_eq "$OUT" "old" "project-of old code"
 
 assert_exit 0 bash "$LIB" code-dir foo;                                  assert_eq "$OUT" "$P/Foo" "code-dir foo"
-assert_exit 0 bash "$LIB" layout foo;                                    assert_eq "$OUT" "new" "layout foo"
-assert_exit 0 bash "$LIB" layout old;                                    assert_eq "$OUT" "old" "layout old"
-assert_exit 0 bash "$LIB" code-dir old;                                  assert_eq "$OUT" "$CORE_DIR/old/code" "code-dir old"
 assert_exit 1 bash "$LIB" code-dir none
-assert_exit 1 bash "$LIB" layout none
-
-# An old-layout project plus an unrelated folder of the same name beside the Core: <Core>/<name>/code
-# wins (only the old layout has one).
-mkdir -p "$CORE_DIR/twin/code" "$P/Twin"; : > "$CORE_DIR/twin/CLAUDE.md"; git init -q "$P/Twin"
-assert_exit 0 bash "$LIB" layout twin;                                   assert_eq "$OUT" "old" "layout twin (old + unrelated Twin)"
-assert_exit 0 bash "$LIB" code-dir twin;                                 assert_eq "$OUT" "$CORE_DIR/twin/code" "code-dir twin"
+assert_exit 2 bash "$LIB" layout foo   # lib.sh layout is gone with the old layout (corecrew 1.0)
+# The old layout of corecrew 0.4 and older (<Core>/<name>/code holds a git repo) is not supported: code-dir and code-root
+# exit 4 with one line, also when an unrelated folder of the same name sits beside the Core (it never takes the place).
+OLDL="keeps the code inside the Core, the layout of corecrew 0.4 and older, which corecrew 1.0 no longer supports; move the project beside the Core with corecrew 0.15 first (/corecrew:task adopt "
+assert_exit 4 bash "$LIB" code-dir old;                                  assert_eq "$OUT" "$CORE_DIR/old/code $OLDL$CORE_DIR/old/code)" "code-dir old"
+assert_exit 4 bash "$LIB" code-root "$CORE_DIR/old/code";                assert_eq "$OUT" "$CORE_DIR/old/code $OLDL$CORE_DIR/old/code)" "code-root old"
+assert_exit 4 bash "$LIB" code-root "$CORE_DIR/old";                     assert_eq "$OUT" "$CORE_DIR/old/code $OLDL$CORE_DIR/old/code)" "code-root old project folder"
+mkdir -p "$CORE_DIR/twin" "$P/Twin"; : > "$CORE_DIR/twin/CLAUDE.md"; git init -q "$CORE_DIR/twin/code"; git init -q "$P/Twin"
+assert_exit 4 bash "$LIB" code-dir twin;                                 assert_eq "$OUT" "$CORE_DIR/twin/code $OLDL$CORE_DIR/twin/code)" "code-dir twin (old + unrelated Twin)"
+assert_exit 4 bash "$LIB" code-root "$P/Twin"
+# Codex names the skill $corecrew:task
+OUT="$(COREKIT_HOST=codex bash "$LIB" code-dir old 2>&1)"; case "$OUT" in *'($corecrew:task adopt '*) pass ;; *) fail "codex old-layout line: $OUT" ;; esac
+# a code/ folder that is no git repo is not the old layout: the folder beside the Core is the code folder
+mkdir -p "$CORE_DIR/plain/code" "$P/Plain"; : > "$CORE_DIR/plain/CLAUDE.md"
+assert_exit 0 bash "$LIB" code-dir plain;                                assert_eq "$OUT" "$P/Plain" "code-dir with a plain code/ folder in the Core"
 
 # shellcheck disable=SC1090
 ( source "$LIB"; load_settings
@@ -117,7 +122,6 @@ done
 new_sandbox; P="$SANDBOX/Projects"; U="uni проект"
 mkdir -p "$CORE_DIR/$U" "$P/Uni проект/src"; : > "$CORE_DIR/$U/CLAUDE.md"; git init -q "$P/Uni проект"
 assert_exit 0 bash "$LIB" code-dir "$U";                      assert_eq "$OUT" "$P/Uni проект" "code-dir non-ASCII"
-assert_exit 0 bash "$LIB" layout "$U";                        assert_eq "$OUT" "new" "layout non-ASCII"
 assert_exit 0 bash "$LIB" project-of "$P/Uni проект";         assert_eq "$OUT" "$U" "project-of non-ASCII code folder"
 assert_exit 0 bash "$LIB" project-of "$P/Uni проект/src/x.ts"; assert_eq "$OUT" "$U" "project-of a file in it"
 assert_exit 0 bash "$LIB" code-root "$P/Uni проект/src";      assert_eq "$OUT" "$P/Uni проект" "code-root non-ASCII"
@@ -147,12 +151,11 @@ assert_eq "$(git -C "$CORE_DIR" status --porcelain -- "uni-проект")" "" "n
 OUT="$(cd "$N" && bash "$SCRIPTS/undo-step" 2>&1)" && pass || fail "undo-step of a non-ASCII project failed: $OUT"
 assert_eq "$(cat "$N/c.txt")" "c1" "undo-step: code of a non-ASCII project"
 assert_eq "$(cat "$CORE_DIR/uni-проект/d.md")" "d1" "undo-step: docs of a non-ASCII project"
-# a space: new layout (Uni проект beside <Core>/uni проект) and old layout (<Core>/my app/code)
-mkproj "uni проект" "Uni проект"
-mkdir -p "$CORE_DIR/my app/code"; echo "# my app" > "$CORE_DIR/my app/CLAUDE.md"; git -C "$CORE_DIR/my app/code" init -q
+# a space: Uni проект beside <Core>/uni проект, and My App beside <Core>/my app
+mkproj "uni проект" "Uni проект"; mkproj "my app" "My App"
 git -C "$CORE_DIR" add -A && git -C "$CORE_DIR" commit -qm "two projects"
-for C in "$P/Uni проект" "$CORE_DIR/my app/code"; do
-  d="$(dirname "$C")"; [ "$C" = "$P/Uni проект" ] && d="$CORE_DIR/uni проект"
+for C in "$P/Uni проект" "$P/My App"; do
+  d="$CORE_DIR/$(printf '%s' "$(basename "$C")" | tr '[:upper:]' '[:lower:]')"
   echo c1 > "$C/c.txt"; git -C "$C" add c.txt && git -C "$C" commit -qm "by hand"
   echo c2 > "$C/c.txt"; echo d1 > "$d/d.md"
   nc="$(commit_count "$C")"; nd="$(commit_count "$CORE_DIR")"; sc="$(git -C "$C" status --porcelain)"; sd="$(git -C "$CORE_DIR" status --porcelain)"
@@ -178,7 +181,7 @@ n="$(wc -l < "$LIB" | tr -d ' ')"
 HELPERS="expand_home canon_dir coredev_get core_ready coredev_set settings_file_path _sf_load _sf_get _setting_valid
   _nl_trim expand_home_r canon_dir_r _basename_r _dirname_r _coredev_get_r _sfp_r _sf_get_r
   _resolve_setting _settings_file_check resolve_setting _core_raw load_settings json_str json_fields
-  _project_of_path worktree_of project_of wt_is_main_of code_root_of code_dir_of layout_of valid_project_name lc norm_path
+  _project_of_path worktree_of project_of wt_is_main_of code_root_of code_dir_of old_code_of old_layout_msg valid_project_name lc norm_path
   resolve_abs codex_home host tools_dir hooks_marker_path plugin_version rel_core esc render put mkdir_p git_init
   project_docs_manifest put_project_docs link_file_to_claude link_local_claude link_agents projects_entry projects_upsert"
 # shellcheck disable=SC1090,SC2086
@@ -213,13 +216,13 @@ assert_eq "$(CODEX_HOME= HOME=rel ch)" "" "codex_home: a relative HOME is none"
 
 # --- what counts as a project inside the Core, each rule alone with its neighbour that does count
 new_sandbox; P="$SANDBOX/Projects"
-mkdir -p "$CORE_DIR/docsonly/sub" "$CORE_DIR/onlycode/code" "$CORE_DIR/bare/sub" "$CORE_DIR/standards/sub" "$CORE_DIR/knowledge" \
+mkdir -p "$CORE_DIR/docsonly/sub" "$CORE_DIR/onlycode/code/.git" "$CORE_DIR/bare/sub" "$CORE_DIR/standards/sub" "$CORE_DIR/knowledge" \
   "$CORE_DIR/.hidden/code" "$CORE_DIR/core"
 for d in docsonly standards knowledge .hidden core; do : > "$CORE_DIR/$d/CLAUDE.md"; done
 mkdir -p "$CORE_DIR/standards/code" "$CORE_DIR/knowledge/code"
 assert_exit 0 bash "$LIB" project-of "$CORE_DIR/docsonly/sub";  assert_eq "$OUT" "docsonly" "a folder with only CLAUDE.md is a project"
-assert_exit 0 bash "$LIB" project-of "$CORE_DIR/onlycode";      assert_eq "$OUT" "onlycode" "a folder with only code/ is a project"
-assert_exit 0 bash "$LIB" project-of "$CORE_DIR/onlycode/code"; assert_eq "$OUT" "onlycode" "...and so is a path in its code/"
+assert_exit 1 bash "$LIB" project-of "$CORE_DIR/onlycode";      assert_eq "$OUT" "" "a folder with only a code/ repo is no project (1.0)"
+assert_exit 1 bash "$LIB" project-of "$CORE_DIR/onlycode/code"; assert_eq "$OUT" "" "...nor a path in its code/"
 assert_exit 1 bash "$LIB" project-of "$CORE_DIR/bare/sub";      assert_eq "$OUT" "" "a folder with neither is no project"
 assert_exit 1 bash "$LIB" project-of "$CORE_DIR/standards";     assert_eq "$OUT" "" "standards/ with a CLAUDE.md and code/ is no project"
 assert_exit 1 bash "$LIB" project-of "$CORE_DIR/standards/sub"; assert_eq "$OUT" "" "a path below standards/ is in no project"
@@ -232,7 +235,6 @@ assert_exit 0 bash "$LIB" project-of "$CORE_DIR/core";          assert_eq "$OUT"
 assert_exit 1 bash "$LIB" project-of "$CORE_DIR";               assert_eq "$OUT" "" "the Core root is no project"
 # ...and the Core folder is never that project's code folder; a folder beside the Core is
 assert_exit 1 bash "$LIB" code-dir core;                        assert_eq "$OUT" "" "code-dir: the Core is not the code folder of core"
-assert_exit 1 bash "$LIB" layout core
 mkdir -p "$P/Docsonly"
 assert_exit 0 bash "$LIB" code-dir docsonly;                    assert_eq "$OUT" "$P/Docsonly" "code-dir: a folder beside the Core is"
 # the name rule: 3 to 40 characters

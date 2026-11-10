@@ -20,8 +20,8 @@ CORECREW_CONFIG="$F" cpu_run timeout 60 bash "$LIB" settings attribution > "$SAN
 assert_eq "$got" "attribution: allow" "a 250 KB settings file is over the 64 KB limit: not read, the default is used"
 [ "$CPU_MS" -lt 3000 ] && pass || fail "lib.sh settings with a 250 KB line took $CPU_MS ms of CPU (quadratic read of the settings file)"
 # the same through a guard hook: the whole hook must stay far below its 15 s timeout
-CD="$SANDBOX/Projects/Core"; mkdir -p "$CD/p/code"; : > "$CD/p/CLAUDE.md"
-printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"%s/docs/a.md","content":"x"}}' "$CD/p/code" "$CD/p/code" > "$SANDBOX/write.json"
+CD="$SANDBOX/Projects/Core"; mkdir -p "$CD/p" "$SANDBOX/Projects/p"; : > "$CD/p/CLAUDE.md"
+printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"%s/docs/a.md","content":"x"}}' "$SANDBOX/Projects/p" "$SANDBOX/Projects/p" > "$SANDBOX/write.json"
 CORE_DIR="$CD" CORECREW_CONFIG="$F" cpu_run timeout 60 bash "$HOOKS/guard-code.sh" < "$SANDBOX/write.json" >/dev/null 2>"$SANDBOX/hook.err"; rc=$?
 [ "$CPU_MS" -lt 3000 ] && pass || fail "guard-code with a 250 KB settings line took $CPU_MS ms of CPU (hook timeout 15 s, a timeout does not block)"
 assert_eq "$rc" "2" "guard-code still refuses docs/ with a huge settings file"

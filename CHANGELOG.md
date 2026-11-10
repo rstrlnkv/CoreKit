@@ -23,6 +23,11 @@ Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off
 - `/corecrew:task adopt` no longer moves a project of corecrew 0.4 and older (the code in
   `<Core>/<name>/code/`): it refuses with nothing changed. Move such a project with corecrew 0.15
   first.
+- The old layout (the code in `<Core>/<name>/code/`, corecrew 0.4 and older) is no longer
+  supported. Session start says so once and makes no links there; `save`, `undo-step` and
+  `install-hooks.sh` refuse such a project with nothing changed, and the code guard no longer
+  watches `<Core>/<name>/code/`. `lib.sh layout` is gone; `lib.sh code-dir` and `code-root` exit 4
+  for such a project.
 
 ## [0.15.0] - 2026-11-10
 

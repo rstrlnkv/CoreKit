@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/lib.sh"
 new_sandbox; setup_core; sync_tools
-scaffold_old hook-app
-P="$CORE_DIR/hook-app"; C="$P/code"
+bash "$SKILL/scripts/scaffold.sh" --name hook-app >/dev/null
+P="$CORE_DIR/hook-app"; C="$SANDBOX/Projects/hook-app"
 assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P"
 assert_file "$C/.git/hooks/pre-commit"; assert_file "$C/.git/hooks/pre-push"
 assert_file "$CORE_DIR/.git/hooks/pre-push"
@@ -225,8 +225,8 @@ git -C "$C" commit -q -m clean >/dev/null 2>&1 && pass || fail "clean commit blo
 
 # install-hooks run from the plugin syncs the tools first: empty tools dir, then a clean commit works
 new_sandbox; setup_core
-scaffold_old fresh-app
-C="$CORE_DIR/fresh-app/code"
+bash "$SKILL/scripts/scaffold.sh" --name fresh-app >/dev/null
+C="$SANDBOX/Projects/fresh-app"
 assert_no_file "$COREDEV_TOOLS"
 assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/fresh-app"
 assert_file "$COREDEV_TOOLS/VERSION"; assert_file "$COREDEV_TOOLS/git-hooks/blocked-patterns"
@@ -257,10 +257,10 @@ assert_no_file "$CORE_DIR/foo/code"
 # no code folder at all: exit 1, names the missing folder
 mkdir -p "$CORE_DIR/bar"
 assert_exit 1 bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/bar"
-echo "$OUT" | grep -q 'No git repo at' && pass || fail "no 'No git repo at' message: $OUT"
+echo "$OUT" | grep -qF "No git repo at $SANDBOX/Projects/bar" && pass || fail "no 'No git repo at' message naming the folder beside the Core: $OUT"
 
 # the pre-commit hook on non-ASCII paths and case variants; a missing patterns file fails closed
-new_sandbox; setup_core; sync_tools; scaffold_old hk-app; C="$CORE_DIR/hk-app/code"
+new_sandbox; setup_core; sync_tools; bash "$SKILL/scripts/scaffold.sh" --name hk-app >/dev/null; C="$SANDBOX/Projects/hk-app"
 bash "$SCRIPTS/install-hooks.sh" "$CORE_DIR/hk-app" >/dev/null
 for bad in "папка/CLAUDE.md" "é/.env" Claude.md .ENV; do
   try_commit "$bad" && fail "commit allowed: $bad" || pass

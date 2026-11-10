@@ -54,8 +54,8 @@ assert_no_file "$SANDBOX/mkt/.claude/plugins/data/corecrew-corekit"
 
 # --- Core set up, session elsewhere: silent (tools still synced)
 setup_core
-scaffold_old sess-app
-P="$CORE_DIR/sess-app"; C="$P/code"
+bash "$SKILL/scripts/scaffold.sh" --name sess-app >/dev/null
+P="$CORE_DIR/sess-app"; C="$(dirname "$CORE_DIR")/sess-app"
 rm -rf "$CLAUDE_PLUGIN_DATA/tools" "$CLAUDE_PLUGIN_DATA/state"
 run_rc "$SANDBOX/elsewhere"
 assert_eq "$RC" "0" "exit outside Core"; assert_eq "$OUT" "" "silent outside Core"
@@ -141,7 +141,7 @@ rm -f "$C/.git/hooks/pre-commit" "$C/.git/hooks/pre-push" "$CORE_DIR/.git/hooks/
 bash "$SCRIPTS/install-hooks.sh" "$P" >/dev/null 2>&1
 run_rc "$C"; echo "$OUT" | grep -qF "install-hooks.sh" && fail "fresh shims reported: $OUT" || pass
 
-# --- new layout: the CLAUDE.local.md link, created once, never overwritten; old layout is named
+# --- the CLAUDE.local.md link, created once, never overwritten; the old layout is named
 PR="$(dirname "$CORE_DIR")"
 bash "$SKILL/scripts/scaffold.sh" --name newapp >/dev/null
 NP="$CORE_DIR/newapp"; NC="$PR/newapp"
@@ -151,7 +151,7 @@ echo "$OUT" | grep -qF "corecrew: linked CLAUDE.local.md to $NP/CLAUDE.md; resta
 [ -L "$NC/CLAUDE.local.md" ] && pass || fail "symlink not created"
 assert_eq "$(readlink "$NC/CLAUDE.local.md")" "$NP/CLAUDE.md" "link target"
 echo "$OUT" | grep -qF "$NP/docs/INDEX.md" && pass || fail "new layout: project context missing: $OUT"
-echo "$OUT" | grep -qF "still lives in" && fail "old-layout line in a new layout: $OUT" || pass
+echo "$OUT" | grep -qF "corecrew 0.4" && fail "old-layout line in a new layout: $OUT" || pass
 run_rc "$NC"; echo "$OUT" | grep -qF "linked CLAUDE.local.md" && fail "second run links again: $OUT" || pass
 echo "$OUT" | grep -qF "created " && fail "link_local_claude line leaked: $OUT" || pass
 echo "$OUT" | grep -qF "skipped " && fail "link_local_claude line leaked: $OUT" || pass
@@ -218,32 +218,40 @@ assert_eq "$(echo "$OUT" | grep -c 'AGENTS.md')" "1" "Core AGENTS.md: one line"
 echo "$OUT" | grep 'AGENTS.md' | grep -qF "$NP/AGENTS.md" && pass || fail "Core AGENTS.md line lacks the path: $OUT"
 assert_eq "$(cat "$NP/AGENTS.md")" "core" "Core AGENTS.md changed"
 rm "$NP/AGENTS.md"; ln -s "$NP/CLAUDE.md" "$NC/AGENTS.md"
-# the old layout: its line, no link
-run_rc "$C"
-echo "$OUT" | grep -qF "corecrew: this project still lives in $C; run /corecrew:task adopt $C to move it to $PR/sess-app" && pass || fail "old layout line missing: $OUT"
-[ -e "$C/CLAUDE.local.md" ] && fail "link made in an old-layout code folder" || pass
-[ -e "$C/AGENTS.md" ] || [ -L "$C/AGENTS.md" ] && fail "AGENTS.md made in an old-layout code folder" || pass
-echo "$OUT" | grep -qF "AGENTS.md" && fail "old layout: AGENTS.md mentioned: $OUT" || pass
+# the old layout of corecrew 0.4 and older (<Core>/<name>/code), which 1.0 does not support: one note, from the code
+# folder and from the project folder, and no link anywhere (not in an unrelated folder of that name beside the Core)
+OP="$CORE_DIR/olds-app"; OC="$OP/code"; mkdir -p "$OP/docs" "$PR/Olds-App"; echo "# olds-app" > "$OP/CLAUDE.md"; git init -q "$OC"
+OLDNOTE="corecrew: this project keeps its code in $OC, the layout of corecrew 0.4 and older, which corecrew 1.0 no longer supports; move it beside the Core with corecrew 0.15 first (/corecrew:task adopt $OC)"
+for d in "$OC" "$OP"; do
+  run_rc "$d"; assert_eq "$RC" "0" "old layout: exit ($d)"
+  echo "$OUT" | grep -qxF "$OLDNOTE" && pass || fail "old layout note missing ($d): $OUT"
+  assert_eq "$(printf '%s\n' "$OUT" | grep -c 'corecrew 0.4')" "1" "old layout: one note ($d)"
+  echo "$OUT" | grep -qF "AGENTS.md" && fail "old layout: AGENTS.md mentioned: $OUT" || pass
+done
+for f in "$OC/CLAUDE.local.md" "$OC/AGENTS.md" "$PR/Olds-App/CLAUDE.local.md" "$PR/Olds-App/AGENTS.md"; do
+  [ -e "$f" ] || [ -L "$f" ] && fail "old layout: $f made" || pass
+done
+rm -rf "$OP" "$PR/Olds-App"
 # a folder of Projects that is not a project: nothing at all
 mkdir -p "$PR/Brain"; run_rc "$PR/Brain"; assert_eq "$OUT" "" "Projects/Brain: silent"
 
 # --- cwd given with JSON escapes (\u Cyrillic, \/ and \") in a Core whose path has a space
 E="$SANDBOX/Мой проект \"q\""; mkdir -p "$E"
 export CORE_DIR="$E/Ядро"
-setup_core; scaffold_old esc-app
+setup_core; bash "$SKILL/scripts/scaffold.sh" --name esc-app >/dev/null
 EP="$CORE_DIR/esc-app"
 # JSON-escape the sandbox path: \u for Мой, \" for quotes, \/ for slashes
-json_path="$(printf '%s' "$EP/code" | sed -e 's/"/\\"/g' -e 's|/|\\/|g' -e 's/Мой/\\u041c\\u043e\\u0439/')"
+json_path="$(printf '%s' "$E/esc-app" | sed -e 's/"/\\"/g' -e 's|/|\\/|g' -e 's/Мой/\\u041c\\u043e\\u0439/')"
 OUT="$(printf '{"cwd":"%s","source":"resume"}' "$json_path" | bash "$H" 2>&1)"; RC=$?
 assert_eq "$RC" "0" "escaped cwd: exit"
 echo "$OUT" | grep -qF "$EP/docs/INDEX.md" && pass || fail "escaped cwd not resolved: $OUT"
 # core_dir through a symlink: cwd via the link resolves to the same project
 ln -s "$E" "$SANDBOX/sym"; export CORE_DIR="$SANDBOX/sym/Ядро"
-run_rc "$SANDBOX/sym/Ядро/esc-app/code"
+run_rc "$SANDBOX/sym/esc-app"
 echo "$OUT" | grep -qF "$EP/docs/INDEX.md" && pass || fail "symlinked core_dir: $OUT"
 
 # --- a failing tools sync never blocks; one short line. Outside a project it goes to stderr, in a project to stdout.
-export CORE_DIR="$P/.."; mkdir -p "$SANDBOX/emptyroot/scripts"
+CORE_DIR="$(cd "$P/.." && pwd -P)"; export CORE_DIR; mkdir -p "$SANDBOX/emptyroot/scripts"
 sync_fail() {  # sync_fail <cwd> — stdout in OUT, stderr in ERR, exit code in RC
   OUT="$(hook_event claude SessionStart "$1" source=startup | CLAUDE_PLUGIN_ROOT="$SANDBOX/emptyroot" bash "$H" 2>"$SANDBOX/err")"; RC=$?; ERR="$(cat "$SANDBOX/err")"
 }
@@ -301,10 +309,10 @@ assert_eq "$(grep -cx bash "$EXEC_LOG")" "1" "bash starts in a project with the 
 mkdir -p "$SANDBOX/cs/a"
 if [ -d "$SANDBOX/cs/A" ]; then
   export CORE_DIR="$SANDBOX/CaseCore/Ядро"; setup_core
-  CP="$CORE_DIR/MyApp"; mkdir -p "$CP/code" "$CP/docs"; echo "# MyApp" > "$CP/CLAUDE.md"
+  CP="$CORE_DIR/MyApp"; mkdir -p "$CP/docs"; echo "# MyApp" > "$CP/CLAUDE.md"
   export CORE_DIR="$SANDBOX/casecore/ядро"
-  run_rc "$CP/code"; echo "$OUT" | grep -qF "$CP/docs/INDEX.md" && pass || fail "CORE_DIR in other case, cwd as on disk: $OUT"
-  run_rc "$SANDBOX/CASECORE/ЯДРО/myapp/code"; echo "$OUT" | grep -qF "$CP/docs/INDEX.md" && pass || fail "cwd in other case: $OUT"
+  run_rc "$CP"; echo "$OUT" | grep -qF "$CP/docs/INDEX.md" && pass || fail "CORE_DIR in other case, cwd as on disk: $OUT"
+  run_rc "$SANDBOX/CASECORE/ЯДРО/myapp"; echo "$OUT" | grep -qF "$CP/docs/INDEX.md" && pass || fail "cwd in other case: $OUT"
 else
   skip "letter case" "case-sensitive volume"; pass
 fi
