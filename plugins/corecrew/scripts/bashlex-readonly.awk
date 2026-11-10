@@ -123,9 +123,11 @@ function finalize(   k, a, dd, last, v, first, m, q, c) {
   if (cmd == "perl") {
     for (k = 1; k <= na; k++) {
       a = args[k]
-      if (a ~ /^-[eE]/) return                     # the code starts: no more options
+      if (a == "--" || substr(a, 1, 1) != "-") return  # the script or its arguments: no more options
+      if (a ~ /^-[eE]./) continue                  # code glued to -e
       if (a ~ /^-[MImx]/) continue                 # -MModule, -Ilib: their letters are names
       if (a ~ /^-[A-Za-z]*i/) { out("X", "perl -i"); return }
+      if (a ~ /^-[A-Za-z]*[eE]$/) k++              # -e CODE: perl reads more switches after the code
     }
     return
   }
@@ -211,7 +213,8 @@ function finalize(   k, a, dd, last, v, first, m, q, c) {
   for (k = 1; k <= na && !full; k++) {
     a = args[k]
     if (!dd && a == "--") { dd = 1; continue }
-    if (!dd && substr(a, 1, 1) == "-" && a !~ /^-[rwxXst]+$/) { if (cmd == "truncate" && (a == "-s" || a == "--size")) k++; continue }
+    if (!dd && cmd == "truncate" && (a == "-s" || a == "--size")) { k++; continue }  # before the mode test: -s is a size
+    if (!dd && substr(a, 1, 1) == "-" && a !~ /^-[rwxXst]+$/) continue
     if (first) { first = 0; continue }
     path(a)
   }

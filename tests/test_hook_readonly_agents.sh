@@ -36,6 +36,9 @@ refused $V 'ln -s src/a.txt src/l'
 SEDI="sed -""i"   # spelled in two parts: the portability check reads this file too
 refused $V "$SEDI '' s/a/b/ src/a.txt"
 refused $V "perl -pi -e s/a/b/ src/a.txt"
+# perl reads more switches after -e CODE: "perl -e s/a/b/ -pi f" edits f in place
+refused $V "perl -e s/a/b/ -pi src/a.txt"
+refused $V "perl -e 1 -i src/a.txt"
 refused $V 'git commit -qm x'
 refused $V 'git -C . add -A'
 refused $V 'git checkout -- src/a.txt'
@@ -106,6 +109,9 @@ allowed $V 'git config --get user.name && git config -l && git config user.name'
 allowed $V 'git -C /tmp/ro-clone checkout -b x'
 allowed $V 'git clone . /tmp/ro-copy'
 allowed $V 'perl -Ilib -MList::Util -e 1'
+allowed $V 'perl -ne print src/a.txt && perl -e 1 -w src/a.txt && perl -eprint src/a.txt'
+allowed $V 'truncate -s 0 /tmp/ro-a.txt'   # -s takes the size: the temp file is the target
+refused $V 'ln -s /tmp/ro-x /tmp/ro-l'     # ln keeps its own rule, -s or not
 allowed $V 'chmod -R u+w /tmp/d'
 allowed $V 'curl -s https://example.com && curl -o /tmp/f https://example.com/f && wget -qO- https://example.com'
 allowed $V 'unzip -l /tmp/a.zip && tar tf /tmp/a.tar && tar xf /tmp/a.tar -C /tmp/x'
