@@ -50,6 +50,16 @@ echo x > "$C/CLAUDE.md"; git -C "$C" add -f CLAUDE.md; git -C "$C" commit -q --n
 git -C "$C" push -q origin main 2>"$SANDBOX/push.err" && fail "push of CLAUDE.md allowed" || pass
 # the advice fits both hosts
 assert_contains "$SANDBOX/push.err" "Remove them from history before pushing (ask your assistant to help)."
+# taking a blocked file out is the fix both hooks ask for, so it passes: with CLAUDE.md already on the remote (pushed
+# past the hook), the commit that removes it and the push of that commit both go through
+git -C "$C" push -q --no-verify origin main 2>/dev/null && pass || fail "setup: CLAUDE.md pushed past the hook"
+git -C "$C" rm -q CLAUDE.md
+git -C "$C" commit -q -m "remove CLAUDE.md" >/dev/null 2>&1 && pass || fail "removing a tracked blocked file is committed"
+git -C "$C" push -q origin main 2>/dev/null && pass || fail "the push of that removal passes"
+git -C "$SANDBOX/remote.git" ls-tree -r --name-only main | grep -qx 'CLAUDE.md' && fail "CLAUDE.md is still on the remote" || pass
+# adding it again is still refused, in the same repo
+try_commit CLAUDE.md && fail "commit allowed: CLAUDE.md after its removal" || pass
+rm -f "$C/CLAUDE.md"
 
 # pp_repo <dir>: a new repo with corecrew's pre-push shim and a bare remote <dir>.git as origin
 pp_repo() {
@@ -75,6 +85,9 @@ git -C "$R3" checkout -q --orphan side && git -C "$R3" rm -rq --cached . && nv_c
 git -C "$R3" push -q origin side 2>/dev/null && fail "push of an orphan branch whose root commit holds AGENTS.md allowed" || pass
 git -C "$R3" checkout -q --orphan pages && git -C "$R3" rm -rq --cached . && nv_commit "$R3" index.html
 git -C "$R3" push -q origin pages 2>/dev/null && pass || fail "a legitimate orphan branch push was blocked"
+# deleting a remote branch pushes no commit: it passes
+git -C "$R3" push -q origin :pages 2>/dev/null && pass || fail "deleting a remote branch passes"
+git -C "$R3.git" rev-parse -q --verify refs/heads/pages >/dev/null && fail "the remote branch is still there" || pass
 git -C "$R3" checkout -q -f main
 # a remote tip this repo never fetched (another clone pushed it): the commits are still checked (a forced push)
 git clone -q -b main "$R3.git" "$SANDBOX/other clone" && nv_commit "$SANDBOX/other clone" src/z.txt \
@@ -201,7 +214,6 @@ T2="$SANDBOX/my tools"; bash "$SCRIPTS/sync-tools.sh" "$PLUGIN" "$T2" >/dev/null
 rm -f "$C/.git/hooks/pre-push"
 assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P" --tools "$T2"
 assert_contains "$C/.git/hooks/pre-push" "$T2/git-hooks/pre-push-code"
-# (CLAUDE.md is already tracked by the --no-verify test above, so use a fresh blocked file)
 echo secret > "$C/.env.local"; git -C "$C" add -f .env.local
 OUT=$(git -C "$C" commit -m t 2>&1) && fail "commit allowed with tools in a path with a space" || pass
 echo "$OUT" | grep -q 'Commit blocked' && pass || fail "shim with a spaced tools path did not run the hook body: $OUT"
