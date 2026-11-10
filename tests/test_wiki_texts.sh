@@ -92,30 +92,25 @@ grep -qE 'wikilink|\[\[|Obsidian' "$R" && pass || fail "README does not mention 
 # release.md: a 0.6 wiki is migrated at task Start, never at release (I1)
 grep -qF 'converted first with' "$REL" && fail "release.md still migrates the wiki at release" || pass
 assert_contains "$REL" '`no page has a type`'
-assert_contains "$REL" '"migrate at Start"'
 assert_contains "$REL" 'baseline'
 assert_contains "$REL" 'pre-existing problem'
 assert_contains "$REL" 'Only new lines are ✗'
-grep -qiE '0\.6' "$REL" && pass || fail "release.md does not name the 0.6 format"
-# SKILL.md Start: dry run, the owner's ok, its own save step, and the wiki-check baseline
+grep -qF 'wiki-migrate.sh' "$REL" && pass || fail "release.md: a refused wiki names wiki-migrate.sh"
+# SKILL.md Start: a wiki without types (corecrew 0.6 and older) stops the chain with the command that converts it
+# (corecrew 1.0, P3: task no longer runs the conversion); then the wiki-check baseline
 SK="$PLUGIN/skills/task/SKILL.md"
 st="$(awk '$0 == "## Start" {f=1; next} /^## /{f=0} f' "$SK")"
 for w in 'wiki-index.sh" "<Core>/<project>" --check' 'no page has a type' \
-         '<plugin>/reference/older-formats.md' 'Without that "ok", stop the chain' \
+         'wiki-migrate.sh" "<Core>/<project>"' 'stop the chain' \
          'wiki-check.sh" "<Core>/<project>"' '**baseline**'; do
   printf '%s\n' "$st" | grep -qF -- "$w" && pass || fail "SKILL.md Start lacks: $w"
 done
-# the migration itself (dry run, the user's ok, its own save step) lives in the Older formats reference
 OF="$PLUGIN/reference/older-formats.md"
-ofw="$(awk '$0 == "## Wiki without types" {f=1; next} /^## /{f=0} f' "$OF")"
-for w in 'wiki-migrate.sh" "<Core>/<project>" --dry-run' 'show its output to the user' \
-         'wiki: migrate to the 0.7 format' '--no-attribution' 'Without that "ok", stop the chain'; do
-  printf '%s\n' "$ofw" | grep -qF -- "$w" && pass || fail "older-formats.md, Wiki without types, lacks: $w"
-done
+printf '%s\n' "$st" | grep -qF 'older-formats.md' && fail "SKILL.md Start still sends to older-formats.md" || pass
 # older-formats.md covers every older format; each section names the versions that made it ("Made by corecrew
 # <first>-<last>.") and its support deadline (Decision 12 A: until corecrew 1.0).
 secs="$(grep '^## ' "$OF" | tr '\n' '|')"
-assert_eq "$secs" "## Wiki without types|## Brief with a stage field|## Knowledge with sections|## Old layout|## Core without a schema|" "older-formats.md sections"
+assert_eq "$secs" "## Old layout|## Core without a schema|" "older-formats.md sections"
 for w in 'Made by corecrew ' 'Supported until corecrew 1.0'; do
   miss="$(awk -v w="$w" '/^## /{if (n != "" && !h) m = m n "|"; n = $0; h=0; next} index($0, w) == 1 {h=1}
     END {if (n != "" && !h) m = m n "|"; print m}' "$OF")"

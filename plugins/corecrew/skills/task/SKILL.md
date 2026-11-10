@@ -126,9 +126,10 @@ attribution value resolved at Start" instead of placeholders:
    skips it (adopt.md has its own checks).
 6. **Wiki.** Every path except `adopt` (adopt converts the wiki itself), before any crew is
    briefed: run `bash "<scripts>/wiki-index.sh" "<Core>/<project>" --check`. When it prints
-   `wiki-index: no page has a type; run wiki-migrate.sh first`, the wiki is in an older format:
-   follow `<plugin>/reference/older-formats.md`, section Wiki without types (the user's "ok", the
-   migration and its own commit). Without that "ok", stop the chain. Then, in any case, run
+   `wiki-index: no page has a type; run wiki-migrate.sh first`, the wiki is from corecrew 0.6 or older:
+   stop the chain and give the user the command that converts it once,
+   `bash "<scripts>/wiki-migrate.sh" "<Core>/<project>"` (`--dry-run` first shows the changes), to
+   run and save as its own step. Otherwise run
    `bash "<scripts>/wiki-check.sh" "<Core>/<project>" --code "<code root>"` once and note its lines as the **baseline**,
    like the base commits: the wiki problems that were there before this chain. The verifier brief
    and release postcondition 3 use it.

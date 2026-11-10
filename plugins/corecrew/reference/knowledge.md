@@ -18,8 +18,7 @@ file first, then the all-projects file, and skips lines tagged with another stac
 
 A title line `# <role> — <project>` (or `# <role> — all projects`), then one list: one `- ` line
 per lesson, newest last. No sections, no size limit, no sub-files. A file in the older form, with
-four sections and family links, is read as it is and never restructured:
-`<plugin>/reference/older-formats.md`, section Knowledge with sections.
+four sections and family links, is read as it is and never restructured.
 
 ## The line
 

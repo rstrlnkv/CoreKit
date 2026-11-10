@@ -57,8 +57,6 @@ Progress lives in the last section `## Progress` of `<Core>/<name>/docs/brief.md
 `Stage: <stage>`; never add a front-matter field (the wiki allows exactly six). Resume only the
 project this run started, or one the user asks you to continue: read its brief and go on at the next
 stage instead of starting over. A taken name is never a reason to resume (step 2).
-An older brief with `stage: <v>` in its front matter: see `<plugin>/reference/older-formats.md`,
-section Brief with a stage field.
 
 | Stage | next step |
 |-------|-----------|

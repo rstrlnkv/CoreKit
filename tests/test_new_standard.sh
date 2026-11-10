@@ -183,10 +183,8 @@ md_section "$K" 'Who writes it' | grep -qiF 'general' && pass || fail "knowledge
 # the arrow: → is canonical; -> written by hand reads the same (here and in new-standard's detection)
 md_section "$K" 'The line' | grep -qF -- '`->`' && pass || fail "knowledge.md: -> is not accepted"
 assert_contains "$SK" '`->`'
-# older files keep their sections; the older form is described once, in older-formats.md
-md_section "$K" 'A role file' | grep -qF 'older-formats.md' && pass || fail "knowledge.md does not point at the older form"
-O="$PLUGIN/reference/older-formats.md"
-md_section "$O" 'Knowledge with sections' | grep -qF '## What has broken here' && pass || fail "older-formats.md: no Knowledge with sections"
-md_section "$O" 'Knowledge with sections' | grep -qF 'never' && pass || fail "older-formats.md: task may restructure an older knowledge file"
+# a file in an older form is read as it is and never restructured (corecrew 1.0, P3: no older-formats.md section)
+md_section "$K" 'A role file' | grep -qF 'never restructured' && pass || fail "knowledge.md: an older file may be restructured"
+md_section "$K" 'A role file' | grep -qF 'older-formats.md' && fail "knowledge.md still points at older-formats.md" || pass
 
 finish

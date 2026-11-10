@@ -50,9 +50,9 @@ each: `[[name]] description`. Pages with status `done` or `superseded` are count
 
 ## Old wikis
 
-`wiki-index.sh` refuses a wiki from an older corecrew with `no page has a type`; `wiki-migrate.sh`
-converts it, and `/corecrew:task` offers that at Start. The steps are in `older-formats.md` beside this
-file, section Wiki without types.
+`wiki-index.sh` refuses a wiki from corecrew 0.6 and older with `no page has a type`;
+`bash "<scripts>/wiki-migrate.sh" "<Core>/<project>" [--dry-run]` converts it once (a `warning:` line
+names what to fix by hand). `/corecrew:task` stops until then; `adopt` converts it by itself.
 
 ## Checking
 

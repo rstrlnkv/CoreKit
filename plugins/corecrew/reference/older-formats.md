@@ -5,47 +5,6 @@ brought up to date. Most sections are reached from a skill, which sends you to o
 that format; the last ones are reported at session start. `<plugin>` and `<scripts>` are the paths
 the skill resolved under Paths.
 
-## Wiki without types
-Made by corecrew 0.1.0-0.6.6.
-Supported until corecrew 1.0 for the parts only such a wiki needs (`docs/superpowers/` and the
-offer in a task chain); `adopt` keeps the general conversion.
-
-A wiki from corecrew 0.6 and older has Markdown links, a hand-written map and its specs and plans in
-`docs/superpowers/`. `wiki-index.sh` refuses it with `wiki-index: no page has a type; run wiki-migrate.sh first`.
-`bash "<scripts>/wiki-migrate.sh" "<Core>/<project>" [--dry-run]` converts it: typed front matter,
-wikilinks, specs and plans moved to `docs/specs/` and `docs/plans/`. A `warning:` line names what to
-fix by hand (old `CLAUDE.md` lines too). It also moves a brief's one-line `stage:` field (see below).
-`adopt` runs it by itself.
-
-In a task chain (Start, **Wiki**):
-1. Run `bash "<scripts>/wiki-migrate.sh" "<Core>/<project>" --dry-run`, show its output to the user
-   and ask for an "ok".
-2. On "ok" run it again without `--dry-run`, and commit it as its own step from the code root:
-   `bash "<scripts>/save" "wiki: migrate to the 0.7 format"` (with attribution=forbid add
-   `--no-attribution`). This needs the clean tree of Start, **Clean tree** (on `question`, check it
-   now).
-3. Without that "ok", stop the chain.
-
-## Brief with a stage field
-Made by corecrew 0.1.0-0.7.1.
-Supported until corecrew 1.0.
-
-An older `docs/brief.md` keeps the new-project stage as `stage: <v>` in its front matter. The wiki
-allows exactly six front-matter fields, so the stage lives in the last section `## Progress`, as one
-line `Stage: <v>`. Write that section as the last one and delete the field in the same edit, then run
-`bash "<scripts>/wiki-check.sh" "<Core>/<name>"`. If `## Progress` already exists, only delete the field.
-
-## Knowledge with sections
-Made by corecrew 0.2.0-0.9.1.
-Supported until corecrew 1.0.
-
-A knowledge file from corecrew 0.9 and older has four sections (`## How proof is made here`,
-`## Where things are`, `## What has broken here`, `## What you must not do here`) and may link
-family files `<role>/<Family>.md`. Agents read it as it is. `task`
-never restructures it: a new line goes at the end of `## What has broken here` of the role file.
-The user may move the lines into one list by hand; the current form is
-`<plugin>/reference/knowledge.md`.
-
 ## Old layout
 Made by corecrew 0.1.0-0.4.0.
 Supported until corecrew 1.0.

@@ -37,8 +37,8 @@ commands of postcondition 3, with `--changed` given the files the version edit c
    has a clean final report: no open finding. None called (for example a `question` chain) → ✓.
 3. **Wiki.** `bash "<scripts>/wiki-index.sh" "<Core>/<project>"` (regenerates `docs/INDEX.md`; its
    result is committed with the chain), then `bash "<scripts>/wiki-check.sh" "<Core>/<project>" --code "<code root>" --changed <files> <pages>`.
-   Silent exit 0 → ✓. A wiki the plugin still refuses (`no page has a type`: the 0.6 format) is ✗
-   with "migrate at Start" (Start, **Wiki** offers `wiki-migrate.sh`). A wiki-check line that is also
+   Silent exit 0 → ✓. A wiki the plugin still refuses (`no page has a type`: corecrew 0.6 and older) is ✗
+   with the `wiki-migrate.sh` command of Start, **Wiki**. A wiki-check line that is also
    in the Start baseline is a pre-existing problem: list it under `Open` as a warning; the release
    goes on. Only new lines are ✗. For them decide by the Core's schema:
    `CORE_DIR="<Core>" bash "<scripts>/lib.sh" get schema` against

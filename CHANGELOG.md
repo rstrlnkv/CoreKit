@@ -17,6 +17,9 @@ Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off
   warning. Remove such a hook and run `install-hooks.sh` again.
 - The Core folders `bin/` and `hooks/` of corecrew 0.1 are no longer part of a step: `save` leaves
   a change there uncommitted. Delete the folders by hand.
+- `/corecrew:task` no longer converts a wiki of corecrew 0.6 and older: it stops and gives the
+  `wiki-migrate.sh` command to run once. The notes on a brief with a `stage:` field and on knowledge
+  files with sections are gone; such files are still read as they are.
 
 ## [0.15.0] - 2026-11-10
 
