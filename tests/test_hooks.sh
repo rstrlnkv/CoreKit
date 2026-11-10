@@ -50,6 +50,16 @@ echo x > "$C/CLAUDE.md"; git -C "$C" add -f CLAUDE.md; git -C "$C" commit -q --n
 git -C "$C" push -q origin main 2>"$SANDBOX/push.err" && fail "push of CLAUDE.md allowed" || pass
 # the advice fits both hosts
 assert_contains "$SANDBOX/push.err" "Remove them from history before pushing (ask your assistant to help)."
+# taking a blocked file out is the fix both hooks ask for, so it passes: with CLAUDE.md already on the remote (pushed
+# past the hook), the commit that removes it and the push of that commit both go through
+git -C "$C" push -q --no-verify origin main 2>/dev/null && pass || fail "setup: CLAUDE.md pushed past the hook"
+git -C "$C" rm -q CLAUDE.md
+git -C "$C" commit -q -m "remove CLAUDE.md" >/dev/null 2>&1 && pass || fail "removing a tracked blocked file is committed"
+git -C "$C" push -q origin main 2>/dev/null && pass || fail "the push of that removal passes"
+git -C "$SANDBOX/remote.git" ls-tree -r --name-only main | grep -qx 'CLAUDE.md' && fail "CLAUDE.md is still on the remote" || pass
+# adding it again is still refused, in the same repo
+try_commit CLAUDE.md && fail "commit allowed: CLAUDE.md after its removal" || pass
+rm -f "$C/CLAUDE.md"
 
 # pp_repo <dir>: a new repo with corecrew's pre-push shim and a bare remote <dir>.git as origin
 pp_repo() {
@@ -75,6 +85,9 @@ git -C "$R3" checkout -q --orphan side && git -C "$R3" rm -rq --cached . && nv_c
 git -C "$R3" push -q origin side 2>/dev/null && fail "push of an orphan branch whose root commit holds AGENTS.md allowed" || pass
 git -C "$R3" checkout -q --orphan pages && git -C "$R3" rm -rq --cached . && nv_commit "$R3" index.html
 git -C "$R3" push -q origin pages 2>/dev/null && pass || fail "a legitimate orphan branch push was blocked"
+# deleting a remote branch pushes no commit: it passes
+git -C "$R3" push -q origin :pages 2>/dev/null && pass || fail "deleting a remote branch passes"
+git -C "$R3.git" rev-parse -q --verify refs/heads/pages >/dev/null && fail "the remote branch is still there" || pass
 git -C "$R3" checkout -q -f main
 # a remote tip this repo never fetched (another clone pushed it): the commits are still checked (a forced push)
 git clone -q -b main "$R3.git" "$SANDBOX/other clone" && nv_commit "$SANDBOX/other clone" src/z.txt \
@@ -93,7 +106,14 @@ assert_contains "$SANDBOX/nolist.err" "git could not list the commits to push"
 
 # Core pre-push: privacy check via gh
 STUB="$SANDBOX/stub"; mkdir -p "$STUB"
-printf '#!/bin/sh\necho "$GH_STUB"\n' > "$STUB/gh"; chmod +x "$STUB/gh"
+# the stub answers one question only, the privacy of someone/Core; any other call fails with no answer
+cat > "$STUB/gh" <<'STUBEOF'
+#!/bin/sh
+[ -n "$GH_LOG" ] && echo "$*" >> "$GH_LOG"
+[ "$*" = "api repos/someone/Core --jq .private" ] || exit 1
+echo "$GH_STUB"
+STUBEOF
+chmod +x "$STUB/gh"
 H="$CORE_DIR/.git/hooks/pre-push"; URL=https://github.com/someone/Core.git
 GH_STUB=true  PATH="$STUB:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && pass || fail "private Core push blocked"
 GH_STUB=false PATH="$STUB:$PATH" bash "$H" origin "$URL" </dev/null >/dev/null 2>&1 && fail "public Core push allowed" || pass
@@ -101,12 +121,43 @@ PATH="$(path_without gh)" bash "$H" origin "$URL" </dev/null >/dev/null 2>"$SAND
 # the install hint is for every OS, the same as preflight's: the GitHub CLI site, not one package manager
 assert_contains "$SANDBOX/nogh" "https://cli.github.com"; assert_not_contains "$SANDBOX/nogh" "brew"
 GH_STUB=true PATH="$STUB:$PATH" bash "$H" origin "git@github.com:someone/Core.git" </dev/null >/dev/null 2>&1 && pass || fail "ssh url not parsed"
+GH_STUB=true PATH="$STUB:$PATH" bash "$H" origin "ssh://git@github.com/someone/Core.git" </dev/null >/dev/null 2>&1 && pass || fail "ssh:// url not parsed"
+# core_push <url>: the hook's exit code with a gh that calls someone/Core private; stderr in core.err, gh's calls in gh.log
+core_push() {
+  rm -f "$SANDBOX/gh.log"
+  GH_LOG="$SANDBOX/gh.log" GH_STUB=true CORECREW_GH_RETRY_SLEEP=0 PATH="$STUB:$PATH" bash "$H" origin "$1" </dev/null >/dev/null 2>"$SANDBOX/core.err"
+}
+# a remote that is not GitHub is refused as such, before gh is asked anything
+for u in "https://example.com/someone/Core.git" "$SANDBOX/remote.git"; do
+  core_push "$u" && fail "a non-GitHub host is refused: $u was allowed" || pass
+  assert_contains "$SANDBOX/core.err" "Core may only be pushed to GitHub"
+  assert_no_file "$SANDBOX/gh.log"
+done
+A='@'   # (the URLs below are spelled with $A, so that none of them reads as an email address)
+# a user part before github.com and one trailing slash are GitHub too: the same privacy question is asked
+for u in "https://someone${A}github.com/someone/Core.git" "https://github.com/someone/Core/" "https://someone${A}github.com/someone/Core.git/"; do
+  core_push "$u" && pass || fail "a GitHub remote was refused: $u ($(cat "$SANDBOX/core.err"))"
+  assert_eq "$(cat "$SANDBOX/gh.log" 2>/dev/null)" "api repos/someone/Core --jq .private" "gh is asked about someone/Core for $u"
+done
+GH_STUB=false PATH="$STUB:$PATH" bash "$H" origin "https://someone${A}github.com/someone/Core/" </dev/null >/dev/null 2>&1 \
+  && fail "public Core push allowed through a URL with a user part" || pass
+# a host that only looks like GitHub stays refused (github.com as the user part, in the path, as a prefix of the host,
+# after a slash in the user part, or with two slashes at the end)
+for u in "https://github.com${A}evil.example/someone/Core.git" "https://evil.example/github.com/someone/Core.git" \
+         "https://someone${A}github.company.com/someone/Core.git" "https://evil.example/x${A}github.com/someone/Core.git" \
+         "https://a${A}b${A}github.com/someone/Core.git" "https://github.com/someone/Core//" \
+         "git${A}someone${A}github.com:someone/Core.git" "http://someone${A}github.com/someone/Core.git"; do
+  core_push "$u" && fail "a look-alike remote was allowed: $u" || pass
+  assert_contains "$SANDBOX/core.err" "Core may only be pushed to GitHub"
+  assert_no_file "$SANDBOX/gh.log"
+done
 # a failed gh call (network) is retried: 2 failures then "true" pass, 3 failures block, "false" is final
 FL="$SANDBOX/flaky"; mkdir -p "$FL"
 cat > "$FL/gh" <<'STUBEOF'
 #!/bin/sh
 n=$(cat "$GH_COUNT" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$GH_COUNT"
 if [ "$n" -le "$GH_FAILS" ]; then echo "TLS handshake timeout" >&2; exit 1; fi
+[ "$*" = "api repos/someone/Core --jq .private" ] || exit 1
 echo "$GH_ANSWER"
 STUBEOF
 chmod +x "$FL/gh"
@@ -164,7 +215,6 @@ T2="$SANDBOX/my tools"; bash "$SCRIPTS/sync-tools.sh" "$PLUGIN" "$T2" >/dev/null
 rm -f "$C/.git/hooks/pre-push"
 assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P" --tools "$T2"
 assert_contains "$C/.git/hooks/pre-push" "$T2/git-hooks/pre-push-code"
-# (CLAUDE.md is already tracked by the --no-verify test above, so use a fresh blocked file)
 echo secret > "$C/.env.local"; git -C "$C" add -f .env.local
 OUT=$(git -C "$C" commit -m t 2>&1) && fail "commit allowed with tools in a path with a space" || pass
 echo "$OUT" | grep -q 'Commit blocked' && pass || fail "shim with a spaced tools path did not run the hook body: $OUT"
@@ -215,6 +265,33 @@ for bad in "папка/CLAUDE.md" "é/.env" Claude.md .ENV; do
   try_commit "$bad" && fail "commit allowed: $bad" || pass
   rm -rf "${C:?}/${bad:?}"
 done
+# a path git would print quoted (a double quote, a backslash, a tab, a line break) is judged by its real name: both
+# hooks refuse the blocked file, and the push leaves it off the remote; a harmless file with such a name still passes
+QUOTED='we"ird/.env
+back\slash/CLAUDE.md'
+TABBED="$(printf 'tab\tdir/AGENTS.md')"; BROKEN_LINE="$(printf 'line\nbreak/.env')"
+RQ="$SANDBOX/quoted names"; pp_repo "$RQ"; nv_commit "$RQ" src/a.txt
+git -C "$RQ" push -q origin HEAD:refs/heads/main 2>/dev/null && pass || fail "setup: the clean push before the quoted names"
+quoted_case() {  # quoted_case <path>: refused by pre-commit, and by pre-push after a --no-verify commit
+  try_commit "$1" && fail "commit allowed: $1" || pass
+  rm -rf "${C:?}/${1%%/*}"
+  nv_commit "$RQ" "$1"
+  git -C "$RQ" push -q origin HEAD:refs/heads/main 2>/dev/null && fail "push allowed: $1" || pass
+  git -C "$RQ.git" ls-tree -r --name-only -z main | tr '\0' '\n' | grep -qE '(^|/)(\.env|CLAUDE\.md|AGENTS\.md)$' \
+    && fail "the remote holds the blocked file: $1" || pass
+  git -C "$RQ" reset -q --hard HEAD~1
+}
+printf '%s\n' "$QUOTED" > "$SANDBOX/quoted"
+while IFS= read -r bad; do quoted_case "$bad"; done < "$SANDBOX/quoted"
+quoted_case "$TABBED"; quoted_case "$BROKEN_LINE"
+OUT=$(mkdir -p "$C/we\"ird"; echo x > "$C/we\"ird/.env"; git -C "$C" add -f 'we"ird/.env'; git -C "$C" commit -m t 2>&1)
+git -C "$C" reset -q; rm -rf "$C/we\"ird"
+echo "$OUT" | grep -qxF '  - we"ird/.env' && pass || fail "a quoted name is not listed raw: $OUT"
+for ok in 'we"ird/main.dart' 'back\slash/README.md' "$(printf 'tab\tdir/notes.md')" "$(printf 'line\nbreak/main.dart')"; do
+  try_commit "$ok" && pass || fail "commit blocked: $ok"
+  nv_commit "$RQ" "$ok"
+done
+git -C "$RQ" push -q origin HEAD:refs/heads/main 2>/dev/null && pass || fail "a push of harmless files with quoted names was blocked"
 mv "$COREDEV_TOOLS/git-hooks/blocked-patterns" "$SANDBOX/bp"
 try_commit src/ok.txt && fail "missing patterns file must fail closed" || pass
 # the fix names no single host: the static hook cannot know which one installed it
@@ -312,6 +389,21 @@ while IFS= read -r p; do
     assert_eq "$i$c$u" "$i$i$i" "one list: .gitignore, pre-commit and pre-push disagree on $p (ignored, pre-commit, pre-push)"
   fi
 done < "$SANDBOX/samples"
+# every pattern has a sample: a line added to one list only then needs a sample path, and the agreement above fails on it
+for l in blocked-patterns allowed-patterns; do
+  grep -v '^[[:space:]]*$' "$GHK/$l" > "$SANDBOX/patterns"
+  while IFS= read -r re; do
+    grep -qiE -e "$re" "$SANDBOX/samples" && pass || fail "one list: no sample path matches the $l line $re"
+  done < "$SANDBOX/patterns"
+done
+# (check-ignore -v prints "<file>:<line number>:<pattern><tab><path>" with the line that decided, negated lines too)
+git -C "$TB" -c core.ignorecase=true check-ignore -v --no-index --stdin < "$SANDBOX/samples" \
+  | sed -e "s/$(printf '\t').*//" -e 's/^[^:]*:[0-9]*://' > "$SANDBOX/deciding"
+awk '/^# Internal/ || /^# Secrets/ { s = 1; next } /^#/ || /^$/ { s = 0 } s' "$GIC" > "$SANDBOX/ignore-lines"
+[ -s "$SANDBOX/ignore-lines" ] && pass || fail "one list: gitignore-common has no Internal or Secrets line"
+while IFS= read -r l; do
+  grep -qxF -e "$l" "$SANDBOX/deciding" && pass || fail "one list: no sample path is decided by the gitignore-common line $l"
+done < "$SANDBOX/ignore-lines"
 # adopt adds to an existing .gitignore only the lines its filter takes: every Internal line and every .env line
 ADOPT_CASE="$(sed -n 's/^ *case "\$l" in \(CLAUDE\*|[^)]*\)) ;; \*) continue ;; esac$/\1/p' "$SCRIPTS/adopt.sh")"
 [ -n "$ADOPT_CASE" ] && pass || fail "adopt.sh: the .gitignore filter line was not found"
