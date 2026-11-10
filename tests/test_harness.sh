@@ -303,6 +303,11 @@ for f in "$ROOT"/tests/test_*.sh; do
   old="$(grep -nE '(^|;|\{|then|else|do)[[:space:]]*echo "[[:space:]]*(note:|SKIP )' "$f" | cut -d: -f1 | tr '\n' ' ')"
   assert_eq "${old:-none}" "none" "$(basename "$f"): old-style skip or note lines (use skip, or note)"
 done
+# --- bg and bg_wait: a section's counts are added, also when the section uses the variable names bg uses itself
+fake x_bg.sh 'a() { n=7; p=1; f=2; pass; }; b() { for n in 1 2; do pass; done; fail "b fails"; }; bg a; bg b; bg_wait; finish'
+one x_bg.sh; assert_eq "$RC" "1" "bg sections: the failure of a section fails the file"
+has "x_bg.sh: 3 passed, 1 failed" "bg sections that set n"; lacks "did not finish" "bg sections that set n"
+
 # --- a part behind a tool or root gate says so when it does not run (R4-114): every `if command -v <tool>` and every
 # `if [ "$(id -u)" ...` block of a test file holds a skip call (the block: from the `if` line that ends in `then` to
 # the `fi` at the same indent; a one-line `if ...; fi` holds it itself). A gate that only picks one of two tools
