@@ -10,8 +10,7 @@ setup_core
 bash "$SKILL/scripts/scaffold.sh" --name edge >/dev/null
 PR="$(dirname "$CORE_DIR")"; C="$PR/edge"; P="$CORE_DIR/edge"
 git -C "$C" commit -q --allow-empty -m init
-# proj and wt_of: tests/lib-hook.sh
-guard() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"file_path":"%s","content":"x"}}' "$3" "$1" "$2" | bash "$HOOKS/guard-code.sh" >/dev/null 2>"$SANDBOX/err"; RC=$?; }
+# proj, wt_of and guard: tests/lib-hook.sh
 
 # --- the .git file of a worktree, rewritten: relative gitdir, trailing blanks, CRLF
 W="$SANDBOX/ext/w1"; git -C "$C" worktree add -q "$W" -b e1 || fail "worktree add"

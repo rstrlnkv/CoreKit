@@ -9,8 +9,7 @@ setup_core
 bash "$SKILL/scripts/scaffold.sh" --name trust >/dev/null
 PR="$(dirname "$CORE_DIR")"; C="$PR/trust"; P="$CORE_DIR/trust"
 git -C "$C" commit -q --allow-empty -m init
-# wt_of: tests/lib-hook.sh
-guard() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"file_path":"%s","content":"x"}}' "$3" "$1" "$2" | bash "$HOOKS/guard-code.sh" >/dev/null 2>"$SANDBOX/err"; RC=$?; }
+# wt_of and guard: tests/lib-hook.sh
 mkdir -p "$SANDBOX/elsewhere"
 
 # --- a real worktree whose entry does not point back to this folder is not a worktree
