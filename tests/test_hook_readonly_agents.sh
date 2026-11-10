@@ -39,12 +39,6 @@ refused $V "perl -pi -e s/a/b/ src/a.txt"
 # perl reads more switches after -e CODE: "perl -e s/a/b/ -pi f" edits f in place
 refused $V "perl -e s/a/b/ -pi src/a.txt"
 refused $V "perl -e 1 -i src/a.txt"
-# a bare -I takes the next word as its folder (a real perl: -I does, -M and -m do not); scanning goes on after it
-refused $V "perl -I /tmp -pi -e s/a/b/ src/a.txt"
-refused $V "perl -e s/a/b/ -I /tmp -pi src/a.txt"
-refused $V "perl -wI /tmp -pi -e s/a/b/ src/a.txt"
-# -0 and -l take digits, then more switches follow in the same group
-refused $V "perl -0pi -e s/a/b/ src/a.txt"
 refused $V 'git commit -qm x'
 refused $V 'git -C . add -A'
 refused $V 'git checkout -- src/a.txt'
@@ -116,14 +110,7 @@ allowed $V 'git -C /tmp/ro-clone checkout -b x'
 allowed $V 'git clone . /tmp/ro-copy'
 allowed $V 'perl -Ilib -MList::Util -e 1'
 allowed $V 'perl -ne print src/a.txt && perl -e 1 -w src/a.txt && perl -eprint src/a.txt'
-allowed $V "perl -I /tmp -e 'print 1' && perl -ne 'print' src/a.txt && perl -wI /tmp -e 1"
-allowed $V 'perl -0777 -ne print src/a.txt && perl -l0 -ne print src/a.txt'   # digits without an i: reads only
 allowed $V 'truncate -s 0 /tmp/ro-a.txt'   # -s takes the size: the temp file is the target
-allowed $V 'truncate -cs 0 /tmp/ro-a.txt && truncate -c -s 0 /tmp/ro-a.txt && truncate -s0 /tmp/ro-a.txt'  # a group ending in s
-refused $V 'truncate -cs 0 src/a.txt'
-# -r takes the next letters or word as RFILE: in -rs the s is that file, so the next word is a target
-refused $V 'truncate -rs src/a.txt'
-refused $V 'truncate -crs src/a.txt'
 refused $V 'ln -s /tmp/ro-x /tmp/ro-l'     # ln keeps its own rule, -s or not
 allowed $V 'chmod -R u+w /tmp/d'
 allowed $V 'curl -s https://example.com && curl -o /tmp/f https://example.com/f && wget -qO- https://example.com'

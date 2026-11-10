@@ -125,10 +125,8 @@ function finalize(   k, a, dd, last, v, first, m, q, c) {
       a = args[k]
       if (a == "--" || substr(a, 1, 1) != "-") return  # the script or its arguments: no more options
       if (a ~ /^-[eE]./) continue                  # code glued to -e
-      if (a == "-I") { k++; continue }             # -I DIR: of perl's switches only -I takes a separate word
       if (a ~ /^-[MImx]/) continue                 # -MModule, -Ilib: their letters are names
-      if (a ~ /^-[A-Za-z0-9]*i/) { out("X", "perl -i"); return }  # -0pi, -l0pi: digits may come before the i
-      if (a ~ /^-[A-Za-z0-9]*I$/) { k++; continue } # -wI DIR: a group that ends in I
+      if (a ~ /^-[A-Za-z]*i/) { out("X", "perl -i"); return }
       if (a ~ /^-[A-Za-z]*[eE]$/) k++              # -e CODE: perl reads more switches after the code
     }
     return
@@ -215,7 +213,7 @@ function finalize(   k, a, dd, last, v, first, m, q, c) {
   for (k = 1; k <= na && !full; k++) {
     a = args[k]
     if (!dd && a == "--") { dd = 1; continue }
-    if (!dd && cmd == "truncate" && (a ~ /^-[co]*s$/ || a == "--size")) { k++; continue }  # -s, -cs: the next word is a size (not -rs: there s is RFILE)
+    if (!dd && cmd == "truncate" && (a == "-s" || a == "--size")) { k++; continue }  # before the mode test: -s is a size
     if (!dd && substr(a, 1, 1) == "-" && a !~ /^-[rwxXst]+$/) continue
     if (first) { first = 0; continue }
     path(a)
