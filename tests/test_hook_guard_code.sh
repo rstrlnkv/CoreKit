@@ -570,6 +570,9 @@ sec_codex() {
   # the Codex shell
   fx pre-bash; hook_ok "codex Bash without a patch passes"
   fx pre-bash-subagent; hook_ok "codex Bash in a subagent: no ro_agent for a Codex agent_type"
+  # the same subagent with a command that writes (a read-only checker would be refused): still no ro_agent
+  run_hook "$H" "$(sed -e "s|@CWD@|$C|g" -e 's|swift test --filter Foo|echo x > src/a|' "$FX/pre-bash-subagent.json")"
+  hook_ok "codex Bash in a subagent that writes: no ro_agent for a Codex agent_type"
   # A patch handed to the shell is refused with one message, wherever it points: a patch run through the Bash command line
   # cannot be checked. Both hooks call the same function in one line (scripts/shell-patch.sh); its cases are in
   # test_shell_patch.sh and the hook-level matrix (both hooks, both cwds, both hosts) in test_shell_patch_exec.sh.
@@ -841,6 +844,105 @@ sec_cheap() {
   assert_eq "$(grep -vxE 'bash|dirname' "$EXEC_LOG" | LC_ALL=C sort | tr '\n' ' ')" "awk cat " "git status starts only cat, one awk and dirname"
 }
 bg sec_cheap
+
+# Rules that one deleted line would drop: each case here is the only one that sees its rule.
+sec_rules() {
+  local G="$CORE_DIR/gl/code" n i many="" O="$SANDBOX/elsewhere"
+  sh() { run_bash "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" "${2-$C}"; }
+  patch() { run_hook "$H" "$(hook_event codex PreToolUse "${2-$C}" tool="${3-apply_patch}" command="$1")"; }
+  # a Core file outside code/ is not judged, whatever its name (the path must lie under the code root)
+  run_file Write "$CORE_DIR/p/docs/AGENTS.md";   hook_ok "Core project docs/AGENTS.md"
+  run_file Write "$CORE_DIR/p/notes/CLAUDE.md";  hook_ok "Core project notes/CLAUDE.md"
+  # public-docs: a glob is not expanded, even when the hook starts in a code folder that holds docs/
+  mkdir -p "$G/docs" "$G/src"; printf 'public-docs: *\n' > "$CORE_DIR/gl/CLAUDE.md"
+  cd "$G" || return; run_file Write "$G/docs/x.md" "$G"; cd "$OLDPWD" || return
+  blocked "public-docs: * is not expanded" "$G/docs/x.md" "$CORE_DIR/gl/docs/x.md"
+  # docs/superpowers itself stays private under a public docs/
+  printf 'public-docs: docs/\n' > "$CORE_DIR/gl/CLAUDE.md"
+  run_file Write "$G/docs/superpowers" "$G"; blocked "a file named docs/superpowers" "$G/docs/superpowers" "$CORE_DIR/gl/docs/superpowers"
+  run_file Write "$G/docs/superpowersx" "$G"; hook_ok "docs/superpowersx under a public docs/"
+  # an unreadable patch: each internal name in a *** line is refused (raw check), an ordinary name passes
+  for n in docs/a.md .claude/x CLAUDE.md CLAUDE.local.md AGENTS.md; do
+    patch "*** ADD FILE: $n"; hook_blocked_any "unreadable patch naming $n"
+    case "$ERR" in *"the line \"*** ADD FILE: $n\" names an internal path"*) pass ;; *) fail "unreadable patch naming $n: message: $ERR" ;; esac
+  done
+  patch "*** ADD FILE: src/AGENTS.txt"; hook_ok "unreadable patch naming src/AGENTS.txt passes"
+  # too many internal-looking targets: refused when a target names the folder that holds the Core, from any cwd
+  mkdir -p "$CORE_DIR/cap2/code/src"; printf 'public-docs: docs/\n' > "$CORE_DIR/cap2/CLAUDE.md"
+  i=1; while [ $i -le 201 ]; do many="$many $CORE_DIR/cap2/code/docs/pub/x$i"; i=$((i + 1)); done
+  run_bash "touch$many" "$O"; hook_blocked_any "201 internal-looking targets in a project, cwd outside"
+  grep -q 'too many files to check' "$OD/err" && pass || fail "the too-many message, cwd outside: $ERR"
+  # a link named .claude/worktrees/<name> passes like a worktree folder, also when it points into the Core
+  sh "ln -s \"$CORE_DIR/p/docs\" .claude/worktrees/lw"; hook_ok "ln -s <Core>/p/docs .claude/worktrees/lw"
+  sh 'ln -s "$X" .claude/worktrees/lv';          hook_ok "ln -s \$X .claude/worktrees/lv"
+  sh "ln -s \"$CORE_DIR/p/docs\" .claude/lw";    blocked "ln -s <Core>/p/docs .claude/lw" "$C/.claude/lw" "$CORE_DIR/p/.claude/lw"
+  # a link or a copy into a folder is judged by the name it gets there; a . or .. source gives no name
+  sh 'ln -s /tmp/CLAUDE.md src/';                blocked "ln -s /tmp/CLAUDE.md src/" "$C/src/CLAUDE.md" "$CORE_DIR/p/src/CLAUDE.md"
+  sh 'ln -s ../CLAUDE.md' "$C/src";              blocked "ln -s ../CLAUDE.md (one operand) in src/" "$C/src/CLAUDE.md" "$CORE_DIR/p/src/CLAUDE.md"
+  sh 'cp -r .. AGENTS.md/sub/';                  hook_ok "cp -r .. AGENTS.md/sub/ (a .. source names no file)"
+  sh 'cp -r . src/';                             hook_ok "cp -r . src/"
+}
+bg sec_rules
+
+# The writers' options, one row each: "p@<command>" passes, "r@<command>@<path refused, under the code folder>".
+# %W is the code folder, %K the project's folder in the Core, %S the in-place sed. Own project wr, with docs/ and src/.
+sec_rows() {
+  local W="$CORE_DIR/wr/code" K="$CORE_DIR/wr" SED=sed want c t i same="" n100="" n
+  mkdir -p "$W/docs" "$W/src"; : > "$K/CLAUDE.md"
+  sh() { run_bash "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" "${2-$W}"; }
+  while IFS=@ read -r want c t; do
+    c="${c//%W/$W}"; c="${c//%K/$K}"; c="${c//%S/$SED -i}"
+    sh "$c"
+    case "$want" in
+      p) hook_ok "passes: $c" ;;
+      r) blocked "refused: $c" "$W/$t" "$K/$t" ;;
+    esac
+  done <<'ROWS'
+p@touch -r docs/ref src/a
+p@touch -d now src/a
+p@mkdir -m 755 src/x
+p@install -m 644 a src/a
+p@install -m 644 -g docs a .
+r@install -o root a docs/a@docs/a
+r@cp -S .bak a docs/a@docs/a
+p@cp -b -S .claude settings.json .
+p@mv -b -S .claude settings.json .
+p@ln -S .claude -s ../settings.json .
+r@cp --target-directory=docs a@docs/a
+r@mv --target-directory=docs a@docs/a
+r@ln -t docs a@docs
+r@ln -s -t src /tmp/CLAUDE.md@src/CLAUDE.md
+r@cp -- a docs/a@docs/a
+r@mv -- -old/CLAUDE.md src/@src/CLAUDE.md
+p@sed -e s/a/b/ src/a
+p@%S -f docs/fix.sed src/a.c
+r@%S -f fix.sed docs/a.md@docs/a.md
+p@perl -e 1 src/a
+p@perl -pi -e 1 -e AGENTS.md src/a.c
+r@cd %W/ && echo x > docs/y.md@docs/y.md
+p@cd %W/ && echo x > src/y.md
+p@echo x > /dev/null
+p@cd %K && ln -s CLAUDE.md %W/AGENTS.md
+r@cd %W/src && ln -s notes.md %W/AGENTS.md@AGENTS.md
+r@cd /srv/$D && cp CLAUDE.md %W/src/@src/CLAUDE.md
+p@cp "$TPL/CLAUDE.md" src/
+ROWS
+  # ~ is the home folder, also after a cd (it is no relative path)
+  HOME="$W" sh 'cd src && echo x > ~/docs/a.md'; blocked "a ~ target after a cd" "$W/docs/a.md" "$K/docs/a.md"
+  HOME="$W" sh 'cd src && echo x > ~/src/a.md';  hook_ok "a ~ target after a cd, in src/"
+  # a target with a TAB in its name is not judged (LIMIT: the reader's lines are TAB-separated)
+  run_bash 'echo x > \"docs/a\tb\"' "$W";        hook_ok "LIMIT, passes: a target with a TAB"
+  # each target counts once toward the cap
+  i=1; while [ $i -le 201 ]; do same="$same /tmp/docs/a.md"; i=$((i + 1)); done
+  sh "touch$same";                               hook_ok "the same target 201 times is one target"
+  # past 100 targets every internal name is still judged
+  i=1; while [ $i -le 100 ]; do n100="${n100}touch x$i; "; i=$((i + 1)); done
+  for n in docs/late.md .claude/x CLAUDE.md CLAUDE.local.md AGENTS.md src/AGENTS.md; do
+    sh "${n100}echo x > $n"; blocked "100 targets, then > $n" "$W/$n" "$K/$n"
+  done
+  sh "${n100}echo x > src/late.md";              hook_ok "100 targets, then > src/late.md"
+}
+bg sec_rows
 
 bg_wait
 
