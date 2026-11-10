@@ -6,6 +6,8 @@ All notable changes to `coreopinion` are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-10
+
 ### Changed
 - The trigger evals moved out of the plugin to `evals/coreopinion/`, so an install no longer
   carries them. Run them with `bash scripts/eval.sh coreopinion`.
