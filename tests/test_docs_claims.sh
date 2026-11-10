@@ -91,4 +91,22 @@ printf 'Use `-j 4` and `KEEP_SANDBOX=1`; -jx and XVERBOSE are other words.\n' > 
 names_knob "$SANDBOX/c.md" -j && pass || fail "names_knob: -j in backticks"
 names_knob "$SANDBOX/c.md" KEEP_SANDBOX && pass || fail "names_knob: KEEP_SANDBOX=1"
 names_knob "$SANDBOX/c.md" VERBOSE && fail "names_knob: XVERBOSE counted as VERBOSE" || pass
+
+# --- the Codex CLI version the docs say they were tested with (R4-132) is the one CI installs: CODEX_VERSION in the
+# workflow is the source, cut to major.minor. A bump there with the docs left behind fails here.
+# codex_tested <workflow> — major.minor of its CODEX_VERSION line (comment lines are not read); empty if there is none
+codex_tested() {
+  grep -v '^[[:space:]]*#' "$1" | sed -n -E 's/^[[:space:]]*CODEX_VERSION:[[:space:]]*"?([0-9]+\.[0-9]+)\.[0-9]+.*/\1/p' | head -1
+}
+cxv="$(codex_tested "$WF")"
+[ -n "$cxv" ] && pass || fail "no CODEX_VERSION: <major.minor.patch> line in $WF"
+for doc in README.md plugins/corecrew/README.md; do
+  grep -qF "(tested with $cxv)" "$ROOT/$doc" && pass || fail "$doc does not say '(tested with $cxv)', the Codex CLI that CI installs"
+done
+# self-check: the version is read from the env line, not from a comment, and cut to major.minor
+printf '%s\n' 'jobs:' '  suite:' '    env:' '      # CODEX_VERSION: 9.9.9 was the old one' '      CODEX_VERSION: 0.167.2    # bump on purpose' > "$SANDBOX/cx.yml"
+assert_eq "$(codex_tested "$SANDBOX/cx.yml")" "0.167" "codex_tested: major.minor of the env line"
+printf '%s\n' '      CODEX_VERSION: "12.3.0"' > "$SANDBOX/cx.yml"
+assert_eq "$(codex_tested "$SANDBOX/cx.yml")" "12.3" "codex_tested: a quoted version"
+assert_eq "$(codex_tested "$SANDBOX/nomatrix.yml")" "" "codex_tested without the line"
 finish
