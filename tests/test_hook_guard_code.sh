@@ -452,12 +452,17 @@ assert_eq "$RC" "0" "no awk files: Bash passes"; assert_eq "$(<"$OD/out")$(<"$OD
 printf '%s' '{"cwd":"'"$C"'","tool_name":"Write","tool_input":{"file_path":"'"$C"'/docs/a.md"}}' | bash "$PL/hooks/guard-code.sh" >"$OD/out" 2>"$OD/err"; RC=$?
 assert_eq "$RC" "2" "no awk files: file tools are still judged"
 # the apply_patch reader (patch-paths.awk) is missing: no path is read, nothing can be judged, every patch is refused
-pj() { printf '{"cwd":"%s","tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\\n*** Add File: %s\\n+x\\n*** End Patch"}}' "$C" "$1"; }
+# pj <path> [cwd] — the JSON of an apply_patch call that adds one file
+pj() { printf '{"cwd":"%s","tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\\n*** Add File: %s\\n+x\\n*** End Patch"}}' "${2-$C}" "$1"; }
 pj docs/a.md | bash "$PL/hooks/guard-code.sh" >"$OD/out" 2>"$OD/err"; RC=$?
 assert_eq "$RC" "2" "no patch-paths.awk: apply_patch on docs/ is refused (fails closed)"
 [ -s "$OD/err" ] && pass || fail "no patch-paths.awk: empty stderr on exit 2"
 pj src/a.swift | bash "$PL/hooks/guard-code.sh" >"$OD/out" 2>"$OD/err"; RC=$?
 assert_eq "$RC" "2" "no patch-paths.awk: a harmless apply_patch is refused too (nothing can be judged)"
+assert_contains "$OD/err" "patch-paths.awk is missing or failed"
+# the same refusal holds with a cwd outside any project (guard-code has no cwd gate for apply_patch)
+pj src/a.swift "$SANDBOX/elsewhere" | bash "$PL/hooks/guard-code.sh" >"$OD/out" 2>"$OD/err"; RC=$?
+assert_eq "$RC" "2" "no patch-paths.awk, cwd outside a project: a harmless apply_patch is refused"
 assert_contains "$OD/err" "patch-paths.awk is missing or failed"
 
 # --- SIGPIPE ignored (as on GitHub's runners) and a reader that stops early: no "write error: Broken pipe" reaches the user
@@ -646,6 +651,12 @@ sec_codex() {
   patch "$big*** Add File: $D${nl}+x${nl}$E"; hook_blocked_any "codex 101st path (docs/a.md) is refused"
   patch "$big*** Add File: src/last.txt${nl}+x${nl}$E"; hook_blocked_any "codex 101 harmless paths are refused"
   grep -q 'at most 100' "$OD/err" && pass || fail "the cap message must say at most 100 files: $ERR"
+  # outside any project two more refusals still hold: the cap and an unreadable text whose *** line names an internal path
+  patch "$big*** Add File: src/last.txt${nl}+x${nl}$E" "$O"; hook_blocked_any "codex outside a project: 101 harmless paths are refused"
+  grep -q 'at most 100' "$OD/err" && pass || fail "outside a project: the cap message must say at most 100 files: $ERR"
+  patch "$big$E" "$O"; hook_ok "codex outside a project: 100 harmless paths pass"
+  patch "*** Add File: $D${nl}+x" "$O"; hook_blocked_any "codex outside a project: no Begin Patch, a *** line naming docs/a.md is refused"
+  patch "*** Add File: src/a.txt${nl}+x" "$O"; hook_ok "codex outside a project: no Begin Patch, a *** line naming src/a.txt passes"
   cpu_run run_hook "$H" "$(hook_event codex PreToolUse "$C" tool=apply_patch rawcmd="$big5k")"; hook_blocked_any "codex 5000 harmless paths are refused"
   [ "$CPU_MS" -lt 10000 ] && pass || fail "5000 paths took $CPU_MS ms of CPU (hook timeout 15 s)"
   grep -q 'at most 100' "$OD/err" && pass || fail "the cap message must say at most 100 files"
