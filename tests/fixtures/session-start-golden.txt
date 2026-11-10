@@ -30,7 +30,7 @@ Session rules (@SB@/Projects/Core/session-rules.md):
 Rule one.
 corecrew: @SB@/Projects/gold/CLAUDE.local.md exists and is not a link to @SB@/Projects/Core/gold/CLAUDE.md, so the private CLAUDE.md is not loaded. Move that file away, then run: ln -s "@SB@/Projects/Core/gold/CLAUDE.md" "@SB@/Projects/gold/CLAUDE.local.md"
 rc=0
-== layout note + stale hook
+== layout note
 corecrew: you are in the Core project "gold" (Core: @SB@/Projects/Core)
 Project docs index: @SB@/Projects/Core/gold/docs/INDEX.md
 Save a finished step: bash "@SB@/plugin-data/tools/save" "<message>"; undo the last step: bash "@SB@/plugin-data/tools/undo-step"
@@ -39,7 +39,6 @@ Session rules (@SB@/Projects/Core/session-rules.md):
 Rule one.
 Layout note: this Core has layout schema 1, the plugin expects 2. Bring it up to date (adds only what is missing): bash "@PL@/scripts/setup-core.sh" "@SB@/Projects/Core"
 corecrew: linked CLAUDE.local.md to @SB@/Projects/Core/gold/CLAUDE.md; restart the session to load it
-Old git hooks from an older version: @SB@/Projects/gold/.git/hooks/pre-commit. Replace them with: bash "@PL@/scripts/install-hooks.sh" "@SB@/Projects/Core/gold"
 rc=0
 == from the Core project folder
 corecrew: you are in the Core project "gold" (Core: @SB@/Projects/Core)
@@ -49,5 +48,4 @@ Standards: alpha
 Session rules (@SB@/Projects/Core/session-rules.md):
 Rule one.
 Layout note: this Core has layout schema 1, the plugin expects 2. Bring it up to date (adds only what is missing): bash "@PL@/scripts/setup-core.sh" "@SB@/Projects/Core"
-Old git hooks from an older version: @SB@/Projects/gold/.git/hooks/pre-commit. Replace them with: bash "@PL@/scripts/install-hooks.sh" "@SB@/Projects/Core/gold"
 rc=0

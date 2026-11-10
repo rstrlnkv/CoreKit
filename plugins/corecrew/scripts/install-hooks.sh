@@ -30,8 +30,6 @@ CORE_DIR="${CORE_DIR:-$(dirname "$P")}"
 MARK="# corecrew hook shim"
 # The shim's advice names the host that installed corecrew (lib.sh host): a session of that host refreshes the tools.
 case "$(host)" in codex) HOST_NAME=Codex ;; *) HOST_NAME="Claude Code" ;; esac
-OLD_MARK="new-project hook"     # 0.1.x hooks
-OLD_SHIM="# coredev hook shim" # 0.2.x shims (plugin was called coredev)
 
 # Run from the plugin (plugin.json is one level up): bring the tools copy up to date first, so
 # the shims have something to run. From the tools copy itself (save's reinstall) there is no
@@ -55,7 +53,7 @@ done
 install_shim() {
   local dest="$2" target="$TOOLS/git-hooks/$1"
   # (-L: a link whose target is missing is the user's hook too; grep fails on it, so it is left as it is)
-  if { [ -e "$dest" ] || [ -L "$dest" ]; } && ! grep -qF -e "$MARK" -e "$OLD_MARK" -e "$OLD_SHIM" "$dest"; then
+  if { [ -e "$dest" ] || [ -L "$dest" ]; } && ! grep -qF -e "$MARK" "$dest"; then
     echo "WARN: $dest exists and is not a corecrew hook; left unchanged" >&2; return 0
   fi
   mkdir -p "$(dirname "$dest")" 2>/dev/null || {

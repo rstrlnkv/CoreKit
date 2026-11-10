@@ -184,7 +184,7 @@ printf 'schema: 01\n' > "$CORE_DIR/.coredev"
 run claude --cwd "$C"; echo "$OUT" | grep -qF "Layout note" && pass || fail "schema 01: layout note: $OUT"
 printf 'schema: 2\n' > "$CORE_DIR/.coredev"
 mkdir -p "$C/.git/hooks"; printf '#!/bin/sh\n# new-project hook\n' > "$C/.git/hooks/pre-commit"
-run claude --cwd "$C"; echo "$OUT" | grep -qF "Old git hooks" && pass || fail "stale hook note: $OUT"
+run claude --cwd "$C"; echo "$OUT" | grep -qF "Old git hooks" && fail "corecrew 1.0 still names an old hook: $OUT" || pass
 rm -f "$C/.git/hooks/pre-commit"
 
 # --- a failing sync is reported and the exit stays 0; the rest still runs

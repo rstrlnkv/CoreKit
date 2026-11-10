@@ -124,24 +124,14 @@ run_rc "$SANDBOX/elsewhere"
 assert_eq "$OUT" "{\"systemMessage\":\"corecrew: Core at $CORE_DIR is not set up — /corecrew:new-project or /corecrew:task adopt <folder> will set it up\"}" "old Core elsewhere: hint says not set up"
 cp "$SANDBOX/corecrew.bak" "$CORE_DIR/.coredev"
 
-# --- git hooks: only an old "new-project hook" is named; shims and a user's own hook are left alone
-INST="bash \"$PLUGIN/scripts/install-hooks.sh\" \"$P\""
+# --- git hooks: corecrew 1.0 (P3) names no old hook; 0.1.x and 0.2.x hooks are a user's own hooks now
 mkdir -p "$C/.git/hooks" "$CORE_DIR/.git/hooks"
 run_rc "$C"; echo "$OUT" | grep -qF "install-hooks.sh" && fail "hook note without hooks: $OUT" || pass
 printf '#!/bin/sh\n# new-project hook\nexit 0\n' > "$C/.git/hooks/pre-commit"
-run_rc "$C"; echo "$OUT" | grep -qF "$INST" && pass || fail "old pre-commit: install command missing: $OUT"
-echo "$OUT" | grep -qF "pre-commit" && pass || fail "old pre-commit not named: $OUT"
-rm "$C/.git/hooks/pre-commit"
-printf '#!/bin/sh\n# new-project hook\nexit 0\n' > "$C/.git/hooks/pre-push"
-run_rc "$C"; echo "$OUT" | grep -qF "$INST" && pass || fail "old pre-push: install command missing: $OUT"
-rm "$C/.git/hooks/pre-push"
+printf '#!/bin/sh\n# coredev hook shim\nexec true\n' > "$C/.git/hooks/pre-push"
 printf '#!/bin/sh\n# new-project hook\nexit 0\n' > "$CORE_DIR/.git/hooks/pre-push"
-run_rc "$C"; echo "$OUT" | grep -qF "$INST" && pass || fail "old Core pre-push: install command missing: $OUT"
-echo "$OUT" | grep -qF "$CORE_DIR/.git/hooks/pre-push" && pass || fail "old Core pre-push not named: $OUT"
-rm "$CORE_DIR/.git/hooks/pre-push"
-printf '#!/bin/sh\n# coredev hook shim\nexec true\n' > "$C/.git/hooks/pre-commit"
-run_rc "$C"; echo "$OUT" | grep -qF "$INST" && pass || fail "0.2.x shim: install command missing: $OUT"
-rm "$C/.git/hooks/pre-commit"
+run_rc "$C"; echo "$OUT" | grep -qF "install-hooks.sh" && fail "an old hook is still named: $OUT" || pass
+rm -f "$C/.git/hooks/pre-commit" "$C/.git/hooks/pre-push" "$CORE_DIR/.git/hooks/pre-push"
 printf '#!/bin/sh\n# corecrew hook shim\nexec true\n' > "$C/.git/hooks/pre-commit"
 printf '#!/bin/sh\n# my own hook\nexit 0\n' > "$C/.git/hooks/pre-push"
 printf '#!/bin/sh\n# new-project hook\n# corecrew hook shim\n' > "$CORE_DIR/.git/hooks/pre-push"

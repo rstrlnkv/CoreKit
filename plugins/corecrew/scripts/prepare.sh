@@ -52,7 +52,7 @@ link_notes() {
 
 # 2. The project.
 prepare_project() {
-  local cwd="$1" proj P sv old shown code stale h hp
+  local cwd="$1" proj P sv old shown code hp
   proj="$(project_of "$cwd")" || proj=""
   if [ -n "$proj" ]; then
     P="$CORE_DIR/$proj"
@@ -78,17 +78,6 @@ prepare_project() {
           case "$WT_ROOT" in "$(canon_dir "$code")"|"$(canon_dir "$code")"/*) ;; *) link_notes "$WT_ROOT" "$P" ;; esac
         fi
       fi
-    fi
-    # Old git hooks: from before the plugin ("new-project hook") or 0.2.x shims of coredev, which run a
-    # tools copy that is no longer updated. A current shim, or a hook of the user's own, is left alone.
-    stale=""
-    for h in "${code:-$P/code}/.git/hooks/pre-commit" "${code:-$P/code}/.git/hooks/pre-push" "$CORE_DIR/.git/hooks/pre-push"; do
-      [ -f "$h" ] || continue
-      grep -qF "# corecrew hook shim" "$h" && continue
-      grep -qF -e "new-project hook" -e "# coredev hook shim" "$h" && stale="${stale:+$stale, }$h"
-    done
-    if [ -n "$stale" ]; then
-      printf '%s\n' "$(msg old_hooks "$stale" "$ROOT/scripts/install-hooks.sh" "$P")"
     fi
     # core.hooksPath: git runs the hooks of another folder (husky, lefthook, a global setting), so the corecrew
     # shims never run there: install-hooks prints the lines to chain them. An empty value makes git run no hooks

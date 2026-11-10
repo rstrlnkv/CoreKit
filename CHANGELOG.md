@@ -9,6 +9,11 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+### Removed
+- Git hooks of corecrew 0.1 and 0.2 (`new-project hook`, `# coredev hook shim`) are no longer
+  replaced or named at session start: `install-hooks.sh` leaves them as a hook of your own, with a
+  warning. Remove such a hook and run `install-hooks.sh` again.
+
 ## [0.15.0] - 2026-11-10
 
 Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off until then.

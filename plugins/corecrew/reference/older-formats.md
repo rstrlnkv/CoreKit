@@ -64,17 +64,6 @@ still does, until it is replaced (next section). A Core that tracks the folders 
 still commits a change or a deletion there with the step, and the clean-tree check of a task chain
 names them.
 
-## Old git hooks
-Made by corecrew 0.1.0-0.2.1.
-Supported until corecrew 1.0.
-
-Git hooks from corecrew 0.1 (a hook with the line `new-project hook`) and 0.2 (a shim with the line
-`# coredev hook shim`, from when the plugin was called coredev) run a tools copy that is no longer
-updated. `install-hooks.sh` calls these markers `OLD_MARK` and `OLD_SHIM`. At session start
-`prepare.sh` names each such hook in a note with the command to replace them; relay it. That command
-runs `install-hooks.sh`, which writes current shims over them and leaves a hook of the user's own
-alone.
-
 ## Core without a schema
 Made by corecrew 0.1.0-0.4.0.
 Supported until corecrew 1.0.

@@ -26,7 +26,7 @@
 MSG_LANGS="en ru"
 # shellcheck disable=SC2034  # MSG_KEYS is read by tests/test_hook_messages.sh (every language for every key)
 MSG_KEYS="sync_failed sync_not_ours agents_in_core hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
-session_rules schema_none run_starting layout_note old_hooks hooks_path hooks_path_empty guard_code_blocked guard_code_public guard_code_too_many patch_too_many patch_unjudgeable patch_no_reader patch_shell secrets_blocked secrets_ask
+session_rules schema_none run_starting layout_note hooks_path hooks_path_empty guard_code_blocked guard_code_public guard_code_too_many patch_too_many patch_unjudgeable patch_no_reader patch_shell secrets_blocked secrets_ask
 local_link_created agents_link_created agents_link_wrong agents_link_failed local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind
 readonly_agent settings_invalid_path settings_invalid_value settings_unreadable settings_no_home allowed_attribution allowed_model_profile
 src_env src_option src_file fix_env fix_option fix_file codex_trust codex_profile"
@@ -72,8 +72,6 @@ _msg_text() {
     ru:run_starting) MSG_T='тест, который запускается' ;;
     en:layout_note) MSG_T='Layout note: this Core has layout schema @1, the plugin expects @2. Bring it up to date (adds only what is missing): bash "@3" "@4"' ;;
     ru:layout_note) MSG_T='Заметка о структуре: структура этого Core — версия @1, плагину нужна @2. Обновите её (добавится только недостающее): bash "@3" "@4"' ;;
-    en:old_hooks) MSG_T='Old git hooks from an older version: @1. Replace them with: bash "@2" "@3"' ;;
-    ru:old_hooks) MSG_T='Найдены старые git-хуки от прошлой версии: @1. Замените их командой: bash "@2" "@3"' ;;
     en:hooks_path) MSG_T='corecrew git hooks do not run in @1: core.hooksPath sends git to @2. To chain them from your own hooks, run: bash "@3" "@4" (it prints the lines to add).' ;;
     ru:hooks_path) MSG_T='Git-хуки corecrew не работают в @1: core.hooksPath направляет git в @2. Чтобы подключить их к вашим хукам, выполните: bash "@3" "@4" (команда напечатает строки для добавления).' ;;
     en:hooks_path_empty) MSG_T='corecrew git hooks do not run in @1: core.hooksPath is set to an empty value, so git runs no hooks there. To install them, first remove the setting: git -C "@1" config --unset core.hooksPath    then run: bash "@2" "@3"' ;;

@@ -192,17 +192,16 @@ mv "$SANDBOX/pcc" "$COREDEV_TOOLS/git-hooks/pre-commit-code"; git -C "$C" reset 
 COREKIT_HOST=claude bash "$SCRIPTS/install-hooks.sh" "$P" >/dev/null 2>&1
 assert_contains "$C/.git/hooks/pre-commit" "Start a Claude Code session with corecrew enabled"
 
-# an old 0.1.x hook (marker "new-project hook") is replaced by a shim
-printf '#!/bin/sh\n# new-project hook: OLDBODY\nexit 0\n' > "$C/.git/hooks/pre-commit"
-assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P"
-assert_contains "$C/.git/hooks/pre-commit" "# corecrew hook shim"
-assert_not_contains "$C/.git/hooks/pre-commit" "OLDBODY"
-
-# a 0.2.x shim (marker "coredev hook shim") is replaced by a current shim
-printf '#!/bin/sh\n# coredev hook shim\nT=OLDSHIM\n' > "$C/.git/hooks/pre-commit"
-assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P"
-assert_contains "$C/.git/hooks/pre-commit" "# corecrew hook shim"
-assert_not_contains "$C/.git/hooks/pre-commit" "OLDSHIM"
+# corecrew 1.0 (P3): the 0.1.x hook ("new-project hook") and the 0.2.x shim ("coredev hook shim") are no longer
+# known; like any hook that is not a current shim, they are left unchanged with a warning
+for old in '# new-project hook: OLDBODY' '# coredev hook shim'; do
+  printf '#!/bin/sh\n%s\nexit 0\n' "$old" > "$C/.git/hooks/pre-commit"
+  assert_exit 0 bash "$SCRIPTS/install-hooks.sh" "$P"
+  echo "$OUT" | grep -q 'left unchanged' && pass || fail "no warning for an old hook ($old): $OUT"
+  assert_contains "$C/.git/hooks/pre-commit" "$old"
+  assert_not_contains "$C/.git/hooks/pre-commit" "# corecrew hook shim"
+done
+rm -f "$C/.git/hooks/pre-commit"; bash "$SCRIPTS/install-hooks.sh" "$P" >/dev/null 2>&1
 
 # a foreign hook is left alone and warned about
 printf '#!/bin/sh\n# mine\nexit 0\n' > "$C/.git/hooks/pre-push"

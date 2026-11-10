@@ -39,9 +39,8 @@ run_cases() {
   rm -f "$C/CLAUDE.local.md"; printf 'mine\n' > "$C/CLAUDE.local.md"
   case_run "real CLAUDE.local.md" "$C"
   rm -f "$C/CLAUDE.local.md"
-  mkdir -p "$C/.git/hooks"; printf '#!/bin/sh\n# new-project hook\n' > "$C/.git/hooks/pre-commit"
   printf 'schema: 1\n' > "$CORE_DIR/.coredev"
-  case_run "layout note + stale hook" "$C"
+  case_run "layout note" "$C"
   case_run "from the Core project folder" "$P"
   sed -e "s|$SANDBOX|@SB@|g" -e "s|$PLUGIN|@PL@|g" "$SANDBOX/raw.txt" > "$ACT"
 }

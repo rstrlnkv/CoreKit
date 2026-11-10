@@ -173,11 +173,10 @@ for v in en ru; do
   check "$v" "core not set up" "$OUT" "{\"systemMessage\":\"corecrew: Core at $CORE_DIR is not set up — /corecrew:new-project or /corecrew:task adopt <folder> will set it up\"}" \
     "{\"systemMessage\":\"corecrew: Core в $CORE_DIR не настроен — /corecrew:new-project или /corecrew:task adopt <folder> настроят его\"}"
 done
-# inside a project with spaces, %s, quotes and Cyrillic in the names; no schema; an old hook; session rules; two standards
+# inside a project with spaces, %s, quotes and Cyrillic in the names; no schema; session rules; two standards
 PN="my app %s 'q' проект"
 P="$CORE_DIR/$PN"; mkdir -p "$P/code/.git/hooks" "$CORE_DIR/standards" "$CORE_DIR/.git/hooks"
 : > "$P/CLAUDE.md"; : > "$CORE_DIR/standards/a.md"; : > "$CORE_DIR/standards/b.md"
-echo "# new-project hook" > "$P/code/.git/hooks/pre-commit"
 printf 'rule one\nrule two' > "$CORE_DIR/session-rules.md"
 for v in "${VARIANTS[@]}"; do
   OUT="$(hook_event claude SessionStart "$P/code" source=startup | vrun "$v" bash "$H" 2>"$SANDBOX/err")"; RC=$?
@@ -187,15 +186,13 @@ Project docs index: $P/docs/INDEX.md
 Save a finished step: bash \"$COREDEV_TOOLS/save\" \"<message>\"; undo the last step: bash \"$COREDEV_TOOLS/undo-step\"
 Standards: a, b
 Session rules ($CORE_DIR/session-rules.md):
-Layout note: this Core has layout schema none, the plugin expects 2. Bring it up to date (adds only what is missing): bash \"$PLUGIN/scripts/setup-core.sh\" \"$CORE_DIR\"
-Old git hooks from an older version: $P/code/.git/hooks/pre-commit. Replace them with: bash \"$PLUGIN/scripts/install-hooks.sh\" \"$P\"" \
+Layout note: this Core has layout schema none, the plugin expects 2. Bring it up to date (adds only what is missing): bash \"$PLUGIN/scripts/setup-core.sh\" \"$CORE_DIR\"" \
 "corecrew: вы в проекте Core \"$PN\" (Core: $CORE_DIR)
 Индекс документации проекта: $P/docs/INDEX.md
 Сохранить завершённый шаг: bash \"$COREDEV_TOOLS/save\" \"<message>\"; отменить последний шаг: bash \"$COREDEV_TOOLS/undo-step\"
 Стандарты: a, b
 Правила сессии ($CORE_DIR/session-rules.md):
-Заметка о структуре: структура этого Core — версия не указана, плагину нужна 2. Обновите её (добавится только недостающее): bash \"$PLUGIN/scripts/setup-core.sh\" \"$CORE_DIR\"
-Найдены старые git-хуки от прошлой версии: $P/code/.git/hooks/pre-commit. Замените их командой: bash \"$PLUGIN/scripts/install-hooks.sh\" \"$P\""
+Заметка о структуре: структура этого Core — версия не указана, плагину нужна 2. Обновите её (добавится только недостающее): bash \"$PLUGIN/scripts/setup-core.sh\" \"$CORE_DIR\""
   case "$OUT" in *"):"$'\n'"rule one"$'\n'"rule two"$'\n'*) pass ;; *) fail "session rules text not printed verbatim [$v]: $OUT" ;; esac
 done
 rm -f "$CORE_DIR/standards/a.md" "$CORE_DIR/standards/b.md"
