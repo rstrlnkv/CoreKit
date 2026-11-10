@@ -77,6 +77,11 @@ hook_refused_patch() {
 proj() { bash "$SCRIPTS/lib.sh" project-of "$1" 2>/dev/null; }
 # wt_of <path> — "<rc> <worktree root> <main checkout>" as lib.sh's worktree_of sets them
 wt_of() { ( . "$SCRIPTS/lib.sh"; WT_ROOT=""; WT_MAIN=""; worktree_of "$1"; rc=$?; echo "$rc $WT_ROOT $WT_MAIN" ); }
+# guard <tool> <path> <cwd> — runs guard-code.sh on a file-tool call (Write, Edit) made in <cwd>: exit code in RC,
+# stderr in ERR (and in $SANDBOX/err)
+guard() {
+  printf '{"session_id":"s","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"file_path":"%s","content":"x"}}' "$3" "$1" "$2" | bash "$HOOKS/guard-code.sh" >/dev/null 2>"$SANDBOX/err"; RC=$?; ERR="$(<"$SANDBOX/err")"
+}
 
 # poll <tenths> <cmd...> — runs cmd every 0.1 s until it succeeds, at most <tenths> more times; 1 when it never did
 poll() { local n="$1"; shift; while ! "$@"; do [ "$n" -gt 0 ] || return 1; n=$((n - 1)); sleep 0.1; done; }

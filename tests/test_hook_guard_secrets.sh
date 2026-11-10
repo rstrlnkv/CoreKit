@@ -245,6 +245,10 @@ run_hook "$H" '{"cwd":"'"$C"'","tool_name":"Grep","tool_input":{"pattern":"x","p
 run_hook "$H" '{"cwd":"'"$C"'","tool_name":"Glob","tool_input":{"pattern":["**/.env"]}}'; closed "Glob odd pattern"
 run_hook "$H" '{"cwd":"'"$C"'","tool_name":"Bash","tool_input":{"command":"cat .env'; closed "Bash truncated command"
 run_hook "$H" '{"cwd":"'"$C"'","tool_name":"Bash","tool_input":{"command":["cat .env"]}}'; closed "Bash command as an array"
+for n in example sample template; do
+  run_hook "$H" '{"cwd":"'"$C"'","tool_name":"Bash","tool_input":{"command":["cat .env.'"$n"'"]}}'; hook_ok "Bash command as an array naming .env.$n passes"
+done
+run_hook "$H" '{"cwd":"'"$C"'","tool_name":"Bash","tool_input":{"command":["cat .env.local"]}}'; closed "Bash command as an array naming .env.local"
 run_hook "$H" '{"cwd":"'"$C"'","tool_name":"Bash","tool_input":{"command":"cat ~/.ssh/id_rsa'; closed "Bash truncated ssh command"
 # and an odd shape outside the Core is still inert
 run_hook "$H" '{"cwd":"'"$SANDBOX"'/elsewhere","tool_name":"Read","tool_input":{"file_path":"'"$C"'/.env'; hook_ok "odd shape, cwd outside the Core"

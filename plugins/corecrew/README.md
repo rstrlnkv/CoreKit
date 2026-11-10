@@ -57,9 +57,10 @@ codex plugin add corecrew@corekit
 Then:
 
 1. **Trust the hooks.** Start `codex`, open `/hooks`, review and enable the `corecrew` hooks. Until
-   you do, corecrew's guards (project docs in code, secrets) stay off, and a plain Codex start does
-   not warn you: only `new-project`, `task` and `ship` remind you when they run. Do it again after
-   each update.
+   you do, corecrew's guards (project docs in code, secrets) stay off. The interactive `codex` asks
+   at start to review new or changed hooks. `codex exec` and other non-interactive runs do not ask
+   and skip the hooks silently, so `new-project`, `task` and `ship` remind you when they run. Do it
+   again after each update.
 2. **Write the settings file.** Codex has no options screen; see [Settings](#settings).
 3. **Give Codex your Core.** Codex writes only in the working folder and `--add-dir` folders, so
    start it as `codex --add-dir "<Core>"` (`~/Projects/Core` by default). For new-project, start it
@@ -75,12 +76,16 @@ What differs from Claude Code:
 - The crew roles are role files that `/corecrew:task` hands to Codex subagents as text, with the
   model and effort from `model_profile`, or from `codex_model` / `codex_model_<role>` when set.
   `feature-dev` is not used.
-- The crew needs Codex subagents (the `multi_agent` feature, on by default; `codex features list`
-  shows it). In a session without the `spawn_agent` tool the chain stops and says so.
+- The crew needs Codex subagents. In a session without the `spawn_agent` tool the chain stops and
+  says so.
 - Commits ask for your approval: the Codex sandbox keeps `.git` read-only, so `save` runs outside
-  it after you approve. In non-interactive `codex exec` the whole chain still runs; only the commit
-  stops, with `Commit: stopped — Codex sandbox keeps .git read-only`, and the files stay
-  uncommitted.
+  it after you approve.
+- A non-interactive run needs a sandbox that can write, with the Core added. In a folder Codex
+  does not trust yet, a plain `codex exec` is a read-only session and stops at the Core check.
+  Run `codex exec --sandbox workspace-write --add-dir "<Core>"`. With the corecrew secrets profile
+  as your default, run `codex exec --add-dir "<Core>"` instead: `--sandbox` switches the profile off.
+  Then the whole chain runs and only the commit stops, with
+  `Commit: stopped — Codex sandbox keeps .git read-only`, and the files stay uncommitted.
 - `gh`, pushes and project generators also run outside the sandbox after your approval: the
   sandbox has no network.
 - Codex subagents cannot be made read-only, so the read-only steps are checked, not enforced: the
@@ -167,7 +172,7 @@ rules for code; the brief and the project's `CLAUDE.md` win where they differ).
 
 ### What the hooks do
 
-Inside a Core project (the Core folder, or a code folder beside it):
+Inside a Core project (the project's folder in the Core, `<Core>/<name>/`, or its code folder beside the Core):
 
 - **Session start** refreshes the plugin's tools, links `CLAUDE.local.md` and `AGENTS.md`, and
   prints the project, the docs index, the save and undo commands and your `session-rules.md`.
@@ -185,11 +190,15 @@ Inside a Core project (the Core folder, or a code folder beside it):
   folder, so two runs do not break each other.
 - **Stop** reminds the agent to save a step that is left uncommitted.
 
-Outside a Core project, session start only refreshes the tools and, once per machine, says that the
-Core is not set up. In Claude Code the read-only checker rule applies everywhere: the designer,
-localizer, security and verifier agents may write nothing but temp folders; it does not act for
-Codex subagents, which the chain checks instead. In Codex the code guard also refuses a patch handed
-to the shell in any folder. Every other hook passes every call.
+Outside a Core project, session start refreshes the tools, names a setting it had to ignore and,
+once per machine, says that the Core is not set up. In Claude Code the read-only checker rule
+applies everywhere: the designer, localizer, security and verifier agents may write nothing but
+temp folders; it does not act for Codex subagents, which the chain checks instead. In Codex the
+code guard also refuses, in any folder, a patch handed to the shell and a patch it cannot check
+(more than 100 files, a missing reader, or an unreadable patch that names an internal path).
+"Outside a Core project" means the session folder. The code guard judges the path written, so a
+write into a project's code folder is refused from any session folder. The secrets guard, the
+one-suite hook and the Stop reminder act only when the session folder is in a project.
 
 The git hooks in the code repo (pre-commit, pre-push) refuse internal files in commits and pushes.
 The Core's pre-push hook refuses to push unless the Core's GitHub repo is private.
@@ -199,7 +208,7 @@ The Core's pre-push hook refuses to push unless the Core's GitHub repo is privat
 | Key | Values | Default | Meaning |
 |---|---|---|---|
 | `core_dir` | a folder | `~/Projects/Core` | Where your Core lives |
-| `attribution` | `allow` / `forbid` | `allow` | Whether Claude may add `Co-Authored-By` and "Generated with" lines to commits and pull requests |
+| `attribution` | `allow` / `forbid` | `allow` | Whether corecrew's own commits (`save`) may carry `Co-Authored-By` and "Generated with" lines; `forbid` strips them. A plain `git commit` is governed by the host's own attribution setting |
 | `model_profile` | `economy` / `balanced` / `strong` | `balanced` | Which models the crew uses per role |
 | `ui_language` | `en` / `ru` | `en` | Language of the hook messages |
 | `codex_model` | `<model> [<effort>]` or `inherit` | — | Codex only: the model (and effort) of every crew role, over `model_profile`; `inherit` leaves Codex's own default |
@@ -215,8 +224,9 @@ Configure options, or in the settings file below. coremodel has a `language` set
 
 In Claude Code the settings are plugin options (`/plugin` → Installed → corecrew → Configure
 options). Without an options screen (Codex, or a command-line install) they live in
-`~/.config/corecrew/settings`, or in the file named by `CORECREW_CONFIG`: one `key: value` per line,
-`#` starts a comment. The file is read, never run.
+`~/.config/corecrew/settings` (`$XDG_CONFIG_HOME/corecrew/settings` when that is set), or in the
+file named by `CORECREW_CONFIG`: one `key: value` per line; a line that starts with `#` is a
+comment (a `#` after a value is part of the value). The file is read, never run.
 
 ```
 core_dir: ~/Projects/Core
@@ -235,7 +245,7 @@ the same way, except `ui_language`, which falls back to `en` silently.
 - **OS:** macOS and Linux; CI runs the tests on both. Any CPU architecture: the plugin is bash
   scripts with no native code.
   Windows needs [Git for Windows](https://git-scm.com/download/win), because the hooks run in Git Bash; it is untested.
-- **Claude Code** 2.1.271 or newer (its settings with a list of choices need it), or the **Codex CLI**.
+- **Claude Code** 2.1.271 or newer (its settings with a list of choices need it), or the **Codex CLI** (tested with 0.166).
 - **git**, and the **GitHub CLI** `gh`, logged in with `gh auth login`. `gh` is used to create repos,
   to check that a new project's name is free, to check that the Core repo is private before a push,
   and to publish a GitHub release.
@@ -269,10 +279,19 @@ the same way, except `ui_language`, which falls back to `en` silently.
 - Your Core (the `core_dir` setting): read and written.
 - In each code repo beside the Core: the `CLAUDE.local.md` and `AGENTS.md` links, git hooks
   (pre-commit, pre-push), and ignore lines in `.gitignore` when a project is adopted. In the Core: a
-  pre-push hook.
-- The settings file `~/.config/corecrew/settings`, only if you create it.
+  pre-push hook. `/corecrew:task adopt` also moves the tracked `CLAUDE.md`, `AGENTS.md`, `docs/`
+  and `.claude/` files into the Core and commits that in the repo ("Move internal Claude files to
+  Core"), adding a `.worktreeinclude`; it shows the plan first.
+- The settings file, only if you create it ([Settings](#settings) has its path).
+- Small state files:
+  - In Codex, a marker that the hooks ran: `state/hooks-seen-codex` beside the settings file
+    (`~/.config/corecrew/state/hooks-seen-codex` by default). Session start writes the plugin
+    version into it.
+  - The turn folder of the one-suite hook: `one-suite/` in the plugin's data folder, or
+    `$TMPDIR/corecrew-one-suite-<uid>` when the host names no data folder.
+  - `.git/new-project-stop-remind` in a code repo: what the Stop reminder last reminded about.
 
-corecrew never overwrites or deletes your files.
+Outside adopt, which moves those files into the Core, corecrew never overwrites or deletes your files.
 
 ### Known limitations
 
@@ -311,7 +330,10 @@ with `corecrew: ... is missing`. So remove the shims first.
      not know this folder and leaves it.
 
 4. Optional:
-   - Delete `~/.config/corecrew/settings`. coremodel's Codex hint reads it too.
+   - Delete `~/.config/corecrew/` (the settings file and, in Codex, the `state/` marker).
+     coremodel's Codex hint reads the settings file too.
+   - Delete `.git/new-project-stop-remind` in a code repo, and a `corecrew-one-suite-<uid>` folder
+     in your temp folder. Both are safe to delete.
    - If you pasted the Codex secrets profile: remove `default_permissions = "corecrew"` and the
      `[permissions.corecrew...]` tables from `~/.codex/config.toml`.
 
@@ -322,7 +344,7 @@ They are yours; corecrew never deletes them.
 
 See [CONTRIBUTING.md](../../CONTRIBUTING.md) for the rules and the tests, and
 [ARCHITECTURE.md](../../ARCHITECTURE.md) for how the plugin is built. Trigger evals are in
-`evals/` and run by hand with `claude plugin eval plugins/corecrew --ablation none --no-publish`.
+`evals/corecrew/` at the repo root and run by hand with `bash scripts/eval.sh corecrew`.
 
 ## Licence
 

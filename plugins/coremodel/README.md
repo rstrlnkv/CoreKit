@@ -205,11 +205,10 @@ model and effort settings were never changed, so nothing needs undoing. In Codex
 ## Development
 
 ```bash
-bash tests/test_coremodel.sh                          # validate the manifest and module, run the plugin's tests
-HOME=$(mktemp -d) claude plugin test plugins/coremodel  # the plugin's own tests, with a throwaway HOME
+bash tests/test_coremodel.sh                          # validate the manifest and module, run the module tests in tests/coremodel/
 bash tests/test_coremodel_codex.sh                    # the Codex hint, against a fake codex
 claude plugin validate plugins/coremodel
-bash plugins/coremodel/tests/quality.sh sonnet          # classifier quality on the real model (network, not part of the suite)
+bash tests/coremodel/quality.sh sonnet                # classifier quality on the real model (network, not part of the suite)
 ```
 The sources are in `plugins/coremodel/hooks/`. Credits: the idea comes from Ben AI's "Effort Optimizer" mod. No code or text of it is reused.
 

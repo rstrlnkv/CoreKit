@@ -17,7 +17,8 @@ done
 # skill as the model would run it: <scripts>, <plugin>, <skill> filled in (see subst), ${user_config.*} left literal.
 # subst <skill dir>: what the model does with the placeholders after `lib.sh plugin-root`
 subst() { sed -e "s|<scripts>|$PLUGIN/scripts|g" -e "s|<plugin>|$PLUGIN|g" -e "s|<skill>|$1|g"; }
-shells="bash"; command -v zsh >/dev/null 2>&1 && shells="bash zsh"
+shells="bash"
+if command -v zsh >/dev/null 2>&1; then shells="bash zsh"; else skip zsh-commands "zsh not on PATH"; fi
 n=0
 for sk in "$PLUGIN"/skills/*/SKILL.md; do
   d="$(dirname "$sk")"
@@ -133,8 +134,12 @@ case "$ap" in *'codex exec'*"$cx_stop"*) pass ;; *) fail "codex-host.md Approval
 printf '%s\n' "$ap" | tr '\n' ' ' | grep -qiE 'not possible[^.]*, stop and report' &&
   fail "codex-host.md Approval: a missing approval must stop only that step, not the whole skill" || pass
 # Codex 0.166 keeps spawn_agent with --disable multi_agent: no text promises what the feature switch does.
-for f in "$CH" "$PLUGIN/README.md" "$PLUGIN/../../README.md"; do
+# Nor does any text say which tool set is Codex's default, that the feature is on by default, or send the reader to
+# `codex features list` (R4-069: none of the three was shown by a run).
+for f in "$CH" "$PLUGIN/README.md" "$PLUGIN/../../README.md" "$PLUGIN/skills/task/references/codex.md"; do
   grep -qE -- '--disable multi_agent|multi_agent` turns them on' "$f" && fail "$f promises what the multi_agent switch does" || pass
+  grep -qE -- "features list|Codex's default|multi_agent[^.]*on by default" "$f" \
+    && fail "${f#"$ROOT"/} makes an unproven claim about Codex subagents (features list, Codex's default, on by default)" || pass
 done
 
 # new-project: the open command is written out for both hosts, not left to another file.

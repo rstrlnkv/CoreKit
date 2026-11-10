@@ -64,7 +64,7 @@ BEGIN {
   nsec = split("Rule|Why|How to check|Exceptions|Sources", SEC, "|")
   nfld = split("name description applies-to updated", FLD, " ")
   nrole = split(roles, ROLE, " ")
-  state = 2; unclosed = 0; fence = 0; cur = ""
+  state = 2; fence = 0; cur = ""
 }
 {
   sub(/\r$/, "")
@@ -72,7 +72,7 @@ BEGIN {
     if ($0 == "---") { state = 1; next }
   }
   if (state == 1) {
-    if ($0 == "---") { state = 2; closed = 1; next }
+    if ($0 == "---") { state = 2; next }
     scan($0)
     i = index($0, ":")
     if (i > 1) {

@@ -303,4 +303,60 @@ for f in "$ROOT"/tests/test_*.sh; do
   old="$(grep -nE '(^|;|\{|then|else|do)[[:space:]]*echo "[[:space:]]*(note:|SKIP )' "$f" | cut -d: -f1 | tr '\n' ' ')"
   assert_eq "${old:-none}" "none" "$(basename "$f"): old-style skip or note lines (use skip, or note)"
 done
+# --- bg and bg_wait: a section's counts are added, also when the section uses the variable names bg uses itself
+fake x_bg.sh 'a() { n=7; p=1; f=2; pass; }; b() { for n in 1 2; do pass; done; fail "b fails"; }; bg a; bg b; bg_wait; finish'
+one x_bg.sh; assert_eq "$RC" "1" "bg sections: the failure of a section fails the file"
+has "x_bg.sh: 3 passed, 1 failed" "bg sections that set n"; lacks "did not finish" "bg sections that set n"
+
+# --- a part behind a tool or root gate says so when it does not run (R4-114): every `if command -v <tool>` and every
+# `if [ "$(id -u)" ...` block of a test file holds a skip call (the block: from the `if` line that ends in `then` to
+# the `fi` at the same indent; a one-line `if ...; fi` holds it itself). A gate that only picks one of two tools
+# inside one line is no block and is not read. The short form `command -v <tool> >/dev/null 2>&1 && ...` outside an
+# `if` is a gate with no place for a skip call, so it is always open; `... || <fallback>` is a choice and is not read.
+# test_manifest.sh is read once its own gates are closed.
+# open_gates <file> — the line numbers of the gate blocks with no skip call, on one line
+open_gates() {
+  awk '
+    function isgate(l) { return l ~ /^[ \t]*if .*(command -v [A-Za-z0-9_.-]+ >\/dev\/null|\$\(id -u\))/ }
+    function hasskip(l) { return l !~ /^[ \t]*#/ && l ~ /(^|[ \t;])skip [^ ]/ }
+    {
+      if (inb) {
+        if (hasskip($0)) ok = 1
+        if ($0 ~ ("^" ind "fi([ \t;]|$)")) { if (!ok) printf "%d ", start; inb = 0 }
+        next
+      }
+      if ($0 !~ /^[ \t]*(#|if |elif |while )/ && $0 ~ /command -v [A-Za-z0-9_.-]+ >\/dev\/null( 2>&1)?[ \t]*&&/) { printf "%d ", NR; next }
+      if (!isgate($0)) next
+      if ($0 ~ /then[ \t]*$/) { inb = 1; ok = 0; start = NR; ind = $0; sub(/[^ \t].*$/, "", ind); next }
+      if ($0 ~ /;[ \t]*fi[ \t]*$/ && !hasskip($0)) printf "%d ", NR
+    }
+    END { if (inb && !ok) printf "%d ", start }' "$1"
+}
+G="$SANDBOX/gates.sh"
+printf '%s\n' 'if command -v zsh >/dev/null 2>&1; then' '  zsh -c :' 'fi' > "$G"
+assert_eq "$(open_gates "$G")" "1 " "a tool gate with no skip is found"
+printf '%s\n' 'x=1' 'if [ "$(id -u)" != 0 ]; then' '  if true; then :; fi' '  chmod a-w x' 'fi' 'skip later "not in the block"' > "$G"
+assert_eq "$(open_gates "$G")" "2 " "a root gate with no skip is found (a skip after the block does not count)"
+printf '%s\n' 'if ! command -v node >/dev/null 2>&1; then echo no; fi' > "$G"
+assert_eq "$(open_gates "$G")" "1 " "a one-line gate with no skip is found"
+printf '%s\n' 'if command -v zsh >/dev/null 2>&1; then' '  zsh -c :' 'else' '  skip zsh "zsh not on PATH"' 'fi' \
+  'if [ "$(id -u)" -eq 0 ]; then skip ro "running as root"; else' '  chmod a-w x' 'fi' \
+  'if ! command -v node >/dev/null 2>&1; then skip node "node not on PATH"; finish; fi' \
+  'if command -v zsh >/dev/null 2>&1; then' '  # skip nothing here' '  zsh -c :' 'fi' \
+  'f() {' '  if command -v node >/dev/null 2>&1; then node "$1"' '  else python3 "$1"; fi' '}' > "$G"
+assert_eq "$(open_gates "$G")" "10 " "gates that skip and a one-line choice between two tools pass; a comment is no skip"
+# the fixture is written with %s for the tool check, so that these lines are not short gates of this file themselves
+cv='command -v'
+{ printf 'shells="bash"; %s zsh >/dev/null 2>&1 && shells="bash zsh"\n' "$cv"
+  printf '%s timeout >/dev/null 2>&1 || timeout() { shift; "$@"; }\n' "$cv"
+  printf '# %s zsh >/dev/null 2>&1 && shells="bash zsh"\n' "$cv"
+  printf 'shells="bash"; if %s zsh >/dev/null 2>&1; then shells="bash zsh"; else skip zsh "zsh not on PATH"; fi\n' "$cv"
+  printf 'if %s git >/dev/null 2>&1 && %s zsh >/dev/null 2>&1; then skip x "y"; fi\n' "$cv" "$cv"
+  printf '  %s node >/dev/null && node x\n' "$cv"
+} > "$G"
+assert_eq "$(open_gates "$G")" "1 6 " "a short '&&' gate is open; a fallback, a comment and an if with a skip are not"
+for f in "$ROOT"/tests/test_*.sh; do
+  case "${f##*/}" in test_manifest.sh) continue ;; esac
+  assert_eq "$(open_gates "$f")" "" "$(basename "$f"): gated parts with no skip call, at lines"
+done
 finish

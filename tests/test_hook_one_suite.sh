@@ -489,7 +489,7 @@ if [ -n "$REAL_FLOCK" ]; then
   assert_eq "$RC" "0" "flock fails: falls back to the mkdir lock and takes the turn"
   assert_no_file "$SANDBOX/lk/turn.lockd"
 else
-  pass   # no flock on this machine: only the mkdir path can be run here
+  skip flock "flock not on PATH"   # only the mkdir path can be run here
 fi
 stale_run "$SANDBOX/noflock"
 assert_eq "$RC" "0" "no flock: the stale turn is taken"

@@ -206,8 +206,8 @@ path_without() {
 # prints their output in the order they were started and adds their counts. A section must not call finish.
 BGN=0
 bg() {
-  BGN=$((BGN + 1)); local n=$BGN
-  ( OD="$TEST_TMP/bg$n"; mkdir -p "$OD"; FAILS=0; PASSES=0; "$1"; echo "$PASSES $FAILS" > "$TEST_TMP/bg$n.count" ) > "$TEST_TMP/bg$n.log" 2>&1 &
+  BGN=$((BGN + 1)); local _bg_n=$BGN   # a name no section uses: the section runs in this function's scope
+  ( OD="$TEST_TMP/bg$_bg_n"; mkdir -p "$OD"; FAILS=0; PASSES=0; "$1"; echo "$PASSES $FAILS" > "$TEST_TMP/bg$_bg_n.count" ) > "$TEST_TMP/bg$_bg_n.log" 2>&1 &
 }
 bg_wait() {
   local n p f
