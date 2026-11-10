@@ -1,11 +1,12 @@
 # scripts/bashlex-guard-secrets.awk — the guard-secrets.sh part of the Bash judging: finds the words that
 # a file-reading command is given and that name a secret. Used with scripts/bash-lex.awk (the tokenizer):
 #   awk -f bash-lex.awk -f bashlex-guard-secrets.awk
-# Prints "P\t<word>\t<cd>" for each candidate (at most CAP, each word once): a word, as typed, whose last
+# Prints "P\t<word>\t<cd>\t<judged>" for each candidate (at most CAP, each word once): a word, as typed, whose last
 # path component is .env or .env.* (not .env.example/.sample/.template; glob characters count, so .env*
 # is one) or that has a .ssh path component. <cd> is 1 when a cd/pushd/popd came before, which makes a
 # relative path unknown (the name is still a secret name, a .ssh folder is not judged). The caller
-# judges the candidates (symlinks, the real ~/.ssh).
+# judges the candidates (symlinks, the real ~/.ssh). <judged> is the word the caller judges: the same word, or, for a
+# glob, the word with each component that can match .ssh or a secret name replaced by that name (see cand).
 # Also prints "X\tnomore" or "X\tcap" when reading stopped early (a <<"WORD" inside "$(...)", or more than
 # CAP candidates): the caller does not trust the rest and fails closed.
 # Command substitutions inside double quotes ("$(cat .env)", backticks) are lexed as command lines of their
@@ -100,7 +101,7 @@ function glob_hits(comp, want,   re, k, ns, smp) {
 }
 # cand(a) — a word to judge. Prints "P\t<word as typed>\t<cd>\t<word to judge>": the last form is the same word, or
 # with a glob component that can match .ssh or a secret name replaced by that name (~/.s*/id_rsa -> ~/.ssh/id_rsa).
-function cand(a,   l, t, x, nc, comp, k, j, hit, norm, rest) {
+function cand(a,   l, t, x, nc, comp, k, hit, norm) {
   if (nomore || full || a == "") return
   if (index(a, "\t") || index(a, "\002")) return
   l = tolower(a)
@@ -111,7 +112,7 @@ function cand(a,   l, t, x, nc, comp, k, j, hit, norm, rest) {
   if (!(x ~ /^\.env([*?\[{]|$)/ || (x ~ /^\.env\./ && x !~ /^\.env\.(example|sample|template)$/)) && t !~ /(^|\/)\.ssh(\/|$)/) {
     if (t !~ /[*?\[{]/) return
     # a glob: judge each component
-    nc = split(t, comp, "/"); rest = ""; hit = 0
+    nc = split(t, comp, "/"); hit = 0
     for (k = nc; k >= 1; k--) {
       if (glob_hits(comp[k], k == nc ? ".env" : ".ssh")) {
         if (k == nc) { hit = 1; comp[k] = ".env" }
@@ -122,7 +123,6 @@ function cand(a,   l, t, x, nc, comp, k, j, hit, norm, rest) {
     # rebuild from the lower-case parts (letter case is folded by the caller anyway)
     norm = comp[1]
     for (k = 2; k <= nc; k++) norm = norm "/" comp[k]
-    if (substr(a, 1, 1) == "~" && substr(norm, 1, 1) != "~") norm = "~" substr(norm, 2)
   }
   if (a in seen) return
   seen[a] = 1
@@ -146,7 +146,7 @@ function short_opt(a,   p, n, l, kind) {
   }
   return 0
 }
-function finalize(   k, a, dd, pat, nm, v, nop, tdir, j, n, ops, key) {
+function finalize(   k, a, dd, pat, nm, v, nop, tdir, j, n, ops) {
   if (cmd == "" || cmd == "?") return
   dd = 0; pat = (cmd in PAT); nop = 0; tdir = ""
   for (k = 1; k <= na && !full; k++) {

@@ -58,13 +58,13 @@
 #   .ssh (~/.s*/id_rsa), is judged as that name; a glob that starts with * ? [ does not match a dot in the shell
 #   and passes, and so do .* and .??* (no letter in them). Wrapper options that take a value are skipped
 #   (timeout 5, nice -n 5, sudo -u root, env -u X, stdbuf -o0). zip -x/-i patterns are not files.
-#   Documented limits, not redesigned: a relative target after cd, xargs, find -exec, bash -c "...", and the
+#   Documented limits, not redesigned: a relative target after cd, xargs, find -exec, and the
 #   guard being inert outside a project cwd.
 #   The tokenizer is one linear awk pass (scripts/bash-lex.awk, shared with both readers of guard-code: its write
 #   check and the read-only rule). After a cd the name
 #   rule still applies (cd .. && cat .env is blocked) but a relative ~/.ssh is unknown. Not caught: git
 #   (git add .env is not a read; git show HEAD:.env is), output redirects, ls, a recursive grep over a
-#   folder, variables other than a leading $HOME, sh -c "...", scripts, a link with an innocent name.
+#   folder, variables other than a leading $HOME, scripts, a link with an innocent name.
 #   When the lexer stops early (more than 200 candidates, or <<"WORD" inside "$(...)") the rest of the command
 #   is unknown: if the command text has a secret-looking string (see raw_hit below) the hook fails closed.
 #   The tokenizer lives in scripts/bash-lex.awk and scripts/bashlex-guard-secrets.awk: if they are missing
