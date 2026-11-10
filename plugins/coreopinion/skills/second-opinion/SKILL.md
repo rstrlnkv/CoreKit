@@ -225,7 +225,7 @@ what failed and what the user can do:
   https://code.claude.com/docs/en/sandbox-environments.md#run-commands-outside-the-sandbox-with-excludedcommands
   Do not change the user's settings yourself without their yes. If they ran Claude Code from
   inside Codex's app, start Claude Code from a normal terminal instead.
-- **Timeout** (no answer in 5 minutes): remove `$T` as above, say so; offer a smaller material or `medium` effort.
+- **Timeout** (no answer in 5 minutes): remove `$T` (see the end of this section), say so; offer a smaller material or `medium` effort.
 - **Exit 0 but empty answer**: say GPT returned nothing; show the last lines of the log tail.
 - **Exit 3** (the script runs inside a Codex session): this skill works only in Claude Code; nothing was sent.
 - **Exit 2** with `no prompt`: the prompt did not reach the script; run it again with the prompt
