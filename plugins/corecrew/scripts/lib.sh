@@ -67,14 +67,17 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   # _warn_settings — the SETTINGS_WARN records as English lines (the texts of hooks/messages.sh). messages.sh is
   # sourced only here; where it is missing (the tools copy) nothing is printed and the exit code stays.
   _warn_settings() {
-    local k v s e
-    [ -n "$SETTINGS_WARN" ] || return 0
+    local k v s rest="$SETTINGS_WARN"
+    [ -n "$rest" ] || return 0
     # shellcheck disable=SC1091
     . "$_LIB_DIR/../hooks/messages.sh" 2>/dev/null || return 0
-    while IFS=$'\t' read -r k v s e; do
+    while [ -n "$rest" ]; do   # one record per line; no here-string (see _sf_get_r)
+      _tab_cut_r "${rest%%$'\n'*}"; k="$_TC"
+      case "$rest" in *$'\n'*) rest="${rest#*$'\n'}" ;; *) rest="" ;; esac
       [ -n "$k" ] || continue
-      UI_LANGUAGE=en msg_settings_warning "$k" "$v" "$s" "$e" "$(settings_file_path)"; printf '\n'
-    done <<< "$SETTINGS_WARN"
+      _tab_cut_r "$_TR"; v="$_TC"; _tab_cut_r "$_TR"; s="$_TC"
+      UI_LANGUAGE=en msg_settings_warning "$k" "$v" "$s" "$_TR" "$(settings_file_path)"; printf '\n'
+    done
     return 0
   }
   _ORIG_CORE_DIR="${CORE_DIR:-}"

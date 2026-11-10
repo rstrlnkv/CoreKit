@@ -40,6 +40,20 @@ set +f
 assert_eq "$miss" "" "every secret pattern of the review profile is denied, but the four broad token and secret globs"
 
 if ! command -v codex >/dev/null 2>&1; then skip codex-profile "codex not on PATH (sandbox checks)"; finish; fi
+# --- a read-only sandbox (what `codex sandbox` gives with no config; a plain `codex exec` in a project Codex does not
+# trust): nothing is writable, the temp folder included, and bash 3.2 writes a here-string to a temp file. lib.sh must
+# still read the settings file, name an ignored value, and print no raw bash error.
+RO="$SANDBOX/ro"; mkdir -p "$RO/codex-home" "$RO/Core" "$RO/w" "$SANDBOX/xdg/corecrew"
+printf 'core_dir: %s\nmodel_profile: strong\nattribution: maybe\n' "$RO/Core" > "$SANDBOX/xdg/corecrew/settings"
+ro() { (cd "$RO/w" && unset CORE_DIR && CODEX_HOME="$RO/codex-home" codex sandbox -- "$@"); }
+out="$(ro sh -c ': > probe' 2>&1)"; case "$out" in *"not permitted"*) pass ;; *) fail "the sandbox with no config is not read-only: $out" ;; esac
+assert_eq "$(ro bash "$SCRIPTS/lib.sh" settings model_profile 2>/dev/null)" "model_profile: strong" "read-only sandbox: the settings file is read"
+assert_eq "$(ro bash "$SCRIPTS/lib.sh" core-dir 2>/dev/null)" "$RO/Core" "read-only sandbox: core-dir is the file's core_dir"
+err="$(ro bash "$SCRIPTS/lib.sh" core-dir 2>&1 >/dev/null)"
+case "$err" in *'attribution "maybe"'*'is not valid'*) pass ;; *) fail "read-only sandbox: no settings warning on stderr: $err" ;; esac
+case "$err" in *"here document"*|*"temp file"*) fail "read-only sandbox: a raw bash error: $err" ;; *) pass ;; esac
+rm -f "$SANDBOX/xdg/corecrew/settings"
+
 # the profile writes the temp folder (and git needs its config in a place it can read), so the fake home must not sit in the one the sandbox sees
 H="$SANDBOX/home"; mkdir -p "$SANDBOX/tmp"; export TMPDIR="$SANDBOX/tmp"; cp "$GIT_CONFIG_GLOBAL" "$TMPDIR/gitconfig"; export GIT_CONFIG_GLOBAL="$TMPDIR/gitconfig"; mkdir -p "$CODEX_HOME" "$H/.ssh" "$SANDBOX/w/src"
 cp "$FRAG" "$CODEX_HOME/config.toml"

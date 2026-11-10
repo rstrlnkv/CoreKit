@@ -328,6 +328,22 @@ assert_eq "$(CORE_DIR="$SANDBOX/nl
 assert_eq "$(HOME="$HOME
 " CORE_DIR='~' sq CORE_DIR)" "[$RH]" "a HOME that ends in a newline"
 assert_eq "$(CORE_DIR=/ sq CORE_NAME; CORE_DIR=/ sq PROJECTS_DIR; CORE_DIR=//x sq PROJECTS_DIR)" "[/][/][/]" "the root as the Core and beside it"
+# no writable folder at all, the temp folder included (a read-only Codex sandbox; bash 3.2 writes a here-string to a
+# temp file): the settings file is still read and an ignored value is still named. macOS only (sandbox-exec).
+NOWRITE='(version 1)(allow default)(deny file-write*)(allow file-write* (literal "/dev/null"))'
+if command -v sandbox-exec >/dev/null 2>&1 && [ "$(sandbox-exec -p "$NOWRITE" sh -c ': > "$1" || echo denied' _ "$SANDBOX/nw-probe" 2>/dev/null)" = denied ]; then
+  sfw 'core_dir: '"$SANDBOX"'/rofile\nmodel_profile: strong\nattribution: maybe\n'
+  assert_eq "$(sandbox-exec -p "$NOWRITE" bash "$LIB" settings core_dir model_profile attribution 2>/dev/null)" \
+    "core_dir: $SANDBOX/rofile
+model_profile: strong
+attribution: allow" "nothing writable: the settings file is read"
+  err="$(sandbox-exec -p "$NOWRITE" bash "$LIB" core-dir 2>&1 >/dev/null)"
+  case "$err" in *'attribution "maybe"'*'is not valid'*) pass ;; *) fail "nothing writable: no settings warning: $err" ;; esac
+  case "$err" in *"here document"*|*"temp file"*) fail "nothing writable: a raw bash error: $err" ;; *) pass ;; esac
+  assert_eq "$(sandbox-exec -p "$NOWRITE" bash "$LIB" core-dir 2>/dev/null)" "$SANDBOX/rofile" "nothing writable: core-dir from the file"
+else
+  skip nothing-writable "no usable sandbox-exec (macOS only)"
+fi
 # load_settings and resolve_setting return 0 when a key, the settings file or .coredev is missing: a caller may run
 # under set -e (as on 2104bfb)
 rm -f "$SF"; mkdir -p "$SANDBOX/core-nofacts"; printf 'schema: 2\n' > "$SANDBOX/core-nofacts/.coredev"
