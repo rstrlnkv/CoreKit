@@ -125,7 +125,7 @@ export function texts(lang: Lang) {
     question: (l: Level, why: string) => s.effortQuestion(n(l), l === 'xhigh', why),
     levelOption: (l: Level, recommended: boolean) => (recommended ? s.recommended(n(l)) : n(l)),
     modelOption: (m: ModelKey, recommended: boolean) => (recommended ? s.recommended(name(m)) : name(m)),
-    keepLevel: (now: Level | '') => (now ? s.keepLevel(n(now)) : s.keepAsIs),
+    keepLevel: (now: Level) => s.keepLevel(n(now)),
     keepModel: (m: ModelKey) => s.keep(name(m)),
     switchToModel: (m: ModelKey) => s.switchTo(name(m)),
     firstModel: (to: ModelKey, why: string) => s.firstModelQuestion(name(to), why),

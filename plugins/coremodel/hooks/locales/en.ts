@@ -28,8 +28,6 @@ export const en = {
   recommended: (label: string) => `${label} (recommended)`,
   keep: (what: string) => `Keep ${what}`,
   keepLevel: (level: string) => `Keep ${level}`,
-  keepAsIs: 'Keep it as it is',
-  keepCurrentModel: 'Keep the current model',
   backToModel: '← Back to the model',
   switchTo: (model: string) => `Switch to ${model}`,
   cancel: 'Cancel',

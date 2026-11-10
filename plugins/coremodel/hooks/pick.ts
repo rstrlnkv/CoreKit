@@ -141,17 +141,15 @@ export async function runPick(
   let askModel: (() => Promise<void>) | null = null
   if (mAction === 'ask' && pick.model) {
     const to = pick.model
-    // Mid-chat the question is the cost question: the pick and the current model, nothing else.
-    const opts: (ModelKey | 'keep')[] = isFirst ? modelOptions(to, nowModel, allowed, true) : [to, nowModel || 'keep']
-    const labels = opts.map(m =>
-      m === 'keep' ? t.keepCurrentModel : m === nowModel ? t.keepModel(m) : isFirst ? t.modelOption(m, m === to) : t.switchToModel(m),
-    )
+    // Mid-chat the question is the cost question: the pick and the current model, nothing else (modelOptions).
+    const opts: ModelKey[] = modelOptions(to, nowModel, allowed, isFirst)
+    const labels = opts.map(m => (m === nowModel ? t.keepModel(m) : isFirst ? t.modelOption(m, m === to) : t.switchToModel(m)))
     const question = isFirst ? t.firstModel(to, pick.why) : t.costQuestion(to, nowModel, await chatTokens($), pick.why)
     askModel = async () => {
       modelTo = null
       try {
         const chosen = opts[labels.indexOf(await $.ui.ask(question, { options: labels, header: t.modelHeader }))]
-        if (chosen && chosen !== 'keep' && chosen !== nowModel) modelTo = chosen
+        if (chosen && chosen !== nowModel) modelTo = chosen
       } catch {
         // A dismissed question keeps the model; the effort is still asked.
       }
@@ -164,7 +162,7 @@ export async function runPick(
   if (action === 'ask') {
     // With Back among them the question has room for three levels; any level can still be typed.
     const opts = effortOptions(level, now).slice(0, askModel ? 3 : 4)
-    const labels = opts.map(l => (l === now ? t.keepLevel(now) : t.levelOption(l, l === level)))
+    const labels = opts.map(l => (l === now ? t.keepLevel(l) : t.levelOption(l, l === level)))
     const question = t.question(level, askModel ? '' : pick.why)
     for (let round = 0; round < 5; round += 1) {
       let answer = ''

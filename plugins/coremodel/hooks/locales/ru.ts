@@ -19,8 +19,6 @@ export const ru: Strings = {
   recommended: label => `${label} (советую)`,
   keep: what => `Оставить ${what}`,
   keepLevel: level => `Оставить «${level}»`,
-  keepAsIs: 'Оставить как есть',
-  keepCurrentModel: 'Оставить текущую модель',
   backToModel: '← Назад к модели',
   switchTo: model => `Перейти на ${model}`,
   cancel: 'Отмена',
