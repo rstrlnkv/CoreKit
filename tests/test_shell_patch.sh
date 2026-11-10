@@ -471,4 +471,33 @@ passes 'grep -rn apply_patch src' "no scripts dir: simple form"
 passes 'ls' "no scripts dir: ls"
 # shellcheck disable=SC2034  # SELF is read by the functions of the sourced lib.sh
 SELF="$PLUGIN"
+# --- rules that one deleted line would drop: each line here is the only one that sees its rule
+# each file marker after Begin Patch, alone
+for c in 'Update File: a' 'Delete File: a' 'Move to: a'; do
+  refused "cat <<'EOF' | x${nl}*** Begin Patch${nl}*** $c${nl}*** End Patch${nl}EOF" "patch text with only a $c marker"
+done
+passes "cat <<'EOF' | x${nl}*** Begin Patch${nl}*** Bogus File: a${nl}*** End Patch${nl}EOF" "patch text with no file marker"
+# a glob argument: 3 literal characters pass, 4 are a hit; a last part over 200 bytes is refused unread
+passes 'echo app*' "a glob argument with 3 literal characters"
+refused 'echo appl*' "a glob argument with 4 literal characters"
+refused "ls $(printf '%200s' '' | tr ' ' a)*; true" "a glob part over 200 bytes"
+passes "ls $(printf '%199s' '' | tr ' ' a)*; true" "a glob part of 200 bytes"
+# <<- ends at a tab-indented delimiter and <<< starts no heredoc: the line after is a command line again
+refused "cat <<-EOF${nl}	x${nl}	EOF${nl}ls appl*" "a command line after a <<- heredoc"
+passes "cat <<-EOF${nl}	ls appl*${nl}	EOF" "a glob word inside a <<- heredoc body"
+refused "cat <<< word${nl}ls appl*" "a command line after a here-string"
+# a quote in a heredoc body pairs with no quote outside it; a redirect target is no argument
+refused "cat <<EOF${nl}it's${nl}EOF${nl}echo appl* 'x'" "a command line after a heredoc body with an apostrophe"
+passes 'echo x > appl*' "a glob redirect target"
+refused 'echo x > appl*; echo appl*' "a glob argument after a glob redirect target"
+# the simple form: a ( ) or { } anywhere, a group, an assignment first
+refused 'grep apply_patch a(b' "a paren in an argument"
+refused 'grep apply_patch {a,b}' "braces in an argument"
+refused 'grep apply_patch f | (cat)' "a subshell pipe element"
+refused '{ grep apply_patch f; }' "a group"
+refused 'X=1 grep apply_patch f' "an assignment first"
+# git: -O (an order file read as a program's input) inside a cluster of short options
+refused 'git log -pO apply_patch' "git log -pO"
+refused 'git log -O apply_patch' "git log -O"
+passes 'git log --oneline -S apply_patch' "git log --oneline -S"
 finish

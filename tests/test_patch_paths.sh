@@ -67,6 +67,13 @@ assert_eq "$(pp "$b*** Add File: a$nl+x$nl$(printf '\302\240')*** Add File: docs
 # junk before a header: unreadable
 assert_eq "$(pp "$b*** Add File: a$nl+x${nl}junk *** Add File: .env$nl$e")" "W>a${nl}X>unreadable" "junk before a header is X"
 assert_eq "$(pp "x *** Add File: .env" )" "X>unreadable" "strict: text with a header outside Begin is X"
+# each refusal branch alone: a header outside Begin before a valid block, an empty Delete, Update and Move to path,
+# and an Update that the end of the text closes (no End Patch)
+assert_eq "$(pp "x *** Add File: .env$nl$b*** Add File: a$nl+x$nl$e")" "X>unreadable${nl}W>a" "a header outside Begin, then a valid block"
+assert_eq "$(pp "$b*** Delete File: $nl$e")" "X>unreadable" "an empty Delete File path is unreadable"
+assert_eq "$(pp "$b*** Update File: $nl@@$nl$e")" "X>unreadable" "an empty Update File path is unreadable"
+assert_eq "$(pp "$b*** Update File: a$nl*** Move to: $nl@@$nl$e")" "X>unreadable${nl}W>a" "an empty Move to path is unreadable, the update still listed"
+assert_eq "$(pp "$b*** Update File: a$nl@@$nl-x$nl+y")" "W>a" "an update with no End Patch is still listed"
 # a missing awk file prints nothing and fails; a reader that ran with no path prints nothing and succeeds
 # shellcheck disable=SC2034  # SELF is read by patch_paths (the sourced lib.sh)
 OUTP="$(SELF="$SANDBOX/nowhere"; patch_paths "$b*** Add File: a$nl$e")"; RCP=$?

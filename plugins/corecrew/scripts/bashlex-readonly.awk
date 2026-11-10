@@ -85,7 +85,6 @@ function do_git(   k, a, skip, sub_, gc, rest, nn, ch) {
   else if (sub_ == "branch") ch = (rest ~ / -(d|D|m|M|c|C|f|u)( |$)| --(delete|move|copy|force|set-upstream-to|unset-upstream|edit-description)/) || (nn > 0 && rest !~ / (-l|--list|-a|--all|-r|--remotes|--contains|--no-contains|--merged|--no-merged|--points-at|--show-current)( |$)/)
   else if (sub_ == "tag") ch = nn > 0 && rest !~ / (-l|--list|-n[0-9]*|--contains|--no-contains|--merged|--no-merged|--points-at|-v|--verify)( |$)/
   else if (sub_ == "stash") ch = rest !~ /^ (list|show)( |$)/
-  else if (sub_ == "worktree") ch = rest !~ /^ list( |$)/
   else if (sub_ == "submodule") ch = rest != "" && rest !~ /^ (status|summary)( |$)/
   else if (sub_ == "notes") ch = rest != "" && rest !~ /^ (list|show)( |$)/
   else if (sub_ == "remote") ch = rest != "" && rest !~ /^ (-v|--verbose|show|get-url)( |$)/
@@ -169,7 +168,6 @@ function finalize(   k, a, dd, last, v, first, m, q, c) {
   if (cmd == "wget") {
     v = after("-O", "--output-document")
     if (v == "\001") for (k = 1; k <= na; k++) if (args[k] ~ /^-[A-Za-z]*O-$/) v = "-"
-    if (v == "-") return
     if (v != "\001") { path(v); return }
     v = after("-P", "--directory-prefix"); if (v != "\001") { path(v); return }
     out("X", "wget (a download into the current folder)"); return

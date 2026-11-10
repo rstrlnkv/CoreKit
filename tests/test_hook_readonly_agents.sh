@@ -120,6 +120,65 @@ allowed $V 'cat src/a.txt 2>&1<src/a.txt'
 allowed $V "rm -f /tmp/ro-log.txt"
 allowed $V 'ls > /dev/null 2>&1'
 allowed $V 'echo x > "$TMPDIR/log.txt"'   # a target with a variable is not judged (fails open)
+# --- every word of the reader's lists and every rule of its own, one line each (scripts/bashlex-readonly.awk). The
+# hook only reads the command text: nothing here runs.
+# the tracked commands that write, each with a target in the project, and its twin under the temp folders
+for c in 'rsync -a src/a.txt src/b.txt' 'truncate -s 0 src/a.txt' 'unlink src/a.txt' 'shred src/a.txt' 'chmod +x src/a.txt' \
+         'chmod 644 src/a.txt' 'chown me src/a.txt' 'dd if=/dev/zero of=src/a.txt' "g$SEDI s/a/b/ src/a.txt" 'patch -p1 src/a.txt /tmp/a.diff' \
+         'rmdir src/x' 'install -m 644 /tmp/a src/a' 'pushd src && rm a.txt' 'popd && rm a.txt' 'mv /tmp/ro-a.txt src/e.txt' \
+         'mv src/a.txt /tmp/ro-a.txt' 'touch -- -x' 'cp -- /tmp/a -x' 'ln /tmp/ro-x /tmp/ro-l' 'patch -p1 < /tmp/a.diff' \
+         'git branch --unset-upstream' 'chmod -x src/a.txt'; do
+  refused $V "$c"
+done
+for c in 'rsync -a src/a.txt /tmp/ro-b.txt' 'truncate --size 0 /tmp/ro-a.txt' 'unlink /tmp/ro-a.txt' \
+         'shred /tmp/ro-a.txt' 'chmod +x /tmp/ro-a.txt' 'chmod 644 /tmp/ro-a.txt' 'chown me /tmp/ro-a.txt' 'dd if=src/a.txt of=/tmp/ro-a.txt' \
+         'rmdir /tmp/ro-x' 'install -m 644 src/a.txt /tmp/ro-a' 'mv /tmp/ro-a.txt /tmp/ro-b.txt' 'pushd src && cat a.txt' 'gsed -n 1p src/a.txt'; do
+  allowed $V "$c"
+done
+# after cd, pushd or popd a relative write is refused wherever the hook started, also in a temp folder
+for c in 'cd /opt && echo x > ro-log.txt' 'pushd /opt && echo x > ro-log.txt' 'popd && echo x > ro-log.txt'; do refused $V "$c" /tmp; done
+allowed $V 'echo x > ro-log.txt' /tmp
+# xargs and find -exec: every command that changes files whatever its arguments; a reader passes through xargs
+for w in rm rmdir mv cp touch mkdir tee ln chmod chown truncate unlink shred install rsync dd patch sed perl git sh bash zsh; do
+  refused $V "echo a | xargs $w"
+  refused $V "find . -exec $w {} \;"
+done
+refused $V 'echo a | xargs -n 1 /bin/rm'
+allowed $V 'echo a | xargs -n 1 wc -l'
+allowed $V 'echo a | xargs -I rm cat'
+# find: every predicate that runs a command or writes a file
+for w in -execdir -ok -okdir -fprint -fprint0 -fprintf -fls; do refused $V "find . -name x $w /tmp/ro-out"; done
+allowed $V 'find . -name x -print -newer src/a.txt'
+# git: every subcommand that always changes the work tree, the index, refs or a remote
+for w in add commit push pull reset checkout switch restore merge rebase cherry-pick revert am rm mv clean init fetch gc prune \
+         update-index update-ref replace filter-branch; do
+  refused $V "git $w"
+done
+# git options that take a value: the word after them is no subcommand
+for w in '-c k=v' '--namespace n' '-C .'; do refused $V "git $w commit -qm x"; allowed $V "git $w status"; done
+for w in '--git-dir x' '--git-dir=x' '--work-tree x' '--work-tree=x'; do refused $V "git $w status"; done
+# the rules of single commands, and the same command reading or writing under the temp folders
+for c in 'wget -O src/f https://example.com/f' 'wget --output-document=src/f https://example.com/f' 'wget -P src https://example.com/f' \
+         'tar cf src/a.tar x' 'tar -c -f src/a.tar x' 'tar -c x' 'tar xf /tmp/a.tar -C src' 'unzip /tmp/a.zip -d src' 'dd of=src/a' \
+         'git clone https://example.com/r.git' 'git clone https://example.com/r.git src/r' 'sed --in-place s/a/b/ src/a.txt' \
+         'git submodule update' 'git notes add -m x' 'git apply /tmp/p.diff' 'git config --unset user.name' 'git worktree prune' \
+         'curl --output src/f https://example.com/f' 'curl --output=src/f https://example.com/f' 'curl --remote-name https://example.com/f' \
+         'sort --output=src/s.txt src/a.txt'; do
+  refused $V "$c"
+done
+for c in 'wget -O - https://example.com/f' 'wget -O /tmp/ro-f https://example.com/f' 'wget -P /tmp https://example.com/f' \
+         'tar -c -f /tmp/ro-a.tar src' 'tar tf /tmp/a.tar' 'unzip /tmp/a.zip -d /tmp/ro-x' 'unzip -l /tmp/a.zip' 'dd if=src/a.txt of=/tmp/ro-a' \
+         'git clone https://example.com/r.git /tmp/ro-r' 'git apply --check /tmp/p.diff' 'git apply --stat /tmp/p.diff' 'git submodule status' \
+         'git notes show' 'curl --output /tmp/ro-f https://example.com/f' 'sort --output=/tmp/ro-s.txt src/a.txt'; do
+  allowed $V "$c"
+done
+# the temp roots, each alone: with TMPDIR naming a folder outside /tmp and /var/folders, a write under each root passes,
+# and the one under that folder passes only while TMPDIR names it
+for c in /tmp/ro-x.txt /private/tmp/ro-x.txt /var/folders/ro/x.txt /private/var/folders/ro/x.txt /opt/ro-tmp/x.txt; do
+  TMPDIR=/opt/ro-tmp allowed $V "echo x > $c"
+done
+TMPDIR=/opt/ro-tmp refused $V 'echo x > /opt/ro-other/x.txt'
+refused $V 'echo x > /opt/ro-tmp/x.txt'
 # every read-only checker, also by its bare name; outside a project too
 for a in corecrew:designer corecrew:localizer corecrew:security verifier designer; do refused "$a" 'echo x > src/a.txt'; done
 refused $V "echo x > /opt/ro-elsewhere.txt" "$SANDBOX"

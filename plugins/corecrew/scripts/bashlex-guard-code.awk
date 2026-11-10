@@ -23,7 +23,7 @@
 BEGIN {
   nofollow = 1; dqhd = 1; longw = "\001"
   CAP = 100; MORE = 100; BAD = "$`*?[{\t\001\002"
-  split("tee touch mkdir cp mv ln install sed perl git cd pushd popd", t, " "); for (k in t) TRACK[t[k]] = 1
+  split("tee touch mkdir cp mv ln install sed perl git cd", t, " "); for (k in t) TRACK[t[k]] = 1
   split("docs .claude claude.md claude.local.md agents.md", t, " "); for (k in t) INTERNAL[t[k]] = 1
   # options that take the next word as their value
   vopt("touch", "-t -d -r --date --reference"); vopt("mkdir", "-m --mode"); vopt("install", "-m -o -g -S --mode --owner --group --suffix")
@@ -91,7 +91,7 @@ function writes(   k, a, n, op, dd, tdir, script, inpl, dir, c, val) {
       if (a ~ /^--target-directory=/) { tdir = substr(a, 20); continue }
       if (c == "sed" && (a ~ /^-[nrEsuz]*[iI]/ || a ~ /^--in-place/)) inpl = 1
       # BSD sed -i .bak and -i '': the suffix is its own word. A word with a / is a file (GNU sed -i <file>).
-      if (c == "sed" && a ~ /^-[nrEsuz]*[iI]$/ && k < na && (args[k + 1] == "" || args[k + 1] ~ /^\.[^\/]*$/)) { k++; continue }
+      if (c == "sed" && a ~ /^-[nrEsuz]*[iI]$/ && k < na && args[k + 1] ~ /^\.[^\/]*$/) { k++; continue }
       if (c == "perl" && a ~ /^-[acnpstuvwlTUWXS0-9]*i/) inpl = 1
       if (c == "install" && a ~ /^-[a-zA-Z]*d/) dir = 1
       val = ((c, a) in VOPT) || (c == "perl" && a ~ /^-[a-zA-Z]*[eE]$/)   # the next word is its value
