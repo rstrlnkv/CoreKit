@@ -532,6 +532,16 @@ assert_exit 2 bash "$W" "$FX/codewiki" --code --changed src/app.sh
 assert_exit 2 bash "$W" "$FX/codewiki" --code "$SANDBOX/does-not-exist"
 assert_exit 2 bash "$W" "$FX/codewiki" --code "$CR/src/app.sh"
 
+# An install without exec bits (a host that drops them): the scripts run their siblings with bash, so wiki-check
+# and wiki-index work the same. Each of the three calls is seen alone below: the page list of wiki-check (a broken
+# call is exit 2), its INDEX check (a broken call is "INDEX.md stale"), the page list of wiki-index ("stale").
+NX="$SANDBOX/noexec"; cp -R "$SCRIPTS" "$NX"; find "$NX" -type f -exec chmod a-x {} +
+[ ! -x "$NX/wiki-pages.sh" ] && [ ! -x "$NX/wiki-index.sh" ] && pass || fail "the copy still has exec bits (nothing to test)"
+assert_exit 0 bash "$NX/wiki-check.sh" "$FX/wiki-good"
+assert_eq "$OUT" "" "no exec bits: wiki-check on a clean project prints nothing"
+assert_exit 0 bash "$NX/wiki-index.sh" "$FX/wiki-good" --check
+assert_eq "$OUT" "" "no exec bits: wiki-index --check on a clean project prints nothing"
+
 # Rules file and docs.
 assert_file "$PLUGIN/reference/wiki.md"
 assert_contains "$PLUGIN/reference/wiki.md" "git -C <Core> diff --name-only HEAD -- <project>/docs"

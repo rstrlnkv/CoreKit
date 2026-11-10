@@ -85,7 +85,7 @@ trap 'rm -rf "$T"' EXIT
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 # Wiki pages (docs-relative, one per line) and every file under docs/ (wikilinks may name any).
-"$HERE/wiki-pages.sh" "$DOCS" > "$T/pages" || exit 2
+bash "$HERE/wiki-pages.sh" "$DOCS" > "$T/pages" || exit 2
 ( set -o pipefail; cd "$DOCS" && find . -type f | sed 's|^\./||' | LC_ALL=C sort ) > "$T/files" || exit 2
 
 # Changed paths: "C <code path>" or "P <docs-relative page>".
@@ -119,7 +119,7 @@ run_checked() { run_awk "$@" || echo "$2" >> "$T/failed"; }
 OUT="$(
   if [ ! -f "$DOCS/INDEX.md" ]; then echo "wiki-check: INDEX.md: missing"
   else
-    "$HERE/wiki-index.sh" "$PROJ" --check > /dev/null 2>&1; rc=$?      # (no "case" here: bash 3.2 misparses it in $( ))
+    bash "$HERE/wiki-index.sh" "$PROJ" --check > /dev/null 2>&1; rc=$?      # (no "case" here: bash 3.2 misparses it in $( ))
     if [ "$rc" = 1 ]; then echo "wiki-check: INDEX.md: INDEX.md stale"
     elif [ "$rc" != 0 ]; then echo INDEX.md >> "$T/failed"; fi
   fi

@@ -108,7 +108,7 @@ for k in specs plans; do
 done
 rmdir "$SD/superpowers" 2>/dev/null
 
-"$HERE/wiki-pages.sh" "$SD" > "$W/pages" || die "could not list the pages"
+bash "$HERE/wiki-pages.sh" "$SD" > "$W/pages" || die "could not list the pages"
 # Page names, and "name<TAB>heading" for every # to ###### heading outside front matter and fences.
 LC_ALL=C awk -v D="$SD" '
   function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }

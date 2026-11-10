@@ -48,7 +48,7 @@ while IFS= read -r page; do
     /^description:/ { d = val($0) }
     END { printf "%s\t%s\t%s\t%s\t%s\n", t, n, s, d, p }
   ' "$docs/$page" >> "$rows"
-done < <("$HERE/wiki-pages.sh" "$docs")
+done < <(bash "$HERE/wiki-pages.sh" "$docs")
 if [ -s "$rows" ] && [ "${WIKI_INDEX_UNTYPED:-0}" != 1 ] && ! awk -F'\t' '$1 != "" { f = 1 } END { exit !f }' "$rows"; then
   echo "wiki-index: no page has a type; run wiki-migrate.sh first"; exit 1
 fi

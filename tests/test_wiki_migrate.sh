@@ -475,4 +475,18 @@ assert_eq "$RC" "1" "no wiki-migrate.awk: exit"
 assert_contains "$SANDBOX/err" "nothing was changed"
 assert_eq "$(tree_sum "$P")" "$before" "no wiki-migrate.awk: the project changed"
 
+# --- an install without exec bits: wiki-migrate runs wiki-pages.sh with bash, so it prints what the install with
+# exec bits prints and leaves the same tree
+new_sandbox
+cp -R "$PLUGIN" "$SANDBOX/noexec"; find "$SANDBOX/noexec" -type f -exec chmod a-x {} +
+[ ! -x "$SANDBOX/noexec/scripts/wiki-pages.sh" ] && pass || fail "the copy still has exec bits (nothing to test)"
+mkproj "$SANDBOX/nx1"; run "$P"; want_out="$OUT"; want_tree="$(tree_sum "$P")"
+assert_eq "$RC" "0" "with exec bits: exit"
+mkproj "$SANDBOX/nx2"
+OUT="$(bash "$SANDBOX/noexec/scripts/wiki-migrate.sh" "$P" 2>"$SANDBOX/err")"; RC=$?
+assert_eq "$RC" "0" "no exec bits: exit"
+assert_eq "$(cat "$SANDBOX/err")" "" "no exec bits: stderr"
+assert_eq "$OUT" "$want_out" "no exec bits: output"
+assert_eq "$(tree_sum "$P")" "$want_tree" "no exec bits: the migrated tree"
+
 finish
