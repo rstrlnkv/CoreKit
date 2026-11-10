@@ -86,9 +86,29 @@ market_desc() {
 # (the GitHub repository description is set to the same text by hand: gh repo edit --description)
 assert_eq "$(sed -n 3p "$ROOT/README.md")" "$(market_desc corekit)" "README.md line 3 vs the marketplace.json description"
 
+# cross_refs <root> <plugin> <other> — the lines of <plugin>'s files (documents aside) that name a path into <other>:
+# ../<other>/, /<other>/ or plugins/<other>. Every plugin installs alone, so none may reach into another.
+# The corecrew SETTINGS file is a permitted data fallback for coremodel (codex/hint.sh finds it through
+# `settings_file ... corecrew`): a literal ~/.config/corecrew/settings there would be this text check's known false hit.
+cross_refs() { ( cd "$1" && LC_ALL=C grep -rnIE --exclude='*.md' "(\.\./|/)$3/|plugins/$3" "plugins/$2" ); }
+# platform_ver <plugin README> — the Claude Code version of its platform badge
+platform_ver() { sed -n 's/.*badge\/platform-Claude%20Code%20\([0-9][0-9.]*[0-9]\)%2B.*/\1/p' "$1" | head -1; }
+# hosts_names <README> <version> — its **Hosts:** line names <version> as a whole version
+hosts_names() { grep -F -- '**Hosts:**' "$1" | grep -qE "(^|[^0-9.])$(printf '%s' "$2" | sed 's/\./\\./g')([^0-9]|\$)"; }
 plugins=""
 for d in "$ROOT"/plugins/*/; do plugins="$plugins $(basename "$d")"; done
 for pl in $plugins; do
+  for o in $plugins; do
+    [ "$o" = "$pl" ] && continue
+    hits="$(cross_refs "$ROOT" "$pl" "$o")"
+    [ -z "$hits" ] && pass || fail "$pl depends on $o (a plugin must work alone): $hits"
+  done
+  # the root README's Hosts line names the Claude Code version each plugin's platform badge asks for
+  ver="$(platform_ver "$ROOT/plugins/$pl/README.md")"
+  if [ -z "$ver" ]; then fail "plugins/$pl/README.md: no Claude Code version in the platform badge"
+  elif hosts_names "$ROOT/README.md" "$ver"; then pass
+  else fail "README.md: the Hosts line does not name Claude Code $ver, the version of plugins/$pl/README.md's platform badge"
+  fi
   CJ="$ROOT/plugins/$pl/.claude-plugin/plugin.json"; XJ="$ROOT/plugins/$pl/.codex-plugin/plugin.json"
   CL="$(changelog_of "$pl")"
   assert_file "$CL"
@@ -136,6 +156,27 @@ done
 
 # self-check of the CHANGELOG rule: a good file passes, each kind of mistake is caught
 new_sandbox; T="$SANDBOX/changelogs"; mkdir -p "$T"
+# self-check of cross_refs: each form of a path into another plugin is a hit; the plugin's name as a word, its own
+# paths, a longer name and a document are not
+XR="$SANDBOX/x root"; mkdir -p "$XR/plugins/aa/hooks" "$XR/plugins/bb"
+printf '%s\n' 'on="$(settings_file "$CFG" bb)"' '. "$here/lib.sh"' 'x=plugins/aa/hooks' 'y=../bbq/lib.sh' > "$XR/plugins/aa/hooks/ok.sh"
+printf '%s\n' 'See ../bb/README.md and plugins/bb.' > "$XR/plugins/aa/README.md"
+assert_eq "$(cross_refs "$XR" aa bb)" "" "a plugin that only names the other plugin, or names it in a document"
+printf '%s\n' ': ok' '. "$here/../../bb/lib.sh"' > "$XR/plugins/aa/hooks/up.sh"
+assert_eq "$(cross_refs "$XR" aa bb)" 'plugins/aa/hooks/up.sh:2:. "$here/../../bb/lib.sh"' "a ../<other>/ path"
+rm "$XR/plugins/aa/hooks/up.sh"; printf '%s\n' 'f="$HOME/x/bb/lib.sh"' > "$XR/plugins/aa/hooks/abs.sh"
+assert_eq "$(cross_refs "$XR" aa bb)" 'plugins/aa/hooks/abs.sh:1:f="$HOME/x/bb/lib.sh"' "a /<other>/ path"
+rm "$XR/plugins/aa/hooks/abs.sh"; printf '%s\n' 'ls plugins/bb' > "$XR/plugins/aa/hooks/rel.sh"
+assert_eq "$(cross_refs "$XR" aa bb)" 'plugins/aa/hooks/rel.sh:1:ls plugins/bb' "a plugins/<other> path"
+# self-check of the Hosts line: the badge's version is read; another line, or a longer version, does not satisfy it
+printf '%s\n' '# p' '' 'd' '' '![platform](https://img.shields.io/badge/platform-Claude%20Code%202.1.30%2B%20%7C%20Codex%20CLI-lightgrey) ![release](x)' > "$SANDBOX/p.md"
+assert_eq "$(platform_ver "$SANDBOX/p.md")" "2.1.30" "platform_ver from the badge"
+printf '%s\n' '- **Hosts:** Claude Code 2.1.30 or newer (bb needs 2.1.309).' 'Elsewhere: 2.1.44.' > "$SANDBOX/r.md"
+hosts_names "$SANDBOX/r.md" 2.1.30 && pass || fail "hosts_names: the first version of the Hosts line"
+hosts_names "$SANDBOX/r.md" 2.1.309 && pass || fail "hosts_names: a version before a bracket"
+hosts_names "$SANDBOX/r.md" 2.1.3 && fail "hosts_names: 2.1.3 counted inside 2.1.30" || pass
+hosts_names "$SANDBOX/r.md" 1.30 && fail "hosts_names: 1.30 counted inside 2.1.30" || pass
+hosts_names "$SANDBOX/r.md" 2.1.44 && fail "hosts_names: a version outside the Hosts line counted" || pass
 printf '# Changelog\n\n## [Unreleased]\n\n## [1.1.0] - 2026-11-08\n\n### Added\n\n- x\n\n## [1.0.0] - 2026-11-01\n\n### Fixed\n\n- y\n' > "$T/good.md"
 assert_eq "$(check_changelog "$T/good.md")" "" "a good CHANGELOG passes"
 assert_eq "$(top_version "$T/good.md")" "1.1.0" "top released version"
@@ -201,7 +242,6 @@ else
 fi
 assert_no_file "$ROOT/install.sh"; assert_no_file "$ROOT/tests/test_install.sh"
 assert_not_contains "$ROOT/README.md" 'install.sh'; assert_not_contains "$CR" 'install.sh'
-assert_contains "$ROOT/README.md" '2.1.271'
 assert_contains "$ROOT/README.md" '/plugin install feature-dev@claude-plugins-official'
 T="$PLUGIN/templates"
 assert_dir "$T"   # shared by new-project, adopt, setup-core and wiki-migrate, so not inside a skill

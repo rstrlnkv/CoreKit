@@ -3,8 +3,8 @@
 # - absolute home paths (/Users/, /home/, C:\Users\);
 # - email addresses (example.com, example.org, noreply addresses and git@ SSH remotes are fine);
 # - the owner's handle (read from marketplace.json) outside the files that must carry it;
-# - references to the private design spec ("spec section", "spec §", "spec D<n>") outside docs/, and to
-#   a private ADR ("ADR 009") in a shipped plugin file (a template's "ADR 001" heading is allowed), and to a
+# - references to the private design spec ("spec section", "spec §", "spec D<n>") anywhere (docs/ is published
+#   too), and to a private ADR ("ADR 009") in a shipped plugin file (a template's "ADR 001" heading is allowed), and to a
 #   private plan or task ("plan 3c", "task 4") in a shipped plugin file;
 # - owner-specific terms from a local list that never enters the repo (see PERSONAL TERMS below);
 # - any project name listed in the owner's private PROJECTS.md (the list never enters the repo).
@@ -88,10 +88,7 @@ scan_repo() {
       plugins/*/.claude-plugin/*.json|plugins/*/.codex-plugin/*.json|plugins/*/README.md|plugins/*/README.*.md|plugins/*/CHANGELOG.md) ;;
       *) [ -n "$handle" ] && lines "owner handle outside manifests, READMEs, LICENSE, CHANGELOGs, SECURITY, ARCHITECTURE, CONTRIBUTING, docs" "$rel" -iwF -- "$handle" "$f" ;;
     esac
-    case "$rel" in
-      docs/*) ;;
-      *) lines "reference to the private spec" "$rel" -E 'spec section|spec §|spec D[0-9]' "$f" ;;
-    esac
+    lines "reference to the private spec" "$rel" -E 'spec section|spec §|spec D[0-9]' "$f"
     # a shipped file may not cite a private ADR ("ADR 009"); a template's "ADR 001" heading is the user's own record
     case "$rel" in
       plugins/*/templates/*) ;;
@@ -107,10 +104,7 @@ scan_repo() {
         [ -s "$kind_file.standard" ] && lines "owner standard file name" "$rel" -iwF -f "$kind_file.standard" "$f" ;;
     esac
     [ -s "$kind_file.archive" ] && lines "archive project name" "$rel" -iwF -f "$kind_file.archive" "$f"
-    case "$rel" in
-      docs/*) ;;
-      *) [ -s "$names" ] && lines "a project name from PROJECTS.md" "$rel" -iwF -f "$names" "$f" ;;
-    esac
+    [ -s "$names" ] && lines "a project name from PROJECTS.md" "$rel" -iwF -f "$names" "$f"
   done
   rm -f "$kind_file".*
 }
@@ -148,7 +142,7 @@ printf 'owner zhandle\npath %s\n' "$U" > "$R/plugins/p/CHANGELOG.md"   # handle 
 printf 'owner zhandle\n' > "$R/plugins/p/hooks/h.ts"       # hit: a plugin's code
 printf 'see spec section 4\n' > "$R/plugins/p/hooks/s.sh"  # hit: private spec
 printf 'see spec §4.2 and spec D17\n' > "$R/tests/spec.sh" # hit once: private spec
-printf 'see spec section 4\n' > "$R/docs/design.md"        # allowed: docs/
+printf 'see spec section 4\n' > "$R/docs/design.md"        # hit: docs/ is published too
 printf 'see ADR 009\n' > "$R/plugins/p/hooks/adr.sh"       # hit: a private ADR in a shipped file
 mkdir -p "$SK/templates"; printf '# ADR 001: stack\n' > "$SK/templates/d.md.tmpl"   # allowed: the user's own ADR
 mkdir -p "$R/plugins/p/templates/docs"; printf '# ADR 001: stack\n' > "$R/plugins/p/templates/docs/d.md.tmpl"   # allowed: the same, plugin level
@@ -171,6 +165,7 @@ git -C "$R" add -A >/dev/null
 printf 'path %s\n' "$U" > "$R/untracked.sh"                # not tracked: not scanned
 hits="$(scan_repo "$R" "" zhandle "$FT" | LC_ALL=C sort)"
 want='CHANGELOG.md:1: absolute home path (/Users/, /home/ or C:\Users\)
+docs/design.md:1: reference to the private spec
 docs/n.md:1: a personal name from the local terms list
 docs/ok3.md:1: archive project name
 plugins/p/CHANGELOG.md:2: absolute home path (/Users/, /home/ or C:\Users\)
@@ -214,10 +209,10 @@ P="$SANDBOX/repo2"; mkdir -p "$P/skills" "$P/docs"; git -C "$P" init -q
 printf 'Uses the zorblax quill library\n' > "$P/skills/leak.md"      # hit: case-insensitive phrase
 printf 'a frumbly day\nfrumblyish\n' > "$P/skills/word.md"           # hit line 1 only (whole word)
 printf 'app demo corecrew test\n' > "$P/skills/generic.md"            # fine: short / generic names
-printf 'Frumbly lives here\n' > "$P/docs/ok.md"                      # fine: docs/
+printf 'Frumbly lives here\n' > "$P/docs/ok.md"                      # hit: docs/ is published too
 git -C "$P" add -A >/dev/null
 out="$(scan_repo "$P" "$SANDBOX/names" "" "" | LC_ALL=C sort)"
-assert_eq "$(echo "$out" | tr '\n' ';')" "skills/leak.md:1: a project name from PROJECTS.md;skills/word.md:1: a project name from PROJECTS.md;" "fake project names"
+assert_eq "$(echo "$out" | tr '\n' ';')" "docs/ok.md:1: a project name from PROJECTS.md;skills/leak.md:1: a project name from PROJECTS.md;skills/word.md:1: a project name from PROJECTS.md;" "fake project names"
 printf '%s' "$out" | grep -qiE 'zorblax|frumbly' && fail "output leaked a project name" || pass
 assert_eq "$(project_names "$SANDBOX/missing.md")" "" "missing PROJECTS.md gives no names"
 

@@ -12,6 +12,9 @@ new_sandbox
 # counting wrapper's own `bash` (run_hook starts the hook with `bash <hook>`). The `sh` that runs each logging shim
 # is started by its full path (the shim's #! line) and is not counted; the `sh` in the Stop count is the hook's own
 # (xargs sh -c). Raise a budget only with the reason in the commit; lower it when a hook gets cheaper.
+# The three rows of round 4 (a commit with a quote, SessionStart outside a project, a clean Stop) were measured the
+# same way. One path has no row: a test command with no other run in sight (one-suite lists the processes there);
+# its count was not measured on Linux, where the process listing is the likeliest to differ, and a budget is not per system.
 COST_GIT_STATUS_ONE_SUITE=2        # bash cat: the prefilter finds no "test" in the payload
 COST_GIT_STATUS_GUARD_CODE=5       # bash cat dirname*2 awk
 COST_GIT_STATUS_GUARD_SECRETS=5    # bash cat dirname*2 awk
@@ -26,6 +29,9 @@ COST_PATCH_GUARD_SECRETS=10        # bash cat dirname*2 awk*2 tr*4
 COST_OUTSIDE_ONE_SUITE=2           # bash cat
 COST_OUTSIDE_GUARD_CODE=5          # bash cat dirname*2 awk
 COST_OUTSIDE_GUARD_SECRETS=5       # bash cat dirname*2 awk
+COST_COMMIT_QUOTE_ONE_SUITE=12     # bash cat dirname*2 awk*2 grep sed*3 tr*2: past the prefilter, no runner in the command
+COST_SESSION_START_OUTSIDE=15      # bash*2 cat*2 dirname*2 awk*4 cksum*4 sed
+COST_STOP_CLEAN=26                 # git*7 dirname*6 tr*4 basename*3 bash cat awk grep readlink rm
 COST_SESSION_START=28              # bash*2 (the wrapper's, sync-tools.sh) git cat*2 awk*4 cksum*4 grep*3 tr*5 ...
 COST_STOP_REMINDED=44              # git*13 dirname*6 tr*4 cat*3 basename*3 xargs*2 sh find ls mktemp rm ...
 # load_settings (every hook runs it) opens 2 command substitutions with CORE_DIR unset and no settings file:
@@ -79,6 +85,8 @@ cost "Write src/x.py: guard-secrets"    guard-secrets "$COST_WRITE_GUARD_SECRETS
 cost "Read src/x.py: guard-secrets"     guard-secrets "$COST_READ_GUARD_SECRETS"       0 silent "$(file Read "$C/src/x.py")"
 cost "Codex apply_patch: guard-code"    guard-code    "$COST_PATCH_GUARD_CODE"         0 silent "$(hook_event codex PreToolUse "$C" tool=apply_patch command="$PATCH")"
 cost "Codex apply_patch: guard-secrets" guard-secrets "$COST_PATCH_GUARD_SECRETS"      0 silent "$(hook_event codex PreToolUse "$C" tool=apply_patch command="$PATCH")"
+# a quote takes one-suite past its prefilter: the common long path of a command that is no test run
+cost "Bash git commit with a quote: one-suite" one-suite "$COST_COMMIT_QUOTE_ONE_SUITE" 0 silent "$(pre "git commit -m 'fix'")"
 cost "Bash outside a project: one-suite"     one-suite     "$COST_OUTSIDE_ONE_SUITE"     0 silent "$(pre 'git status' "$E")"
 cost "Bash outside a project: guard-code"    guard-code    "$COST_OUTSIDE_GUARD_CODE"    0 silent "$(pre 'git status' "$E")"
 cost "Bash outside a project: guard-secrets" guard-secrets "$COST_OUTSIDE_GUARD_SECRETS" 0 silent "$(pre 'git status' "$E")"
@@ -91,8 +99,18 @@ note "SessionStart: $EXECS programs (budget $COST_SESSION_START)"
 [ "$EXECS" -le "$COST_SESSION_START" ] && pass \
   || fail "SessionStart: $EXECS programs, budget $COST_SESSION_START: $(LC_ALL=C sort "$EXEC_LOG" | uniq -c | tr -s ' \n' ' ')"
 
-# Stop in a dirty project that was already reminded of this change set: silent, exit 0
+# SessionStart outside a project with the Core set up: nothing to say, so nothing on stdout or stderr
+count_execs run_hook "$HOOKS/session-start.sh" "$(hook_event claude SessionStart "$E" source=startup)"
+assert_eq "$RC" "0" "SessionStart outside a project: exit code"
+assert_eq "$OUT" "" "SessionStart outside a project: stdout"; assert_eq "$ERR" "" "SessionStart outside a project: stderr"
+note "SessionStart outside a project: $EXECS programs (budget $COST_SESSION_START_OUTSIDE)"
+[ "$EXECS" -le "$COST_SESSION_START_OUTSIDE" ] && pass \
+  || fail "SessionStart outside a project: $EXECS programs, budget $COST_SESSION_START_OUTSIDE: $(LC_ALL=C sort "$EXEC_LOG" | uniq -c | tr -s ' \n' ' ')"
+
+# Stop in a clean project (the tree is still as saved: nothing above writes into it): silent, exit 0
 stop_in() { printf '{"session_id":"s","cwd":"%s","hook_event_name":"Stop","stop_hook_active":false}' "$C"; }
+cost "Stop, clean: stop-remind" stop-remind "$COST_STOP_CLEAN" 0 silent "$(stop_in)"
+# Stop in a dirty project that was already reminded of this change set: silent, exit 0
 echo x > "$C/new.txt"
 run_hook "$HOOKS/stop-remind.sh" "$(stop_in)"; assert_eq "$RC" "2" "Stop, dirty: the first stop reminds"
 cost "Stop, dirty and reminded: stop-remind" stop-remind "$COST_STOP_REMINDED" 0 silent "$(stop_in)"

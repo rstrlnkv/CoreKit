@@ -6,10 +6,29 @@ source "$(dirname "$0")/lib.sh"
 WF="$ROOT/.github/workflows/tests.yml"
 assert_file "$WF"
 
+# The documents, one glob a line; "optional" marks a glob that may match nothing (the translations).
+# run.sh runs this file from tests/, so every glob expands under the root it is given, never the cwd.
+CLAIM_GLOBS='README.md
+README.*.md optional
+SECURITY.md
+ARCHITECTURE.md
+CONTRIBUTING.md
+plugins/*/README.md
+plugins/*/README.*.md optional
+docs/*.md'
+# claim_docs <root> <glob> — the files of <glob> under <root>, relative to it
+claim_docs() {
+  local f
+  # shellcheck disable=SC2086 # $2 is a glob on purpose; the root is quoted, so its own characters stay literal
+  for f in "$1"/$2; do [ -f "$f" ] && printf '%s\n' "${f#"$1"/}"; done
+}
 docs=""
-for d in README.md README.*.md SECURITY.md ARCHITECTURE.md CONTRIBUTING.md plugins/*/README.md plugins/*/README.*.md docs/*.md; do
-  [ -f "$ROOT/$d" ] && docs="$docs $d"
-done
+while read -r g opt; do
+  got="$(claim_docs "$ROOT" "$g")"
+  # a required glob that finds nothing has stopped expanding (or its files moved): nothing of it would be checked
+  [ -n "$got" ] || [ "$opt" = optional ] && pass || fail "the document glob $g finds no file under the repo root"
+  docs="$docs $got"
+done <<< "$CLAIM_GLOBS"
 
 # ci_oses <workflow> — the systems of the suite matrix (one line `os: [a, b]`), named as the docs name
 # them: macos-* -> macOS, ubuntu-* -> Linux, windows-* -> Windows; anything else as written
@@ -44,6 +63,15 @@ printf '%s\n' '- macOS is tested. Linux is expected to work.' '  Windows is unte
 assert_eq "$(untested_claims "$SANDBOX/doc.md" Linux | cut -d: -f1)" "1" "an 'expected to work' claim is caught for Linux"
 assert_eq "$(untested_claims "$SANDBOX/doc.md" Windows | cut -d: -f1)" "2" "an 'untested' claim is caught for Windows"
 assert_eq "$(untested_claims "$SANDBOX/doc.md" Linux | wc -l | tr -d ' ')" "1" "a plain mention of Linux is not a claim"
+# every document glob expands under the root it is given and not under the cwd (run.sh runs from tests/)
+DR="$SANDBOX/doc root"
+mkdir -p "$DR/plugins/p" "$DR/docs"
+for f in README.md README.de.md SECURITY.md ARCHITECTURE.md CONTRIBUTING.md plugins/p/README.md plugins/p/README.de.md docs/a.md; do
+  : > "$DR/$f"
+done
+got="$(cd "$SANDBOX" && while read -r g _; do claim_docs "$DR" "$g" | tr '\n' ' '; done <<< "$CLAIM_GLOBS")"
+assert_eq "$got" "README.md README.de.md SECURITY.md ARCHITECTURE.md CONTRIBUTING.md plugins/p/README.md plugins/p/README.de.md docs/a.md " \
+  "each document glob expands under the given root"
 
 # --- CONTRIBUTING names every knob of tests/run.sh. The header of run.sh is the source: a line "#   <knob> ..."
 # whose knob is an option (-j N) or a variable (VERBOSE=1, KEEP_SANDBOX=1). Nothing here reads a literal list of knobs.
