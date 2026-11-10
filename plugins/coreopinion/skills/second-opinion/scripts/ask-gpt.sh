@@ -38,9 +38,9 @@ case "${1:-}" in
 esac
 T="$1"; effort="${2:-medium}"
 case "$T" in ''|/|-*) echo "usage: ask-gpt.sh --check | --new | <temp folder> [medium|high] < prompt" >&2; exit 2 ;; esac
-# The folder is removed at the end, so it must be a mktemp folder (coreopinion.* as --new makes it, or tmp.* from a
-# bare `mktemp -d`) right in a temp folder: $TMPDIR, the system one (macOS: getconf DARWIN_USER_TEMP_DIR, where a bare
-# `mktemp -d` lands whatever TMPDIR says) or /tmp, all compared after resolving links (/tmp is /private/tmp on macOS).
+# The folder is removed at the end, so it must be a folder as --new makes it (coreopinion.*) right in a temp folder:
+# $TMPDIR, the system one (macOS: getconf DARWIN_USER_TEMP_DIR) or /tmp, all compared after resolving links (/tmp is
+# /private/tmp on macOS).
 # A wrong path, the project say, is refused and left alone; a temp folder that resolves to / counts as none.
 t_dir="$(cd "$T" 2>/dev/null && pwd -P)" || { echo "ask-gpt.sh: $T is not a folder" >&2; exit 2; }
 t_ok=""
@@ -48,7 +48,7 @@ for r in "${TMPDIR:-}" "$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null)" /tmp; do
   [ -n "$r" ] || continue
   r="$(cd "$r" 2>/dev/null && pwd -P)" || continue
   [ "$r" != / ] || continue
-  case "${t_dir#"$r"/}" in "$t_dir"|*/*) ;; tmp.?*|coreopinion.?*) t_ok=1 ;; esac
+  case "${t_dir#"$r"/}" in "$t_dir"|*/*) ;; coreopinion.?*) t_ok=1 ;; esac
 done
 [ -n "$t_ok" ] || { echo "ask-gpt.sh: $T is not a mktemp -d folder in the temp folder; nothing was run or removed" >&2; exit 2; }
 [ -f "$T/dir" ] || { echo "ask-gpt.sh: $T/dir is missing (make the folder with ask-gpt.sh --new)" >&2; exit 2; }

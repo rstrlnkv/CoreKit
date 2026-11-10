@@ -85,7 +85,11 @@ done)"
 assert_eq "${missing:-none}" "none" "every secret pattern is in the --pathspec output"
 new_sandbox
 # the temp folder for ask-gpt.sh, made as SKILL.md says (macOS mktemp -d without a template ignores $TMPDIR)
-tmpf() { mktemp -d "${TMPDIR:-/tmp}/coreopinion.XXXXXXXXXX"; }
+# These folders are outside the sandbox (ask-gpt.sh accepts no folder inside one), so the file removes the ones a
+# red run leaves: each is recorded when made and removed when the file exits.
+MADE="$SANDBOX/made-folders"
+tmpf() { mktemp -d "${TMPDIR:-/tmp}/coreopinion.XXXXXXXXXX" | tee -a "$MADE"; }
+at_exit '[ ! -f "$MADE" ] || while IFS= read -r d; do case "$d" in */coreopinion.?*) rm -rf "$d" ;; esac; done < "$MADE"'
 unset CODEX_THREAD_ID   # a shell that Codex runs carries it; ask-gpt.sh refuses there (checked below)
 R="$SANDBOX/secrets-repo"; mkdir -p "$R/sub" "$R/keys"
 git -C "$R" init -q
@@ -323,25 +327,17 @@ assert_file "$PRJ/code.sh"
 TD="$(tmpf)"; mkdir -p "$TD/inner"; printf '%s' "$BAD" > "$TD/inner/dir"; printf 'p\n' > "$TD/inner/prompt.md"
 ( PATH="$SANDBOX/stub:$PATH" bash "$A" "$TD/inner" >/dev/null 2>&1 ); assert_eq "$?" "2" "a folder inside a temp folder: refused"
 assert_dir "$TD/inner"; rm -rf "$TD"
-# Where the temp folder may be: right in $TMPDIR, in the system temp folder (macOS getconf DARWIN_USER_TEMP_DIR, where
-# a bare `mktemp -d` lands whatever TMPDIR says) or in /tmp, compared after resolving links (/tmp vs /private/tmp).
+# Where the temp folder may be: right in $TMPDIR, in the system temp folder (macOS getconf DARWIN_USER_TEMP_DIR) or
+# in /tmp, compared after resolving links (/tmp vs /private/tmp). Its name is the one --new gives: coreopinion.*.
 okrun() { # <folder> <label>: accepted, run, and removed
   printf '%s' "$GR" > "$1/dir"; printf 'p\n' > "$1/prompt.md"
   out="$(CODEX_THREAD_ID= PATH="$SANDBOX/stub:$PATH" bash "$A" "$1" 2>&1)"
   case "$out" in exit=0*) pass ;; *) fail "$2: refused: $out" ;; esac
   assert_no_file "$1"
+  rm -rf "$1"   # outside the sandbox: a red run must not leave it
 }
-# A bare `mktemp -d` while TMPDIR points elsewhere: macOS puts the folder in the system temp folder, which is
-# accepted. GNU mktemp honours TMPDIR, so there the case does not exist (the unused folder is removed).
 mkdir -p "$SANDBOX/elsewhere"
-BARE="$(TMPDIR="$SANDBOX/elsewhere" mktemp -d)"
-case "$BARE" in
-  "$SANDBOX/elsewhere"/*) rmdir "$BARE"
-    skip bare-mktemp "mktemp -d honours TMPDIR here (GNU), so a bare mktemp -d folder outside it cannot be made" ;;
-  *) okrun "$BARE" "a bare mktemp -d folder while TMPDIR points elsewhere" ;;
-esac
 okrun "$(mktemp -d /tmp/coreopinion.XXXXXXXXXX)" "a folder right in /tmp (a link on macOS)"
-okrun "$(mktemp -d /tmp/tmp.XXXXXXXXXX)" "a tmp.* folder right in /tmp"
 SYS="$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null)"
 if [ -n "$SYS" ] && [ -d "$SYS" ]; then
   okrun "$(TMPDIR="$SANDBOX/elsewhere" mktemp -d "${SYS%/}/coreopinion.XXXXXXXXXX")" "a folder right in the system temp folder"
@@ -351,9 +347,21 @@ L="$SANDBOX/tmplink"; ln -s "${TMPDIR:-/tmp}" "$L" 2>/dev/null && okrun "$(mktem
 refuse() { # <folder> <label> [env...]
   local d="$1" l="$2"; shift 2
   printf '%s' "$GR" > "$d/dir"; printf 'p\n' > "$d/prompt.md"; printf 'keep\n' > "$d/keep.txt"
-  ( env "$@" CODEX_THREAD_ID= PATH="$SANDBOX/stub:$PATH" bash "$A" "$d" >/dev/null 2>&1 ); assert_eq "$?" "2" "$l: refused"
+  out="$(env "$@" CODEX_THREAD_ID= PATH="$SANDBOX/stub:$PATH" bash "$A" "$d" 2>&1 >/dev/null)"; assert_eq "$?" "2" "$l: refused"
   assert_file "$d/keep.txt"
 }
+# A hand-made tmp.* folder (a bare `mktemp -d`) is not one of --new's: refused with the temp-folder message, left as it
+# was, and codex is not run. On macOS a bare `mktemp -d` lands in the system temp folder whatever TMPDIR says; GNU
+# mktemp honours TMPDIR, so there the folder is inside the sandbox (refused all the same).
+refuse_tmp() { # <folder> <label>
+  rm -f "$SANDBOX/args.txt"
+  refuse "$1" "$2"
+  case "$out" in *"is not a mktemp -d folder in the temp folder"*) pass ;; *) fail "$2: the message: $out" ;; esac
+  assert_no_file "$SANDBOX/args.txt"
+  rm -rf "$1"
+}
+refuse_tmp "$(TMPDIR="$SANDBOX/elsewhere" mktemp -d)" "a bare mktemp -d folder while TMPDIR points elsewhere"
+refuse_tmp "$(mktemp -d /tmp/tmp.XXXXXXXXXX)" "a tmp.* folder right in /tmp"
 mkdir -p "$HOME/coreopinion.home1"; refuse "$HOME/coreopinion.home1" "a coreopinion.* folder in HOME"
 H2="$HOME/tmp.home2"; mkdir -p "$H2"; refuse "$H2" "a tmp.* folder in HOME"
 mkdir -p "$GR/coreopinion.repo"; refuse "$GR/coreopinion.repo" "a coreopinion.* folder in the repo"
@@ -380,7 +388,7 @@ COREOPINION_PROMPT
 )"
 case "$OUT" in exit=0*) pass ;; *) fail "a prompt on stdin runs: $OUT" ;; esac
 assert_eq "$(cat "$SANDBOX/stdin.txt" 2>/dev/null)" 'Review this, $HOME and `x` stay as they are.' "codex reads the prompt given on stdin"
-assert_no_file "$NEWT"
+assert_no_file "$NEWT"; rm -rf "$NEWT"
 # --check: codex there, exit 0; without codex, exit 4 and nothing on stdout
 OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$A" --check </dev/null 2>&1)"; rc=$?
 assert_eq "$rc" "0" "--check with codex: exit 0 ($OUT)"
