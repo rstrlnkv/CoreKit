@@ -70,7 +70,6 @@ plugins/coreopinion/              second opinion from GPT (Claude Code only)
                                   secret-patterns.txt (the one secret list)
     agents/openai.yaml            Codex: keeps the skill out of Codex (coreopinion is Claude Code only)
 scripts/commit-subjects.sh        the check of this repo's own commit subjects (CI job and optional commit-msg hook)
-scripts/make-test-coredev.sh      builds test-coredev, the hand-made project for an end-to-end try of /corecrew:task
 scripts/eval.sh                   runs one plugin's trigger evals on a copy it assembles (real model calls,
                                   not part of tests/run.sh)
 evals/corecrew/, evals/coreopinion/  the trigger evals (does a skill start when it should); they live outside
