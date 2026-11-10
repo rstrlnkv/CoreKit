@@ -33,7 +33,8 @@ for pl in corecrew coreopinion; do
   d="$(stub_dir)"
   assert_eq "$(basename "$d")" "$pl" "$pl: the staged folder has the plugin's name"
   assert_eq "$(grep '^arg ' "$LOG" | tr '\n' ' ')" "arg plugin arg eval arg $d arg --ablation arg none arg --no-publish " "$pl: the command"
-  want="$(for c in "$ROOT/evals/$pl"/*/; do echo "case $(basename "$c")"; done)"
+  # results/ (git-ignored output of an earlier real run) is left out of the copy, so it is no case
+  want="$(for c in "$ROOT/evals/$pl"/*/; do [ "$(basename "$c")" = results ] || echo "case $(basename "$c")"; done)"
   assert_eq "$(grep '^case ' "$LOG")" "$want" "$pl: the staged cases"
   [ -n "$want" ] && pass || fail "$pl: no case folder under evals/$pl"
   # the copy is a throwaway one, outside the repo, and it is gone after the run

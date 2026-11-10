@@ -30,7 +30,7 @@ function on_out(w) { path(w) }
 function on_in(w) { }
 # on_subst(w) — a $(...) or backtick body inside double quotes is queued as a command line (bash-lex.awk)
 function on_subst(w) { subst_queue(w) }
-END { if (nomore || capped) printf "X\t%s\n", "a command this check could not read whole" }
+END { if (nomore || capped || doubt) printf "X\t%s\n", "a command this check could not read whole" }
 function out(kind, a) {
   if (ne >= CAP) { capped = 1; full = 1; return }
   ne++; printf "%s\t%s\n", kind, a

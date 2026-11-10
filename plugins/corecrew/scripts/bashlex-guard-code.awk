@@ -12,6 +12,8 @@
 #   L <dest> <source>   ln: a link at <dest>, or in it when it is a directory, that points to <source>; the source
 #                       is empty when it is made at run time (unknown)
 #   C                   the last line: too many targets to check (see below); the hook refuses the whole command
+#   U                   the tokenizer may have skipped or misread a command (bash-lex.awk, doubt): the hook judges the
+#                       raw text
 # Not printed: a path with $ ` * ? [ { (made at run time), /dev/..., and after cd, pushd or popd a relative path
 # (the folder is unknown then), except after the one simple leading form `cd <absolute folder> &&` (or `;`, or a
 # newline), when it is the first command, not in a subshell, with one plain / word: the relative paths after it are
@@ -39,6 +41,7 @@ function classify(b) {
 function on_out(w) { emit("W", w, "") }
 function on_in(w) { }        # a file read is not a file written
 function on_subst(w) { }     # "$(...)" is not followed (LIMIT)
+END { if (doubt && !full) print "U" }
 
 # --- printing
 function internal(p,   n, part, x) {

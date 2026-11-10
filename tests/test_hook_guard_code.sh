@@ -198,6 +198,16 @@ blocked "Bash command after a commit heredoc with a double-quoted delimiter is j
 run_bash 'grep -n \"<<'"'"'\" f.sh && echo '"'"'ok'"'"' \"> docs/y\"'; hook_ok "Bash a <<' inside a double-quoted grep pattern does not flip the quoting"
 run_bash 'cat <<EOF\necho x > docs/a.md'; hook_ok "Bash unterminated heredoc body"
 run_bash 'cat <<EOF > notes\nx\nEOF\ncp a docs/b'; blocked "Bash command after a closed heredoc is judged" "$C/docs/b" "$CORE_DIR/p/docs/b"
+# P10: a << in a double-quoted string with no $( before it is text: the next line is read as a command
+run_bash 'echo \"a<<b\"\necho x > docs/a.md'; blocked "Bash after \"a<<b\": the next line is judged" "$C/docs/a.md" "$CORE_DIR/p/docs/a.md"
+# P10: a command the tokenizer may misread (a << after a closed $( in a string, a blank in a subscript): raw text decides
+for c in 'echo \"$(x) a<<b\"\necho y > CLAUDE.md\nb' 'X[a b]=1 tee docs/a.md' 'X[\"a\"]=1 tee docs/a.md'; do
+  run_bash "$c"; assert_eq "$RC" "2" "Bash in doubt, internal name: $c"
+  case "$ERR" in *'could not be read safely'*) pass ;; *) fail "Bash in doubt: no unread message: $ERR" ;; esac
+done
+for c in 'echo \"$(x) a<<b\"\nls > out.txt\nb' 'X[a b]=1 tee notes.txt' 'X[\"a\"]=1 make'; do
+  run_bash "$c"; hook_ok "Bash in doubt, no internal name passes: $c"
+done
 
 }
 bg sec_bash_pass

@@ -25,7 +25,11 @@
 #   globals it may set: full (stop reading); in BEGIN, nofollow = 1 (enqueue() queues nothing: bash -c, eval and
 #   "$(...)" are not followed), dqhd = 1 (<<"WORD" inside "$(...)" is read as a heredoc), longw (the word a hook
 #   gets for a word longer than 4096 bytes; "" when unset). nomore is set here by <<"WORD" inside "$(...)" when
-#   dqhd is not set (reading stops: a hook that must not fail open there can look at it in its END block)
+#   dqhd is not set (reading stops: a hook that must not fail open there can look at it in its END block). doubt is
+#   set here, and reading goes on, when the text may hold a command this pass skipped or misread: a << in a double-
+#   quoted string after something other than one plain "$(word ... (a closed $(), a quote, a backtick), or a
+#   NAME[...] word with a quote or a blank in the subscript. A hook that must
+#   not fail open judges the raw text then (its END block).
 # A shell run with -c (bash -c "...", sh -c, zsh -c, ...) and eval hand their command line to enqueue() too.
 # State this file owns: cmd, args, na, sep, wrapped, shk/sargs/nsa (shell -c and eval), and the redirect/heredoc flags.
 
@@ -105,6 +109,8 @@ function endword(   w, qd, b, rw, x) {
     if (wskip) { wskip = 0; return }   # the value of a wrapper option
     # X=1, X="a b", X+=1, X[0]=1: a quote before the = ("X=1") makes a command word
     if (!qd && w ~ /^[A-Za-z_][A-Za-z0-9_]*(\[.*\])?[+]?=/) return
+    # X["a"]=1, X[a b]=1: bash takes them as assignments, this pass as a command word (doubt: the raw text decides)
+    if (w ~ /^[A-Za-z_][A-Za-z0-9_]*\[/) doubt = 1
     if (wrapped && substr(w, 1, 1) == "-") { wrapper_opt(w); return }
     if (wdur) { wdur = 0; return }   # timeout's duration
     b = base(w)
@@ -225,16 +231,24 @@ function lex(text,   lxn, lxk, lxpos, lxw, lxl, lxc) {
     }
     if (c == "\"") {
       if (!index(word, "=")) qpre = 1
-      inword = 1; hasq = 1; k = i + 1; j = k
+      inword = 1; hasq = 1; k = i + 1; j = k; dqs = 0; dqx = 0
       while (j <= len) {
         d = C[j]
         if (d == "\"") break
         if ((d == "$" && C[j + 1] == "(") || d == "`") wsub = 1
+        # dqs: a $( or backtick was opened in this string; dqx: since then a ( ) ` ' \ or a second $( came, so this
+        # pass cannot tell whether a << after it is still inside the substitution
+        if (d == "$" && C[j + 1] == "(") { if (dqs) dqx = 1; dqs = 1; j += 2; continue }
+        if (d == "`") { if (dqs) dqx = 1; dqs = 1 }
+        else if (dqs && (d == "(" || d == ")" || d == "\047" || d == "\\")) dqx = 1
         # a heredoc inside "$(...)": its body (up to the delimiter line) is skipped, so a stray quote
         # in it cannot flip the quoting. <<"WORD" ends this span early: stop judging (fail open).
         if (d == NL && hdn > 0) { app(seg(k, j)); i = j + 1; skip_heredocs(); j = i; k = j; continue }
         if (d == "<" && C[j + 1] == "<" && C[j + 2] == "<") { j += 3; continue }   # <<<x: a here-string, no heredoc
+        # << with no $( or backtick before it in this string is text (bash starts no heredoc in a quoted string)
+        if (d == "<" && C[j + 1] == "<" && C[j + 2] != "<" && !dqs) { j += 2; continue }
         if (d == "<" && C[j + 1] == "<" && C[j + 2] != "<") {
+          if (dqx) doubt = 1
           p = j + 2; st = 0
           if (C[p] == "-") { st = 1; p++ }
           # <<"WORD" inside "$(...)": stop judging, or with dqhd read it as a heredoc. A "<<" that is the end of the

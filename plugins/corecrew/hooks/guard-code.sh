@@ -303,6 +303,14 @@ into_dir() {
   resolve_abs "$1"
   if [ -d "$ABS" ] || [ "${1%/}" != "$1" ]; then check_path "${1%/}/$s" "$3"; fi
 }
+# A line U: the tokenizer may have skipped or misread a command. The raw text decides, in scope as for C: a component
+# that names an internal file anywhere in the command refuses it.
+case "$NL$targets$NL" in *"${NL}U$NL"*)
+  if hit="$({ printf '%s' "$cmd"; } 2>/dev/null | internal_hit)"; then
+    case "$targets$cmd" in *"$(dirname "$CORE_DIR")"/*) guard_refuse "$(msg guard_code_unread "$hit")" ;; esac
+    project_of "$(canon_dir "$cwd")" >/dev/null 2>&1 && guard_refuse "$(msg guard_code_unread "$hit")"
+  fi ;;
+esac
 while IFS="$TAB" read -r kind a b; do
   case "$kind" in
     W) check_path "$a" ;;

@@ -8,7 +8,8 @@
 # judges the candidates (symlinks, the real ~/.ssh). <judged> is the word the caller judges: the same word, or, for a
 # glob, the word with each component that can match .ssh or a secret name replaced by that name (see cand).
 # Also prints "X\tnomore" or "X\tcap" when reading stopped early (a <<"WORD" inside "$(...)", or more than
-# CAP candidates): the caller does not trust the rest and fails closed.
+# CAP candidates), and "X\tdoubt" when the tokenizer may have skipped a command (bash-lex.awk, doubt): the caller
+# does not trust the reading and judges the raw text.
 # Command substitutions inside double quotes ("$(cat .env)", backticks) are lexed as command lines of their
 # own, once the main pass is done (on_subst -> subst_queue in bash-lex.awk).
 # Judged: the arguments of the commands in RD, and the word after an input redirect (< file). Not
@@ -49,6 +50,7 @@ function reg(tab, cmds, opts,   nc, no, x, y, cl, ol) {
 END {
   if (nomore) print "X\tnomore"
   else if (capped) print "X\tcap"
+  else if (doubt) print "X\tdoubt"
 }
 # on_subst(w) — a $(...) or backtick body inside double quotes is queued as a command line (bash-lex.awk)
 function on_subst(w) { subst_queue(w) }

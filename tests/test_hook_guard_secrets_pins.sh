@@ -163,6 +163,28 @@ sec_lex() {
   p 'echo "$(cat .envrc"'
   # reading stops at <<"WORD" inside "$(...)": nothing after it is judged as a word, the raw scan decides (shown: .env)
   b "echo \"\$(cat sub/.env)\" \"\$(cat <<\"E\"${NL}x${NL}E${NL})\"" '.env'
+  # P10: a << in a double-quoted string with no $( or backtick before it is text, not a heredoc: the lines after it
+  # are judged
+  b "echo \"a<<b\"${NL}cat .env" '.env'
+  b "echo \"a<<b\"${NL}cat .env${NL}b" '.env'
+  p "echo \"a<<b\"${NL}ls"
+  p "git commit -m \"x<<y\"${NL}git status"
+  # P10: a << after something other than a plain $(word ... (a closed $(), a quote, a backtick) is in doubt: the
+  # raw text decides, so a secret named anywhere in it is refused
+  b "echo \"\$(x) a<<b\"${NL}cat .env${NL}b" '.env'
+  b "echo \"\`x\` a<<b\"${NL}cat .env${NL}b" '.env'
+  p "echo \"\$(x) a<<b\"${NL}ls${NL}b"
+  # a real commit: "$(cat <<'EOF' ... EOF)" is a heredoc, its body (which may name .env) is not judged
+  p "git commit -m \"\$(cat <<'EOF'${NL}fix .env.example handling${NL}EOF${NL})\""
+  p "git commit -m \"\$(cat <<EOF${NL}read .env only through .env.example${NL}EOF${NL})\""
+  # P10: a subscript with a quote or a blank in it (X["a"]=1, X[a b]=1) is in doubt: the raw text decides
+  b 'X["a"]=1 cat .env' '.env'
+  b "X['a']=1 cat .env" '.env'
+  b 'X[a b]=1 cat .env' '.env'
+  p 'X["a"]=1 ls'
+  p 'X[a b]=1 make test'
+  # a heredoc whose delimiter never comes: bash reads the rest as its body and runs none of it
+  p "cat <<EOF${NL}x${NL}cat .env"
   # words the shell itself would not run, read as the tokenizer reads them today
   b 'cat/ .env' '.env'
   p '"2">x cat .env'

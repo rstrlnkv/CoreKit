@@ -131,6 +131,10 @@ one). It does not cover git history (`git show HEAD:.env`).
   `.env` and `.env.*` in any folder, except `.env.example`, `.env.sample` and `.env.template`
   (`.envrc` does not match); and `*.pem` and `*.key` files. It does not block the rest of `docs/`, so
   a `docs/` file that got past the code guard can still be committed by hand.
+- The hooks share one reader of Bash commands. When it cannot read a command safely (a `<<` after a
+  closed `$(...)` or a backtick inside a double-quoted string, or a quote or blank inside an array
+  subscript such as `X["a"]=1`), the secrets guard and the code guard judge the raw text and refuse the
+  command only when it names a secret or an internal file; the read-only checkers refuse it whole.
 - Codex subagents cannot be made read-only: the read-only steps of `/corecrew:task` are checked
   (the working tree before and after), not enforced.
 

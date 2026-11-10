@@ -9,6 +9,13 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off until then.
+
+### Fixed
+- The guards no longer skip the command after `echo "a<<b"` and a line break, or after `X["a"]=1` and
+  `X[a b]=1`: a `<<` in a double-quoted string with no `$(` before it is text, and a command the shared
+  reader cannot read safely is judged by its raw text (the read-only checkers refuse it).
+
 ## [1.0.0] - 2026-11-11
 
 Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off until then.

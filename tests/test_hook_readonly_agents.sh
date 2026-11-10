@@ -149,6 +149,13 @@ for c in 'rsync -a src/a.txt /tmp/ro-b.txt' 'truncate --size 0 /tmp/ro-a.txt' 'u
          'truncate -s 0 /tmp/ro-a.txt' 'truncate -cs 0 /tmp/ro-a.txt' 'truncate -r src/a.txt /tmp/ro-a.txt' 'truncate --size=0 /tmp/ro-a.txt'; do
   allowed $V "$c"
 done
+# P10: a << in a double-quoted string with no $( before it is text, so the next line is judged; a command the
+# tokenizer may misread (a << after a closed $( in a string, a quote or blank in a subscript) is refused whole
+NLJ=$'\n'
+for c in "echo \"a<<b\"${NLJ}echo x > src/a.txt" "echo \"\$(x) a<<b\"${NLJ}ls${NLJ}b" 'X[a b]=1 ls' 'X["a"]=1 ls'; do
+  refused $V "$c"
+done
+allowed $V "echo \"a<<b\"${NLJ}ls"
 # after cd, pushd or popd a relative write is refused wherever the hook started, also in a temp folder
 for c in 'cd /opt && echo x > ro-log.txt' 'pushd /opt && echo x > ro-log.txt' 'popd && echo x > ro-log.txt'; do refused $V "$c" /tmp; done
 allowed $V 'echo x > ro-log.txt' /tmp
