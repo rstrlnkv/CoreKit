@@ -393,6 +393,8 @@ assert_contains "$SANDBOX/argv.txt" '--ephemeral'
 assert_contains "$SANDBOX/argv.txt" '--ignore-user-config'
 # the project's AGENTS.md does not ride along with the classifier prompt
 assert_contains "$SANDBOX/argv.txt" 'project_doc_max_bytes=0'
+# a change the user can see is in the release notes
+assert_contains "$CM/CHANGELOG.md" 'project_doc_max_bytes=0'
 assert_contains "$SANDBOX/argv.txt" 'model_reasoning_effort="low"'
 assert_not_contains "$SANDBOX/argv.txt" 'fix the flaky login test'
 assert_contains "$STDIN" 'fix the flaky login test'
