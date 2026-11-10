@@ -483,6 +483,19 @@ done
 assert_eq "$(git -C "$CORE_DIR" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ' ')" "bin/x hooks/y " "save did not commit the 0.1.x folders"
 assert_eq "$(git -C "$CORE_DIR" status --porcelain -- bin hooks)" "" "0.1.x folders left uncommitted"
 
+# A step with thousands of docs files on long paths: their names together are longer than one command line may
+# be (ARG_MAX), so the docs commit must not take the files as arguments. All of them land in one docs commit.
+big="$P/docs/$(printf '%0120d' 0 | tr 0 x)/$(printf '%0120d' 0 | tr 0 y)"; mkdir -p "$big"
+(cd "$big" && i=0 && while [ $i -lt 4500 ]; do : > "file-$i.md"; i=$((i + 1)); done)
+echo "md" > "$C/eh.txt"
+(cd "$C" && bash "$SAVE" "Many docs") > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "0" "save with 4500 long docs paths: $(tail -n 3 "$SANDBOX/out")"
+assert_contains "$SANDBOX/out" "saved docs"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain -- save-app | wc -l | tr -d ' ')" "0" "docs left uncommitted after a many-file step"
+assert_eq "$(git -C "$CORE_DIR" show --name-only --format= HEAD | grep -c '/file-[0-9]*\.md$')" "4500" "many docs files in the step commit"
+git -C "$CORE_DIR" rm -rq -- "save-app/docs/${big#"$P/docs/"}"; echo "md2" > "$C/eh.txt"
+(cd "$C" && bash "$SAVE" "Many docs removed") >/dev/null 2>&1
+
 # failure path: the user's own pre-commit hook in the code repo refuses the commit. Nothing is saved: no docs
 # commit follows a code commit that was not made. With the hook gone the same step is saved.
 printf '#!/bin/sh\necho "user hook refused" >&2\nexit 1\n' > "$C/.git/hooks/pre-commit"; chmod +x "$C/.git/hooks/pre-commit"
