@@ -27,6 +27,10 @@ run_hook() { payload "$@" | bash "$H" >"$SANDBOX/out" 2>"$SANDBOX/err"; RC=$?; O
 # expect <rc> <label> <json-escaped command> [cwd] [description]
 expect() { local want="$1" label="$2"; shift 2; run_hook "$@"; assert_eq "$RC" "$want" "$label"; assert_eq "$OUT" "" "$label: stdout"; }
 
+# alive — a fake run lasts 120 s, and on a loaded machine the cases can take longer: when the one in $dummy is over,
+# it is started again
+alive() { kill -0 "$dummy" 2>/dev/null || { fake "$C" "$FAKE"; dummy=$FAKE_PID; }; }
+
 # --- nothing running: every command passes
 expect 0 "no run in progress" 'swift test --filter Foo'
 
@@ -43,11 +47,16 @@ for c in 'swift test --filter Foo' 'cd /x && swift test' '(cd /x; swift test)' '
          'flutter test' 'go test ./...' 'go test -run Foo ./pkg' \
          'bash Scripts/test.sh --scratch-path /tmp/x --filter A' './run-tests.sh' 'sh tests.sh' 'bash -e ./test.sh' \
          'cd /x\nbash Scripts/test.sh --filter A' 'cd /x\nswift test' 'git status\r\npytest' \
-         'echo \"it'"'"'s\" && swift test'; do
+         'echo \"it'"'"'s\" && swift test' \
+         'if true; then swift test; fi' 'while x; do swift test; done' 'if x; then :; else swift test; fi' \
+         'exec swift test' 'command swift test' 'nohup swift test' 'sudo swift test' 'env swift test' 'nice swift test' \
+         'xcrun swift test' 'caffeinate swift test' 'poetry run pytest' 'pipenv run pytest' 'bundle exec npm test'; do
+  alive
   expect 2 "refused while a run is on: $c" "$c"
 done
 assert_contains "$SANDBOX/err" "still in progress"
 assert_contains "$SANDBOX/err" "run the same command again"
+stop "$dummy"; fake "$C" "$FAKE"; dummy=$FAKE_PID   # a new fake run, with its whole 120 s, for the cases below
 
 # --- not a run: a runner named in data, a read of a script, near misses
 for c in 'git status' 'ls' 'cat Scripts/test.sh' 'cat tests.sh' 'vim test.sh' \
@@ -111,6 +120,15 @@ printf '#!/bin/sh\nexit 1\n' > "$SANDBOX/nocwd/lsof"; printf '#!/bin/sh\nexit 1\
 chmod +x "$SANDBOX/nocwd/lsof" "$SANDBOX/nocwd/readlink"
 PATH="$SANDBOX/nocwd:$PATH" ONE_SUITE_PROCS="$OTHER" expect 0 "a run whose working folder cannot be read does not hold" 'swift test'
 stop "$o1"
+# the other way round: a run in the project's Core folder, outside the code folder, holds a call made from the code folder
+mkdir -p "$CORE_DIR/app/docs"
+fake "$CORE_DIR/app/docs" "$OTHER"; o1=$FAKE_PID
+ONE_SUITE_PROCS="$OTHER" expect 2 "a run in the project's Core folder holds a call in the code folder" 'swift test'
+stop "$o1"
+fake "$CORE_DIR/foo" "$OTHER"; o1=$FAKE_PID
+ONE_SUITE_PROCS="$OTHER" expect 2 "new layout: a run in the project's Core folder holds a call in the code folder beside the Core" 'swift test' "$F/src"
+ONE_SUITE_PROCS="$OTHER" expect 0 "new layout: a run in another project's Core folder does not hold" 'swift test'
+stop "$o1"
 # linked worktrees: each is its own place
 git -C "$C" init -q && git -C "$C" commit -q --allow-empty -m init
 W="$C/wt/w1"; mkdir -p "$C/wt"; git -C "$C" worktree add -q "$W" -b w1 2>/dev/null
@@ -144,6 +162,7 @@ done
 OUT="$(bash "$H" </dev/null 2>&1)"; assert_eq "$?" "0" "closed stdin"
 
 # --- the refusal says why and names the way out
+alive
 msg="$(payload 'swift test' | bash "$H" 2>&1 >/dev/null)"
 case "$msg" in *"still in progress"*"run the same command again"*) pass ;; *) fail "refusal message: $msg" ;; esac
 case "$msg" in *"after 0 s"*) pass ;; *) fail "refusal names the wait: $msg" ;; esac
@@ -206,6 +225,13 @@ PATH="$PROCPS:$PATH" expect 2 "procps pgrep: a run is seen" 'swift test'
 case "$ERR" in *"$dummy $FAKE"*) pass ;; *) fail "procps pgrep: the refusal names the renamed argv0 ($dummy $FAKE): $ERR" ;; esac
 [ -s "$PROCPS/calls.log" ] && pass || fail "procps pgrep: the hook did not call the pgrep on PATH"
 rm -rf "$ONE_SUITE_TURN"
+# --- the wait never polls in a tight loop: while it waits out the limit it looks at the processes about once a
+# second. An upper bound on the looks, not a time: load can only make them fewer.
+: > "$PROCPS/calls.log"
+PATH="$PROCPS:$PATH" ONE_SUITE_WAIT=3 expect 2 "a wait of 3 s for a run that stays on is refused" 'swift test'
+polls="$(wc -l < "$PROCPS/calls.log" | tr -d ' ')"
+[ "$polls" -ge 1 ] && [ "$polls" -le 5 ] && pass || fail "a wait of 3 s looked at the processes $polls times (want 1..5: one look a second)"
+rm -rf "$ONE_SUITE_TURN"
 
 # --- a long command line is read whole. With no terminal (CI, a hook with no tty) procps-ng ps cuts args to
 # 80 columns unless it is given -ww; BSD ps then reads the whole line anyway. The test word of this gradle run
@@ -223,6 +249,10 @@ chmod +x "$PS80/ps"
 rm -rf "$ONE_SUITE_TURN"
 ONE_SUITE_PROCS="$LP/gradlew( .*)? test( |$)" expect 2 "a run with a long command line is seen" 'swift test'
 case "$ERR" in *"$long $LP/gradlew"*) pass ;; *) fail "the refusal names the long run ($long): $ERR" ;; esac
+# the refusal stays one line and quotes at most the first 120 characters of the run (its pid and command line)
+SHOWN="$(printf '%s' "$long $LONG" | cut -c1-120)"
+assert_eq "$(printf '%s\n' "$ERR" | wc -l | tr -d ' ')" "1" "the refusal for a long run is one line"
+case "$ERR" in *"($SHOWN)"*) pass ;; *) fail "the refusal does not cut the long run to 120 characters: $ERR" ;; esac
 rm -rf "$ONE_SUITE_TURN"
 PATH="$PS80:$PATH" ONE_SUITE_PROCS="$LP/gradlew( .*)? test( |$)" expect 2 "ps cutting at 80 columns: a long run is still seen" 'swift test'
 stop "$long"
@@ -303,6 +333,15 @@ read -r rc t < "$SANDBOX/res"
 assert_eq "$rc" "0" "a state folder that is not writable: the call goes"
 [ "$t" -lt 2 ] && pass || fail "a state folder that is not writable: took ${t} s"
 chmod -R u+rwx "$SANDBOX/tmpf"
+# a turn that is a symlink (to a folder with a fresh turn in it): not used, the call goes, nothing is written through
+# it. The other half of this rule, a turn owned by another user, cannot be made without a second user and has no case.
+mkdir -p "$SANDBOX/lnk" "$SANDBOX/planted2/turn"; echo 4102444800 > "$SANDBOX/planted2/turn/at"   # the year 2100: fresh
+ln -s "$SANDBOX/planted2/turn" "$SANDBOX/lnk/turn"
+ONE_SUITE_TURN="$SANDBOX/lnk/turn" ONE_SUITE_PROCS="$NONE" ONE_SUITE_GRACE=1000 ONE_SUITE_WAIT=0 timed_hook 'swift test'
+assert_eq "$RC" "0" "a turn that is a symlink: the call goes"
+[ -L "$SANDBOX/lnk/turn" ] && pass || fail "a turn that is a symlink: the symlink was replaced"
+assert_eq "$(ls "$SANDBOX/planted2/turn" | tr '\n' ' ')" "at " "a turn that is a symlink: nothing written through it"
+assert_eq "$(cat "$SANDBOX/planted2/turn/at")" "4102444800" "a turn that is a symlink: its target is untouched"
 # one turn per place: a run let through in another project or another worktree a moment ago never holds this call,
 # while one let through in the same place does (the project's code folder and its Core folder are one place)
 # place_hook <cwd> — one call with the default turn location (CLAUDE_PLUGIN_DATA=$SANDBOX/pp), a long grace, no
@@ -347,8 +386,31 @@ t0=$(date +%s); ( unset ONE_SUITE_GRACE; ONE_SUITE_WAIT=20; export ONE_SUITE_WAI
 assert_eq "$rc" "0" "default grace: a re-run at once goes"
 [ "$t" -le 4 ] && pass || fail "default grace: a re-run at once waited ${t} s"
 # knobs that are not numbers fall back to the defaults instead of hanging or failing
+# (the turn is an old one, so the hook gets as far as comparing both knobs; timed_hook kills a hook that hangs)
+rm -rf "$ONE_SUITE_TURN"; mkdir -p "$ONE_SUITE_TURN"; echo 0 > "$ONE_SUITE_TURN/at"
+ONE_SUITE_WAIT=abc ONE_SUITE_GRACE=x timed_hook 'swift test'
+assert_eq "$RC" "0" "bad knob values: still decides"; assert_eq "$OUT" "" "bad knob values: still decides: stdout"
+assert_eq "$ERR" "" "bad knob values: no error text"
+# each knob alone. A bad grace is the default 3 s: a turn from 1970 is past it and is taken
+rm -rf "$ONE_SUITE_TURN"; mkdir -p "$ONE_SUITE_TURN"; echo 0 > "$ONE_SUITE_TURN/at"
+ONE_SUITE_WAIT=0 ONE_SUITE_GRACE=x timed_hook 'swift test'
+assert_eq "$RC" "0" "a bad grace alone: the old turn is taken"; assert_eq "$ERR" "" "a bad grace alone: no error text"
+# a bad wait is the default 120 s: the hook waits for a run and goes when it is over, without a word. ONCE holds a
+# pgrep that finds the run at its first call and nothing after, so the wait is compared once whatever the load
+ONCE="$SANDBOX/once"; mkdir -p "$ONCE"
+cat > "$ONCE/pgrep" <<EOF
+#!/bin/sh
+[ -e "$ONCE/seen" ] && exit 1
+: > "$ONCE/seen"; exec "$(command -v pgrep)" "\$@"
+EOF
+chmod +x "$ONCE/pgrep"
+fake "$C" "$FAKE"; knob=$FAKE_PID
 rm -rf "$ONE_SUITE_TURN"
-ONE_SUITE_WAIT=abc ONE_SUITE_GRACE=x expect 0 "bad knob values: still decides" 'swift test'
+PATH="$ONCE:$PATH" ONE_SUITE_WAIT=abc ONE_SUITE_GRACE=0 timed_hook 'swift test'
+stop "$knob"
+assert_file "$ONCE/seen"
+assert_eq "$RC" "0" "a bad wait alone: the hook waits and then goes"; assert_eq "$ERR" "" "a bad wait alone: no error text"
+rm -rf "$ONE_SUITE_TURN"
 
 # --- the takeover of a stale turn: of many waiters that find the same stale turn in the same instant,
 # exactly one goes (they used to remove and re-make it one after another, each taking the turn the
@@ -460,7 +522,8 @@ for p in '/usr/bin/swift-test --parallel' 'swift test --filter A' '/Applications
          'xcodebuild test-without-building -scheme App' \
          '/x/python -m pytest -x' '/x/.venv/bin/pytest tests' 'pytest' 'cargo test' '/u/.cargo/bin/cargo +nightly test --all' \
          '/bin/bash /f/bin/flutter test' 'dart flutter_tools.snapshot test --no-color' 'go test ./...' '/tmp/go-build123/b001/foo.test -test.v' \
-         'bash /x/Scripts/test.sh --filter A' '/bin/bash ./run-tests.sh' '/bin/zsh -e tests.sh'; do
+         'bash /x/Scripts/test.sh --filter A' '/bin/bash ./run-tests.sh' '/bin/zsh -e tests.sh' \
+         'vitest run' '/p/bin/vitest run --reporter dot' 'py.test' '/x/.venv/bin/py.test tests'; do
   matches "$p" && pass || fail "default pattern misses: $p"
 done
 for p in "bash $H" "bash $HOOKS/../tests/test_hook_one_suite.sh" 'bash tests/run.sh' 'vim pytest.ini' 'grep -rn pytest .' 'pip install pytest' 'less tests.sh' 'cat test.sh' \
