@@ -75,6 +75,9 @@ REL="$PLUGIN/skills/task/references/release.md"; PATHS="$PLUGIN/skills/task/refe
 assert_eq "$(cat "$SK" "$REL" "$PATHS" | grep -c 'where the version lives')" "1" "the version question is asked in one place"
 rp="$(awk '/^\*\*Release path/{f=1} f && /^$/{exit} f' "$REL")"
 case "$rp" in *ship*) pass ;; *) fail "release.md Release path defers the version question to ship" ;; esac
+# P8: the version edit drifts the wiki pages whose files: name the edited files; the Release path has
+# engineer update the pages wiki-check names (drift:) before postcondition 1, so postcondition 3 is green.
+case "$rp" in *'postcondition 3'*'--changed'*'drift:'*) pass ;; *) fail "release.md Release path updates the pages wiki-check --changed names as drifted by the version edit" ;; esac
 # release.md states the same order for `/corecrew:task release`: the version edit is labelled as coming
 # before postcondition 1, and the paragraph stands above the postcondition list.
 case "$rp" in '**Release path, before postcondition 1:**'*) pass ;; *) fail "release.md: the version edit comes before postcondition 1" ;; esac

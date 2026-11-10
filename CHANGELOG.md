@@ -9,6 +9,12 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off until then.
+
+### Fixed
+- A release no longer stops once at the wiki check: after the version edit, the release path
+  updates the wiki pages whose `files:` name the edited manifests or changelog.
+
 ## [0.14.0] - 2026-11-10
 
 Codex: the hooks changed, so Codex keeps them off until you trust them again in `/hooks`. Print the

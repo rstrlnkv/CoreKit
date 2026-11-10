@@ -23,7 +23,10 @@ the answer. Offer Keep a Changelog 1.1.0 as
 the default form when the project has none: the lines under `## [Unreleased]` move under a new
 `## [<version>] - YYYY-MM-DD` heading, grouped as Added, Changed, Deprecated, Removed, Fixed and
 Security (only the groups that have lines), and an empty `## [Unreleased]` stays on top. An empty
-`[Unreleased]`: engineer writes the lines from `git log` since the last release.
+`[Unreleased]`: engineer writes the lines from `git log` since the last release. Then run the two
+commands of postcondition 3, with `--changed` given the files the version edit changed: each
+`drift:` line names a page whose `files:` holds one of them. engineer updates each such page
+(the version it states, its `updated:` date) in the same step, so postcondition 3 does not stop the release.
 
 1. **Tests.** Chains with a tester: show the result of the final tester `check:` run (rule 7
    in SKILL.md); do not run the suite again. Release path (no tester): run the `check:`
