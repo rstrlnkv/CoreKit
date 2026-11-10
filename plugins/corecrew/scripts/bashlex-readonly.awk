@@ -125,8 +125,10 @@ function finalize(   k, a, dd, last, v, first, m, q, c) {
       a = args[k]
       if (a == "--" || substr(a, 1, 1) != "-") return  # the script or its arguments: no more options
       if (a ~ /^-[eE]./) continue                  # code glued to -e
+      if (a == "-I") { k++; continue }             # -I DIR: of perl's switches only -I takes a separate word
       if (a ~ /^-[MImx]/) continue                 # -MModule, -Ilib: their letters are names
       if (a ~ /^-[A-Za-z]*i/) { out("X", "perl -i"); return }
+      if (a ~ /^-[A-Za-z0-9]*I$/) { k++; continue } # -wI DIR: a group that ends in I
       if (a ~ /^-[A-Za-z]*[eE]$/) k++              # -e CODE: perl reads more switches after the code
     }
     return

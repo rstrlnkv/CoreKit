@@ -39,6 +39,10 @@ refused $V "perl -pi -e s/a/b/ src/a.txt"
 # perl reads more switches after -e CODE: "perl -e s/a/b/ -pi f" edits f in place
 refused $V "perl -e s/a/b/ -pi src/a.txt"
 refused $V "perl -e 1 -i src/a.txt"
+# a bare -I takes the next word as its folder (a real perl: -I does, -M and -m do not); scanning goes on after it
+refused $V "perl -I /tmp -pi -e s/a/b/ src/a.txt"
+refused $V "perl -e s/a/b/ -I /tmp -pi src/a.txt"
+refused $V "perl -wI /tmp -pi -e s/a/b/ src/a.txt"
 refused $V 'git commit -qm x'
 refused $V 'git -C . add -A'
 refused $V 'git checkout -- src/a.txt'
@@ -110,6 +114,7 @@ allowed $V 'git -C /tmp/ro-clone checkout -b x'
 allowed $V 'git clone . /tmp/ro-copy'
 allowed $V 'perl -Ilib -MList::Util -e 1'
 allowed $V 'perl -ne print src/a.txt && perl -e 1 -w src/a.txt && perl -eprint src/a.txt'
+allowed $V "perl -I /tmp -e 'print 1' && perl -ne 'print' src/a.txt && perl -wI /tmp -e 1"
 allowed $V 'truncate -s 0 /tmp/ro-a.txt'   # -s takes the size: the temp file is the target
 refused $V 'ln -s /tmp/ro-x /tmp/ro-l'     # ln keeps its own rule, -s or not
 allowed $V 'chmod -R u+w /tmp/d'
