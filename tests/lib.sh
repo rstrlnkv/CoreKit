@@ -291,13 +291,13 @@ count_execs() {
   return $_ce_rc
 }
 
-# fake <cwd> <argv0> — starts a fake test run for hooks/one-suite.sh: a `sleep 120` renamed to <argv0> (exec -a)
+# fake <cwd> <argv0> — starts a fake test run for hooks/one-suite.sh: a `sleep 3600` renamed to <argv0> (exec -a)
 # whose working folder is <cwd>. Its pid goes in FAKE_PID and in FAKES. It returns once ps shows the new name
 # (it polls every 0.1 s, up to 5 s), so a hook run right after it can see the run. The hook holds a call only
 # for a run whose working folder is in the same place as the call.
 FAKES=""
 fake() {
-  bash -c 'cd "$1" && exec -a "$2" sleep 120' _ "$1" "$2" >/dev/null 2>&1 & FAKE_PID=$!
+  bash -c 'cd "$1" && exec -a "$2" sleep 3600' _ "$1" "$2" >/dev/null 2>&1 & FAKE_PID=$!
   disown "$FAKE_PID" 2>/dev/null; FAKES="$FAKES $FAKE_PID"
   local i=0
   while [ $i -lt 50 ]; do
