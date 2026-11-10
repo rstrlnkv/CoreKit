@@ -24,7 +24,7 @@ grep -qF 'os: [macos-latest, ubuntu-latest]' "$WF" && pass || fail "the os matri
 
 # The suite job installs the claude CLI (pinned, through npm: node is on both runners) before the macOS step
 # that puts bash 3.2 first, so the tests that need claude run in CI instead of skipping. Its suite step fails
-# when the log still says the tests skipped for lack of claude.
+# when the log holds a SKIP line that names claude.
 suite="$(job "$WF" suite)"
 ni="$(printf '%s\n' "$suite" | grep -nE 'npm install -g "?@anthropic-ai/claude-code@' | head -1 | cut -d: -f1)"
 nb="$(printf '%s\n' "$suite" | grep -nF 'Use the system bash 3.2' | head -1 | cut -d: -f1)"
@@ -35,10 +35,23 @@ nr="$(printf '%s\n' "$suite" | grep -nF 'Run the suite' | head -1 | cut -d: -f1)
 case "$suite" in *'CLAUDE_VERSION:'*) pass ;; *) fail "the claude version is pinned in env (CLAUDE_VERSION)" ;; esac
 for v in DISABLE_AUTOUPDATER CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC; do case "$suite" in *"$v: 1"*) pass ;; *) fail "$v: 1 in the suite env" ;; esac; done
 run="$(printf '%s\n' "$suite" | awk '/Run the suite/{f=1} f')"
-case "$run" in *'claude not on PATH'*) pass ;; *) fail "the suite step fails on a claude skip (grep for: claude not on PATH)" ;; esac
+# the claude check is the step's if-block whose grep names claude; like the codex one it greps run.sh's SKIP lines
+# for claude anywhere in them, not for one chosen skip text, and it is not gated on the OS: both runners install claude
+cl="$(printf '%s\n' "$run" | awk '/^ *if grep .*claude/{f=1} f; f && /^ *fi$/{exit}')"
+case "$cl" in *"grep -E '^SKIP .*claude' "*) pass ;; *) fail "the suite step fails on every claude skip (grep -E '^SKIP .*claude')" ;; esac
+case "$cl" in *'not on PATH'*) fail "the claude skip check still names a chosen skip text" ;; *) pass ;; esac
+case "$cl" in *'RUNNER_OS'*) fail "the claude skip check is gated on an OS" ;; *) pass ;; esac
+case "$cl" in *'exit 1'*) pass ;; *) fail "the claude skip check exits 1" ;; esac
+clstep="$(printf '%s\n' "$suite" | awk '/- name: Install the claude CLI/{f=1; print; next} f && /- name:/{f=0} f')"
+[ -n "$clstep" ] && pass || fail "the claude install step (Install the claude CLI)"
+printf '%s\n' "$clstep" | grep -qE '^ *if:' && fail "the claude install step runs on both runners (no if:)" || pass
 # The suite runs one file per core (run.sh starts the largest files first), its output still teed for the skip greps.
 case "$run" in *'bash tests/run.sh -j "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)" 2>&1 | tee'*) pass ;;
   *) fail "the suite step runs tests/run.sh -j <cores> and tees its output" ;; esac
+# The pipe to tee needs `shell: bash`: GitHub runs an explicit `shell: bash` with -eo pipefail; the default shell is
+# `bash -e`, where the pipeline's status is tee's and a red suite would pass.
+rstep="$(printf '%s\n' "$suite" | awk '/- name: Run the suite/{f=1; print; next} f && /- name:/{f=0} f')"
+printf '%s\n' "$rstep" | grep -qE '^ *shell: bash$' && pass || fail "the 'Run the suite' step holds shell: bash (pipefail for the pipe to tee)"
 
 # The suite job installs the codex CLI on macos-latest only (Decision 20 (b): the sandbox tests expect the macOS
 # seatbelt text), pinned, before the bash 3.2 step; on macOS its suite step fails on every skip that names codex
@@ -70,5 +83,11 @@ case "$runs" in *'${{'*) fail "commit-subjects: an expression inside run: (pass 
 for v in EVENT BEFORE PR_BASE PR_HEAD DEFAULT_BRANCH; do case "$cs" in *"$v: "*) pass ;; *) fail "commit-subjects: env $v" ;; esac; done
 # The ShellCheck job also covers the repo-level scripts/
 grep -qE '^ *find plugins tests scripts |^ *find .*\bscripts\b.*-prune' "$WF" && pass || fail "the shellcheck find roots name scripts"
+# "Quote paths" in the shipped scripts: a second ShellCheck call, fed from the plugins/ entries of the same list,
+# reports every unquoted expansion (SC2086, an info-level note the first call leaves out)
+sc="$(job "$WF" shellcheck)"
+printf '%s\n' "$sc" | grep -F -- '--include=SC2086' | grep -F "grep '^plugins/' " | grep -qF -- '--severity=info' \
+  && pass || fail "the shellcheck job runs --severity=info --include=SC2086 over the plugins/ entries of the file list"
+case "$sc" in *"xargs -0 shellcheck --severity=warning"*) pass ;; *) fail "the shellcheck job still runs --severity=warning over every shell file" ;; esac
 
 finish
