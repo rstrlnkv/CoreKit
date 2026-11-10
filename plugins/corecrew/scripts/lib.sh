@@ -3,9 +3,9 @@
 # env (core_dir only), the plugin option CLAUDE_PLUGIN_OPTION_<KEY> (Claude Code), the settings file
 # ~/.config/corecrew/settings or $CORECREW_CONFIG (lines "key: value"; the only source in Codex), the
 # default. Project facts live in <Core>/.coredev (lines "key: value"). Files are read, never executed.
-# load_settings sets: CORE_DIR, CORE_NAME, PROJECTS_DIR, ATTRIBUTION, MODEL_PROFILE, UI_LANGUAGE,
-# APP_ID_PREFIX, SETTINGS_WARN (records "key<TAB>value<TAB>source<TAB>value in effect" of values ignored as invalid;
-# their texts are msg_settings_warning in hooks/messages.sh).
+# load_settings sets: CORE_DIR, CORE_NAME, PROJECTS_DIR, ATTRIBUTION, UI_LANGUAGE, SETTINGS_WARN (records
+# "key<TAB>value<TAB>source<TAB>value in effect" of values ignored as invalid; their texts are msg_settings_warning
+# in hooks/messages.sh).
 #
 # The helpers live in parts next to this file, which it sources (callers source only lib.sh):
 #   lib-paths.sh     expand_home canon_dir lc norm_path resolve_abs (and expand_home_r canon_dir_r, which set a variable)

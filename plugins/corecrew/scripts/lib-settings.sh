@@ -212,8 +212,7 @@ load_settings() {
     _dirname_r "$CORE_RAW"; canon_dir_r "$_DN"; PROJECTS_DIR="$_CANON"
   fi
   _resolve_setting attribution; ATTRIBUTION="$REPLY"
-  _resolve_setting model_profile; MODEL_PROFILE="$REPLY"
+  _resolve_setting model_profile   # only validated here, so an invalid value reaches SETTINGS_WARN
   _resolve_setting ui_language; UI_LANGUAGE="$REPLY"
-  _coredev_get_r app-id-prefix || :; APP_ID_PREFIX="$_CDV"
   return 0
 }

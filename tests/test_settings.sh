@@ -6,6 +6,9 @@ export HOME="$SANDBOX/home"; mkdir -p "$HOME"
 
 # settings <VAR> — load_settings in a clean shell (sees this script's environment), print one variable
 settings() { bash -c '. "$1"; load_settings; eval "printf %s \"\$$2\""' _ "$LIB" "$1"; }
+# profile / prefix — the two values no script reads from a variable, through the CLI (stderr is not part of the value)
+profile() { local o; o="$(bash "$LIB" settings model_profile 2>/dev/null)"; printf %s "${o#model_profile: }"; }
+prefix() { bash "$LIB" get app-id-prefix; }
 real() { (cd -P "$1" && pwd); }
 RS="$(real "$SANDBOX")"   # canonical sandbox (macOS: /var -> /private/var)
 RH="$(real "$HOME")"
@@ -14,12 +17,12 @@ RH="$(real "$HOME")"
 assert_eq "$(settings CORE_DIR)" "$RH/Projects/Core" "default CORE_DIR"
 assert_eq "$(settings CORE_NAME)" "Core" "default CORE_NAME"
 assert_eq "$(settings ATTRIBUTION)" "allow" "default ATTRIBUTION"
-assert_eq "$(settings MODEL_PROFILE)" "balanced" "default MODEL_PROFILE"
-assert_eq "$(settings APP_ID_PREFIX)" "" "default APP_ID_PREFIX"
+assert_eq "$(profile)" "balanced" "default model_profile"
+assert_eq "$(prefix)" "" "default app-id-prefix"
 
 # plugin options
 assert_eq "$(CLAUDE_PLUGIN_OPTION_ATTRIBUTION=forbid settings ATTRIBUTION)" "forbid"
-assert_eq "$(CLAUDE_PLUGIN_OPTION_MODEL_PROFILE=strong settings MODEL_PROFILE)" "strong"
+assert_eq "$(CLAUDE_PLUGIN_OPTION_MODEL_PROFILE=strong profile)" "strong"
 
 # CORE_DIR: env wins over the plugin option; option used when env is unset or empty
 assert_eq "$(CORE_DIR="$SANDBOX/env" CLAUDE_PLUGIN_OPTION_CORE_DIR="$SANDBOX/opt" settings CORE_DIR)" "$RS/env" "env wins"
@@ -32,7 +35,7 @@ assert_eq "$(CORE_DIR='${user_config.core_dir}' settings CORE_DIR)" "$RH/Project
 assert_eq "$(CORE_DIR='${user_config.core_dir}' CLAUDE_PLUGIN_OPTION_CORE_DIR="$SANDBOX/opt" settings CORE_DIR)" "$RS/opt" "literal placeholder -> option"
 assert_eq "$(CLAUDE_PLUGIN_OPTION_CORE_DIR='${user_config.core_dir}' settings CORE_DIR)" "$RH/Projects/Core" "literal in the option -> default"
 assert_eq "$(CLAUDE_PLUGIN_OPTION_ATTRIBUTION='${user_config.attribution}' settings ATTRIBUTION)" "allow" "literal attribution -> default"
-assert_eq "$(CLAUDE_PLUGIN_OPTION_MODEL_PROFILE='${user_config.model_profile}' settings MODEL_PROFILE)" "balanced" "literal model_profile -> default"
+assert_eq "$(CLAUDE_PLUGIN_OPTION_MODEL_PROFILE='${user_config.model_profile}' profile)" "balanced" "literal model_profile -> default"
 
 # ~ expansion and trailing slash
 assert_eq "$(CORE_DIR='~/x' settings CORE_DIR)" "$RH/x" "~/x"
@@ -64,18 +67,17 @@ assert_eq "$(CORE_DIR="$SP" settings CORE_DIR)" "$(real "$SP")" "space+Cyrillic 
 export CORE_DIR="$SANDBOX/Projects/Core"
 assert_exit 0 bash -c '. "$1"; load_settings; coredev_set app-id-prefix com.test' _ "$LIB"
 assert_file "$CORE_DIR/.coredev"
-assert_eq "$(settings APP_ID_PREFIX)" "com.test"
+assert_eq "$(prefix)" "com.test"
 printf 'schema: 1\n' > "$CORE_DIR/.coredev"
 bash -c '. "$1"; load_settings; coredev_set app-id-prefix com.one; coredev_set app-id-prefix com.two' _ "$LIB"
 assert_eq "$(grep -c '^app-id-prefix:' "$CORE_DIR/.coredev")" "1" "one app-id-prefix line"
-assert_eq "$(settings APP_ID_PREFIX)" "com.two"
+assert_eq "$(prefix)" "com.two"
 assert_contains "$CORE_DIR/.coredev" "schema: 1"
 assert_eq "$(bash -c '. "$1"; load_settings; coredev_get schema' _ "$LIB")" "1" "coredev_get"
 assert_eq "$(bash -c '. "$1"; load_settings; coredev_get nothing' _ "$LIB")" "" "coredev_get missing key"
 # CLI entry: bash lib.sh get|set <key> [value]
 assert_exit 0 bash "$LIB" set app-id-prefix com.cli
-assert_eq "$(bash "$LIB" get app-id-prefix)" "com.cli" "CLI get"
-assert_eq "$(settings APP_ID_PREFIX)" "com.cli"
+assert_eq "$(prefix)" "com.cli" "CLI get"
 
 # invalid app id prefix is refused and the file is unchanged
 before=$(cat "$CORE_DIR/.coredev")
@@ -85,8 +87,7 @@ assert_eq "$(cat "$CORE_DIR/.coredev")" "$before" ".coredev changed by invalid i
 
 # the settings file is read, never executed
 printf 'app-id-prefix: $(touch %s/pwned)\n' "$SANDBOX" > "$CORE_DIR/.coredev"
-assert_eq "$(settings APP_ID_PREFIX)" "\$(touch $SANDBOX/pwned)" "literal value"
-assert_eq "$(bash "$LIB" get app-id-prefix)" "\$(touch $SANDBOX/pwned)" "literal value via CLI"
+assert_eq "$(prefix)" "\$(touch $SANDBOX/pwned)" "literal value via CLI"
 assert_no_file "$SANDBOX/pwned"
 
 # canon_dir of the filesystem root
@@ -152,13 +153,13 @@ assert_eq "$(CORECREW_CONFIG="$SANDBOX/c.txt" bash "$LIB" setting-path)" "$SANDB
 sfw 'core_dir: ~/FromFile\nattribution: forbid\nmodel_profile: strong\nui_language: ru\n'
 assert_eq "$(settings CORE_DIR)" "$RH/FromFile" "file core_dir"
 assert_eq "$(settings ATTRIBUTION)" "forbid" "file attribution"
-assert_eq "$(settings MODEL_PROFILE)" "strong" "file model_profile"
+assert_eq "$(profile)" "strong" "file model_profile"
 assert_eq "$(settings UI_LANGUAGE)" "ru" "file ui_language"
 # format: quotes, spaces, comments, blanks, CRLF, unknown key, duplicates, leading blanks
 sfw '# comment\n\n  core_dir: "'"$SANDBOX"'/My Core"\r\nbogus: 1\nattribution: '"'forbid'"'\nattribution: allow\n   model_profile:   economy  \n'
 assert_eq "$(settings CORE_DIR)" "$SANDBOX/My Core" "quoted core_dir with a space, CRLF"
 assert_eq "$(settings ATTRIBUTION)" "forbid" "single quotes, first occurrence wins"
-assert_eq "$(settings MODEL_PROFILE)" "economy" "leading blanks and trimmed value"
+assert_eq "$(profile)" "economy" "leading blanks and trimmed value"
 # precedence: option > file; env CORE_DIR > option; placeholder falls through
 sfw 'core_dir: '"$SANDBOX"'/file\nattribution: forbid\n'
 assert_eq "$(CLAUDE_PLUGIN_OPTION_CORE_DIR="$SANDBOX/opt" settings CORE_DIR)" "$SANDBOX/opt" "option beats file"
@@ -335,9 +336,9 @@ for cd_ in "$SANDBOX/nocore" "$SANDBOX/core-nofacts"; do
   assert_eq "$(CORE_DIR="$cd_" bash -c '. "$1"; load_settings; echo "rc=$?"' _ "$LIB" 2>&1)" "rc=0" "load_settings exit code ($cd_)"
 done
 assert_eq "$(bash -ec '. "$1"; resolve_setting attribution; echo " ok"' _ "$LIB" 2>&1)" "allow ok" "resolve_setting under set -e, no settings file"
-sfw 'model_profile: strong\n'
-assert_eq "$(CORE_DIR="$SANDBOX/nocore" bash -ec '. "$1"; load_settings; echo "ok $MODEL_PROFILE"' _ "$LIB" 2>&1)" "ok strong" \
+sfw 'attribution: forbid\n'
+assert_eq "$(CORE_DIR="$SANDBOX/nocore" bash -ec '. "$1"; load_settings; echo "ok $ATTRIBUTION"' _ "$LIB" 2>&1)" "ok forbid" \
   "load_settings under set -e, a settings file without most keys"
-assert_eq "$(bash -ec '. "$1"; resolve_setting attribution; echo " ok"' _ "$LIB" 2>&1)" "allow ok" "resolve_setting under set -e, key not in the file"
+assert_eq "$(bash -ec '. "$1"; resolve_setting model_profile; echo " ok"' _ "$LIB" 2>&1)" "balanced ok" "resolve_setting under set -e, key not in the file"
 rm -f "$SF"
 finish
