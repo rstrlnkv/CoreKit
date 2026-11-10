@@ -297,7 +297,7 @@ OUT="$(no_git_identity git -C "$S/r2" commit -q -m x 2>&1)" && fail "no_git_iden
 assert_eq "$(commit_count "$S/r2")" "0" "commit_count of a repo with no commit"
 
 # --- skips go through skip (SKIP-1, TEST-7): no test file has an old-style `echo "SKIP ..."` or `echo "  note: ..."`
-# line, which run.sh lists only when its words happen to match. The echo must start a command (the fixture above
+# line. The echo must start a command (the fixture above
 # that writes such a line into a fake file, and a comment that quotes one, are not matches).
 for f in "$ROOT"/tests/test_*.sh; do
   old="$(grep -nE '(^|;|\{|then|else|do)[[:space:]]*echo "[[:space:]]*(note:|SKIP )' "$f" | cut -d: -f1 | tr '\n' ' ')"

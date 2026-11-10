@@ -64,8 +64,8 @@ report() {
   else
     rc=1; printf 'FAIL %s (%s s)\n' "$2" "${s:-?}"; cat "$d/out"
   fi
-  # SKIP lines (the old forms name no file: the file is added), and old notes that say a part did not run
-  sed -n -E -e 's/^[[:space:]]*SKIP //p' -e 's/^[[:space:]]*note: (.*(skipped|not checked|not run).*)/\1/p' "$d/out" \
+  # SKIP lines (the old forms name no file: the file is added)
+  sed -n -E -e 's/^[[:space:]]*SKIP //p' "$d/out" \
     | while IFS= read -r l; do
         case "$l" in "$2: "*) echo "SKIP $l" ;; *) echo "SKIP $2: $l" ;; esac
       done >> "$RUN_ROOT/skips"
