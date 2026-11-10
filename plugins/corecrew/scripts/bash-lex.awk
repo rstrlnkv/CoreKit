@@ -18,7 +18,8 @@
 #   on_in(w)     — w is the word after an input redirect (< file)
 #   on_subst(w)  — w is a word with a command substitution inside double quotes ("$(...)" or backticks);
 #                  it may call subst_queue(w) to have each substitution lexed as a command line after the
-#                  main pass (both programs do), or enqueue(text) for any other text
+#                  main pass (bashlex-guard-secrets.awk and bashlex-readonly.awk do; bashlex-guard-code.awk
+#                  leaves on_subst empty on purpose: it does not follow "$(...)"), or enqueue(text) for any other text
 #   finalize()   — one command is complete: cmd (its name), args[1..na] (its words) and sep (what ended it:
 #                  ; | & && ( ) ` "nl" for a newline, "" for the end of the text) are set
 #   globals it may set: full (stop reading); in BEGIN, nofollow = 1 (enqueue() queues nothing: bash -c, eval and
