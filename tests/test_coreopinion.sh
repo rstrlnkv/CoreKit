@@ -85,7 +85,11 @@ done)"
 assert_eq "${missing:-none}" "none" "every secret pattern is in the --pathspec output"
 new_sandbox
 # the temp folder for ask-gpt.sh, made as SKILL.md says (macOS mktemp -d without a template ignores $TMPDIR)
-tmpf() { mktemp -d "${TMPDIR:-/tmp}/coreopinion.XXXXXXXXXX"; }
+# These folders are outside the sandbox (ask-gpt.sh accepts no folder inside one), so the file removes the ones a
+# red run leaves: each is recorded when made and removed when the file exits.
+MADE="$SANDBOX/made-folders"
+tmpf() { mktemp -d "${TMPDIR:-/tmp}/coreopinion.XXXXXXXXXX" | tee -a "$MADE"; }
+at_exit '[ ! -f "$MADE" ] || while IFS= read -r d; do case "$d" in */coreopinion.?*) rm -rf "$d" ;; esac; done < "$MADE"'
 unset CODEX_THREAD_ID   # a shell that Codex runs carries it; ask-gpt.sh refuses there (checked below)
 R="$SANDBOX/secrets-repo"; mkdir -p "$R/sub" "$R/keys"
 git -C "$R" init -q
@@ -112,7 +116,7 @@ assert_eq "$got" "ok.txt;" "the widened pathspec drops cloud/infra/package secre
 ut_line="$(grep -m1 '^git ls-files --others --exclude-standard -- \. ' "$S")"
 assert_eq "${ut_line:+found}" "found" "SKILL.md filters untracked files with the same pathspec"
 R3="$SANDBOX/untracked"; mkdir -p "$R3"; git -C "$R3" init -q
-for f in new.sh .npmrc deploy.tfvars my-token.txt note.md; do printf 'x\n' > "$R3/$f"; done
+for f in new.sh .npmrc .envrc deploy.tfvars my-token.txt note.md; do printf 'x\n' > "$R3/$f"; done
 got="$(cd "$R3" && eval "set -- $specs" && git ls-files --others --exclude-standard -- . "$@" | LC_ALL=C sort | tr '\n' ';')"
 assert_eq "$got" "new.sh;note.md;" "untracked secrets are filtered"
 # named files go through scripts/allowed-files.sh. `git ls-files -- <files in one folder> <excludes>`
@@ -123,6 +127,7 @@ R6="$SANDBOX/named"; mkdir -p "$R6/plugins/x/hooks" "$R6/sub/.aws" "$R6/sp ace" 
 for f in plugins/x/hooks/g.sh plugins/x/hooks/h.sh plugins/x/hooks/.env sub/prod.env sub/Credentials.json sub/.aws/config sub/app.sh README.md "sp ace/f.md"; do printf 'x\n' > "$R6/$f"; done
 git -C "$R6" add -A; git -C "$R6" commit -qm init
 printf 'x\n' > "$R6/new/untracked.sh"; printf 'x\n' > "$R6/new/.env.local"
+printf 'new/ignored.log\n' >> "$R6/.git/info/exclude"; printf 'x\n' > "$R6/new/ignored.log"   # git-ignored: never listed
 af() { (cd "$R6${2:+/$2}" && eval "bash \"\$AF\" $1") | LC_ALL=C sort | tr '\n' ';'; }
 assert_eq "$(af 'plugins/x/hooks/g.sh')" "plugins/x/hooks/g.sh;" "one nested file"
 assert_eq "$(af 'plugins/x/hooks/g.sh plugins/x/hooks/h.sh plugins/x/hooks/.env')" "plugins/x/hooks/g.sh;plugins/x/hooks/h.sh;" "files in one folder: the secret dropped"
@@ -132,6 +137,7 @@ assert_eq "$(af './new/ README.md')" "README.md;new/untracked.sh;" "untracked an
 assert_eq "$(af '"sp ace/f.md"')" "sp ace/f.md;" "a path with a space"
 assert_eq "$(af 'x/hooks/g.sh' plugins)" "x/hooks/g.sh;" "from a subfolder, relative to it"
 assert_eq "$(af 'missing.txt')" "" "a missing path: nothing"
+assert_eq "$(af 'new/ignored.log')" "" "a named git-ignored file: nothing"
 (cd "$SANDBOX" && bash "$AF" a >/dev/null 2>&1); assert_eq "$?" "3" "outside a git repository: exit 3"
 # (b) SSH keys of every kind, cluster, database, web and Docker credentials are dropped, at any depth;
 # (c) ordinary source files still pass
@@ -187,6 +193,12 @@ assert_eq "$out" "" "no pattern list: nothing printed"
 (bash "$NL/allowed-files.sh" --pathspec >/dev/null 2>&1) && fail "no pattern list: --pathspec must fail" || pass
 printf '# only a comment\n\n' > "$NL/secret-patterns.txt"
 (cd "$R7" && bash "$NL/allowed-files.sh" src/app.js >/dev/null 2>&1) && fail "an empty pattern list must fail" || pass
+# a pattern with a quote or a backslash would break out of the pathspec and of the Codex profile: the list is refused
+for bad in 'a"b' "a'b" 'a\b'; do
+  printf '*.pem\n%s\n' "$bad" > "$NL/secret-patterns.txt"
+  out="$(cd "$R7" && bash "$NL/allowed-files.sh" src/app.js 2>/dev/null)"; rc=$?
+  assert_eq "$rc:$out" "4:" "a pattern $bad in the list: allowed-files.sh exits 4 and prints nothing"
+done
 # a repo with no commits: the diff base is the empty tree, an error is not 'nothing to review'
 assert_contains "$S" 'git hash-object -t tree /dev/null'
 assert_contains "$S" 'is not "nothing to review"'
@@ -196,10 +208,9 @@ assert_eq "$got" "a.sh;" "empty-tree base lists staged files in a repo without c
 # the user confirms the file list before anything is sent
 assert_contains "$S" 'wait for the'
 assert_contains "$S" 'Nothing is sent before'
-# what read-only really confines: honest wording, narrowed profile, user config off (in the run script)
+# what read-only really confines: honest wording, narrowed profile, user config off (in the run script; the
+# flags are checked below on the arguments codex gets)
 A="$P/skills/second-opinion/scripts/ask-gpt.sh"
-assert_contains "$A" 'default_permissions='
-assert_contains "$A" '--ignore-user-config'
 assert_contains "$A" 'web_search="disabled"'
 # the documented root name of codex 0.166 (":project_roots" is a legacy alias)
 assert_contains "$A" '":workspace_roots"'
@@ -236,11 +247,23 @@ A="$P/skills/second-opinion/scripts/ask-gpt.sh"
 assert_file "$A"
 # the profile is built from secret-patterns.txt: take it from a run with a stub codex that records its arguments
 mkdir -p "$SANDBOX/stub"; printf '#!/bin/sh\nprintf "%%s\\n" "$@" > "$STUB_ARGS"\necho "GPT says hi" > "$(dirname "$STUB_ARGS")/last"\nfor a; do case "$p" in --output-last-message) echo "GPT says hi" > "$a" ;; esac; p="$a"; done\ncat > "$(dirname "$STUB_ARGS")/stdin.txt"\n' > "$SANDBOX/stub/codex"; chmod +x "$SANDBOX/stub/codex"
+export STUB_ARGS="$SANDBOX/args.txt"   # every run of the stub writes inside the sandbox, whatever the call site passes
 GR="$SANDBOX/gitrepo"; git init -q "$GR"
 TP="$(tmpf)"; printf '%s' "$GR" > "$TP/dir"; printf 'p\n' > "$TP/prompt.md"
-( STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$TP" >/dev/null 2>&1 )
+( PATH="$SANDBOX/stub:$PATH" bash "$A" "$TP" >/dev/null 2>&1 )
 profile="$(grep '^permissions\.review\.filesystem=' "$SANDBOX/args.txt" 2>/dev/null | head -1)"
 assert_eq "${profile:+found}" "found" "ask-gpt.sh passes the review permission profile"
+# The sandbox of the run, on the arguments codex really gets (one per line in args.txt): user config off, the
+# review profile chosen, nothing kept, no flag or value that widens it; and the profile without its deny
+# entries is exactly: minimal system paths, the temp folders and the project, all read-only.
+for a in '--ignore-user-config' 'default_permissions="review"' '--ephemeral'; do
+  grep -qx -- "$a" "$SANDBOX/args.txt" 2>/dev/null && pass || fail "codex gets the argument $a"
+done
+assert_eq "$(grep -cE 'danger|bypass|workspace-write|full-auto' "$SANDBOX/args.txt" 2>/dev/null)" "0" "no argument of codex widens the sandbox"
+assert_eq "$(grep -c '^permissions\.' "$SANDBOX/args.txt" 2>/dev/null)" "1" "codex gets one permission profile"
+assert_eq "$(printf '%s\n' "$profile" | sed 's/, "\*\*\/[^"]*"="deny"//g')" \
+  'permissions.review.filesystem={":minimal"="read", "/tmp"="read", "/private/tmp"="read", "/var/tmp"="read", "/private/var/tmp"="read", ":workspace_roots"={"."="read"}}' \
+  "the profile without its deny entries: read-only, the project and minimal paths"
 # (a) every pattern is in the profile, denied
 missing="$(printf '%s\n' "$patterns" | while IFS= read -r g; do
   has "$profile" "\"**/$g\"=\"deny\"" || printf ' %s' "$g"
@@ -254,15 +277,21 @@ assert_eq "${missing:-none}" "none" "every secret pattern also denies the folder
 # the list is required: without it codex is never run
 rm -f "$SANDBOX/args.txt"; cp "$A" "$NL/"; rm -f "$NL/secret-patterns.txt"
 TP="$(tmpf)"; printf '%s' "$GR" > "$TP/dir"; printf 'p\n' > "$TP/prompt.md"
-( STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$NL/ask-gpt.sh" "$TP" >/dev/null 2>&1 ); rc=$?
+( PATH="$SANDBOX/stub:$PATH" bash "$NL/ask-gpt.sh" "$TP" >/dev/null 2>&1 ); rc=$?
 [ "$rc" -ne 0 ] && pass || fail "no pattern list: ask-gpt.sh must fail"
 assert_no_file "$SANDBOX/args.txt"
 assert_no_file "$TP"   # the temp folder (it holds the diff) is still removed
+for bad in 'a"b' "a'b" 'a\b'; do
+  printf '*.pem\n%s\n' "$bad" > "$NL/secret-patterns.txt"
+  TP="$(tmpf)"; printf '%s' "$GR" > "$TP/dir"; printf 'p\n' > "$TP/prompt.md"
+  ( PATH="$SANDBOX/stub:$PATH" bash "$NL/ask-gpt.sh" "$TP" >/dev/null 2>&1 ); assert_eq "$?" "2" "a pattern $bad in the list: ask-gpt.sh exits 2"
+  assert_no_file "$SANDBOX/args.txt"   # codex is not run
+done
 if command -v codex >/dev/null 2>&1 && codex sandbox --help >/dev/null 2>&1; then
   mkdir -p "$CODEX_HOME"   # the sandbox CODEX_HOME: codex refuses to start when it does not exist
   R5="$SANDBOX/profile"; mkdir -p "$R5/.aws" "$R5/sub" "$R5/k" "$R5/.ssh" "$R5/.kube" "$R5/.docker"; git -C "$R5" init -q
   mkdir -p "$R5/secrets" "$R5/credentials" "$R5/tokens" "$R5/sub/kubeconfig" "$R5/deep/secrets"
-  secrets='.env prod.env app.env.local sub/.env.prod key.pem server.key cert.p12 cert.pfx id_rsa id_ed25519.pub Credentials.txt
+  secrets='.env .envrc prod.env app.env.local sub/.env.prod key.pem server.key cert.p12 cert.pfx id_rsa id_ed25519.pub Credentials.txt
            .npmrc sub/.netrc .pypirc .git-credentials prod.tfvars terraform.tfstate terraform.tfstate.backup app.jks release.keystore
            AuthKey_X.p8 my-secret.txt SECRETS.md api_token.txt kubeconfig k/kubeconfig-prod db.kdbx .aws/config
            gcp-service-account.json service_account_key.json sa-serviceaccount.json
@@ -276,6 +305,23 @@ if command -v codex >/dev/null 2>&1 && codex sandbox --help >/dev/null 2>&1; the
       ( cd "$R5" && codex sandbox -c 'default_permissions="review"' -c "$profile" cat "$f" >/dev/null 2>&1 ) && open="$open $f"
     done
     assert_eq "${open:-none}" "none" "the codex profile blocks every secret the filter drops"
+    # No writes: not in the project, and not in /tmp or /var/tmp (":minimal" alone leaves both writable, macOS
+    # codex 0.166). Reading a file there still works. The two names are in the real temp folders: removed below.
+    sbx() { ( cd "$R5" && codex sandbox -c 'default_permissions="review"' -c "$profile" "$@" ) 2>/dev/null; }
+    u="coreopinion-test.$$.$RANDOM"
+    for d in /tmp /var/tmp; do
+      [ -d "$d" ] && [ -w "$d" ] || continue
+      sbx sh -c "echo w > $d/$u" >/dev/null
+      [ ! -e "$d/$u" ] && pass || fail "write to $d is refused"
+      printf 'hello\n' > "$d/$u"
+      assert_eq "$(sbx cat "$d/$u")" "hello" "a file in $d is still read"
+      sbx sh -c "echo changed > $d/$u" >/dev/null; sbx rm -f "$d/$u" >/dev/null
+      assert_eq "$(cat "$d/$u" 2>/dev/null)" "hello" "a file in $d is not changed or deleted"
+      rm -f "$d/$u"
+    done
+    sbx touch new.txt >/dev/null
+    assert_no_file "$R5/new.txt"
+    assert_eq "$(sbx cat ok.txt)" "x" "an ordinary project file is still read"
   elif ( cd "$R5" && codex sandbox cat ok.txt >/dev/null 2>&1 ); then
     fail "codex sandbox reads ok.txt without the review profile but not with it: the profile is broken"
   else
@@ -293,7 +339,7 @@ assert_not_contains "$S" '-C "<project dir>"'
 assert_not_contains "$S" 'codex exec --ignore-user-config'   # one copy of the command: the script's
 BAD="$SANDBOX/we ird\"\$(touch PWNED)\`touch PWNED2\`dir"; mkdir -p "$BAD"; git -C "$BAD" init -q
 T2="$(tmpf)"; printf '%s' "$BAD" > "$T2/dir"; printf 'p\n' > "$T2/prompt.md"
-OUT="$(cd "$SANDBOX" && STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$T2" 2>&1)"
+OUT="$(cd "$SANDBOX" && PATH="$SANDBOX/stub:$PATH" bash "$A" "$T2" 2>&1)"
 assert_eq "$([ -e "$SANDBOX/PWNED" ] || [ -e "$SANDBOX/PWNED2" ] && echo ran || echo safe)" "safe" "a hostile project path runs nothing"
 assert_contains "$SANDBOX/args.txt" 'PWNED'
 assert_not_contains "$SANDBOX/args.txt" '--skip-git-repo-check'
@@ -302,18 +348,30 @@ assert_no_file "$T2"   # the temp folder (it holds the diff) is gone after the r
 grep -qx 'model_reasoning_effort=medium' "$SANDBOX/args.txt" && pass || fail "default effort is medium"
 # high on request; anything else falls back to medium
 T3="$(tmpf)"; printf '%s' "$BAD" > "$T3/dir"; printf 'p\n' > "$T3/prompt.md"
-( STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$T3" xhigh >/dev/null 2>&1 )
+( PATH="$SANDBOX/stub:$PATH" bash "$A" "$T3" xhigh >/dev/null 2>&1 )
 grep -qx 'model_reasoning_effort=medium' "$SANDBOX/args.txt" && pass || fail "an unknown effort falls back to medium"
+T3="$(tmpf)"; printf '%s' "$BAD" > "$T3/dir"; printf 'p\n' > "$T3/prompt.md"
+( PATH="$SANDBOX/stub:$PATH" bash "$A" "$T3" high >/dev/null 2>&1 )
+grep -qx 'model_reasoning_effort=high' "$SANDBOX/args.txt" && pass || fail "high is passed on as high"
 # outside a git repository: the flag, and an empty folder instead of the project
 NR="$SANDBOX/norepo"; mkdir -p "$NR"; printf 'x\n' > "$NR/f.txt"
 T4="$(tmpf)"; printf '%s' "$NR" > "$T4/dir"; printf 'p\n' > "$T4/prompt.md"
-( STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$T4" >/dev/null 2>&1 )
+( PATH="$SANDBOX/stub:$PATH" bash "$A" "$T4" >/dev/null 2>&1 )
 assert_contains "$SANDBOX/args.txt" '--skip-git-repo-check'
 assert_eq "$(grep -A1 -x -- '-C' "$SANDBOX/args.txt" | tail -1)" "$T4/empty" "no repo: Codex gets an empty folder"
 # a missing prompt is refused, and the folder is not removed then
 T5="$(tmpf)"
 ( PATH="$SANDBOX/stub:$PATH" bash "$A" "$T5" </dev/null >/dev/null 2>&1 ); assert_eq "$?" "2" "missing prompt: refused"
 assert_dir "$T5"; rm -rf "$T5"
+# each alone: a prompt but no dir file; a dir file but an empty prompt on stdin. Refused, codex not run, folder kept.
+rm -f "$SANDBOX/args.txt"
+T5="$(tmpf)"; printf 'p\n' > "$T5/prompt.md"
+( PATH="$SANDBOX/stub:$PATH" bash "$A" "$T5" </dev/null >/dev/null 2>&1 ); assert_eq "$?" "2" "a folder without its dir file: refused"
+assert_file "$T5/prompt.md"; rm -rf "$T5"
+T5="$(tmpf)"; printf '%s' "$GR" > "$T5/dir"
+( PATH="$SANDBOX/stub:$PATH" bash "$A" "$T5" </dev/null >/dev/null 2>&1 ); assert_eq "$?" "2" "an empty prompt on stdin: refused"
+assert_file "$T5/dir"; rm -rf "$T5"
+assert_no_file "$SANDBOX/args.txt"
 # the folder the script removes must be a mktemp folder right in the temp folder: a wrong path (the
 # project, say) that happens to hold prompt.md and dir is refused and left alone
 PRJ="$SANDBOX/proj"; mkdir -p "$PRJ"; printf '%s' "$BAD" > "$PRJ/dir"; printf 'p\n' > "$PRJ/prompt.md"; printf 'keep\n' > "$PRJ/code.sh"
@@ -322,25 +380,17 @@ assert_file "$PRJ/code.sh"
 TD="$(tmpf)"; mkdir -p "$TD/inner"; printf '%s' "$BAD" > "$TD/inner/dir"; printf 'p\n' > "$TD/inner/prompt.md"
 ( PATH="$SANDBOX/stub:$PATH" bash "$A" "$TD/inner" >/dev/null 2>&1 ); assert_eq "$?" "2" "a folder inside a temp folder: refused"
 assert_dir "$TD/inner"; rm -rf "$TD"
-# Where the temp folder may be: right in $TMPDIR, in the system temp folder (macOS getconf DARWIN_USER_TEMP_DIR, where
-# a bare `mktemp -d` lands whatever TMPDIR says) or in /tmp, compared after resolving links (/tmp vs /private/tmp).
+# Where the temp folder may be: right in $TMPDIR, in the system temp folder (macOS getconf DARWIN_USER_TEMP_DIR) or
+# in /tmp, compared after resolving links (/tmp vs /private/tmp). Its name is the one --new gives: coreopinion.*.
 okrun() { # <folder> <label>: accepted, run, and removed
   printf '%s' "$GR" > "$1/dir"; printf 'p\n' > "$1/prompt.md"
-  out="$(CODEX_THREAD_ID= STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$1" 2>&1)"
+  out="$(CODEX_THREAD_ID= PATH="$SANDBOX/stub:$PATH" bash "$A" "$1" 2>&1)"
   case "$out" in exit=0*) pass ;; *) fail "$2: refused: $out" ;; esac
   assert_no_file "$1"
+  rm -rf "$1"   # outside the sandbox: a red run must not leave it
 }
-# A bare `mktemp -d` while TMPDIR points elsewhere: macOS puts the folder in the system temp folder, which is
-# accepted. GNU mktemp honours TMPDIR, so there the case does not exist (the unused folder is removed).
 mkdir -p "$SANDBOX/elsewhere"
-BARE="$(TMPDIR="$SANDBOX/elsewhere" mktemp -d)"
-case "$BARE" in
-  "$SANDBOX/elsewhere"/*) rmdir "$BARE"
-    skip bare-mktemp "mktemp -d honours TMPDIR here (GNU), so a bare mktemp -d folder outside it cannot be made" ;;
-  *) okrun "$BARE" "a bare mktemp -d folder while TMPDIR points elsewhere" ;;
-esac
 okrun "$(mktemp -d /tmp/coreopinion.XXXXXXXXXX)" "a folder right in /tmp (a link on macOS)"
-okrun "$(mktemp -d /tmp/tmp.XXXXXXXXXX)" "a tmp.* folder right in /tmp"
 SYS="$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null)"
 if [ -n "$SYS" ] && [ -d "$SYS" ]; then
   okrun "$(TMPDIR="$SANDBOX/elsewhere" mktemp -d "${SYS%/}/coreopinion.XXXXXXXXXX")" "a folder right in the system temp folder"
@@ -350,9 +400,21 @@ L="$SANDBOX/tmplink"; ln -s "${TMPDIR:-/tmp}" "$L" 2>/dev/null && okrun "$(mktem
 refuse() { # <folder> <label> [env...]
   local d="$1" l="$2"; shift 2
   printf '%s' "$GR" > "$d/dir"; printf 'p\n' > "$d/prompt.md"; printf 'keep\n' > "$d/keep.txt"
-  ( env "$@" CODEX_THREAD_ID= STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$d" >/dev/null 2>&1 ); assert_eq "$?" "2" "$l: refused"
+  out="$(env "$@" CODEX_THREAD_ID= PATH="$SANDBOX/stub:$PATH" bash "$A" "$d" 2>&1 >/dev/null)"; assert_eq "$?" "2" "$l: refused"
   assert_file "$d/keep.txt"
 }
+# A hand-made tmp.* folder (a bare `mktemp -d`) is not one of --new's: refused with the temp-folder message, left as it
+# was, and codex is not run. On macOS a bare `mktemp -d` lands in the system temp folder whatever TMPDIR says; GNU
+# mktemp honours TMPDIR, so there the folder is inside the sandbox (refused all the same).
+refuse_tmp() { # <folder> <label>
+  rm -f "$SANDBOX/args.txt"
+  refuse "$1" "$2"
+  case "$out" in *"is not a mktemp -d folder in the temp folder"*) pass ;; *) fail "$2: the message: $out" ;; esac
+  assert_no_file "$SANDBOX/args.txt"
+  rm -rf "$1"
+}
+refuse_tmp "$(TMPDIR="$SANDBOX/elsewhere" mktemp -d)" "a bare mktemp -d folder while TMPDIR points elsewhere"
+refuse_tmp "$(mktemp -d /tmp/tmp.XXXXXXXXXX)" "a tmp.* folder right in /tmp"
 mkdir -p "$HOME/coreopinion.home1"; refuse "$HOME/coreopinion.home1" "a coreopinion.* folder in HOME"
 H2="$HOME/tmp.home2"; mkdir -p "$H2"; refuse "$H2" "a tmp.* folder in HOME"
 mkdir -p "$GR/coreopinion.repo"; refuse "$GR/coreopinion.repo" "a coreopinion.* folder in the repo"
@@ -373,15 +435,15 @@ assert_eq "$(cat "$NEWT/dir" 2>/dev/null)" "$(cd "$SANDBOX/from here" && pwd -P)
 assert_no_file "$NEWT/prompt.md"
 # the prompt comes on stdin, taken as it is; the folder is removed after the run as before
 rm -f "$SANDBOX/stdin.txt"
-OUT="$(STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$NEWT" medium 2>&1 <<'COREOPINION_PROMPT'
+OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$A" "$NEWT" medium 2>&1 <<'COREOPINION_PROMPT'
 Review this, $HOME and `x` stay as they are.
 COREOPINION_PROMPT
 )"
 case "$OUT" in exit=0*) pass ;; *) fail "a prompt on stdin runs: $OUT" ;; esac
 assert_eq "$(cat "$SANDBOX/stdin.txt" 2>/dev/null)" 'Review this, $HOME and `x` stay as they are.' "codex reads the prompt given on stdin"
-assert_no_file "$NEWT"
+assert_no_file "$NEWT"; rm -rf "$NEWT"
 # --check: codex there, exit 0; without codex, exit 4 and nothing on stdout
-OUT="$(STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" --check </dev/null 2>&1)"; rc=$?
+OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$A" --check </dev/null 2>&1)"; rc=$?
 assert_eq "$rc" "0" "--check with codex: exit 0 ($OUT)"
 mkdir -p "$SANDBOX/nocodex"; for b in bash cat dirname; do ln -sf "$(command -v "$b")" "$SANDBOX/nocodex/$b"; done
 OUT="$(PATH="$SANDBOX/nocodex" "$SANDBOX/nocodex/bash" "$A" --check </dev/null 2>/dev/null)"; rc=$?
@@ -398,14 +460,14 @@ assert_eq "$(grep -c '^policy:' "$OY")" "1" "openai.yaml: one policy table"
 rm -f "$SANDBOX/args.txt"
 mkdir -p "$SANDBOX/rofs"; printf '#!/bin/sh\necho "rm: $2: Operation not permitted" >&2\nexit 1\n' > "$SANDBOX/rofs/rm"; chmod +x "$SANDBOX/rofs/rm"
 T6="$(tmpf)"; printf '%s' "$GR" > "$T6/dir"; printf 'p\n' > "$T6/prompt.md"
-OUT="$(CODEX_THREAD_ID=019a-test STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/rofs:$SANDBOX/stub:$PATH" bash "$A" "$T6" </dev/null 2>&1)"; rc=$?
+OUT="$(CODEX_THREAD_ID=019a-test PATH="$SANDBOX/rofs:$SANDBOX/stub:$PATH" bash "$A" "$T6" </dev/null 2>&1)"; rc=$?
 assert_eq "$rc" "3" "inside Codex: ask-gpt.sh exits 3"
 case "$OUT" in *"Claude Code"*) pass ;; *) fail "inside Codex: the refusal names Claude Code: $OUT" ;; esac
 assert_eq "$(printf '%s\n' "$OUT" | grep -c .)" "1" "inside Codex: one line, no cleanup noise"
 assert_no_file "$SANDBOX/args.txt"
 assert_file "$T6/prompt.md"; rm -rf "$T6"   # left alone: nothing was run or removed
 for m in --check --new; do
-  OUT="$(cd "$GR" && CODEX_THREAD_ID=019a-test STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$m" </dev/null 2>/dev/null)"; rc=$?
+  OUT="$(cd "$GR" && CODEX_THREAD_ID=019a-test PATH="$SANDBOX/stub:$PATH" bash "$A" "$m" </dev/null 2>/dev/null)"; rc=$?
   assert_eq "$rc:$OUT" "3:" "inside Codex: $m exits 3 and prints nothing on stdout"
 done
 assert_no_file "$SANDBOX/args.txt"
@@ -417,7 +479,7 @@ first_code="$(grep -n '^```' "$S" | head -1 | cut -d: -f1)"
 tid="$(grep -n 'CODEX_THREAD_ID' "$S" | head -1 | cut -d: -f1)"
 if [ -n "$tid" ] && [ "$tid" -gt "$first_sec" ] && [ "$tid" -lt "$next_sec" ] && [ "$tid" -lt "$first_code" ]; then pass
 else fail "SKILL.md: the Codex stop (CODEX_THREAD_ID) is in section 1, before the first command (line ${tid:-none})"; fi
-OUT="$(CODEX_THREAD_ID= STUB_ARGS="$SANDBOX/args.txt" PATH="$SANDBOX/stub:$PATH" bash "$A" "$(T7="$(tmpf)"; printf '%s' "$GR" > "$T7/dir"; printf 'p\n' > "$T7/prompt.md"; printf '%s' "$T7")" 2>&1)"
+OUT="$(CODEX_THREAD_ID= PATH="$SANDBOX/stub:$PATH" bash "$A" "$(T7="$(tmpf)"; printf '%s' "$GR" > "$T7/dir"; printf 'p\n' > "$T7/prompt.md"; printf '%s' "$T7")" 2>&1)"
 case "$OUT" in *"exit=0"*) pass ;; *) fail "an empty CODEX_THREAD_ID is not a Codex session: $OUT" ;; esac
 # the log tail: 20 lines after a good run, more after a failed one (the skill reads stdout only: the folder is gone)
 mkdir -p "$SANDBOX/stubfail"; printf '#!/bin/sh\ni=1; while [ $i -le 100 ]; do echo "log line $i" >&2; i=$((i+1)); done\nexit 1\n' > "$SANDBOX/stubfail/codex"; chmod +x "$SANDBOX/stubfail/codex"
@@ -428,6 +490,11 @@ n="$(printf '%s\n' "$OUT" | sed -n '/^--- log tail$/,$p' | grep -c '^log line')"
 [ "$n" -gt 20 ] && pass || fail "a failed run prints more than 20 log lines (got $n)"
 case "$OUT" in *"log line 100"*) pass ;; *) fail "the log tail ends with the last line" ;; esac
 assert_no_file "$T8"
+mkdir -p "$SANDBOX/stublong"; printf '#!/bin/sh\ni=1; while [ $i -le 30 ]; do echo "log line $i" >&2; i=$((i+1)); done\nexit 0\n' > "$SANDBOX/stublong/codex"; chmod +x "$SANDBOX/stublong/codex"
+T8="$(tmpf)"; printf '%s' "$GR" > "$T8/dir"; printf 'p\n' > "$T8/prompt.md"
+OUT="$(PATH="$SANDBOX/stublong:$PATH" bash "$A" "$T8" 2>/dev/null)"
+assert_eq "$(printf '%s\n' "$OUT" | sed -n '/^--- log tail$/,$p' | grep -c '^log line')" "20" "a good run prints the last 20 log lines"
+case "$OUT" in exit=0*"log line 30") pass ;; *) fail "a good run: exit=0 first, the last log line last" ;; esac
 # SKILL.md works from the script's stdout and writes nothing into $T: it names no file in it
 others="$(grep -oE '\$T/[A-Za-z0-9_.-]+' "$S" | sort -u | tr '\n' ' ')"
 assert_eq "$others" "" "SKILL.md names no file of the temp folder"
