@@ -20,7 +20,7 @@ while read -r _ lsha _ rsha; do   # <local ref> <local sha> <remote ref> <remote
   fi
   for c in $range; do
     # (--root: a commit with no parent lists every file it adds)
-    bad=$(git -c core.quotePath=false diff-tree --root --no-commit-id --name-only -r --diff-filter=ACMR "$c" \
+    bad=$(git diff-tree --root --no-commit-id --name-only -z -r --diff-filter=ACMR "$c" | tr '\0' '\n' \
           | grep -iE -f "$PATTERNS" | grep -viE -f <(grep -v '^[[:space:]]*$' "$ALLOWED"))
     if [ -n "$bad" ]; then
       echo "Push blocked: commit $(git rev-parse --short "$c") contains files that must not be published:" >&2

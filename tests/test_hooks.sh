@@ -215,6 +215,33 @@ for bad in "папка/CLAUDE.md" "é/.env" Claude.md .ENV; do
   try_commit "$bad" && fail "commit allowed: $bad" || pass
   rm -rf "${C:?}/${bad:?}"
 done
+# a path git would print quoted (a double quote, a backslash, a tab, a line break) is judged by its real name: both
+# hooks refuse the blocked file, and the push leaves it off the remote; a harmless file with such a name still passes
+QUOTED='we"ird/.env
+back\slash/CLAUDE.md'
+TABBED="$(printf 'tab\tdir/AGENTS.md')"; BROKEN_LINE="$(printf 'line\nbreak/.env')"
+RQ="$SANDBOX/quoted names"; pp_repo "$RQ"; nv_commit "$RQ" src/a.txt
+git -C "$RQ" push -q origin HEAD:refs/heads/main 2>/dev/null && pass || fail "setup: the clean push before the quoted names"
+quoted_case() {  # quoted_case <path>: refused by pre-commit, and by pre-push after a --no-verify commit
+  try_commit "$1" && fail "commit allowed: $1" || pass
+  rm -rf "${C:?}/${1%%/*}"
+  nv_commit "$RQ" "$1"
+  git -C "$RQ" push -q origin HEAD:refs/heads/main 2>/dev/null && fail "push allowed: $1" || pass
+  git -C "$RQ.git" ls-tree -r --name-only -z main | tr '\0' '\n' | grep -qE '(^|/)(\.env|CLAUDE\.md|AGENTS\.md)$' \
+    && fail "the remote holds the blocked file: $1" || pass
+  git -C "$RQ" reset -q --hard HEAD~1
+}
+printf '%s\n' "$QUOTED" > "$SANDBOX/quoted"
+while IFS= read -r bad; do quoted_case "$bad"; done < "$SANDBOX/quoted"
+quoted_case "$TABBED"; quoted_case "$BROKEN_LINE"
+OUT=$(mkdir -p "$C/we\"ird"; echo x > "$C/we\"ird/.env"; git -C "$C" add -f 'we"ird/.env'; git -C "$C" commit -m t 2>&1)
+git -C "$C" reset -q; rm -rf "$C/we\"ird"
+echo "$OUT" | grep -qxF '  - we"ird/.env' && pass || fail "a quoted name is not listed raw: $OUT"
+for ok in 'we"ird/main.dart' 'back\slash/README.md' "$(printf 'tab\tdir/notes.md')" "$(printf 'line\nbreak/main.dart')"; do
+  try_commit "$ok" && pass || fail "commit blocked: $ok"
+  nv_commit "$RQ" "$ok"
+done
+git -C "$RQ" push -q origin HEAD:refs/heads/main 2>/dev/null && pass || fail "a push of harmless files with quoted names was blocked"
 mv "$COREDEV_TOOLS/git-hooks/blocked-patterns" "$SANDBOX/bp"
 try_commit src/ok.txt && fail "missing patterns file must fail closed" || pass
 # the fix names no single host: the static hook cannot know which one installed it
