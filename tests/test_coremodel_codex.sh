@@ -61,6 +61,8 @@ if [ -f "$CX_MAN" ]; then
 fi
 # the Claude module file stays as it is and is not what Codex reads
 assert_contains "$CM/hooks/hooks.json" '"modules"'
+# and it wires no command hook: the Codex-only hint must not run in Claude Code
+assert_not_contains "$CM/hooks/hooks.json" '"hooks"'
 assert_file "$HJSON"
 if [ -f "$HJSON" ]; then
   json_ok "$HJSON" && pass || fail "$HJSON is not valid JSON"
@@ -174,6 +176,9 @@ if [ -f "$ARGV" ]; then
   assert_not_contains "$SANDBOX/sent.txt" '{{PROMPT}}'
   assert_not_contains "$SANDBOX/sent.txt" '{{REPLY}}'
   assert_not_contains "$SANDBOX/sent.txt" '{{NOW}}'
+  # the fills are classifier.ts buildPrompt's own words for "no level" and "no reply" (written twice, tied here)
+  assert_contains "$STDIN" 'The chat runs at: unknown'
+  assert_contains "$STDIN" '(none, this is the first prompt)'
 fi
 assert_contains "$ENVREC" 'NESTED=1'
 out="$(cat "$SANDBOX/out")"
@@ -207,6 +212,10 @@ check_map high opus gpt-6-astra "gpt-6-luna gpt-6.1-sol"
 check_map xhigh fable gpt-6-astra "gpt-6-luna gpt-6.1-sol"
 check_map max fable gpt-6-astra "gpt-6-luna gpt-6.1-sol"
 check_map max opus gpt-6-astra "gpt-6-luna gpt-6.1-sol"
+# the level in the model's other spelling, as classifier.ts toLevel reads it
+answer '{"why":"x","level":"Extra high","model":"fable"}'
+run_hint "$PATHSTUB" "$(event 'do the thing')"
+case "$(cat "$SANDBOX/out")" in *'needs gpt-6-astra at xhigh effort'*) pass ;; *) fail "level 'Extra high' is not read as xhigh: $(cat "$SANDBOX/out")" ;; esac
 # the answer may come wrapped in prose or a fence, as the Claude parser also accepts
 answer 'Sure! ```json
 {"why":"x","level":"medium","model":"sonnet"}
@@ -287,6 +296,11 @@ silent "luna for a haiku pick"
 answer '{"why":"x","level":"high","model":"opus"}'
 run_hint "$PATHSTUB" "$(mevent some-other-model 'fix the flaky login test')"
 case "$(cat "$SANDBOX/out")" in *gpt-6-astra*) pass ;; *) fail "unknown current model: no hint" ;; esac
+# a Codex model the hint does not rank (README: "it cannot compare"): the pick is named, even the lightest one
+answer '{"why":"x","level":"low","model":"haiku"}'
+run_hint "$PATHSTUB" "$(mevent gpt-6-sol 'rename x')"
+case "$(cat "$SANDBOX/out")" in *'needs gpt-6-luna at low effort'*) pass ;; *) fail "an unranked current model (gpt-6-sol): the pick is not named: $(cat "$SANDBOX/out")" ;; esac
+answer '{"why":"x","level":"high","model":"opus"}'
 run_hint "$PATHSTUB" '{"hook_event_name":"UserPromptSubmit","meta":{"model":"gpt-6-astra"},"prompt":"fix the flaky login test"}'
 case "$(cat "$SANDBOX/out")" in *gpt-6-astra*) pass ;; *) fail "a nested model key was read as the current model" ;; esac
 
@@ -351,6 +365,22 @@ long="$(awk 'BEGIN{for(i=0;i<20000;i++) printf "word%d ", i}')"
 run_hint "$PATHSTUB" "$(event "$long")"
 assert_eq "$RC" "0" "long prompt: exit 0"
 assert_eq "$(ncalls)" "1" "long prompt: one call"
+# over 4000 bytes it is cut as classifier.ts cutMiddle does: the first 2000 bytes, the marker, the last 2000
+reps() { awk -v n="$1" -v c="$2" 'BEGIN { for (i = 0; i < n; i++) printf "%s", c }'; }   # reps <n> <char>
+H="A$(reps 1999 h)"; TL="$(reps 1999 t)Z"
+run_hint "$PATHSTUB" "$(event "${H}X$(reps 5000 m)Y${TL}")"
+sent="$(cat "$STDIN" 2>/dev/null)"
+case "$sent" in *"<prompt>
+$H
+[…]
+$TL
+</prompt>"*) pass ;; *) fail "a long prompt is not sent as its first 2000 bytes, [...] and its last 2000" ;; esac
+# 4001 bytes is the shortest prompt that is cut; 4000 bytes go whole, with no marker
+run_hint "$PATHSTUB" "$(event "${H}X${TL}")"
+assert_contains "$STDIN" '[…]'
+run_hint "$PATHSTUB" "$(event "${H}${TL}")"
+assert_not_contains "$STDIN" '[…]'
+assert_contains "$STDIN" "${H}${TL}"
 # nothing on stdout other than the one object, in every case above the prompt text stays out
 # (stderr is free)
 
@@ -361,6 +391,8 @@ run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
 tr '\0' '\n' < "$ARGV" > "$SANDBOX/argv.txt"
 assert_contains "$SANDBOX/argv.txt" '--ephemeral'
 assert_contains "$SANDBOX/argv.txt" '--ignore-user-config'
+# the project's AGENTS.md does not ride along with the classifier prompt
+assert_contains "$SANDBOX/argv.txt" 'project_doc_max_bytes=0'
 assert_contains "$SANDBOX/argv.txt" 'model_reasoning_effort="low"'
 assert_not_contains "$SANDBOX/argv.txt" 'fix the flaky login test'
 assert_contains "$STDIN" 'fix the flaky login test'

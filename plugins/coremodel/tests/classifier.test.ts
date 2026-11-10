@@ -40,6 +40,7 @@ test('buildPrompt keeps $-patterns and placeholders in the person text verbatim'
   const out = buildPrompt({ prompt: 'cost $& and {{NOW}}', lastReply: '', now: 'high' })
   expect(out.includes('cost $& and {{NOW}}')).toBe(true)
   expect(out.includes('The chat runs at: high')).toBe(true)
+  expect(out.includes('<reply>\n(none, this is the first prompt)\n</reply>')).toBe(true)
 })
 
 test('buildPrompt cuts the prompt and the reply and names an unknown level', () => {
@@ -49,6 +50,7 @@ test('buildPrompt cuts the prompt and the reply and names an unknown level', () 
   expect(out.includes('r'.repeat(600))).toBe(true)
   expect(out.includes('r'.repeat(601))).toBe(false)
   expect(out.includes('The chat runs at: unknown')).toBe(true)
+  expect(out.includes('(none, this is the first prompt)')).toBe(false)
   for (const w of ['low', 'medium', 'high', 'xhigh', 'max', 'keep']) expect(out.includes(w)).toBe(true)
 })
 

@@ -143,7 +143,8 @@ to="${COREMODEL_HINT_TIMEOUT:-20}"
 case "$to" in ''|*[!0-9]*) to=20 ;; esac
 [ "$to" -gt 20 ] && to=20
 export COREMODEL_NESTED=1
-codex exec --model gpt-6-luna --sandbox read-only --skip-git-repo-check --ephemeral --ignore-user-config -c 'model_reasoning_effort="low"' - < "$tmp/full" > "$tmp/ans" 2>/dev/null &
+# project_doc_max_bytes=0: the project's AGENTS.md is not added to the classifier prompt
+codex exec --model gpt-6-luna --sandbox read-only --skip-git-repo-check --ephemeral --ignore-user-config -c 'model_reasoning_effort="low"' -c 'project_doc_max_bytes=0' - < "$tmp/full" > "$tmp/ans" 2>/dev/null &
 cp=$!
 ( sleep "$to"; kill_tree "$cp" ) > /dev/null 2>&1 &
 wd=$!
