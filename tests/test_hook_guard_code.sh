@@ -884,13 +884,13 @@ sec_rules() {
 }
 bg sec_rules
 
-# The writers' options, one row each: "p@<command>" passes, "r@<command>@<path refused, under the code folder>".
+# The writers' options, one row each: "p#<command>" passes, "r#<command>#<path refused, under the code folder>".
 # %W is the code folder, %K the project's folder in the Core, %S the in-place sed. Own project wr, with docs/ and src/.
 sec_rows() {
   local W="$CORE_DIR/wr/code" K="$CORE_DIR/wr" SED=sed want c t i same="" n100="" n
   mkdir -p "$W/docs" "$W/src"; : > "$K/CLAUDE.md"
   sh() { run_bash "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" "${2-$W}"; }
-  while IFS=@ read -r want c t; do
+  while IFS="#" read -r want c t; do
     c="${c//%W/$W}"; c="${c//%K/$K}"; c="${c//%S/$SED -i}"
     sh "$c"
     case "$want" in
@@ -898,34 +898,34 @@ sec_rows() {
       r) blocked "refused: $c" "$W/$t" "$K/$t" ;;
     esac
   done <<'ROWS'
-p@touch -r docs/ref src/a
-p@touch -d now src/a
-p@mkdir -m 755 src/x
-p@install -m 644 a src/a
-p@install -m 644 -g docs a .
-r@install -o root a docs/a@docs/a
-r@cp -S .bak a docs/a@docs/a
-p@cp -b -S .claude settings.json .
-p@mv -b -S .claude settings.json .
-p@ln -S .claude -s ../settings.json .
-r@cp --target-directory=docs a@docs/a
-r@mv --target-directory=docs a@docs/a
-r@ln -t docs a@docs
-r@ln -s -t src /tmp/CLAUDE.md@src/CLAUDE.md
-r@cp -- a docs/a@docs/a
-r@mv -- -old/CLAUDE.md src/@src/CLAUDE.md
-p@sed -e s/a/b/ src/a
-p@%S -f docs/fix.sed src/a.c
-r@%S -f fix.sed docs/a.md@docs/a.md
-p@perl -e 1 src/a
-p@perl -pi -e 1 -e AGENTS.md src/a.c
-r@cd %W/ && echo x > docs/y.md@docs/y.md
-p@cd %W/ && echo x > src/y.md
-p@echo x > /dev/null
-p@cd %K && ln -s CLAUDE.md %W/AGENTS.md
-r@cd %W/src && ln -s notes.md %W/AGENTS.md@AGENTS.md
-r@cd /srv/$D && cp CLAUDE.md %W/src/@src/CLAUDE.md
-p@cp "$TPL/CLAUDE.md" src/
+p#touch -r docs/ref src/a
+p#touch -d now src/a
+p#mkdir -m 755 src/x
+p#install -m 644 a src/a
+p#install -m 644 -g docs a .
+r#install -o root a docs/a#docs/a
+r#cp -S .bak a docs/a#docs/a
+p#cp -b -S .claude settings.json .
+p#mv -b -S .claude settings.json .
+p#ln -S .claude -s ../settings.json .
+r#cp --target-directory=docs a#docs/a
+r#mv --target-directory=docs a#docs/a
+r#ln -t docs a#docs
+r#ln -s -t src /tmp/CLAUDE.md#src/CLAUDE.md
+r#cp -- a docs/a#docs/a
+r#mv -- -old/CLAUDE.md src/#src/CLAUDE.md
+p#sed -e s/a/b/ src/a
+p#%S -f docs/fix.sed src/a.c
+r#%S -f fix.sed docs/a.md#docs/a.md
+p#perl -e 1 src/a
+p#perl -pi -e 1 -e AGENTS.md src/a.c
+r#cd %W/ && echo x > docs/y.md#docs/y.md
+p#cd %W/ && echo x > src/y.md
+p#echo x > /dev/null
+p#cd %K && ln -s CLAUDE.md %W/AGENTS.md
+r#cd %W/src && ln -s notes.md %W/AGENTS.md#AGENTS.md
+r#cd /srv/$D && cp CLAUDE.md %W/src/#src/CLAUDE.md
+p#cp "$TPL/CLAUDE.md" src/
 ROWS
   # ~ is the home folder, also after a cd (it is no relative path)
   HOME="$W" sh 'cd src && echo x > ~/docs/a.md'; blocked "a ~ target after a cd" "$W/docs/a.md" "$K/docs/a.md"
