@@ -44,7 +44,9 @@ of the plugins, the tests and `scripts/`. Run it on the files you changed before
 `shellcheck --severity=warning <files>` (settings: `.shellcheckrc`, `tests/.shellcheckrc`).
 
 Trigger evals (does a skill start when it should) make real model calls and are not part of the
-run: `claude plugin eval plugins/corecrew --ablation none --no-publish`.
+run: `bash scripts/eval.sh <plugin>` (`corecrew` or `coreopinion`). The cases are in
+`evals/<plugin>/`, the results land in `evals/<plugin>/results/` (ignored by git), and extra
+options such as `--case '<glob>'` pass through to `claude plugin eval`.
 
 ### Test fixtures
 
@@ -101,7 +103,7 @@ A fixture keeps a `CLAUDE.md` as `CLAUDE.md.in`, because this repo's `.gitignore
 - Work on a branch, never on `main`.
 - One commit per working step, in [Conventional Commits](https://www.conventionalcommits.org/)
   form with the plugin as scope: `fix(corecrew): ...`, `feat(coremodel): ...`, `docs: ...`. The
-  subject is at most 72 characters; details go in the body. CI checks the subjects of the new commits
+  subject is at most 72 bytes; details go in the body. CI checks the subjects of the new commits
   with `scripts/commit-subjects.sh` (types: feat, fix, docs, style, refactor, perf, test, build, ci,
   chore, revert, merge; a lowercase scope or none). To get the same check at every commit, install
   it once as a `commit-msg` hook; this command leaves an existing hook alone:

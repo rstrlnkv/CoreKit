@@ -37,9 +37,10 @@ codex plugin add corecrew@corekit
 codex plugin add coremodel@corekit
 ```
 
-Then start `codex`, open `/hooks` and trust the plugins' hooks; until you do, they do not run, and
-Codex does not tell you so (corecrew's `new-project`, `task` and `ship` remind you when they run).
-The plugin READMEs list the remaining steps.
+Then start `codex` and trust the plugins' hooks: the interactive `codex` asks at start to review
+new or changed hooks, or open `/hooks`. Until you trust them they do not run. `codex exec` and
+other non-interactive runs do not ask and skip them silently, so corecrew's `new-project`, `task`
+and `ship` remind you when they run. The plugin READMEs list the remaining steps.
 
 ### Update
 
@@ -62,7 +63,7 @@ Each plugin's README has the full description, its commands and its settings.
 
 ## Requirements
 
-- **Hosts:** Claude Code 2.1.271 or newer (coremodel needs 2.1.309), or the Codex CLI.
+- **Hosts:** Claude Code 2.1.271 or newer (coremodel needs 2.1.309), or the Codex CLI (tested with 0.166).
 - **OS:** macOS and Linux: CI runs the full suite on both, on macOS with its system bash 3.2.
   Windows needs Git for Windows and is untested.
 - **CPU architecture:** any; the plugins are bash scripts and a TypeScript module with no native

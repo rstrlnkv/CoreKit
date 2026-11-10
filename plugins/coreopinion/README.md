@@ -114,7 +114,7 @@ Codex installed it through the marketplace, `codex plugin remove coreopinion@cor
 ```bash
 bash tests/test_coreopinion.sh              # the manifest, the skill, its run script and docs
 claude plugin validate plugins/coreopinion
-claude plugin eval plugins/coreopinion --ablation none --no-publish   # trigger evals in plugins/coreopinion/evals/ (real model calls, not part of tests/run.sh)
+bash scripts/eval.sh coreopinion            # trigger evals in evals/coreopinion/ (real model calls, not part of tests/run.sh)
 ```
 The skill is `plugins/coreopinion/skills/second-opinion/`; the run script is `scripts/ask-gpt.sh` in it.
 

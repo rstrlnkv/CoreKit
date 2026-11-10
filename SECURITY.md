@@ -85,7 +85,12 @@ to Bash commands as well. A deny rule wins over an allow rule, so `Read(**/.env.
 
 **Codex.** corecrew prints a permission profile that keeps `.env*`, keys, credentials and `~/.ssh`
 unreadable: run `bash <plugin folder>/scripts/lib.sh codex-profile` and paste the output into
-`~/.codex/config.toml`. corecrew never writes that file. The profile is a default, not a hard
+`~/.codex/config.toml`. corecrew never writes that file. The profile also lets sandboxed commands
+read two places of corecrew, written into the fragment as paths of your machine: the folder Codex
+keeps this marketplace's plugins in (`<Codex home>/plugins/cache/<marketplace>`, public plugin
+code) and the corecrew settings file (no secrets). The rest of your home folder and of the Codex
+home (`auth.json`, `config.toml`) stays closed. Print and paste the fragment again if yours lacks these
+two lines, and when the Codex home or the settings file moves. The profile is a default, not a hard
 boundary. These switch it off: `--sandbox`, `--dangerously-bypass-approvals-and-sandbox` or
 `-c sandbox_mode=...` on the command line, `sandbox_mode` in any config layer (a profile, the
 system config), and the `.codex/config.toml` of a trusted project (a cloned repository can bring

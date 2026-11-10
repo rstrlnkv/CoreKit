@@ -35,7 +35,8 @@ plugins/corecrew/                 project workflow
     patch-paths.awk               the paths of a Codex apply_patch patch, for both guards
     prepare.sh, setup-core.sh     a host and project brought up to date; the Core created or completed
     sync-tools.sh                 the scripts copied into the plugin's data folder (tools/)
-    install-hooks.sh, git-hooks/  the git hook shims and their installer
+    install-hooks.sh, git-hooks/  the git hook bodies with their two pattern lists, and the installer
+                                  of the shims that run them
     save, undo-step, _locate.sh   one step saved or undone in both repos; _locate.sh finds the repos
                                   and checks that each can commit
     adopt.sh                      an existing project brought into the layout, in phases (preconditions,
@@ -52,7 +53,6 @@ plugins/corecrew/                 project workflow
     older-formats.md              how a project made by an older version is brought up to date
   templates/                      what new-project, adopt, setup-core and wiki-migrate copy or fill in:
                                   CLAUDE.md.tmpl, code/, core/, docs/
-  evals/                          trigger evals
 plugins/coremodel/                model and effort picker
   hooks/                          the Claude Code module (TypeScript): register.tsx wires the hooks;
                                   session.ts the module variables, host.ts what the host says and
@@ -65,21 +65,25 @@ plugins/coremodel/                model and effort picker
   codex/                          hint.sh and hooks.json: the Codex hint
   types/index.d.ts                the plugin's type contract (the host API types are written by
                                   Claude Code into .claude-plugin/types/, which git does not track)
-  tests/                          *.test.ts(x), one file per module or surface, run by `claude plugin test`
-                                  through tests/test_coremodel.sh; world.ts is the host beneath them and
-                                  surfaces.tsx what they draw and press;
-                                  quality.sh is the manual check of the classifier
 plugins/coreopinion/              second opinion from GPT (Claude Code only)
   skills/second-opinion/          SKILL.md; scripts/: ask-gpt.sh (the Codex run), allowed-files.sh and
                                   secret-patterns.txt (the one secret list)
     agents/openai.yaml            Codex: keeps the skill out of Codex (coreopinion is Claude Code only)
-  evals/                          trigger evals
 scripts/commit-subjects.sh        the check of this repo's own commit subjects (CI job and optional commit-msg hook)
 scripts/make-test-coredev.sh      builds test-coredev, the hand-made project for an end-to-end try of /corecrew:task
+scripts/eval.sh                   runs one plugin's trigger evals on a copy it assembles (real model calls,
+                                  not part of tests/run.sh)
+evals/corecrew/, evals/coreopinion/  the trigger evals (does a skill start when it should); they live outside
+                                  the plugins, so an install does not carry them
 tests/                            bash tests, run by tests/run.sh; lib.sh gives each test a sandbox
                                   and the shared helpers (snap_tree: the one "nothing changed" snapshot);
                                   lib-hook.sh holds the hook-test helpers, builds hook input (hook_event)
                                   and asks a real Codex which hooks it loads (codex_hooks_list)
+  coremodel/                      coremodel's module tests, outside the plugin so an install does not carry
+                                  them: *.test.ts(x), one file per module or surface, run by
+                                  `claude plugin test` on a copy that tests/test_coremodel.sh assembles;
+                                  world.ts is the host beneath them and surfaces.tsx what they draw and
+                                  press; quality.sh is the manual check of the classifier
 docs/                             the upgrade guide (migration-0.3.md) and icon sources (icons/)
 ```
 
@@ -103,8 +107,9 @@ Each hook rule, by host (the test file holds the cases of both hosts):
 | guard-code, file tools | Write, Edit, NotebookEdit | apply_patch | tests/test_hook_guard_code.sh |
 | guard-code, Bash writes | yes | yes | tests/test_hook_guard_code.sh |
 | read-only checker rule (guard-code) | everywhere | no: not for Codex subagents | tests/test_hook_readonly_agents.sh; Codex: tests/test_hook_guard_code.sh (`no ro_agent for a Codex agent_type`) |
-| guard-secrets | Read, Grep, Glob, Edit, Write, NotebookEdit, Bash | apply_patch, Bash | tests/test_hook_guard_secrets.sh |
+| guard-secrets | Read, Grep, Glob, Edit, Write, NotebookEdit, Bash | apply_patch, Bash | tests/test_hook_guard_secrets.sh, tests/test_hook_guard_secrets_pins.sh (the single-rule pins) |
 | shell-patch refusal (both guards) | no | guard-code in any folder, guard-secrets inside a project | tests/test_shell_patch.sh, tests/test_shell_patch_exec.sh |
+| apply_patch that cannot be checked: over 100 paths, or the reader missing (both guards); an unreadable text that names an internal path (guard-code) | no | guard-code in any folder, guard-secrets inside a project | tests/test_hook_guard_code.sh, tests/test_hook_guard_secrets.sh |
 | stop-remind | yes | yes | tests/test_stop_hook.sh |
 | coremodel hint (codex/hint.sh) | no (the TypeScript module) | yes | tests/test_coremodel_codex.sh |
 
@@ -133,10 +138,14 @@ Each hook rule, by host (the test file holds the cases of both hosts):
   verifier agents are read-only: in Claude Code a hook refuses their writes.
 - **Hooks** (`plugins/corecrew/hooks/hooks.json`) run at session start, before tool calls and at
   stop. They guard secrets and the public code folder, keep one test suite running at a time and
-  remind the agent to save. Outside a Core project the session-start hook (tools refresh and a
-  one-time "Core not set up" hint) acts in both hosts. Claude Code also runs the read-only checker
-  rule there, and in Codex guard-code refuses a patch handed to the shell (the rule-by-host table
-  under Hosts). Every other hook passes every call.
+  remind the agent to save. Outside a Core project the session-start hook (tools refresh, a warning
+  for an invalid setting and a one-time "Core not set up" hint) acts in both hosts. Claude Code also
+  runs the read-only checker rule there. In Codex the code guard also refuses, in any folder, a
+  patch handed to the shell and a patch it cannot check (more than 100 files, a missing reader, or
+  an unreadable patch that names an internal path); the rule-by-host table under Hosts has the rows.
+  "Outside a Core project" means the session folder. The code guard judges the path written, so a
+  write into a project's code folder is refused from any session folder. The secrets guard, the
+  one-suite hook and the Stop reminder act only when the session folder is in a project.
 - **Scripts** hold what is shared; a hook holds its own rule. What two hooks, or a hook and a
   script, share lives in `plugins/corecrew/scripts/` (`lib.sh` and its parts,
   `plugins/corecrew/scripts/guard-lib.sh`, `plugins/corecrew/scripts/shell-patch.sh`, the awk
@@ -149,12 +158,12 @@ Each hook rule, by host (the test file holds the cases of both hosts):
   Claude Code and `~/.codex/plugins/data/corecrew-<marketplace>/` in Codex, `$CODEX_HOME` when
   set), the one place git hooks run them from, so a plugin update reaches the git hooks without
   reinstalling them.
-- **Git hooks** (`scripts/git-hooks/`) are shims installed by `install-hooks.sh` into the code repo
-  (pre-commit, pre-push) and into the Core (pre-push: the GitHub repo must be private). The code
+- **Git hooks.** `scripts/git-hooks/` holds the hook bodies and the two pattern lists.
+  `install-hooks.sh` writes a shim into the code repo (pre-commit, pre-push) and into the Core
+  (pre-push: the GitHub repo must be private); the shim runs the body from the tools copy. The code
   repo hooks refuse what `scripts/git-hooks/blocked-patterns` lists, except what `allowed-patterns` lists
-  (the `.env` templates): `CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` in any folder, `/.claude/`
-  and `/docs/superpowers/` at the root only, `.env` and `.env.*`
-  (not `.envrc`, `.env.example`, `.env.sample` or `.env.template`), `*.pem` and `*.key`.
+  (the `.env` templates). The names are listed in
+  [SECURITY.md](SECURITY.md#known-limits-of-the-hooks).
 - **Texts and languages.** A text a hook prints, or one a person reads with no model in between,
   lives in its plugin's message table in every language: `plugins/corecrew/hooks/messages.sh`
   (`msg`, the languages in `MSG_LANGS`) and `plugins/coremodel/hooks/locales/`. The output of a
@@ -170,8 +179,10 @@ Each hook rule, by host (the test file holds the cases of both hosts):
 
 ## Invariants
 
-- Internal files never enter a code repo. `CLAUDE.md`, `AGENTS.md`, `.claude/` and secrets are kept
-  out by the code guard and by the git hooks. The wiki (`docs/`) is kept out only by the code guard,
+- Internal files never enter a code repo. `CLAUDE.md`, `AGENTS.md` and `.claude/` are kept out by
+  the code guard and by the git hooks. Secret files are kept out of commits and pushes by the git
+  hooks; the secrets guard only refuses to read or write `.env` files and `~/.ssh` inside a project
+  (the names: [SECURITY.md](SECURITY.md#known-limits-of-the-hooks)). The wiki (`docs/`) is kept out only by the code guard,
   which is best effort. Under `docs/` the git hooks block only its `superpowers/` folder, where
   planning plugins write their drafts; the rest of `docs/` passes, because a project may publish docs there.
 - The host's permissions and sandbox are the security boundary; the hooks are a best-effort second
@@ -181,4 +192,6 @@ Each hook rule, by host (the test file holds the cases of both hosts):
   the test is the source.
 - Scripts never overwrite or delete a user's files; a failed step leaves them as they were.
 - Tests run in a sandbox (own `HOME`, `CORE_DIR`) and never touch the real Core, `~/.claude` or `~/.codex`.
-- `coremodel` and `coreopinion` do not depend on `corecrew` or on each other.
+- No plugin depends on another: each installs alone. `tests/test_manifest.sh` fails when a file of
+  one plugin names a path into another. coremodel's Codex hint may read corecrew's settings file,
+  as data only.

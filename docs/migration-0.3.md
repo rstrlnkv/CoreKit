@@ -5,8 +5,8 @@ For a user of `coredev` 0.2.x or of the `corekit` plugin 0.1.x. The plugin is no
 `coreeffort` for a short time). The marketplace and the repository stay `corekit`. Coming from
 0.1.x (`corekit`), also do the steps of
 [Coming from 0.1.x (corekit), also](#coming-from-01x-corekit-also) after Step 5.
-`<Core>` is your Core folder (default `~/Projects/Core`). It needs no change: `<Core>/.coredev`
-keeps its name.
+`<Core>` is your Core folder (default `~/Projects/Core`). Its settings folder keeps its name:
+`<Core>/.coredev`. Each project's code moves out of the Core once (Step 5).
 
 ### Step 1. Update the marketplace and install the new names
 
@@ -55,12 +55,17 @@ After every project is done, you can delete `~/.claude/plugins/data/coredev-core
 
 Commands are `/corecrew:new-project`, `/corecrew:task`, `/corecrew:new-standard`; agents are
 `corecrew:<role>`; the model and effort command is `/coremodel`. Update any of your own notes or
-`~/.claude/CLAUDE.md` lines that name `coredev` or `effort-picker`.
+`~/.claude/CLAUDE.md` lines that name `coredev` or `effort-picker`. New since 0.2.x:
+`/corecrew:ship`, which releases the current branch.
 
 ### Step 5. Restart Claude Code
 
 Quit and start `claude` again. In a project's code folder, check that `/corecrew:task` is
 listed and that the session start shows no note about old git hooks.
+
+Each project still keeps its code in `<Core>/<project>/code`, and session start says so. Run
+`/corecrew:task adopt <Core>/<project>/code` once per project: it moves the code to
+`<Projects>/<project>`, beside the Core. `/corecrew:task` asks for it before it runs anything else.
 
 ## Coming from 0.1.x (corekit), also
 
