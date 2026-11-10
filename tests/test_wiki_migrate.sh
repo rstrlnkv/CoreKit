@@ -277,6 +277,20 @@ cp "$P/docs/features/broken.md" "$SANDBOX/broken.orig"
 run "$P"
 case "$RC" in 0|1) pass ;; *) fail "unclosed front matter: exit $RC (want 0 or 1): $ERR" ;; esac
 cmp -s "$P/docs/features/broken.md" "$SANDBOX/broken.orig" && pass || fail "unclosed front matter page was rewritten: $(cat "$P/docs/features/broken.md")"
+assert_eq "$(printf '%s\n' "$OUT" | grep '^warning: broken:')" "warning: broken: front matter not closed" "unclosed front matter: the warning"
+
+# --- a reference to a heading that does not exist stays as written and is warned about, in both backtick forms:
+# a code span that is one reference, and the path alone in backticks
+new_sandbox
+mkproj "$SANDBOX/nr"
+printf -- '---\ntype: feature\nstatus: active\ndescription: Reference forms that stay.\nfiles: []\nrelated: []\nupdated: 2026-01-01\n---\n\nSpan: `docs/architecture.md § Nope span` stays.\nTick: `docs/architecture.md` § Nope tick.\n' > "$P/docs/features/w.md"
+cp "$P/docs/features/w.md" "$SANDBOX/w.orig"
+run "$P"
+assert_eq "$RC" "0" "references with no heading: exit"
+assert_eq "$(printf '%s\n' "$OUT" | grep '^warning: w:')" "warning: w: reference to architecture § Nope span not converted
+warning: w: reference to architecture § Nope tick. not converted" "references with no heading: warnings"
+cmp -s "$P/docs/features/w.md" "$SANDBOX/w.orig" && pass || fail "a page with unconverted references was rewritten: $(cat "$P/docs/features/w.md")"
+printf '%s\n' "$OUT" | grep -qxF "updated docs/features/w.md" && fail "an unchanged page is reported as updated" || pass
 
 # --- failure path: a step fails, the project is exactly as it was (files, folders, repo status)
 fails() { # <label> — expects RC=1, one non-empty stderr, project unchanged; the repo stays clean
@@ -423,6 +437,20 @@ for m in --dry-run ""; do
   assert_eq "$(tree_sum "$EXT")" "$ext_before" "superpowers link ${m:-real}: the link target changed"
   assert_eq "$(snap_tree "$P")" "$docs_before" "superpowers link ${m:-real}: the project changed"
   assert_eq "$OUT" "" "superpowers link ${m:-real}: stdout"
+done
+# docs/ itself a link to a real folder: refused the same way, the link and its target as they were
+mkproj "$SANDBOX/dl"; DT="$SANDBOX/dl-target"; mkdir "$DT"; mv "$P/docs" "$DT/docs"; ln -s "$DT/docs" "$P/docs"
+dt_before="$(tree_sum "$DT")"; dl_before="$(snap_tree "$P")"
+[ -n "$(find "$DT/docs" -type f -name '*.md')" ] && pass || fail "the docs/ link target holds no pages (nothing to test)"
+for m in --dry-run ""; do
+  run "$P" $m
+  assert_eq "$RC" "1" "docs link ${m:-real}: exit"
+  assert_eq "$ERR" "wiki-migrate: $P/docs is a symlink; nothing was changed" "docs link ${m:-real}: message"
+  assert_eq "$OUT" "" "docs link ${m:-real}: stdout"
+  assert_eq "$(tree_sum "$DT")" "$dt_before" "docs link ${m:-real}: the link target changed"
+  assert_eq "$(snap_tree "$P")" "$dl_before" "docs link ${m:-real}: the project changed"
+  [ -L "$P/docs" ] && pass || fail "docs link ${m:-real}: docs/ is no longer a link"
+  assert_eq "$(ls -d "$P"/.wiki-migrate.* 2>/dev/null)" "" "docs link ${m:-real}: a staging folder was left"
 done
 # the other folders, each a link to an outside folder
 for l in superpowers/specs superpowers/plans specs plans .obsidian; do
