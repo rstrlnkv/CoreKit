@@ -150,6 +150,19 @@ printf 'neW\n' > "$R/untracked one.txt"; changed "changing an untracked file (sa
 printf 'x\n' > "$R/sub dir/deep.txt"; changed "a new untracked file in a subfolder with a space"
 rm "$R/sub dir/other.txt"; changed "deleting a tracked file"
 git -C "$R" add -A; git -C "$R" commit -q -m two; changed "a new commit"
+# each part of the fingerprint alone: only one of its inputs differs between the two states
+printf 'cccc\n' > "$R/tracked file.txt"; base="$(ts)"
+printf 'cccd\n' > "$R/tracked file.txt"; changed "a second edit of an already modified tracked file"   # diff HEAD only
+git -C "$R" add "tracked file.txt"; printf 'eeee\n' > "$R/tracked file.txt"; base="$(ts)"   # staged and edited again
+blob="$(printf 'ffff\n' | git -C "$R" hash-object -w --stdin)"
+git -C "$R" update-index --cacheinfo "100644,$blob,tracked file.txt"
+changed "staging other content while the work tree file keeps its bytes"   # the index only
+git -C "$R" reset -q --hard; base="$(ts)"
+git -C "$R" commit -q --allow-empty -m empty; changed "an empty commit"   # HEAD only
+printf 'same\n' > "$R/t1.log"; printf 'same\n' > "$R/t2.log"   # ignored, equal content: only the link's target differs
+ln -s t1.log "$R/a link"; base="$(ts)"
+rm "$R/a link"; ln -s t2.log "$R/a link"; changed "an untracked symlink re-pointed at another file with the same content"
+rm "$R/a link" "$R/t1.log" "$R/t2.log"
 # documented limit: ignored files are not part of the state
 base="$(ts)"
 printf 'log\n' > "$R/x.log"; assert_eq "$(ts)" "$base" "creating an ignored x.log does not change the state"
