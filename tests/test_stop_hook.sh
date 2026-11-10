@@ -237,4 +237,14 @@ cstop stop; assert_eq "$CRC" "2" "codex Stop: new edits remind again"
 [ -s "$SANDBOX/cerr" ] && pass || fail "codex Stop: second exit 2 with an empty stderr"
 (cd "$C" && bash "$SCRIPTS/save" "s-codex") >/dev/null 2>&1
 
+# a nested git repo in a subfolder named code (new layout): the reminder is about the project, not the nested repo
+mkdir -p "$C/code"; git -C "$C/code" init -q; echo n > "$C/code/n.txt"
+git -C "$C/code" add -A; git -C "$C/code" commit -q -m nested
+(cd "$C" && bash "$SCRIPTS/save" "s-nested") >/dev/null 2>&1
+input "$C" false | bash "$H" >/dev/null 2>&1; assert_eq "$?" "0" "nested code/ repo: a saved project passes"
+echo x > "$C/beside-nested.txt"
+OUT=$(input "$C" false | bash "$H" 2>&1); rc=$?
+assert_eq "$rc" "2" "nested code/ repo: a change in the project is reminded"
+echo "$OUT" | grep -q 'save' && pass || fail "nested code/ repo: the reminder lacks save: $OUT"
+
 finish
