@@ -216,6 +216,15 @@ rm -rf "$SL/tools"
 OUT="$(PATH="$MKS:$PATH" bash "$SYNC" "$PLUGIN" "$SL/tools" 2>&1)"; RC=$?
 assert_file "$SANDBOX/mkdir.once"
 assert_eq "$RC $OUT" "0 tools updated $V" "one failed mkdir of the lock, no lock there: tried again"
+# those looks at no lock do not shorten the wait on a fresh lock (one with no pid yet): two failed mkdirs with no lock,
+# then a lock with no pid appears, and it is still waited on three times before it is taken for dead
+printf '#!/bin/sh\ncase "$*" in *tools.lock) n=$(wc -l < "%s/mkdir.n" 2>/dev/null | tr -d " "); echo x >> "%s/mkdir.n"\n  case "${n:-0}" in 0|1) exit 1 ;; 2) "%s" "$@"; exit 1 ;; esac ;; esac\nexec "%s" "$@"\n' \
+  "$SANDBOX" "$SANDBOX" "$REALMKDIR" "$REALMKDIR" > "$MKS/mkdir"
+rm -rf "$SL/tools" "$SANDBOX/sleep.n"
+OUT="$(PATH="$MKS:$SLP:$PATH" bash "$SYNC" "$PLUGIN" "$SL/tools" 2>&1)"; RC=$?
+assert_eq "$RC $OUT" "0 tools updated $V" "two failed mkdirs, then a fresh lock: the copy is made"
+assert_eq "$(wc -l < "$SANDBOX/sleep.n" 2>/dev/null | tr -d ' ')" "3" "two failed mkdirs, then a fresh lock: waited on three times"
+assert_eq "$(ls -A "$SL" | grep -vc '^tools$')" "0" "two failed mkdirs, then a fresh lock: nothing but tools in the folder"
 # A stale copy whose folder cannot be written (the Codex sandbox, a read-only data folder): no lock can be made and
 # none is held, so the run fails at once (exit 1, no wait, not "tools busy") and the copy stays as it was. The same
 # with no copy yet. Skipped as root (it can write anyway). With the folder writable again the copy is refreshed.
@@ -368,6 +377,38 @@ assert_eq "$(readlink "$C/.git/hooks/pre-commit")" "$SANDBOX/ihdl-gone-hook" "da
 assert_no_file "$SANDBOX/ihdl-gone-hook"
 echo "$OUT" | grep -qF "$C/.git/hooks/pre-commit exists and is not a corecrew hook; left unchanged" && pass || fail "dangling hook link: no WARN line: $OUT"
 assert_contains "$C/.git/hooks/pre-push" "# corecrew hook shim"
+# A stale tools copy that cannot be refreshed. In a data folder that cannot be written (the Codex sandbox, a read-only
+# data folder) the copy that is there goes on running: the shims are installed, exit 0. Skipped as root (it can write
+# anyway). With no copy there, or when the refresh fails in a folder that can be written (cp fails), nothing is
+# installed: exit 1 and one line.
+scaffold_old ihro; P="$CORE_DIR/ihro"; C="$P/code"; DATA="$(dirname "$COREDEV_TOOLS")"
+if [ "$(id -u)" != 0 ]; then
+  echo 0.1.0 > "$COREDEV_TOOLS/VERSION"; before="$(tree_sum "$COREDEV_TOOLS")"; chmod 555 "$DATA"
+  OUT="$(bash "$IH" "$P" 2>&1)"; RC=$?
+  chmod 755 "$DATA"
+  assert_eq "$RC $OUT" "0 hooks installed" "stale copy, data folder read-only: hooks installed on the copy that is there"
+  assert_contains "$C/.git/hooks/pre-commit" "# corecrew hook shim"
+  assert_contains "$C/.git/hooks/pre-push" "# corecrew hook shim"
+  assert_eq "$(tree_sum "$COREDEV_TOOLS")" "$before" "stale copy, data folder read-only: the copy changed"
+  assert_eq "$(ls -A "$DATA" | grep -c '^tools\.')" "0" "stale copy, data folder read-only: something left beside tools"
+  rm -f "$C/.git/hooks/pre-commit" "$C/.git/hooks/pre-push"
+  mv "$COREDEV_TOOLS" "$SANDBOX/ihro-tools"; chmod 555 "$DATA"
+  OUT="$(bash "$IH" "$P" 2>&1)"; RC=$?
+  chmod 755 "$DATA"; mv "$SANDBOX/ihro-tools" "$COREDEV_TOOLS"
+  assert_eq "$RC $OUT" "1 corecrew: could not update the tools in $COREDEV_TOOLS; hooks not installed." "no copy, data folder read-only"
+  assert_no_file "$C/.git/hooks/pre-commit"; assert_no_file "$C/.git/hooks/pre-push"
+else
+  skip "install-hooks with a read-only data folder" "running as root"
+fi
+CPF="$SANDBOX/cpfail"; mkdir -p "$CPF"; printf '#!/bin/sh\nexit 1\n' > "$CPF/cp"; chmod +x "$CPF/cp"
+echo 0.1.0 > "$COREDEV_TOOLS/VERSION"; rm -f "$C/.git/hooks/pre-commit" "$C/.git/hooks/pre-push"
+OUT="$(PATH="$CPF:$PATH" bash "$IH" "$P" 2>/dev/null)"; RC=$?
+ERR="$(PATH="$CPF:$PATH" bash "$IH" "$P" 2>&1 >/dev/null)"
+assert_eq "$RC $OUT" "1 " "stale copy, the refresh fails in a writable folder: exit 1, no success line"
+echo "$ERR" | grep -qF "corecrew: could not update the tools in $COREDEV_TOOLS; hooks not installed." && pass || fail "refresh fails in a writable folder: no line: $ERR"
+assert_no_file "$C/.git/hooks/pre-commit"; assert_no_file "$C/.git/hooks/pre-push"
+assert_eq "$(ls -A "$DATA" | grep -c '^tools\.')" "0" "refresh fails in a writable folder: something left beside tools"
+sync_tools && pass || fail "tools copy refreshed after the stale cases"
 
 # 5. An empty core.hooksPath (set to cancel a global one): git then runs no hooks from .git/hooks and
 #    rev-parse names the work tree root. Nothing is written anywhere, exit 4, no success line.

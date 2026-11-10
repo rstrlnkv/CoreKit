@@ -70,9 +70,10 @@ while [ "$tries" -lt 10 ]; do
   if mkdir "$LOCK" 2>/dev/null; then got=1; break; fi
   # No lock could be made and none is there: the folder cannot be written (a read-only data folder, the Codex sandbox),
   # so waiting would not help. Three times, not one: a holder may have let go between the mkdir and this look.
+  # (these looks do not count as tries: a fresh lock with no pid yet still gets its three waits)
   if [ ! -e "$LOCK" ] && [ ! -L "$LOCK" ]; then
     nolock=$((nolock + 1)); [ "$nolock" -lt 3 ] || exit 1
-    tries=$((tries + 1)); continue
+    continue
   fi
   holder="$(cat "$LOCK/pid" 2>/dev/null)"
   # (no pid yet is a fresh lock for the first seconds, after that an owner that died before writing it)

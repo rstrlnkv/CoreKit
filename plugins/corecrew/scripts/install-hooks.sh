@@ -36,10 +36,12 @@ OLD_SHIM="# coredev hook shim" # 0.2.x shims (plugin was called coredev)
 
 # Run from the plugin (plugin.json is one level up): bring the tools copy up to date first, so
 # the shims have something to run. From the tools copy itself (save's reinstall) there is no
-# plugin.json and this is skipped.
+# plugin.json and this is skipped. A copy that could not be refreshed because its folder cannot be written (no
+# folder can be made beside it: a read-only data folder, the Codex sandbox) goes on running as it is.
 if [ -f "$HERE/../.claude-plugin/plugin.json" ] && [ -f "$HERE/sync-tools.sh" ]; then
   bash "$HERE/sync-tools.sh" "$(cd "$HERE/.." && pwd)" "$TOOLS" >/dev/null || \
-    { echo "corecrew: could not update the tools in $TOOLS; hooks not installed." >&2; exit 1; }
+    { [ -f "$TOOLS/VERSION" ] && ! mkdir "$TOOLS.probe.$$" 2>/dev/null; } || \
+    { rmdir "$TOOLS.probe.$$" 2>/dev/null; echo "corecrew: could not update the tools in $TOOLS; hooks not installed." >&2; exit 1; }
 fi
 
 # This script's own git-hooks/ folder must be complete: an incomplete copy cannot be trusted.
