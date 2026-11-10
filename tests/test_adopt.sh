@@ -255,7 +255,7 @@ F="$SANDBOX/Projects/rules-app"; mkdir -p "$F/.claude/rules/web"; git init -q "$
 printf '# R\n\n## Rules\n- Mine.\n\n```\n## not a heading\n```\n- After the fence.\n\n## Later\nText.\n' > "$F/CLAUDE.md"
 printf -- '---\ndescription: web\npaths:\n  - "src/**/*.{ts,tsx}"\n  - lib/**\n---\nUse tabs.\n' > "$F/.claude/rules/web/style.md"
 printf -- '---\npaths: [ "a/**", '"'"'b/**'"'"' ]\n---\n## Sub\nB.\n```\n# x\n```\n' > "$F/.claude/rules/two.md"
-printf -- '---\r\npaths: win/**\r\n---\r\n# Head\r\nCRLF body.\r\n' > "$F/.claude/rules/crlf.md"
+printf -- '---\r\npaths: win/**\r\n---\r\n# Head\r\nCRLF body.\r\n' > "$F/.claude/rules/crlf.md"; printf '# Plain\r\nNo front matter.\r\n' > "$F/.claude/rules/crlf2.md"
 git -C "$F" add -A && git -C "$F" commit -q -m initial
 assert_exit 0 bash "$AD" --from "$F"
 C="$CORE_DIR/rules-app/CLAUDE.md"
@@ -272,7 +272,7 @@ awk '/^## not a heading$/ { n = NR } /^- After the fence\.$/ { a = NR } /^### cr
   END { exit !(n && n < a && a < c) }' "$C" && pass || fail "the fold cut the Rules section at a fenced '## ' line: $(cat "$C")"
 grep -qx '# x' "$C" && pass || fail "a '# ' line inside a rule's code fence was shifted like a heading: $(cat "$C")"
 # a rule file with CRLF line ends: read like any other, and no CR reaches CLAUDE.md
-grep -qx '#### Head' "$C" && grep -qx 'CRLF body\.' "$C" && grep -qx 'Applies to: win/\*\*' "$C" && pass || fail "CRLF rule not folded cleanly: $(cat -v "$C")"
+grep -qx '#### Head' "$C" && grep -qx 'CRLF body\.' "$C" && grep -qx 'Applies to: win/\*\*' "$C" && grep -qx '#### Plain' "$C" && grep -qx 'No front matter\.' "$C" && pass || fail "CRLF rule not folded cleanly: $(cat -v "$C")"
 assert_eq "$(tr -cd '\r' < "$C" | wc -c | tr -d ' ')" "0" "a CR byte reached the folded CLAUDE.md"
 assert_contains "$C" "Text."
 
