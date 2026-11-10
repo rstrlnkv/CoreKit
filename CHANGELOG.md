@@ -9,6 +9,68 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+### Changed
+- Codex: when a session has no `spawn_agent` tool, the stop message no longer points to
+  `codex features list` or the `multi_agent` feature, and the text no longer calls multi-agent v1
+  Codex's default. Both tool sets stay described.
+
+### Removed
+- The unused `{{CORE_DIR}}` template placeholder: no shipped template has it, so a project name or
+  purpose that holds that literal text stays as typed.
+
+### Fixed
+- The Codex permission profile that `lib.sh codex-profile` prints no longer closes corecrew's own
+  files: sandboxed commands can read the folder Codex keeps this marketplace's plugins in
+  (`<Codex home>/plugins/cache/<marketplace>`) and the corecrew settings file. The two lines hold
+  paths of your machine. Run `lib.sh codex-profile` again and paste the new fragment into
+  `~/.codex/config.toml`; with the old fragment corecrew's scripts and role files stay unreadable
+  in the sandbox.
+- In a read-only Codex sandbox (a plain `codex exec` in a project Codex does not trust) `lib.sh`
+  reads the settings file instead of falling back to the defaults, and no longer prints
+  `cannot create temp file for here document`.
+- A stale tools copy in a folder that cannot be written (a read-only data folder, the Codex
+  sandbox) no longer waits about 3 s in silence: a skill start prints
+  `corecrew: tools not refreshed: could not update <folder>` at once. A lock that is really held
+  still gives a silent skip.
+- `install-hooks.sh` keeps a user's git hook that is a link to a missing file and prints the
+  `exists and is not a corecrew hook; left unchanged` warning, instead of replacing it.
+- The code repo's git hooks refuse a blocked file (`CLAUDE.md`, `AGENTS.md`, `.env`, keys) when its
+  path holds a double quote, a backslash, a tab or a line break; before, such a file passed both
+  the commit and the push check.
+- The Core's pre-push hook no longer refuses a GitHub remote written with a user part
+  (`https://<user>@github.com/owner/repo`) or with a trailing slash as "not GitHub"; it goes on to
+  the same privacy check. Every other host stays refused.
+- `save`, `undo-step` and the Stop reminder no longer work inside a nested git repo in a subfolder
+  named `code` of a project's code folder; they act on the project and its Core docs.
+- `save` commits the docs when the Core holds an empty `standards/`, `knowledge/`, `bin/` or
+  `hooks/` folder, or one with only ignored files; before, it made the code commit and then failed
+  with `Docs commit failed.` on every run.
+- `undo-step` refuses a step that changed a file whose name holds a line break, with one line and
+  nothing changed; before, it said `Nothing was changed.` and left the file reverted and staged.
+- `undo-step` in a project whose code repo has no commit prints only `No saved step to undo.`,
+  without git's `fatal:` line.
+- `setup-core.sh <relative path>` stops with exit 2 and one line instead of silently creating and
+  committing the default Core at `~/Projects/Core`.
+- `check-standard.sh` refuses a standard that still holds the template's `<command>` placeholder;
+  before, it passed silently.
+- new-project: merging a generated project into the code folder copies its symbolic links as links
+  instead of leaving them out while still reporting "merged"; a link whose path already exists in
+  the code folder is reported as skipped.
+- `wiki-check.sh`, `wiki-index.sh` and `wiki-migrate.sh` run their sibling scripts with `bash`, so
+  they work in an install whose files have no exec bits.
+- `wiki-migrate.sh` puts a `.gitignore` into its staging folder, so a folder left by a killed run
+  is not shown by `git status` or committed by `save`, also in a Core whose `.gitignore` predates
+  the staging lines.
+- `wiki-index.sh` reads front matter as `wiki-check.sh` does: a `---` fence followed by blanks and
+  a blank before the colon of a field are accepted, so such a page is listed in `INDEX.md`.
+- `wiki-check.sh` decodes every `%XX` of a Markdown link target, so a link to an existing file
+  with a percent-encoded non-ASCII name is no longer reported as `broken link`.
+- `reference/wiki.md`: the command that lists the changed pages prints `docs/<page>.md`, a form
+  `wiki-check.sh --changed` reads as a page (the old output gave a false `drift` line).
+- Reading a large settings file (up to the 64 KB limit) stays fast when the keys are near its end.
+- The adopt guide and the `adopt.sh` header no longer say that exit 1 always means a step after
+  the repo commit failed.
+
 ## [0.13.0] - 2026-11-10
 
 ### Added

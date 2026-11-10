@@ -6,6 +6,16 @@ All notable changes to `coreopinion` are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- `ask-gpt.sh` accepts only a folder made by `ask-gpt.sh --new` (`coreopinion.*`); a hand-made
+  `tmp.*` folder is refused and left alone instead of run and removed.
+
+### Fixed
+- The read-only review profile no longer lets commands GPT runs create, change or delete files in
+  `/tmp` and `/var/tmp`; reading them still works.
+- second-opinion: after a timeout the skill points at the removal command at the end of the
+  section instead of one that was no longer above.
+
 ## [0.3.0] - 2026-11-08
 
 ### Added

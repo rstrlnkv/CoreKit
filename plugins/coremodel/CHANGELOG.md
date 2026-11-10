@@ -10,7 +10,14 @@ full detail.
 ### Changed
 
 - Codex hint: the nested classifier call no longer carries the project's `AGENTS.md`
-  (`project_doc_max_bytes=0`).
+  (`project_doc_max_bytes=0`), so project rules cannot bend the pick and each prompt costs fewer
+  tokens. Your global `AGENTS.md` and Codex's own instructions still ride along. Codex asks you to
+  trust the hook again after the update.
+
+### Removed
+
+- Two texts that could never be shown ("Keep it as it is", "Keep the current model") and the
+  unreachable "keep" option of the model question.
 
 ## [0.8.1] - 2026-11-10
 
