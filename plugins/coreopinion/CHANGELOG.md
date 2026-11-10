@@ -16,6 +16,8 @@ All notable changes to `coreopinion` are listed here. The format follows
 ### Fixed
 - The read-only review profile no longer lets commands GPT runs create, change or delete files in
   `/tmp` and `/var/tmp`; reading them still works.
+- `ask-gpt.sh` says a refused folder "is not a folder made by ask-gpt.sh --new" instead of calling
+  a hand-made `mktemp -d` folder "not a mktemp -d folder"; it is still refused and left alone.
 - second-opinion: after a timeout the skill points at the removal command at the end of the
   section instead of one that was no longer above.
 

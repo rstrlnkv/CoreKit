@@ -79,6 +79,24 @@ sandbox profile again (`lib.sh codex-profile`) and paste the new fragment (see F
   with a percent-encoded non-ASCII name is no longer reported as `broken link`.
 - `reference/wiki.md`: the command that lists the changed pages prints `docs/<page>.md`, a form
   `wiki-check.sh --changed` reads as a page (the old output gave a false `drift` line).
+- The secrets guard, the code guard and the read-only check judge the command after a quoted,
+  append or array-element assignment prefix (`X="1" cat .env`, `X+=1 cat .env`,
+  `X[0]="1" cat .env`) and after a here-string inside `"$(...)"`; before, the command was not
+  judged and the call passed.
+- Read-only checkers can no longer edit project files with `perl -e CODE -pi file`, and
+  `truncate -s N` on a file under the temp folder is no longer refused.
+- Codex: the printed sandbox profile also lets sandboxed commands read the global git config
+  files (`~/.gitconfig`, `~/.config/git/config`) and git's global ignore file, each file alone,
+  the corecrew tools copy (`save`, `undo-step`) and the hooks marker. Before, git failed whenever a
+  global git config existed, `save` failed with a raw `Operation not permitted`, and `prepare.sh`
+  kept printing the trust and profile notes.
+- Codex: under the corecrew sandbox profile, `lib.sh layout`, `lib.sh code-dir` and `save` find
+  the project's code folder from the current folder when the folder that holds your projects
+  cannot be listed. That folder stays closed.
+- `setup-core.sh` also refuses a relative Core path that ends in a line break, and an argument
+  that still holds the `${user_config.` placeholder, with exit 2.
+- `wiki-index.sh` titles `docs/INDEX.md` with the project folder's real name when given `.`, `..`
+  or a path ending in a slash; before, `--check` and `wiki-check.sh` called a current index stale.
 - `lib.sh tree-state` no longer prints a shell `Permission denied` line when an untracked file
   cannot be read; it still prints its one line and exits 0.
 - Reading a large settings file (up to the 64 KB limit) stays fast when the keys are near its end.
