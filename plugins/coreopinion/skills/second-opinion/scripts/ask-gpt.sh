@@ -82,7 +82,8 @@ if [ -r "$list_file" ]; then
   done < "$list_file"
 fi
 [ -n "$deny" ] || { echo "ask-gpt.sh: no secret patterns in $list_file; nothing was run" >&2; exit 2; }
-profile='permissions.review.filesystem={":minimal"="read", ":workspace_roots"={"."="read"'"$deny"'}}'
+# ":minimal" alone leaves /tmp and /var/tmp writable (macOS, codex 0.166): the four entries make them read-only.
+profile='permissions.review.filesystem={":minimal"="read", "/tmp"="read", "/private/tmp"="read", "/var/tmp"="read", "/private/var/tmp"="read", ":workspace_roots"={"."="read"'"$deny"'}}'
 # shellcheck disable=SC2086
 codex exec --ignore-user-config -c 'default_permissions="review"' -c "$profile" -c web_search="disabled" \
   -C "$dir" -c model_reasoning_effort="$effort" --ephemeral $extra \

@@ -200,10 +200,9 @@ assert_eq "$got" "a.sh;" "empty-tree base lists staged files in a repo without c
 # the user confirms the file list before anything is sent
 assert_contains "$S" 'wait for the'
 assert_contains "$S" 'Nothing is sent before'
-# what read-only really confines: honest wording, narrowed profile, user config off (in the run script)
+# what read-only really confines: honest wording, narrowed profile, user config off (in the run script; the
+# flags are checked below on the arguments codex gets)
 A="$P/skills/second-opinion/scripts/ask-gpt.sh"
-assert_contains "$A" 'default_permissions='
-assert_contains "$A" '--ignore-user-config'
 assert_contains "$A" 'web_search="disabled"'
 # the documented root name of codex 0.166 (":project_roots" is a legacy alias)
 assert_contains "$A" '":workspace_roots"'
@@ -246,6 +245,17 @@ TP="$(tmpf)"; printf '%s' "$GR" > "$TP/dir"; printf 'p\n' > "$TP/prompt.md"
 ( PATH="$SANDBOX/stub:$PATH" bash "$A" "$TP" >/dev/null 2>&1 )
 profile="$(grep '^permissions\.review\.filesystem=' "$SANDBOX/args.txt" 2>/dev/null | head -1)"
 assert_eq "${profile:+found}" "found" "ask-gpt.sh passes the review permission profile"
+# The sandbox of the run, on the arguments codex really gets (one per line in args.txt): user config off, the
+# review profile chosen, nothing kept, no flag or value that widens it; and the profile without its deny
+# entries is exactly: minimal system paths, the temp folders and the project, all read-only.
+for a in '--ignore-user-config' 'default_permissions="review"' '--ephemeral'; do
+  grep -qx -- "$a" "$SANDBOX/args.txt" 2>/dev/null && pass || fail "codex gets the argument $a"
+done
+assert_eq "$(grep -cE 'danger|bypass|workspace-write|full-auto' "$SANDBOX/args.txt" 2>/dev/null)" "0" "no argument of codex widens the sandbox"
+assert_eq "$(grep -c '^permissions\.' "$SANDBOX/args.txt" 2>/dev/null)" "1" "codex gets one permission profile"
+assert_eq "$(printf '%s\n' "$profile" | sed 's/, "\*\*\/[^"]*"="deny"//g')" \
+  'permissions.review.filesystem={":minimal"="read", "/tmp"="read", "/private/tmp"="read", "/var/tmp"="read", "/private/var/tmp"="read", ":workspace_roots"={"."="read"}}' \
+  "the profile without its deny entries: read-only, the project and minimal paths"
 # (a) every pattern is in the profile, denied
 missing="$(printf '%s\n' "$patterns" | while IFS= read -r g; do
   has "$profile" "\"**/$g\"=\"deny\"" || printf ' %s' "$g"
@@ -281,6 +291,23 @@ if command -v codex >/dev/null 2>&1 && codex sandbox --help >/dev/null 2>&1; the
       ( cd "$R5" && codex sandbox -c 'default_permissions="review"' -c "$profile" cat "$f" >/dev/null 2>&1 ) && open="$open $f"
     done
     assert_eq "${open:-none}" "none" "the codex profile blocks every secret the filter drops"
+    # No writes: not in the project, and not in /tmp or /var/tmp (":minimal" alone leaves both writable, macOS
+    # codex 0.166). Reading a file there still works. The two names are in the real temp folders: removed below.
+    sbx() { ( cd "$R5" && codex sandbox -c 'default_permissions="review"' -c "$profile" "$@" ) 2>/dev/null; }
+    u="coreopinion-test.$$.$RANDOM"
+    for d in /tmp /var/tmp; do
+      [ -d "$d" ] && [ -w "$d" ] || continue
+      sbx sh -c "echo w > $d/$u" >/dev/null
+      [ ! -e "$d/$u" ] && pass || fail "write to $d is refused"
+      printf 'hello\n' > "$d/$u"
+      assert_eq "$(sbx cat "$d/$u")" "hello" "a file in $d is still read"
+      sbx sh -c "echo changed > $d/$u" >/dev/null; sbx rm -f "$d/$u" >/dev/null
+      assert_eq "$(cat "$d/$u" 2>/dev/null)" "hello" "a file in $d is not changed or deleted"
+      rm -f "$d/$u"
+    done
+    sbx touch new.txt >/dev/null
+    assert_no_file "$R5/new.txt"
+    assert_eq "$(sbx cat ok.txt)" "x" "an ordinary project file is still read"
   elif ( cd "$R5" && codex sandbox cat ok.txt >/dev/null 2>&1 ); then
     fail "codex sandbox reads ok.txt without the review profile but not with it: the profile is broken"
   else
