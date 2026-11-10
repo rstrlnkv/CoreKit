@@ -178,6 +178,61 @@ assert_exit 0 bash "$UNDO" "$OLD"
 assert_no_file "$C/old.txt"
 assert_no_file "$K/old-step.md"
 
+# a step that touches a file whose name holds a line break (in the code repo, in the docs): undo-step lists
+# paths one per line, so it refuses with one line before anything changes
+NL=$'new\nline.txt'
+echo n > "$P/docs/$NL"; bash "$SAVE" "docs line break" >/dev/null 2>&1; NLD=$(step_id "$CORE_DIR")
+echo n > "$C/$NL"; echo n > "$C/nl-plain.txt"; bash "$SAVE" "code line break" >/dev/null 2>&1; NLC=$(step_id "$C")
+[ -n "$NLD" ] && [ -n "$NLC" ] && [ "$NLD" != "$NLC" ] && pass || fail "the line-break steps were not saved: '$NLD' '$NLC'"
+for id in "$NLC" "$NLD"; do
+  before=$(snap_tree "$C" "$CORE_DIR")
+  OUT=$(bash "$UNDO" "$id" 2>&1 >/dev/null); rc=$?
+  assert_eq "$rc" "1" "undo of a step with a line break in a file name ($id)"
+  assert_eq "$(printf '%s\n' "$OUT" | grep -c 'line break')" "1" "no line that names the line break: $OUT"
+  assert_eq "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "1" "the refusal is not one line: $OUT"
+  assert_eq "$(snap_tree "$C" "$CORE_DIR")" "$before" "a refused line-break undo changed the repos"
+  assert_eq "$(git -C "$C" status --porcelain)" "" "a refused line-break undo left the code repo dirty"
+  assert_eq "$(git -C "$CORE_DIR" status --porcelain -- u-app)" "" "a refused line-break undo left the docs dirty"
+  no_revert_left
+done
+
+# failure path: the Core index holds an unresolved merge (another project's file). undo-step refuses and
+# changes nothing; with the conflict gone the same step is undone.
+echo um > "$C/um.txt"; echo um > "$P/docs/um.md"; bash "$SAVE" "um step" >/dev/null 2>&1; UM=$(step_id "$C")
+for n in 1 2 3; do
+  printf '100644 %s %s\tother/conflict.md\n' "$(echo "side $n" | git -C "$CORE_DIR" hash-object -w --stdin)" "$n"
+done | git -C "$CORE_DIR" update-index --index-info
+before=$(snap_tree "$C" "$CORE_DIR"); unmerged=$(git -C "$CORE_DIR" ls-files -u)
+assert_exit 1 bash "$UNDO" "$UM"
+echo "$OUT" | grep -qF 'a repo has unresolved merge conflicts. Resolve them first.' && pass || fail "unmerged Core index: undo refuses, exit 1: $OUT"
+assert_eq "$(snap_tree "$C" "$CORE_DIR")" "$before" "unmerged Core index: a refused undo changed the repos"
+assert_eq "$(git -C "$CORE_DIR" ls-files -u)" "$unmerged" "unmerged Core index: the unmerged entry changed"
+no_revert_left
+git -C "$CORE_DIR" rm -q --cached other/conflict.md
+assert_exit 0 bash "$UNDO" "$UM"
+assert_no_file "$C/um.txt"; assert_no_file "$P/docs/um.md"
+
+# a step whose docs change a later step put back by hand: the Core revert changes nothing, so the code
+# commit is undone and the Core gets no commit
+echo A > "$P/docs/pb.md"; bash "$SAVE" pb0 >/dev/null 2>&1
+echo B > "$P/docs/pb.md"; echo pb > "$C/pb.txt"; bash "$SAVE" pb1 >/dev/null 2>&1; PB=$(step_id "$C")
+echo A > "$P/docs/pb.md"; bash "$SAVE" pb2 >/dev/null 2>&1
+core_head=$(git -C "$CORE_DIR" rev-parse HEAD)
+assert_exit 0 bash "$UNDO" "$PB"
+assert_eq "$OUT" "reverted code (pb1)" "undo of a step whose docs were put back"
+assert_no_file "$C/pb.txt"
+assert_eq "$(git -C "$CORE_DIR" rev-parse HEAD)" "$core_head" "no Core commit when the revert changes nothing"
+assert_eq "$(cat "$P/docs/pb.md")" "A" "the docs put back by hand changed"
+no_revert_left
+
+# a project whose code repo has no commit yet: one plain line, no raw git line
+N="$SANDBOX/Projects/Nocommit"; mkdir -p "$N" "$CORE_DIR/nocommit"; echo "# nocommit" > "$CORE_DIR/nocommit/CLAUDE.md"
+git -C "$CORE_DIR" add nocommit; git -C "$CORE_DIR" commit -q -m "nocommit docs" -- nocommit
+git -C "$N" init -q; ln -s "$CORE_DIR/nocommit/CLAUDE.md" "$N/CLAUDE.local.md"; echo CLAUDE.local.md >> "$N/.git/info/exclude"
+OUT=$(cd "$N" && bash "$UNDO" 2>&1); rc=$?
+assert_eq "$rc" "1" "undo-step in a repo with no commit"
+assert_eq "$OUT" "No saved step to undo." "undo-step in a repo with no commit prints more than its own line"
+
 # undo-step only touches the current project's steps: the other project's docs stay
 new_sandbox; setup_core; sync_tools
 scaffold_old app-a; scaffold_old app-b

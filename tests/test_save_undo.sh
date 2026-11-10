@@ -436,6 +436,99 @@ unbounded=$(grep -E '(^| )log( |$)' "$SANDBOX/git-calls" | grep -vE '(^| )(-n [0
 assert_eq "$unbounded" "" "save ran git log without a count limit"
 assert_eq "$(git -C "$C" log -1 --format=%s)" "Bounded" "save through the wrapper did not commit"
 
+# A new-layout project whose code folder holds a nested git repo in a subfolder named code (an ignored
+# checkout of something else): save works on the project and its Core docs, never inside the nested repo.
+mkdir -p "$F/code"; git -C "$F/code" init -q; echo "code/" >> "$F/.git/info/exclude"
+echo "n4" > "$F/n.txt"; echo "doc4" > "$CORE_DIR/foo/d.md"
+(cd "$F" && bash "$SAVE" "Nested code repo") > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "0" "save beside a nested code repo: $(cat "$SANDBOX/out")"
+assert_contains "$SANDBOX/out" "saved code"; assert_contains "$SANDBOX/out" "saved docs"
+assert_eq "$(git -C "$F" log -1 --format=%s)" "Nested code repo" "nested code repo: the project's code commit"
+assert_eq "$(commit_count "$F/code")" "0" "save committed inside the nested repo"
+assert_no_file "$F/code/.git/hooks/pre-commit"
+# the same from a linked worktree, whose .git is a file
+mkdir -p "$FW/code"; git -C "$FW/code" init -q; echo "wt2" > "$FW/wt.txt"
+(cd "$FW" && bash "$SAVE" "Nested code repo, worktree") > "$SANDBOX/out" 2>&1
+assert_contains "$SANDBOX/out" "saved code"
+assert_eq "$(git -C "$FW" log -1 --format=%s)" "Nested code repo, worktree" "nested code repo in a worktree: the code commit"
+
+# An empty Core folder that save's path list names (hooks/), or one that holds only an ignored file (bin/):
+# git knows no file there. The docs are still committed, a renamed docs file with both its names.
+mkdir "$CORE_DIR/hooks"
+echo "eh" > "$C/eh.txt"; mv "$P/docs/features/f.md" "$P/docs/features/g.md"
+(cd "$C" && bash "$SAVE" "Empty hooks folder") > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "0" "save with an empty <Core>/hooks: $(cat "$SANDBOX/out")"
+assert_contains "$SANDBOX/out" "saved code"; assert_contains "$SANDBOX/out" "saved docs"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain -- save-app)" "" "docs left uncommitted beside an empty <Core>/hooks"
+assert_eq "$(git -C "$CORE_DIR" show --name-only --no-renames --format= HEAD | LC_ALL=C sort | tr '\n' ' ')" \
+  "save-app/docs/features/f.md save-app/docs/features/g.md " "the renamed docs file in the step commit"
+rmdir "$CORE_DIR/hooks"; mkdir "$CORE_DIR/bin"; echo local > "$CORE_DIR/bin/local"; echo "bin/local" >> "$CORE_DIR/.git/info/exclude"
+echo "eb" > "$C/eh.txt"; echo "eb" >> "$P/docs/brief.md"
+(cd "$C" && bash "$SAVE" "Ignored file in bin") > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "0" "save with only an ignored file in <Core>/bin: $(cat "$SANDBOX/out")"
+assert_contains "$SANDBOX/out" "saved docs"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain -- save-app)" "" "docs left uncommitted beside an ignored <Core>/bin file"
+assert_file "$CORE_DIR/bin/local"
+
+# The Core folders bin/ and hooks/ that corecrew 0.1.x wrote (reference/older-formats.md): corecrew no longer
+# writes there, but a change or a deletion there still rides along with the step.
+mkdir -p "$CORE_DIR/hooks"; echo x > "$CORE_DIR/bin/x"; echo y > "$CORE_DIR/hooks/y"
+(cd "$C" && bash "$SAVE" "0.1.x folders") >/dev/null 2>&1
+echo x2 > "$CORE_DIR/bin/x"; rm -r "$CORE_DIR/hooks"
+cps="$(CORE_DIR="$CORE_DIR" bash "$LIB" core-paths save-app | tr ' ' '\n')"
+for f in bin hooks; do
+  printf '%s\n' "$cps" | grep -qx "$f" && pass || fail "core-paths does not list the 0.1.x folder $f: $cps"
+done
+(cd "$C" && bash "$SAVE" "0.1.x folders changed") > "$SANDBOX/out" 2>&1
+assert_eq "$(git -C "$CORE_DIR" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ' ')" "bin/x hooks/y " "save did not commit the 0.1.x folders"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain -- bin hooks)" "" "0.1.x folders left uncommitted"
+
+# A step with thousands of docs files on long paths: their names together are longer than one command line may
+# be (ARG_MAX), so the docs commit must not take the files as arguments. All of them land in one docs commit.
+big="$P/docs/$(printf '%0120d' 0 | tr 0 x)/$(printf '%0120d' 0 | tr 0 y)"; mkdir -p "$big"
+(cd "$big" && i=0 && while [ $i -lt 4500 ]; do : > "file-$i.md"; i=$((i + 1)); done)
+echo "md" > "$C/eh.txt"
+(cd "$C" && bash "$SAVE" "Many docs") > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "0" "save with 4500 long docs paths: $(tail -n 3 "$SANDBOX/out")"
+assert_contains "$SANDBOX/out" "saved docs"
+assert_eq "$(git -C "$CORE_DIR" status --porcelain -- save-app | wc -l | tr -d ' ')" "0" "docs left uncommitted after a many-file step"
+assert_eq "$(git -C "$CORE_DIR" show --name-only --format= HEAD | grep -c '/file-[0-9]*\.md$')" "4500" "many docs files in the step commit"
+git -C "$CORE_DIR" rm -rq -- "save-app/docs/${big#"$P/docs/"}"; echo "md2" > "$C/eh.txt"
+(cd "$C" && bash "$SAVE" "Many docs removed") >/dev/null 2>&1
+
+# failure path: the user's own pre-commit hook in the code repo refuses the commit. Nothing is saved: no docs
+# commit follows a code commit that was not made. With the hook gone the same step is saved.
+printf '#!/bin/sh\necho "user hook refused" >&2\nexit 1\n' > "$C/.git/hooks/pre-commit"; chmod +x "$C/.git/hooks/pre-commit"
+echo "uh" > "$C/uh.txt"; echo "uh" >> "$P/docs/brief.md"; nc=$(commit_count "$C"); nd=$(commit_count "$CORE_DIR")
+(cd "$C" && bash "$SAVE" "User hook refuses") > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "1" "save with a refusing code pre-commit hook"
+assert_contains "$SANDBOX/out" "Code commit failed; nothing saved."; assert_not_contains "$SANDBOX/out" "saved code"
+assert_eq "$(commit_count "$C")" "$nc" "a refused code commit was made"
+assert_eq "$(commit_count "$CORE_DIR")" "$nd" "docs committed although the code commit failed"
+assert_eq "$(cat "$C/uh.txt")" "uh" "a refused save changed a file"
+rm -f "$C/.git/hooks/pre-commit"
+(cd "$C" && bash "$SAVE" "User hook gone") > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "0" "save after the refusing hook is gone: $(cat "$SANDBOX/out")"
+assert_eq "$(commit_count "$C")" "$((nc+1))"; assert_eq "$(commit_count "$CORE_DIR")" "$((nd+1))"
+
+# old layout with no Core setting at all (CORE_DIR unset, no Core at ~/Projects/Core): the code folder's
+# place inside the Core finds it
+echo "ne" > "$C/ne.txt"; echo "ne" >> "$P/docs/brief.md"
+(cd "$C" && env -u CORE_DIR -u CLAUDE_PLUGIN_OPTION_CORE_DIR bash "$SAVE" "Old layout, no env") > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "0" "old-layout save with CORE_DIR unset: $(cat "$SANDBOX/out")"
+assert_contains "$SANDBOX/out" "saved code"; assert_contains "$SANDBOX/out" "saved docs"
+assert_no_file "$HOME/Projects/Core"
+
+# save inside the unrelated repo named like the old-layout project (twin-app, above): refused, no commit anywhere
+echo "t" > "$T/t.txt"; nc=$(commit_count "$CORE_DIR/twin-app/code"); nd=$(commit_count "$CORE_DIR")
+(cd "$T" && bash "$SAVE" "In the twin") > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "1" "save inside an unrelated repo named like a project: $(cat "$SANDBOX/out")"
+assert_contains "$SANDBOX/out" "This folder is not a corecrew project"
+assert_eq "$(commit_count "$T")" "0" "save committed in the unrelated repo"
+assert_eq "$(commit_count "$CORE_DIR/twin-app/code")" "$nc" "save in the twin committed in the project"
+assert_eq "$(commit_count "$CORE_DIR")" "$nd" "save in the twin committed in the Core"
+assert_no_file "$T/.git/hooks/pre-commit"
+
 # a Core and a tools folder whose paths have spaces: save and undo-step still work
 SANDBOX="$(mktemp -d "$TEST_TMP/sb.XXXXXX")"; export CORE_DIR="$SANDBOX/my projects/Core"
 export CLAUDE_PLUGIN_DATA="$SANDBOX/plugin data"; export COREDEV_TOOLS="$CLAUDE_PLUGIN_DATA/tools"; sync_tools; setup_core
@@ -444,5 +537,17 @@ scaffold_old sp-app; C="$CORE_DIR/sp-app/code"
 echo s > "$C/s.txt"; (cd "$C" && bash "$SAVE" s) >/dev/null 2>&1
 (cd "$C" && bash "$UNDO") >/dev/null 2>&1
 assert_no_file "$C/s.txt"
+
+# --push with a Core that has no remote: the step is saved (here there is none), the push is skipped, exit 0
+(cd "$C" && bash "$SAVE" --push) > "$SANDBOX/out" 2>&1; rc=$?
+assert_eq "$rc" "0" "save --push with no Core remote: $(cat "$SANDBOX/out")"
+assert_contains "$SANDBOX/out" "skipped push"; assert_not_contains "$SANDBOX/out" "pushed Core"
+
+# old layout, a Core without .coredev, save run from <Core>/<name>/: the code folder below is found
+git -C "$CORE_DIR" rm -q .coredev; git -C "$CORE_DIR" commit -q -m "no .coredev"
+echo o > "$C/o.txt"
+(cd "$CORE_DIR/sp-app" && bash "$SAVE" "From the project folder") > "$SANDBOX/out" 2>&1
+assert_contains "$SANDBOX/out" "saved code"
+assert_eq "$(git -C "$C" log -1 --format=%s)" "From the project folder" "save from <Core>/<name>/ of an old-layout project"
 
 finish

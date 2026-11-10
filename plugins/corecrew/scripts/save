@@ -82,10 +82,16 @@ docs_failed() {
 if [ -n "$CORE_DIRTY" ]; then
   # shellcheck disable=SC2086
   git -C "$CORE" add -A -- $CORE_PATHS || docs_failed "save: git could not write $CORE/.git (read-only? in Codex allow the commit when asked)."
-  # shellcheck disable=SC2086
-  if ! git -C "$CORE" diff --cached --quiet -- $CORE_PATHS; then
+  # The commit names the CORE_PATHS entries with a staged change, not all of them: an entry git knows no file
+  # under (an empty folder, one with only ignored files) would fail the commit as a pathspec. It names no
+  # single file either: the files of a large step do not fit on one command line.
+  set --
+  for p in $CORE_PATHS; do
+    git -C "$CORE" diff --cached --quiet -- "$p" || set -- "$@" "$p"
+  done
+  if [ $# -gt 0 ]; then
     git -C "$CORE" commit -q -m "$MSG" -m "Step-Id: $ID
-Project: $NAME" -- $CORE_PATHS || docs_failed "Docs commit failed."
+Project: $NAME" -- "$@" || docs_failed "Docs commit failed."
     echo "saved docs"; saved=1
   fi
 fi

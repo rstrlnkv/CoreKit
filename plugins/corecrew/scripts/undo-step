@@ -20,7 +20,7 @@ core_mine() {
   local x="" p
   for p in $CORE_PATHS; do x="$x :(exclude)$p"; done
   git -C "$CORE" log --format=%H -- "$NAME"
-  { git -C "$CODE" log --format=%B | sed -n 's/^Step-Id: /i /p'
+  { git -C "$CODE" log --format=%B 2>/dev/null | sed -n 's/^Step-Id: /i /p'
     git -C "$CORE" log --format='o %H' -- . $x
     git -C "$CORE" log --format='%x01 %H %(trailers:key=Project,valueonly,separator=%x2C)%n%B' -- $CORE_PATHS; } |
     awk -v name="$NAME" 'BEGIN { m = sprintf("%c", 1) }
@@ -35,10 +35,11 @@ core_mine() {
 }
 MINE=$(core_mine | awk '!s[$0]++')
 
-# log_of <code|core> <git log args...> — Core history is limited to this project's commits.
+# log_of <code|core> <git log args...> — Core history is limited to this project's commits. A code repo
+# with no commit yet has no steps: git's own line about it is not shown.
 log_of() {
   local which="$1"; shift
-  if [ "$which" = code ]; then git -C "$CODE" log "$@"
+  if [ "$which" = code ]; then git -C "$CODE" log "$@" 2>/dev/null
   elif [ -n "$MINE" ]; then printf '%s\n' "$MINE" | git -C "$CORE" log --no-walk --stdin "$@"; fi
 }
 repo_of() { [ "$1" = code ] && echo "$CODE" || echo "$CORE"; }
@@ -77,6 +78,18 @@ for w in code core; do
   for c in $(commits_of "$w" "$ID"); do
     if [ "$(git -C "$(repo_of "$w")" rev-list --parents -n1 "$c" | wc -w | tr -d ' ')" = "1" ]; then
       echo "Step $ID is the project's first step (its creation) and can't be undone with undo-step." >&2
+      exit 1
+    fi
+  done
+done
+
+# The paths of a step are listed one per line (paths_of, changed_of, roll_back), so a file name with a
+# line break would be read as two wrong names: such a step is refused before anything changes.
+for w in code core; do
+  r=$(repo_of "$w")
+  for c in $(commits_of "$w" "$ID"); do
+    if [ "$(git -C "$r" diff-tree --no-commit-id --name-only -r --no-renames -z "$c" | tr -cd '\n' | wc -c | tr -d ' ')" != 0 ]; then
+      echo "Could not undo step $ID: a file it changed in $r has a line break in its name. Undo that step by hand with git revert. Nothing was changed." >&2
       exit 1
     fi
   done
