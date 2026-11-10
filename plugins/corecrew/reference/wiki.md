@@ -76,5 +76,5 @@ file, section Wiki without types.
 
 Also `wiki-check: INDEX.md: missing` (other checks still run) and `wiki-check: docs: missing docs/ directory` (nothing else is checked).
 `--changed` takes code-root-relative paths (as `git diff --name-only` prints there). A changed page
-is the absolute `<Core>/<project>/docs/<page>.md`. List the changed pages in the Core (read-only):
-`{ git -C <Core> diff --name-only HEAD -- <project>/docs; git -C <Core> ls-files --others --exclude-standard -- <project>/docs; }`.
+is the absolute `<Core>/<project>/docs/<page>.md` or `docs/<page>.md`, as this lists them (read-only):
+`{ git -C <Core>/<project> diff --name-only --relative HEAD -- docs; git -C <Core>/<project> ls-files --others --exclude-standard -- docs; }`.

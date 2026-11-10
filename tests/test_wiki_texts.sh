@@ -160,4 +160,35 @@ for f in "$PLUGIN"/agents/*.md; do
   grep -F 'docs/INDEX.md' "$f" | grep -qi 'generated' && pass || fail "$(basename "$f") does not call docs/INDEX.md the generated map"
 done
 
+# 9. wiki.md's command that lists the changed pages prints them in a form wiki-check --changed reads as pages:
+# run as written (only <Core> and <project> filled in) in a Core whose path holds a space, & and |, its lines
+# and the changed code file give no drift line. One page is edited (git diff lists it), one is new (ls-files).
+new_sandbox
+TC="$SANDBOX/My & Co/Core|x"; TP=proj; TCODE="$SANDBOX/code dir"
+mkdir -p "$TC/$TP/docs/features" "$TCODE/src"; : > "$TCODE/src/a.c"
+wpage() { printf -- '---\ntype: feature\nstatus: active\ndescription: %s\nfiles: [src/a.c]\nrelated: []\nupdated: 2026-11-0%s\n---\n\n## Notes\n\n%s\n' "$2" "$3" "$4" > "$TC/$TP/docs/features/$1.md"; }
+wpage login "the login page" 1 "First text."
+bash "$SCRIPTS/wiki-index.sh" "$TC/$TP" >/dev/null
+git init -q "$TC" && git -C "$TC" add -A && git -C "$TC" commit -q -m one || fail "could not build the Core fixture"
+wpage login "the login page" 2 "Text after the code change."
+wpage signup "the sign-up page" 2 "A new page."
+bash "$SCRIPTS/wiki-index.sh" "$TC/$TP" >/dev/null
+cmd="$(grep -o '`{ git -C [^`]*`' "$WK" | tr -d '`')"
+assert_eq "$(printf '%s\n' "$cmd" | grep -c .)" "1" "wiki.md holds one command that lists the changed pages"
+# shellcheck disable=SC2016  # the variable names are put into the command text; eval expands them
+cmd="$(printf '%s\n' "$cmd" | sed -e 's/<Core>/"$TC"/g' -e 's/<project>/"$TP"/g')"
+listed="$(eval "$cmd" 2>&1)"
+printf '%s\n' "$listed" | grep -q 'features/login\.md$' && pass || fail "the command does not list the edited page: $listed"
+printf '%s\n' "$listed" | grep -q 'features/signup\.md$' && pass || fail "the command does not list the new page: $listed"
+set --; while IFS= read -r l; do [ -z "$l" ] || set -- "$@" "$l"; done <<EOF
+$listed
+EOF
+assert_exit 0 bash "$CHECK" "$TC/$TP" --code "$TCODE" --changed "$@" src/a.c
+assert_eq "$OUT" "" "the listed pages are read as changed pages: no drift"
+# the fixture is live: without the page paths both pages drift
+assert_exit 1 bash "$CHECK" "$TC/$TP" --code "$TCODE" --changed src/a.c
+assert_eq "$OUT" "wiki-check: features/login.md: drift: src/a.c changed, page not updated
+wiki-check: features/signup.md: drift: src/a.c changed, page not updated" "without the pages: drift"
+assert_contains "$WK" 'or `docs/<page>.md`'
+
 finish

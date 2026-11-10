@@ -544,6 +544,7 @@ assert_eq "$OUT" "" "no exec bits: wiki-index --check on a clean project prints 
 
 # Rules file and docs.
 assert_file "$PLUGIN/reference/wiki.md"
-assert_contains "$PLUGIN/reference/wiki.md" "git -C <Core> diff --name-only HEAD -- <project>/docs"
-assert_contains "$PLUGIN/reference/wiki.md" "git -C <Core> ls-files --others --exclude-standard -- <project>/docs"
+# (the command that lists the changed pages is run as written in test_wiki_texts.sh)
+assert_contains "$PLUGIN/reference/wiki.md" "git -C <Core>/<project> diff --name-only --relative HEAD -- docs"
+assert_contains "$PLUGIN/reference/wiki.md" "git -C <Core>/<project> ls-files --others --exclude-standard -- docs"
 finish
