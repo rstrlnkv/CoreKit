@@ -17,12 +17,11 @@ rel_core() {
 esc() { printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'; }
 
 # render <template> <dest> — fill the template placeholders. Reads the caller's variables NAME,
-# PURPOSE, P (the project folder in the Core), DATE; CORE_DIR and CORE_NAME come from load_settings.
+# PURPOSE, P (the project folder in the Core), DATE; CORE_NAME comes from load_settings.
 render() {
   sed -e "s|{{NAME}}|$(esc "$NAME")|g" \
       -e "s|{{PURPOSE}}|$(esc "$PURPOSE")|g" \
       -e "s|{{PROJECT_DIR}}|$(esc "$P")|g" \
-      -e "s|{{CORE_DIR}}|$(esc "$CORE_DIR")|g" \
       -e "s|{{CORE_NAME}}|$(esc "$CORE_NAME")|g" \
       -e "s|{{DATE}}|$DATE|g" "$1" > "$2"
 }
