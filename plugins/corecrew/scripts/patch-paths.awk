@@ -54,7 +54,7 @@ function flush() { if (pending != "") { emit("W", pending); pending = "" } }
 function bad() { xd = 1; printf "X\tunreadable\n" }
 function pathof(t, prefix,   p) { p = trim(substr(t, length(prefix) + 1)); gsub(/[\t\r]/, "", p); return p }
 {
-  line = $0; sub(/\r$/, "", line)
+  line = $0
   if (state == "out") {
     if (trim(line) == "*** Begin Patch") {
       state = "hdr"; begun = 1
