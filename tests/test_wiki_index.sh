@@ -196,6 +196,26 @@ OUT="$(TMPDIR="$TD" bash "$I" "$MO" 2>&1)"; assert_eq "$?" "0" "temp case: write
 OUT="$(TMPDIR="$TD" bash "$I" "$MO" 2>&1)"; assert_eq "$OUT" "skipped docs/INDEX.md" "temp case: skip"; tmp_left "a skipped write"
 OUT="$(TMPDIR="$TD" bash "$I" "$OLD6" 2>&1)"; assert_eq "$?" "1" "temp case: 0.6 wiki exit"; tmp_left "the 0.6 refusal"
 
+# --- a relative ".", ".." or a trailing slash: the title is the folder's name, as with the absolute path,
+# so --check and wiki-check.sh agree with a current index
+RP="$SANDBOX/rel/demo-app"; mkdir -p "$RP/docs"
+printf -- '---\ntype: brief\nstatus: active\ndescription: d\n---\n' > "$RP/docs/brief.md"
+OUT="$(bash "$I" "$RP" 2>&1)"; assert_eq "$OUT" "created docs/INDEX.md" "relative case: created from the absolute path"
+assert_eq "$(head -1 "$RP/docs/INDEX.md")" "# demo-app wiki" "relative case: title from the absolute path"
+OUT="$(cd "$RP" && bash "$I" . --check 2>&1)"; assert_eq "$?:$OUT" "0:" "relative case: '.' --check on a current index"
+OUT="$(cd "$RP" && bash "$I" ./ --check 2>&1)"; assert_eq "$?:$OUT" "0:" "relative case: './' --check on a current index"
+OUT="$(cd "$RP/docs" && bash "$I" .. --check 2>&1)"; assert_eq "$?:$OUT" "0:" "relative case: '..' --check on a current index"
+OUT="$(cd "$RP/docs" && bash "$I" ../ --check 2>&1)"; assert_eq "$?:$OUT" "0:" "relative case: '../' --check on a current index"
+OUT="$(cd "$RP" && bash "$I" . 2>&1)"; assert_eq "$OUT" "skipped docs/INDEX.md" "relative case: '.' write skips a current index"
+OUT="$(cd "$RP/docs" && bash "$I" .. 2>&1)"; assert_eq "$OUT" "skipped docs/INDEX.md" "relative case: '..' write skips a current index"
+assert_eq "$(head -1 "$RP/docs/INDEX.md")" "# demo-app wiki" "relative case: title after the relative runs"
+OUT="$(cd "$RP" && bash "$SCRIPTS/wiki-check.sh" . 2>&1)"
+case "$OUT" in *INDEX*) fail "relative case: wiki-check reports INDEX.md: $OUT" ;; *) pass ;; esac
+rm "$RP/docs/INDEX.md"
+OUT="$(cd "$RP/docs" && bash "$I" .. 2>&1)"; assert_eq "$OUT" "created docs/INDEX.md" "relative case: '..' write creates"
+assert_eq "$(head -1 "$RP/docs/INDEX.md")" "# demo-app wiki" "relative case: title from '..'"
+OUT="$(bash "$I" "$RP/" --check 2>&1)"; assert_eq "$?:$OUT" "0:" "relative case: absolute path agrees with '..'"
+
 # --- usage: exit 2
 assert_exit 2 bash "$I"
 assert_exit 2 bash "$I" "$FX/wiki-index" --bogus
