@@ -86,7 +86,7 @@ grep -qE '^ *find plugins tests scripts |^ *find .*\bscripts\b.*-prune' "$WF" &&
 # "Quote paths" in the shipped scripts: a second ShellCheck call, fed from the plugins/ entries of the same list,
 # reports every unquoted expansion (SC2086, an info-level note the first call leaves out)
 sc="$(job "$WF" shellcheck)"
-printf '%s\n' "$sc" | grep -F -- '--include=SC2086' | grep -F "grep '^plugins/' " | grep -qF -- '--severity=info' \
+printf '%s\n' "$sc" | grep -F -- '--include=SC2086' | grep -E "^ *grep '\\^plugins/' " | grep -qF -- '--severity=info' \
   && pass || fail "the shellcheck job runs --severity=info --include=SC2086 over the plugins/ entries of the file list"
 case "$sc" in *"xargs -0 shellcheck --severity=warning"*) pass ;; *) fail "the shellcheck job still runs --severity=warning over every shell file" ;; esac
 
