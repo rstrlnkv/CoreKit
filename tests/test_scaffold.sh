@@ -18,7 +18,40 @@ assert_exit 2 bash "$S" --name "Bad Name"
 
 # --- valid name creates the full layout
 new_sandbox; setup_core
+# (first a project whose name starts with the next one's name, with a purpose that holds every character sed
+# treats specially in a replacement: the files hold it as typed, and the shorter name still gets its own line)
+TRICKY='A | tricky & purpose \ here'
+assert_exit 0 bash "$S" --name demo-app-two --purpose "$TRICKY"
+for f in CLAUDE.md docs/brief.md; do
+  grep -qxF -- "$TRICKY" "$CORE_DIR/demo-app-two/$f" && pass || fail "purpose kept as typed: $f: $(grep -n tricky "$CORE_DIR/demo-app-two/$f")"
+done
+grep -qxF -- "- demo-app-two — $TRICKY — demo-app-two/" "$CORE_DIR/PROJECTS.md" && pass || fail "purpose kept as typed: PROJECTS.md: $(cat "$CORE_DIR/PROJECTS.md")"
 assert_exit 0 bash "$S" --name demo-app --purpose "Test app"
+want1="$(cat <<'W'
+created demo-app/CLAUDE.md
+created demo-app/docs/brief.md
+created demo-app/docs/architecture.md
+created demo-app/docs/decisions/001-stack-and-architecture.md
+created demo-app/docs/wiki.base
+created demo-app/docs/.obsidian/app.json
+created demo-app/docs/.obsidian/.gitignore
+created demo-app/docs/features/
+created demo-app/docs/specs/
+created demo-app/docs/plans/
+created demo-app/docs/knowledge/
+created demo-app/docs/INDEX.md
+created ../demo-app/
+created ../demo-app/.git
+created ../demo-app/.gitignore
+created ../demo-app/.claude/settings.local.json
+created ../demo-app/.worktreeinclude
+created ../demo-app/CLAUDE.local.md
+created ../demo-app/AGENTS.md
+created PROJECTS.md entry
+W
+)"
+assert_eq "$OUT" "$want1" "first run output"
+assert_eq "$(grep -c '^- demo-app ' "$CORE_DIR/PROJECTS.md") $(grep -c '^- demo-app-two ' "$CORE_DIR/PROJECTS.md")" "1 1" "two PROJECTS.md lines"
 P="$CORE_DIR/demo-app"
 for f in CLAUDE.md docs/INDEX.md docs/brief.md docs/architecture.md \
          docs/decisions/001-stack-and-architecture.md \
@@ -162,14 +195,25 @@ assert_contains "$CORE_DIR/PROJECTS.md" "- demo-app — Test app — demo-app/"
 before=$(tree_sum "$CORE_DIR")
 before_k=$(tree_sum "$K"); before_l="$(readlink "$K/CLAUDE.local.md") $(readlink "$K/AGENTS.md")"
 assert_exit 0 bash "$S" --name demo-app --purpose "Test app"
-echo "$OUT" | grep -qxF 'skipped ../demo-app/AGENTS.md' && pass || fail "second run lacks skipped AGENTS.md: $OUT"
-echo "$OUT" | grep -q '^created' && fail "second run created files" || pass
-echo "$OUT" | grep -q '^skipped' && pass || fail "second run printed no skipped lines"
-echo "$OUT" | grep -qxF 'skipped demo-app/docs/wiki.base' && pass || fail "second run lacks skipped wiki.base: $OUT"
-echo "$OUT" | grep -qxF 'skipped demo-app/docs/.obsidian/app.json' && pass || fail "second run lacks skipped app.json: $OUT"
-echo "$OUT" | grep -qxF 'skipped demo-app/docs/.obsidian/.gitignore' && pass || fail "second run lacks skipped .obsidian/.gitignore: $OUT"
-echo "$OUT" | grep -qxF 'skipped demo-app/docs/INDEX.md' && pass || fail "second run lacks skipped INDEX.md: $OUT"
-echo "$OUT" | grep -v '^skipped' | grep -q . && fail "second run printed a non-skipped line: $OUT" || pass
+want2="$(cat <<'W'
+skipped demo-app/CLAUDE.md
+skipped demo-app/docs/brief.md
+skipped demo-app/docs/architecture.md
+skipped demo-app/docs/decisions/001-stack-and-architecture.md
+skipped demo-app/docs/wiki.base
+skipped demo-app/docs/.obsidian/app.json
+skipped demo-app/docs/.obsidian/.gitignore
+skipped demo-app/docs/INDEX.md
+skipped ../demo-app/.git
+skipped ../demo-app/.gitignore
+skipped ../demo-app/.claude/settings.local.json
+skipped ../demo-app/.worktreeinclude
+skipped ../demo-app/CLAUDE.local.md
+skipped ../demo-app/AGENTS.md
+skipped PROJECTS.md entry
+W
+)"
+assert_eq "$OUT" "$want2" "second run output"
 after=$(tree_sum "$CORE_DIR")
 assert_eq "$before" "$after" "tree changed on re-run"
 assert_eq "$(tree_sum "$K")" "$before_k" "code folder changed on re-run"
@@ -281,6 +325,10 @@ for args in "--name" "--purpose" "--name lim-app --purpose"; do
     grep -qi 'usage' "$SANDBOX/out" && pass || fail "scaffold.sh $args: no usage line: $(cat "$SANDBOX/out")"
   fi
 done
+assert_no_file "$CORE_DIR/lim-app"
+# an argument scaffold does not know is a usage error too
+assert_exit 2 bash "$S" --bogus
+assert_exit 2 bash "$S" --name lim-app --bogus
 assert_no_file "$CORE_DIR/lim-app"
 
 # --- a code-side step that fails stops the run: non-zero exit, no PROJECTS.md entry added after it
