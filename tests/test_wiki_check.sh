@@ -543,6 +543,71 @@ assert_eq "$OUT" "" "percent-encoded links to files that exist"
 printf '\nA [missing one](nope%%C3%%A9.png).\n' >> "$V/docs/features/login.md"
 check percent "wiki-check: features/login.md: broken link nope%C3%A9.png"
 
+# Link and heading forms, two pages, the whole output compared. forms.md: seven hashes are no heading (the link
+# to it is broken); a heading three times is reported once; a quoted comma does not split a related: item; a
+# ?query is cut before the file is looked up; a link title and the <...> form give the target alone.
+# forms2.md: a "#" comment line inside the related: block is not read (its wikilink would be broken).
+variant linkforms
+: > "$V/docs/features/pic.png"; : > "$V/docs/features/my pic.png"
+page features/forms.md <<'EOF'
+---
+type: feature
+status: active
+description: Link and heading forms wiki-check reads.
+files: []
+related: ["[[login|a, b]]", "[[architecture]]"]
+updated: 2026-11-03
+---
+
+# Forms
+
+## Again
+
+####### Seven
+
+Seven hashes are no heading: [[forms#Seven]]. Six are: [[forms2#Six]].
+
+## Again
+
+A [query](forms2.md?raw=1), a [title](pic.png "a title"), an [angle](<my pic.png>) and a [query on a file](pic.png?v=2).
+
+## Again
+EOF
+page features/forms2.md <<'EOF'
+---
+type: feature
+status: active
+description: A comment line inside the related block.
+files: []
+related:
+  # was "[[gone-page]]"
+  - "[[forms]]"
+updated: 2026-11-03
+---
+
+# Forms 2
+
+###### Six
+EOF
+reindex
+check linkforms "wiki-check: features/forms.md: broken wikilink [[forms#Seven]]
+wiki-check: features/forms.md: duplicate heading Again
+wiki-check: features/forms.md: use a wikilink: forms2.md?raw=1"
+# --changed ./<path> names the same code file as <path>
+check wiki-good "wiki-check: features/login.md: drift: src/login.sh changed, page not updated" --changed ./src/login.sh
+# Never green on a broken install: a sibling script that fails (exit 3) is exit 2, for the INDEX check and for the
+# page list alike.
+for sib in wiki-index.sh wiki-pages.sh; do
+  BS="$SANDBOX/broken-$sib"; cp -R "$SCRIPTS" "$BS"; printf '#!/usr/bin/env bash\nexit 3\n' > "$BS/$sib"
+  assert_exit 2 bash "$BS/wiki-check.sh" "$FX/wiki-good"
+done
+# The temp folder is removed: green, red and usage runs leave nothing in TMPDIR.
+TD="$SANDBOX/tmpdir"; mkdir "$TD"
+assert_exit 0 env TMPDIR="$TD" bash "$W" "$FX/wiki-good"
+assert_exit 1 env TMPDIR="$TD" bash "$W" "$FX/linkforms"
+assert_exit 2 env TMPDIR="$TD" bash "$W" "$FX/wiki-good" --bogus
+assert_eq "$(ls -A "$TD")" "" "temp files left in TMPDIR"
+
 # An install without exec bits (a host that drops them): the scripts run their siblings with bash, so wiki-check
 # and wiki-index work the same. Each of the three calls is seen alone below: the page list of wiki-check (a broken
 # call is exit 2), its INDEX check (a broken call is "INDEX.md stale"), the page list of wiki-index ("stale").
