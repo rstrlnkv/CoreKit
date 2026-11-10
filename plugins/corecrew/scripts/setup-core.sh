@@ -4,7 +4,8 @@
 # existing files are never overwritten (a user's README.md or PROJECTS.md stays as it is) and
 # nothing is deleted. It never creates a GitHub repo.
 # Usage: bash setup-core.sh [<core_dir>] [--dry-run]
-#   <core_dir> defaults to $CORE_DIR, then the plugin option core_dir (see lib.sh).
+#   <core_dir>: absolute or ~/...; a relative path is refused (exit 2, nothing created). Without it:
+#   $CORE_DIR, then the plugin option core_dir (see lib.sh).
 # Output, one line per item: created|skipped <item>, would create|would update <item> (dry run),
 #   updated .coredev (the file existed without "schema:" — e.g. only "app-id-prefix:" — or with an
 #   older schema number, so "schema: N" is put first and the other lines are kept as they were).
@@ -26,6 +27,13 @@ while [ $# -gt 0 ]; do
 done
 [ -z "$ARG" ] || CORE_DIR="$ARG"
 load_settings
+# The argument was rejected by load_settings (its SETTINGS_WARN record, source "env"): stop, never set up
+# the default Core in its place. An invalid plugin option or settings file keeps the documented default.
+if [ -n "$ARG" ]; then
+  case $'\n'"$SETTINGS_WARN" in *$'\n'core_dir$'\t'"$ARG"$'\t'env$'\t'*)
+    echo "setup-core: $ARG: the Core path must be absolute or start with ~/; nothing was created." >&2; exit 2 ;;
+  esac
+fi
 [ -n "$CORE_DIR" ] || { echo "setup-core: no Core path (give <core_dir>, or set core_dir, CORE_DIR or HOME); nothing was created." >&2; exit 2; }
 
 # schema_old — true when .coredev holds a schema number below this plugin's (core_ready is true).

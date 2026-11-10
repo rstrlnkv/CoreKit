@@ -78,8 +78,11 @@ mkdir -p "$CORE_DIR/bin" "$CORE_DIR/hooks" "$CORE_DIR/app/docs"
 echo old-save > "$CORE_DIR/bin/save"; echo old-hook > "$CORE_DIR/hooks/pre-commit-code"
 echo "- app" > "$CORE_DIR/PROJECTS.md"; echo x > "$CORE_DIR/app/docs/a.md"
 git init -q "$CORE_DIR"
+echo mine > "$CORE_DIR/staged.txt"; git -C "$CORE_DIR" add staged.txt   # a file the user staged before setup
 before=$(tree_sum "$CORE_DIR/bin"; tree_sum "$CORE_DIR/hooks"; tree_sum "$CORE_DIR/app")
 assert_exit 0 bash "$SC" "$CORE_DIR"
+git -C "$CORE_DIR" show --name-only --format= HEAD | grep -qxF 'staged.txt' && fail "staged.txt is in the Set up Core commit" || pass
+assert_eq "$(git -C "$CORE_DIR" status --porcelain -- staged.txt)" "A  staged.txt" "the user's staged file is still staged"
 assert_eq "$(tree_sum "$CORE_DIR/bin"; tree_sum "$CORE_DIR/hooks"; tree_sum "$CORE_DIR/app")" "$before" "0.1.x files changed"
 assert_eq "$(cat "$CORE_DIR/PROJECTS.md")" "- app" "PROJECTS.md changed"
 assert_file "$CORE_DIR/.coredev"; assert_eq "$(head -1 "$CORE_DIR/.coredev")" "schema: 2"
@@ -114,13 +117,14 @@ assert_eq "$(cat "$CORE_DIR/.coredev")" "schema: 3" "schema 3 rewritten"
 # --- schema 1 Core: only the schema line changes; .gitignore stays byte-identical
 new_sandbox
 assert_exit 0 bash "$SC" "$CORE_DIR"
-printf 'schema: 1\napp-id-prefix: com.x\n' > "$CORE_DIR/.coredev"
+printf 'schema: 1\napp-id-prefix: com.x' > "$CORE_DIR/.coredev"   # no final newline: the last line is kept too
 printf 'my-own-line\n' >> "$CORE_DIR/.gitignore"
 gi_before="$(cat "$CORE_DIR/.gitignore")"
 assert_exit 0 bash "$SC" "$CORE_DIR"
 echo "$OUT" | grep -qxF "updated .coredev" && pass || fail "schema 1 not updated: $OUT"
 assert_eq "$(head -1 "$CORE_DIR/.coredev")" "schema: 2" "schema 1 -> 2"
 assert_eq "$(sed -n 2p "$CORE_DIR/.coredev")" "app-id-prefix: com.x" "prefix kept on upgrade"
+assert_eq "$(wc -l < "$CORE_DIR/.coredev" | tr -d ' ')" "2" ".coredev lines after the upgrade"
 assert_eq "$(cat "$CORE_DIR/.gitignore")" "$gi_before" ".gitignore changed on upgrade"
 assert_exit 0 bash "$SC" "$CORE_DIR"
 echo "$OUT" | grep -qxF "skipped .coredev" && pass || fail "second run not skipped: $OUT"
@@ -199,4 +203,23 @@ fi
 
 # --- usage errors
 assert_exit 2 bash "$SC" --bogus
+
+# --- a relative <core_dir> argument is refused: nothing in the current folder, no default Core instead
+new_sandbox
+W="$SANDBOX/work"; mkdir -p "$W"
+in_dir() { ( cd "$1" && shift && "$@" ); }   # in_dir <dir> <cmd...>
+assert_exit 2 in_dir "$W" env -u CORE_DIR bash "$SC" rel
+assert_eq "$OUT" "setup-core: rel: the Core path must be absolute or start with ~/; nothing was created." "relative argument message"
+assert_no_file "$W/rel"; assert_no_file "$HOME/Projects/Core"
+assert_exit 2 in_dir "$W" env -u CORE_DIR bash "$SC" --dry-run rel
+assert_eq "$OUT" "setup-core: rel: the Core path must be absolute or start with ~/; nothing was created." "relative argument message (dry run)"
+assert_no_file "$W/rel"; assert_no_file "$HOME/Projects/Core"
+# a valid argument is not refused because the plugin option holds an invalid value
+assert_exit 0 in_dir "$W" env -u CORE_DIR CLAUDE_PLUGIN_OPTION_CORE_DIR=rel-option bash "$SC" "$SANDBOX/abs/Core"
+assert_file "$SANDBOX/abs/Core/.coredev"; assert_no_file "$HOME/Projects/Core"
+# only the argument is refused: an invalid plugin option or CORE_DIR with no argument keeps the documented default
+assert_exit 0 in_dir "$W" env -u CORE_DIR CLAUDE_PLUGIN_OPTION_CORE_DIR=rel-option bash "$SC" --dry-run
+assert_eq "$(echo "$OUT" | grep -c '^would create')" "7" "invalid option: the default Core is offered"
+assert_exit 0 in_dir "$W" env CORE_DIR=rel-env bash "$SC"
+assert_file "$HOME/Projects/Core/.coredev"; assert_no_file "$W/rel-env"
 finish
