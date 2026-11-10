@@ -36,6 +36,11 @@ assert_eq "$(CORE_DIR='${user_config.core_dir}' CLAUDE_PLUGIN_OPTION_CORE_DIR="$
 assert_eq "$(CLAUDE_PLUGIN_OPTION_CORE_DIR='${user_config.core_dir}' settings CORE_DIR)" "$RH/Projects/Core" "literal in the option -> default"
 assert_eq "$(CLAUDE_PLUGIN_OPTION_ATTRIBUTION='${user_config.attribution}' settings ATTRIBUTION)" "allow" "literal attribution -> default"
 assert_eq "$(CLAUDE_PLUGIN_OPTION_MODEL_PROFILE='${user_config.model_profile}' profile)" "balanced" "literal model_profile -> default"
+# ... and gives no warning: an unconfigured plugin is not a mistake of the person. Beside it, a really invalid option does warn.
+assert_eq "$(CLAUDE_PLUGIN_OPTION_CORE_DIR='${user_config.core_dir}' CLAUDE_PLUGIN_OPTION_ATTRIBUTION='${user_config.attribution}' CLAUDE_PLUGIN_OPTION_MODEL_PROFILE='${user_config.model_profile}' bash "$LIB" settings core_dir attribution model_profile 2>&1 >/dev/null)" \
+  "" "an unsubstituted option gives no warning"
+err="$(CLAUDE_PLUGIN_OPTION_ATTRIBUTION=maybe bash "$LIB" settings attribution 2>&1 >/dev/null)"
+case "$err" in *'attribution "maybe"'*'is not valid'*) pass ;; *) fail "an invalid option gives a warning: $err" ;; esac
 
 # ~ expansion and trailing slash
 assert_eq "$(CORE_DIR='~/x' settings CORE_DIR)" "$RH/x" "~/x"
@@ -78,6 +83,11 @@ assert_eq "$(bash -c '. "$1"; load_settings; coredev_get nothing' _ "$LIB")" "" 
 # CLI entry: bash lib.sh get|set <key> [value]
 assert_exit 0 bash "$LIB" set app-id-prefix com.cli
 assert_eq "$(prefix)" "com.cli" "CLI get"
+# a .coredev with CRLF line ends: the value comes back without the CR, and the next line is its own key
+printf 'app-id-prefix: com.crlf\r\nschema: 7\r\n' > "$CORE_DIR/.coredev"
+assert_eq "$(prefix | od -c | tr -s ' ' | tr '\n' ' ')" "$(printf 'com.crlf\n' | od -c | tr -s ' ' | tr '\n' ' ')" "CRLF .coredev: the value has no CR"
+assert_eq "$(bash "$LIB" get schema)" "7" "CRLF .coredev: the line after it"
+printf 'schema: 1\napp-id-prefix: com.cli\n' > "$CORE_DIR/.coredev"
 
 # invalid app id prefix is refused and the file is unchanged
 before=$(cat "$CORE_DIR/.coredev")
