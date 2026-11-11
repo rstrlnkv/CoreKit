@@ -70,7 +70,8 @@ assert_contains "$M" "To add a language, add it to MSG_LANGS"   # the header say
 
 # --- Which texts are translated (ARCHITECTURE.md, "Texts and languages"): in shipped plugin code, Cyrillic only in the
 # message tables (corecrew's messages.sh, coremodel's hooks/locales/). Comments of code files and the coremodel
-# classifier's prompt (example prompts for the model, read by no person) are no texts. A .md or .tmpl line is text
+# classifier's prompts and the Codex hint's reply list (example prompts for the model and phrases to match, read by no
+# person) are no texts. A .md or .tmpl line is text
 # whatever it starts with, and so is a line inside a shell heredoc. Tests, evals and README.<code>.md are not scanned.
 CYR=$'[\xd0-\xd3][\x80-\xbf]'
 # in_heredoc <file> <line> — exit 0 when the line of a shell file lies inside a heredoc (<<WORD, <<-WORD, quoted or not)
@@ -99,7 +100,7 @@ cyr_text() {
 }
 cyr_hits="$(cd "$ROOT" && for d in plugins/*/hooks plugins/*/scripts plugins/*/skills plugins/*/agents plugins/*/reference \
     plugins/*/codex plugins/*/templates; do [ -d "$d" ] && LC_ALL=C grep -rnE "$CYR" "$d"; done \
-  | LC_ALL=C grep -vE '^(plugins/corecrew/hooks/messages\.sh|plugins/coremodel/hooks/locales/[^:]*|plugins/coremodel/hooks/classifier\.ts|[^:]*/README\.[A-Za-z-]+\.md):' \
+  | LC_ALL=C grep -vE '^(plugins/corecrew/hooks/messages\.sh|plugins/coremodel/hooks/locales/[^:]*|plugins/coremodel/hooks/classifier\.ts|plugins/coremodel/codex/(classifier|replies)\.txt|[^:]*/README\.[A-Za-z-]+\.md):' \
   | while IFS= read -r hit; do cyr_text "$hit" && printf '%s\n' "$hit"; done)"
 assert_eq "$cyr_hits" "" "Cyrillic in shipped plugin code outside the message tables"
 

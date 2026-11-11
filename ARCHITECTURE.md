@@ -62,7 +62,9 @@ plugins/coremodel/                model and effort picker
                                   buttons, command.ts /coremodel, views.tsx the footer, pane, rows
                                   and band; classifier.ts, models.ts, policy.ts and locales/ make no
                                   calls on `$` (a $.state key lives in the one file that uses it)
-  codex/                          hint.sh and hooks.json: the Codex hint
+  codex/                          the Codex hint: hooks.json (UserPromptSubmit and Stop, both
+                                  hint.sh), classifier.txt its prompt, replies.txt the phrases that
+                                  need no call
   types/index.d.ts                the plugin's type contract (the host API types are written by
                                   Claude Code into .claude-plugin/types/, which git does not track)
 plugins/coreopinion/              second opinion from GPT (Claude Code only)
@@ -171,7 +173,8 @@ Each hook rule, by host (the test file holds the cases of both hosts):
   hint (`plugins/coremodel/codex/hint.sh`) and the read-only checker's refusal, which only a
   subagent reads (`MSG_EN_ONLY` in messages.sh). Manifests are English.
   `tests/test_hook_messages.sh` allows Cyrillic in shipped plugin code only in those tables (and in
-  comments and in the example prompts of coremodel's classifier, which no person reads).
+  comments, in the example prompts of coremodel's classifiers and in the Codex hint's
+  `codex/replies.txt`, which no person reads).
 - **The Core.** The private repo (`~/Projects/Core` by default) holds the standards, knowledge and
   each project's `CLAUDE.md` and `docs/` wiki. The code lives in its own repo beside it; a
   gitignored `CLAUDE.local.md` link in the code folder loads the private `CLAUDE.md`.

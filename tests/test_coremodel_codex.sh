@@ -67,15 +67,21 @@ assert_file "$HJSON"
 if [ -f "$HJSON" ]; then
   json_ok "$HJSON" && pass || fail "$HJSON is not valid JSON"
   assert_eq "$(grep -c '"UserPromptSubmit"' "$HJSON")" "1" "one UserPromptSubmit entry"
-  assert_eq "$(grep -c '"command"' "$HJSON")" "1" "one hook command"
-  assert_eq "$(grep -cE '"(PreToolUse|PostToolUse|SessionStart|Stop|PermissionRequest)"' "$HJSON")" "0" "no other event"
-  assert_contains "$HJSON" 'bash \"${CLAUDE_PLUGIN_ROOT}/codex/hint.sh\"'
+  # Stop keeps the end of Codex's reply for the next prompt (the same script)
+  assert_eq "$(grep -c '"Stop"' "$HJSON")" "1" "one Stop entry"
+  assert_eq "$(grep -c '"command"' "$HJSON")" "2" "two hook commands"
+  assert_eq "$(grep -cE '"(PreToolUse|PostToolUse|SessionStart|PermissionRequest|SubagentStop)"' "$HJSON")" "0" "no other event"
+  assert_eq "$(grep -c 'bash \\"${CLAUDE_PLUGIN_ROOT}/codex/hint.sh\\"' "$HJSON")" "2" "both events run hint.sh"
   # Codex shows this while the hook runs, instead of a silent wait
   assert_contains "$HJSON" '"statusMessage": "coremodel: choosing a model"'
-  t="$(sed -n 's/.*"timeout": *\([0-9][0-9]*\).*/\1/p' "$HJSON" | head -1)"
+  assert_eq "$(grep -c '"statusMessage"' "$HJSON")" "1" "only the prompt hook shows a status"
+  t="$(grep '"statusMessage"' "$HJSON" | sed -n 's/.*"timeout": *\([0-9][0-9]*\).*/\1/p' | head -1)"
   if [ -n "$t" ] && [ "$t" -ge 1 ] && [ "$t" -le 30 ]; then pass; else fail "explicit timeout 1..30 s in hooks.json (got '${t:-none}')"; fi
   # the hook's own wait (default 20 s) fits inside the hook timeout
   if [ -n "$t" ] && [ "$t" -gt 20 ]; then pass; else fail "hook timeout ($t) must exceed hint.sh's own 20 s limit"; fi
+  # the Stop hook only writes a file: a short limit
+  ts="$(sed -n '/"Stop"/,$p' "$HJSON" | sed -n 's/.*"timeout": *\([0-9][0-9]*\).*/\1/p' | head -1)"
+  if [ -n "$ts" ] && [ "$ts" -ge 1 ] && [ "$ts" -le 10 ]; then pass; else fail "Stop timeout 1..10 s (got '${ts:-none}')"; fi
 fi
 
 # offline install into the sandbox CODEX_HOME and ask Codex which hooks it sees
@@ -90,9 +96,11 @@ if command -v codex >/dev/null 2>&1; then
   assert_file "$inst/.codex-plugin/plugin.json"
   codex_hooks_list "$SANDBOX/work" "$SANDBOX/hooks-list.out" && pass || fail "hooks/list: no answer in 10 s: $(head -3 "$SANDBOX/hooks-list.out.err")"
   grep '^{"key":"coremodel@' "$SANDBOX/hooks-list.out" > "$SANDBOX/hooks.lines"
-  assert_eq "$(wc -l < "$SANDBOX/hooks.lines" | tr -d ' ')" "1" "Codex lists exactly one coremodel hook"
+  assert_eq "$(wc -l < "$SANDBOX/hooks.lines" | tr -d ' ')" "2" "Codex lists exactly two coremodel hooks"
   assert_contains "$SANDBOX/hooks.lines" '"key":"coremodel@corekit:codex/hooks.json:user_prompt_submit:0:0"'
   assert_contains "$SANDBOX/hooks.lines" '"eventName":"userPromptSubmit"'
+  assert_contains "$SANDBOX/hooks.lines" '"key":"coremodel@corekit:codex/hooks.json:stop:0:0"'
+  assert_contains "$SANDBOX/hooks.lines" '"eventName":"stop"'
   assert_contains "$SANDBOX/hooks.lines" "\"sourcePath\":\"$inst/codex/hooks.json\""
   assert_contains "$SANDBOX/hooks.lines" "$inst/codex/hint.sh"
   assert_not_contains "$SANDBOX/hooks.lines" 'hooks/hooks.json'
@@ -119,9 +127,9 @@ case "${STUB_MODE:-ok}" in
   empty) exit 0 ;;
   sleep) sleep 10.37 & echo $! > "$STUB_DIR/sleep.pid"; wait $!; exit 0 ;;
 esac
-# an answer file given as -o / --output-last-message is written too
+# an answer file given as -o / --output-last-message is written too; the --output-schema file is kept
 prev=""; for a in "$@"; do
-  case "$prev" in -o|--output-last-message) cat "$STUB_DIR/answer" > "$a" ;; esac
+  case "$prev" in -o|--output-last-message) cat "$STUB_DIR/answer" > "$a" ;; --output-schema) cat "$a" > "$STUB_DIR/schema" ;; esac
   prev="$a"
 done
 cat "$STUB_DIR/answer"
@@ -135,10 +143,12 @@ PATHNONE="$SANDBOX/nobin:/usr/bin:/bin:/usr/sbin:/sbin"; mkdir -p "$SANDBOX/nobi
 ON_SF="$SANDBOX/coremodel-on"; printf 'codex_hint: on\n' > "$ON_SF"
 # run_hint <path> <stdin-text> [VAR=value ...] — stdout in $SANDBOX/out, stderr in $SANDBOX/err, exit code in $RC.
 # The hint is on (COREMODEL_CONFIG=$ON_SF) unless a VAR=value names COREMODEL_CONFIG itself.
+# The saved replies go under $STATE (XDG_STATE_HOME), never the developer's own state folder.
+STATE="$SANDBOX/state"; REPLIES="$STATE/coremodel/codex-replies"
 run_hint() {
   local p="$1" in="$2"; shift 2
-  rm -f "$CALLS" "$ARGV" "$STDIN" "$ENVREC" "$SANDBOX/pid" "$SANDBOX/sleep.pid"
-  { printf "%s" "$in"; } 2>/dev/null | env PATH="$p" COREMODEL_CONFIG="$ON_SF" "$@" /bin/bash "$HINT" > "$SANDBOX/out" 2> "$SANDBOX/err"; RC=$?
+  rm -f "$CALLS" "$ARGV" "$STDIN" "$ENVREC" "$SANDBOX/pid" "$SANDBOX/sleep.pid" "$SANDBOX/schema"
+  { printf "%s" "$in"; } 2>/dev/null | env PATH="$p" COREMODEL_CONFIG="$ON_SF" XDG_STATE_HOME="$STATE" "$@" /bin/bash "$HINT" > "$SANDBOX/out" 2> "$SANDBOX/err"; RC=$?
 }
 ncalls() { [ -f "$CALLS" ] && wc -l < "$CALLS" | tr -d ' ' || echo 0; }
 # event <prompt> — the hook's stdin JSON for a prompt (Codex's shape, tests/lib-hook.sh)
@@ -148,16 +158,24 @@ silent() { # silent <label> — exit 0, nothing on stdout
   assert_eq "$(cat "$SANDBOX/out")" "" "$1: no stdout"
 }
 answer() { printf '%s' "$1" > "$STUB_ANSWER"; }
+reps() { awk -v n="$1" -v c="$2" 'BEGIN { for (i = 0; i < n; i++) printf "%s", c }'; }   # reps <n> <char>
 
-# the classifier template, straight from the Claude module
-TPL="$SANDBOX/template.txt"
-sed -n '/^export const TEMPLATE = `/,/^\/\/ TEMPLATE-END/p' "$CM/hooks/classifier.ts" | sed '1s/^export const TEMPLATE = `//' | sed '$d' > "$TPL"
-[ -s "$TPL" ] && pass || fail "could not extract the template from classifier.ts"
-T_FIRST="$(head -1 "$TPL")"
-T_LAST="$(tail -1 "$TPL" | sed 's/`$//')"
+# the Codex classifier template: its own file, with Codex's model names (the Claude one stays in classifier.ts)
+TPL="$CM/codex/classifier.txt"
+assert_file "$TPL"
+T_FIRST="$(head -1 "$TPL" 2>/dev/null)"
+T_LAST="$(tail -1 "$TPL" 2>/dev/null)"
+for ph in '{{REPLY}}' '{{PROMPT}}'; do assert_eq "$(grep -cF "$ph" "$TPL" 2>/dev/null)" "1" "classifier.txt has $ph once"; done
+assert_not_contains "$TPL" '{{NOW}}'   # Codex does not tell the hook the current effort
+for m in gpt-6-luna gpt-6.1-sol gpt-6-astra; do assert_contains "$TPL" "$m"; done
+for w in Claude haiku sonnet opus fable; do assert_not_contains "$TPL" "$w"; done
+# {{PROMPT}} after {{REPLY}}: the person's text is spliced in last
+if [ "$(grep -nF '{{REPLY}}' "$TPL" | cut -d: -f1)" -lt "$(grep -nF '{{PROMPT}}' "$TPL" | cut -d: -f1)" ] 2>/dev/null; then pass; else fail "{{PROMPT}} must come after {{REPLY}}"; fi
+# the Claude Code template and its parser are not touched by the Codex work
+assert_contains "$CM/hooks/classifier.ts" 'Pick the effort level and the model for one prompt sent to Claude Code.'
 
-# main path: high, opus
-answer '{"why":"flaky test, cause unknown","level":"high","model":"opus"}'
+# main path: high, astra
+answer '{"why":"flaky test, cause unknown","keep":false,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
 assert_eq "$RC" "0" "main: exit 0"
 assert_eq "$(ncalls)" "1" "main: codex called once"
@@ -171,14 +189,19 @@ if [ -f "$ARGV" ]; then
   cat "$SANDBOX/argv.txt" "$STDIN" > "$SANDBOX/sent.txt"   # the prompt may go as an argument or on stdin
   assert_contains "$SANDBOX/sent.txt" "$T_FIRST"
   assert_contains "$SANDBOX/sent.txt" "$T_LAST"
-  assert_contains "$SANDBOX/sent.txt" 'First decide if it is keep.'
   assert_contains "$SANDBOX/sent.txt" 'fix the flaky login test'
   assert_not_contains "$SANDBOX/sent.txt" '{{PROMPT}}'
   assert_not_contains "$SANDBOX/sent.txt" '{{REPLY}}'
-  assert_not_contains "$SANDBOX/sent.txt" '{{NOW}}'
-  # the fills are classifier.ts buildPrompt's own words for "no level" and "no reply" (written twice, tied here)
-  assert_contains "$STDIN" 'The chat runs at: unknown'
-  assert_contains "$STDIN" '(none, this is the first prompt)'
+  # the hook never claims a first prompt: it cannot know that
+  assert_not_contains "$STDIN" 'first prompt'
+  # the answer shape goes as a JSON Schema file: keep, model and effort, each on its own
+  grep -A1 -xF -- '--output-schema' "$SANDBOX/argv.txt" | sed -n 2p | grep -q . && pass || fail "main: argv lacks --output-schema <file>"
+  for k in '"why"' '"keep"' '"model"' '"effort"' '"additionalProperties":false' '"required":["why","keep","model","effort"]' \
+    '"gpt-6-luna"' '"gpt-6.1-sol"' '"gpt-6-astra"' '"low"' '"medium"' '"high"' '"xhigh"' '"max"'; do
+    assert_contains "$SANDBOX/schema" "$k"
+  done
+  assert_not_contains "$SANDBOX/schema" '"ultra"'   # a delegation mode, not a depth: never recommended
+  json_ok "$SANDBOX/schema" && pass || fail "main: the schema is not valid JSON"
 fi
 assert_contains "$ENVREC" 'NESTED=1'
 out="$(cat "$SANDBOX/out")"
@@ -195,41 +218,189 @@ case "$out" in *xhigh*) fail "main: effort high reported as xhigh" ;; *) pass ;;
 case "$out" in */model*) pass ;; *) fail "main: context lacks /model" ;; esac
 case "$out" in *'fix the flaky login test'*) fail "main: the prompt is printed back" ;; *) pass ;; esac
 
-# the map: model and effort
-check_map() { # <level> <model word> <expected codex model> <other model names that must not appear>
-  answer "{\"why\":\"x\",\"level\":\"$1\",\"model\":\"$2\"}"
-  run_hint "$PATHSTUB" "$(event 'do the thing')"
+# model and effort are read on their own: a strong model at low effort stays low, a light one at high stays high
+check_pair() { # <model> <effort> <other names that must not appear>
+  answer "{\"why\":\"x\",\"keep\":false,\"model\":\"$1\",\"effort\":\"$2\"}"
+  run_hint "$PATHSTUB" "$(event 'do the thing in the code')"
   local o; o="$(cat "$SANDBOX/out")"
-  assert_eq "$RC" "0" "map $1/$2: exit 0"
-  case "$o" in *"$3"*) pass ;; *) fail "map $1/$2: context lacks $3: $o" ;; esac
-  case "$o" in *"$1"*) pass ;; *) fail "map $1/$2: context lacks effort $1: $o" ;; esac
-  case "$o" in */model*) pass ;; *) fail "map $1/$2: context lacks /model" ;; esac
-  local m; for m in $4; do case "$o" in *"$m"*) fail "map $1/$2: context names $m too: $o" ;; *) pass ;; esac; done
+  assert_eq "$RC" "0" "pair $1/$2: exit 0"
+  case "$o" in *"needs $1 at $2 effort"*) pass ;; *) fail "pair $1/$2: context lacks '$1 at $2 effort': $o" ;; esac
+  case "$o" in */model*) pass ;; *) fail "pair $1/$2: context lacks /model" ;; esac
+  local m; for m in $3; do case "$o" in *"$m"*) fail "pair $1/$2: context names $m too: $o" ;; *) pass ;; esac; done
 }
-check_map low haiku gpt-6-luna "gpt-6.1-sol gpt-6-astra"
-check_map medium sonnet gpt-6.1-sol "gpt-6-luna gpt-6-astra"
-check_map high opus gpt-6-astra "gpt-6-luna gpt-6.1-sol"
-check_map xhigh fable gpt-6-astra "gpt-6-luna gpt-6.1-sol"
-check_map max fable gpt-6-astra "gpt-6-luna gpt-6.1-sol"
-check_map max opus gpt-6-astra "gpt-6-luna gpt-6.1-sol"
-# the level in the model's other spelling, as classifier.ts toLevel reads it
-answer '{"why":"x","level":"Extra high","model":"fable"}'
-run_hint "$PATHSTUB" "$(event 'do the thing')"
-case "$(cat "$SANDBOX/out")" in *'needs gpt-6-astra at xhigh effort'*) pass ;; *) fail "level 'Extra high' is not read as xhigh: $(cat "$SANDBOX/out")" ;; esac
-# the answer may come wrapped in prose or a fence, as the Claude parser also accepts
+check_pair gpt-6-luna low "gpt-6.1-sol gpt-6-astra"
+check_pair gpt-6-luna high "gpt-6.1-sol gpt-6-astra"
+check_pair gpt-6.1-sol medium "gpt-6-luna gpt-6-astra"
+check_pair gpt-6-astra low "gpt-6-luna gpt-6.1-sol"
+check_pair gpt-6-astra xhigh "gpt-6-luna gpt-6.1-sol"
+check_pair gpt-6-astra max "gpt-6-luna gpt-6.1-sol"
+# the answer may come wrapped in prose or a fence
 answer 'Sure! ```json
-{"why":"x","level":"medium","model":"sonnet"}
+{"why":"x","keep":false,"model":"gpt-6.1-sol","effort":"medium"}
 ```'
 run_hint "$PATHSTUB" "$(event 'add a field')"
-case "$(cat "$SANDBOX/out")" in *gpt-6.1-sol*) pass ;; *) fail "fenced answer is not read: $(cat "$SANDBOX/out")" ;; esac
+case "$(cat "$SANDBOX/out")" in *'needs gpt-6.1-sol at medium effort'*) pass ;; *) fail "fenced answer is not read: $(cat "$SANDBOX/out")" ;; esac
 
 # keep: nothing to add
-answer '{"why":"approval","level":"keep","model":"sonnet"}'
-run_hint "$PATHSTUB" "$(event 'yes')"
+answer '{"why":"picks an offered option","keep":true,"model":"gpt-6.1-sol","effort":"medium"}'
+run_hint "$PATHSTUB" "$(event 'option 2')"
 silent "keep"; assert_eq "$(ncalls)" "1" "keep: codex was asked"
 
+# ---- C1. local skip: a whole greeting, approval or "go on" never reaches Luna ----
+echo "  -- C1. local skip"
+answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
+for p in 'привет' 'Привет!' 'Добрый день' 'да' 'ДА' 'да, давай' 'Да, давай.' 'ок' 'Окей, спасибо!' 'да, продолжай' 'давай дальше' \
+  'спасибо большое' 'хорошо, делай' 'Ну давай' 'hi' 'Hello!' 'thanks' 'Thank you!' 'yes' 'Yes please' 'ok, go ahead' 'OK' 'sounds good' \
+  'continue' 'keep going' 'lgtm' 'yep, do it' '👍'; do
+  run_hint "$PATHSTUB" "$(event "$p")"
+  silent "local skip '$p'"; assert_eq "$(ncalls)" "0" "local skip '$p': Luna not called"
+done
+# new work after an approval, or a reply that may lean on the last answer: Luna is asked
+for p in 'Да, и ещё выясни, почему сумма заказа иногда расходится на копейку' 'Да, и ещё проверь расчёты' 'почини' 'Почини' \
+  'второй вариант' 'да, но без тестов' 'нет' 'no' 'yes, and also fix the login' 'hi, why does the build fail?' 'привет, как дела с релизом?' \
+  'go ahead and deploy to prod' 'ok then rename it' 'continue the migration' 'thanks, now add tests'; do
+  run_hint "$PATHSTUB" "$(event "$p")"
+  assert_eq "$(ncalls)" "1" "'$p': Luna is asked"
+done
+# the new work after "да, и ещё" is judged: the hint names it
+run_hint "$PATHSTUB" "$(event 'Да, и ещё выясни, почему сумма заказа иногда расходится на копейку')"
+assert_contains "$STDIN" 'Да, и ещё выясни, почему сумма заказа иногда расходится на копейку'
+case "$(cat "$SANDBOX/out")" in *'needs gpt-6-astra at high effort'*) pass ;; *) fail "'да, и ещё…': no astra/high hint: $(cat "$SANDBOX/out")" ;; esac
+# the phrase list is data next to the script, and a list entry with spaces or a comment line does not break it
+assert_file "$CM/codex/replies.txt"
+for w in 'привет' 'да' 'давай' 'продолжай' 'hi' 'yes' 'go ahead' 'continue'; do
+  grep -qxF -- "$w" "$CM/codex/replies.txt" && pass || fail "replies.txt lacks '$w'"
+done
+for w in 'почини' 'нет' 'no' 'fix it'; do
+  grep -qxF -- "$w" "$CM/codex/replies.txt" && fail "replies.txt holds '$w', which names work or turns it down" || pass
+done
+# a long prompt is never skipped, whatever it is made of
+run_hint "$PATHSTUB" "$(event "$(awk 'BEGIN { for (i = 0; i < 60; i++) printf "да " }')")"
+assert_eq "$(ncalls)" "1" "a long run of approvals goes to Luna"
+
+# ---- C2. the last reply: kept by Stop, sent only for a short prompt, never claimed when missing ----
+echo "  -- C2. context from Stop"
+# sevent <session> <last reply, JSON-escaped> — Codex's Stop event
+sevent() { printf '{"session_id":"%s","turn_id":"t","cwd":"/tmp","hook_event_name":"Stop","model":"gpt-6.1-sol","permission_mode":"default","stop_hook_active":false,"transcript_path":null,"last_assistant_message":%s}' "$1" "$2"; }
+# pevent <session> <prompt> — a prompt in that session
+pevent() { printf '{"session_id":"%s","turn_id":"t","cwd":"/tmp","hook_event_name":"UserPromptSubmit","model":"gpt-6.1-sol","permission_mode":"default","transcript_path":null,"prompt":"%s"}' "$1" "$(json_esc "$2")"; }
+REPLY1='I found the cause: each line is rounded before the sum. Should I fix the rounding in cart.ts?'
+rm -rf "$STATE"
+run_hint "$PATHSTUB" "$(sevent s1 "\"$REPLY1\"")"
+silent "Stop"; assert_eq "$(ncalls)" "0" "Stop: Luna not called"
+assert_file "$REPLIES/s1"
+assert_contains "$REPLIES/s1" 'Should I fix the rounding in cart.ts?'
+# only the person can read it
+case "$(ls -ld "$REPLIES" | cut -c1-10)" in drwx------) pass ;; *) fail "the replies folder is not private: $(ls -ld "$REPLIES")" ;; esac
+case "$(ls -l "$REPLIES/s1" | cut -c1-10)" in -rw-------) pass ;; *) fail "the saved reply is not private: $(ls -l "$REPLIES/s1")" ;; esac
+# a short follow-up gets the reply, and the reply is used once
+answer '{"why":"fix the named rounding","keep":false,"model":"gpt-6.1-sol","effort":"medium"}'
+run_hint "$PATHSTUB" "$(pevent s1 'почини')"
+assert_eq "$(ncalls)" "1" "почини with context: Luna asked"
+assert_contains "$STDIN" 'Should I fix the rounding in cart.ts?'
+assert_not_contains "$STDIN" '(unknown'
+assert_no_file "$REPLIES/s1"
+# without a saved reply: said to be unknown, never "first prompt"
+run_hint "$PATHSTUB" "$(pevent s1 'почини')"
+assert_contains "$STDIN" '(unknown'
+assert_not_contains "$STDIN" 'first prompt'
+assert_not_contains "$STDIN" 'cart.ts'
+# another session's reply is not used
+run_hint "$PATHSTUB" "$(sevent s1 "\"$REPLY1\"")"
+run_hint "$PATHSTUB" "$(pevent s2 'второй вариант')"
+assert_contains "$STDIN" '(unknown'
+assert_not_contains "$STDIN" 'cart.ts'
+assert_file "$REPLIES/s1"
+# a long prompt stands on its own: the reply is not sent, and it is dropped all the same
+LONGP='Add a CSV export to the orders page with the same columns as the table, and a test for an empty list'
+run_hint "$PATHSTUB" "$(pevent s1 "$LONGP")"
+assert_contains "$STDIN" "$LONGP"
+assert_not_contains "$STDIN" 'cart.ts'
+assert_contains "$STDIN" '(not included'
+assert_no_file "$REPLIES/s1"
+# a skipped approval drops the saved reply too: the next prompt follows a newer turn
+run_hint "$PATHSTUB" "$(sevent s1 "\"$REPLY1\"")"
+run_hint "$PATHSTUB" "$(pevent s1 'да')"
+assert_eq "$(ncalls)" "0" "да after a reply: Luna not called"
+assert_no_file "$REPLIES/s1"
+# only the end of a long reply is kept (the question sits there), cut on a character boundary
+LONGR="$(awk 'BEGIN { for (i = 0; i < 400; i++) printf "ёжик " }')THE QUESTION?"
+run_hint "$PATHSTUB" "$(sevent s1 "\"$LONGR\"")"
+sz="$(wc -c < "$REPLIES/s1" | tr -d ' ')"
+if [ "$sz" -gt 300 ] && [ "$sz" -le 600 ]; then pass; else fail "saved reply is $sz bytes, want 301..600"; fi
+assert_contains "$REPLIES/s1" 'THE QUESTION?'
+LC_ALL=C grep -q "^[$(printf '\200-\277')]" "$REPLIES/s1" && fail "saved reply starts inside a character" || pass
+# a null or empty reply removes the saved one
+run_hint "$PATHSTUB" "$(sevent s1 null)"
+assert_no_file "$REPLIES/s1"
+# hint off: Stop writes nothing
+run_hint "$PATHSTUB" "$(sevent s1 "\"$REPLY1\"")" COREMODEL_CONFIG="$SANDBOX/nothing"
+assert_no_file "$REPLIES/s1"
+# nested (the classifier's own run): nothing either
+run_hint "$PATHSTUB" "$(sevent s1 "\"$REPLY1\"")" COREMODEL_NESTED=1
+assert_no_file "$REPLIES/s1"
+# a session id that is not a plain name writes nothing and reads nothing
+for sid in '../escape' 'a/b' '.hidden' '' "$(reps 200 a)"; do
+  rm -rf "$STATE"
+  run_hint "$PATHSTUB" "$(sevent "$sid" "\"$REPLY1\"")"
+  silent "Stop with session '$sid'"
+  assert_eq "$(find "$STATE" -type f 2>/dev/null)" "" "Stop with session '$sid': no file written"
+done
+# a stale reply (older than a day) is removed by the next Stop
+mkdir -p "$REPLIES"; printf 'old' > "$REPLIES/old-session"; touch -t 202001010000 "$REPLIES/old-session"
+run_hint "$PATHSTUB" "$(sevent s1 "\"$REPLY1\"")"
+assert_no_file "$REPLIES/old-session"
+assert_file "$REPLIES/s1"
+rm -rf "$STATE"
+
+# ---- C3. the client's model catalog ----
+echo "  -- C3. catalog"
+CAT="$SANDBOX/cat-home"; mkdir -p "$CAT"
+# catalog <models...> — each "slug:visibility:effort,effort,..."; written as Codex's models_cache.json is
+catalog() {
+  local first=1 m slug vis effs e
+  { printf '{\n  "fetched_at": "2026-11-11T00:00:00Z",\n  "models": [\n'
+    for m in "$@"; do
+      slug="${m%%:*}"; vis="${m#*:}"; vis="${vis%%:*}"; effs="${m##*:}"
+      [ "$first" = 1 ] || printf ',\n'; first=0
+      printf '    {\n      "slug": "%s",\n      "description": "a \\"slug\\": \\"fake\\" text",\n      "supported_reasoning_levels": [\n' "$slug"
+      local f2=1; for e in $(printf '%s' "$effs" | tr ',' ' '); do
+        [ "$f2" = 1 ] || printf ',\n'; f2=0; printf '        { "effort": "%s", "description": "d" }' "$e"
+      done
+      printf '\n      ],\n      "visibility": "%s",\n      "multi_agent_reasoning_effort": "max"\n    }' "$vis"
+    done
+    printf '\n  ]\n}\n'; } > "$CAT/models_cache.json"
+}
+# luna offers no max here: a max pick on luna is lowered to its highest level
+catalog 'gpt-6-luna:list:low,medium,high' 'gpt-6.1-sol:list:low,medium,high,xhigh,max,ultra' 'gpt-6-astra:list:low,medium,high,xhigh,max,ultra'
+json_ok "$CAT/models_cache.json" && pass || fail "the test catalog is not valid JSON"
+answer '{"why":"x","keep":false,"model":"gpt-6-luna","effort":"max"}'
+run_hint "$PATHSTUB" "$(event 'rename the field everywhere')" CODEX_HOME="$CAT"
+case "$(cat "$SANDBOX/out")" in *'needs gpt-6-luna at high effort'*) pass ;; *) fail "catalog: luna/max is not lowered to high: $(cat "$SANDBOX/out")" ;; esac
+# a model the catalog hides or lacks is not offered to Luna, and not named if Luna names it anyway
+catalog 'gpt-6-luna:list:low,medium,high,xhigh,max' 'gpt-6.1-sol:list:low,medium,high,xhigh,max' 'gpt-6-astra:hide:low,medium,high'
+answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" CODEX_HOME="$CAT"
+assert_eq "$(ncalls)" "1" "catalog without astra: Luna asked"
+assert_not_contains "$SANDBOX/schema" 'gpt-6-astra'
+assert_contains "$SANDBOX/schema" '"gpt-6.1-sol"'
+silent "catalog without astra: astra not named"
+# none of the three models in the catalog: nothing to offer, no call
+catalog 'gpt-7-x:list:low,high'
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" CODEX_HOME="$CAT"
+silent "catalog without the ladder"; assert_eq "$(ncalls)" "0" "catalog without the ladder: Luna not called"
+# an unreadable catalog is no catalog: all three are offered
+printf 'not json' > "$CAT/models_cache.json"
+answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" CODEX_HOME="$CAT"
+assert_contains "$SANDBOX/schema" '"gpt-6-astra"'
+case "$(cat "$SANDBOX/out")" in *'needs gpt-6-astra at high effort'*) pass ;; *) fail "unreadable catalog: no hint" ;; esac
+# no catalog at all: the same
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" CODEX_HOME="$SANDBOX/no-such-home"
+case "$(cat "$SANDBOX/out")" in *'needs gpt-6-astra at high effort'*) pass ;; *) fail "no catalog: no hint" ;; esac
+
 # recursion guard
-answer '{"why":"x","level":"high","model":"opus"}'
+answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_NESTED=1
 silent "nested"; assert_eq "$(ncalls)" "0" "nested: codex not called"
 
@@ -277,30 +448,30 @@ silent "off via CORECREW_CONFIG"; assert_eq "$(ncalls)" "0" "off via CORECREW_CO
 
 # the current model: silent when it is the pick or a stronger one
 mevent() { hook_event codex UserPromptSubmit /tmp model="$1" prompt="$2"; }   # mevent <model> <prompt>
-answer '{"why":"x","level":"high","model":"opus"}'
+answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(mevent gpt-6-astra 'fix the flaky login test')"
 silent "on the strongest model"; assert_eq "$(ncalls)" "0" "on the strongest model: codex not called"
-answer '{"why":"x","level":"medium","model":"sonnet"}'
+answer '{"why":"x","keep":false,"model":"gpt-6.1-sol","effort":"medium"}'
 run_hint "$PATHSTUB" "$(mevent gpt-6.1-sol 'add a field')"
 silent "current model is the pick"; assert_eq "$(ncalls)" "1" "current model is the pick: codex was asked"
-answer '{"why":"x","level":"low","model":"haiku"}'
+answer '{"why":"x","keep":false,"model":"gpt-6-luna","effort":"low"}'
 run_hint "$PATHSTUB" "$(mevent gpt-6.1-sol 'rename x')"
 silent "current model is stronger than the pick"
-answer '{"why":"x","level":"high","model":"opus"}'
+answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(mevent gpt-6.1-sol 'fix the flaky login test')"
 case "$(cat "$SANDBOX/out")" in *gpt-6-astra*) pass ;; *) fail "a weaker current model: no hint: $(cat "$SANDBOX/out")" ;; esac
-answer '{"why":"x","level":"low","model":"haiku"}'
+answer '{"why":"x","keep":false,"model":"gpt-6-luna","effort":"low"}'
 run_hint "$PATHSTUB" "$(mevent gpt-6-luna 'rename x')"
 silent "luna for a haiku pick"
 # a model it does not know, or a model key that is not the event's own: the hint as before
-answer '{"why":"x","level":"high","model":"opus"}'
+answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(mevent some-other-model 'fix the flaky login test')"
 case "$(cat "$SANDBOX/out")" in *gpt-6-astra*) pass ;; *) fail "unknown current model: no hint" ;; esac
 # a Codex model the hint does not rank (README: "it cannot compare"): the pick is named, even the lightest one
-answer '{"why":"x","level":"low","model":"haiku"}'
+answer '{"why":"x","keep":false,"model":"gpt-6-luna","effort":"low"}'
 run_hint "$PATHSTUB" "$(mevent gpt-6-sol 'rename x')"
 case "$(cat "$SANDBOX/out")" in *'needs gpt-6-luna at low effort'*) pass ;; *) fail "an unranked current model (gpt-6-sol): the pick is not named: $(cat "$SANDBOX/out")" ;; esac
-answer '{"why":"x","level":"high","model":"opus"}'
+answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" '{"hook_event_name":"UserPromptSubmit","meta":{"model":"gpt-6-astra"},"prompt":"fix the flaky login test"}'
 case "$(cat "$SANDBOX/out")" in *gpt-6-astra*) pass ;; *) fail "a nested model key was read as the current model" ;; esac
 
@@ -309,12 +480,14 @@ run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" STUB_MODE=fail
 silent "stub exits 1"; assert_eq "$(ncalls)" "1" "stub exits 1: it was called"
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" STUB_MODE=empty
 silent "stub prints nothing"
-for g in 'garbage, no json here' '{"level":"high"' '{"why":"x","level":"enormous","model":"opus"}' '{"why":"x","level":"high","model":"gpt-9"}' '[1,2,3]' ''; do
+for g in 'garbage, no json here' '{"effort":"high"' '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"enormous"}' \
+  '{"why":"x","keep":false,"model":"gpt-9","effort":"high"}' '{"why":"x","keep":false,"model":"opus","effort":"high"}' \
+  '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"ultra"}' '{"why":"x","level":"high","model":"opus"}' '[1,2,3]' ''; do
   answer "$g"
   run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
   silent "garbage answer '$g'"
 done
-answer '{"why":"x","level":"high","model":"opus"}'
+answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHNONE" "$(event 'fix the flaky login test')"
 silent "no codex on PATH"
 for bad in '' '   ' 'not json at all' '{"hook_event_name":"UserPromptSubmit"' '{"hook_event_name":"UserPromptSubmit"}' '{"hook_event_name":"UserPromptSubmit","prompt":""}' '{"hook_event_name":"UserPromptSubmit","prompt":"   "}' '{"hook_event_name":"UserPromptSubmit","prompt":42}' '{"prompt":'; do
@@ -342,12 +515,12 @@ if [ -n "$spid" ] && ! poll 50 gone "$spid"; then fail "timeout: the stub (pid $
 if [ -n "$slp" ] && ! poll 50 gone "$slp"; then fail "timeout: the stub's sleep (pid $slp) is still running"; kill "$slp" 2>/dev/null; else pass; fi
 decoy_kept timeout   # the others are gone or were killed above
 # a bad limit value does not break the hook
-answer '{"why":"x","level":"high","model":"opus"}'
+answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_HINT_TIMEOUT=abc
 case "$(cat "$SANDBOX/out")" in *gpt-6-astra*) pass ;; *) fail "COREMODEL_HINT_TIMEOUT=abc: no hint (a bad value should mean the default)" ;; esac
 
 # the prompt reaches codex unchanged: quotes, $(...), backticks, newlines, Cyrillic, backslashes
-answer '{"why":"x","level":"high","model":"opus"}'
+answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
 P='say "hi" and '"'"'bye'"'"' $(touch '"$SANDBOX"'/pwned) `touch '"$SANDBOX"'/pwned2` ${HOME} $HOME \n literal
 вторая строка: почини авторизацию, "ёжик" \\ end *'
 esc="$(printf '%s' "$P" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS=""} NR>1{printf "\\n"} {print}')"
@@ -366,7 +539,6 @@ run_hint "$PATHSTUB" "$(event "$long")"
 assert_eq "$RC" "0" "long prompt: exit 0"
 assert_eq "$(ncalls)" "1" "long prompt: one call"
 # over 4000 bytes it is cut as classifier.ts cutMiddle does: the first 2000 bytes, the marker, the last 2000
-reps() { awk -v n="$1" -v c="$2" 'BEGIN { for (i = 0; i < n; i++) printf "%s", c }'; }   # reps <n> <char>
 H="A$(reps 1999 h)"; TL="$(reps 1999 t)Z"
 run_hint "$PATHSTUB" "$(event "${H}X$(reps 5000 m)Y${TL}")"
 sent="$(cat "$STDIN" 2>/dev/null)"
@@ -385,8 +557,8 @@ assert_contains "$STDIN" "${H}${TL}"
 # (stderr is free)
 
 # ---- pass 2: stdin, ephemeral, big prompt, SIGTERM, clamp ----
-echo "  -- C2. stdin, big prompt, signals"
-answer '{"why":"x","level":"high","model":"opus"}'
+echo "  -- C4. stdin, big prompt, signals"
+answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
 tr '\0' '\n' < "$ARGV" > "$SANDBOX/argv.txt"
 assert_contains "$SANDBOX/argv.txt" '--ephemeral'

@@ -7,6 +7,26 @@ full detail.
 
 ## [Unreleased]
 
+Codex: the hooks changed (a new `Stop` hook), so Codex keeps them off until you trust both again in
+`/hooks`.
+
+### Added
+
+- Codex hint: a prompt that is only a greeting, thanks, an approval or "go on" ("привет", "да,
+  давай", "ok, go ahead") gets no classifier call, so it no longer waits 7 seconds for nothing. A
+  prompt with new work after the approval ("да, и ещё проверь расчёты") is still checked.
+- Codex hint: a new `Stop` hook keeps the last 600 bytes of Codex's reply until your next prompt in
+  that chat, and a short follow-up ("почини", "the second one") is judged with it. A missing reply is
+  now sent as unknown; the hint no longer tells the classifier that every prompt is the first one, which
+  turned "да, давай" into a low-effort pick instead of "keep". The README lists what is sent.
+
+### Changed
+
+- Codex hint: its own classifier prompt (`codex/classifier.txt`) with Codex's model names, which
+  judges the model and the effort separately, and an answer in a fixed JSON shape (`--output-schema`).
+- Codex hint: when Codex's model catalog is readable, only the models it lists are offered, and an
+  effort a model does not support is lowered to the highest one it does.
+
 ## [0.9.0] - 2026-11-10
 
 Codex: the hook changed, so Codex keeps it off until you trust it again in `/hooks`.

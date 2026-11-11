@@ -3,14 +3,18 @@
 # model (gpt-6-luna, one `codex exec` call) which model and effort the prompt needs and adds one line of
 # context: "switch with /model". It stays silent when the current model is the one it would name or a
 # stronger one. It never blocks the prompt: any failure is silent, exit 0.
+# - A whole greeting, thanks, approval or "go on" (codex/replies.txt) gets no call at all.
+# - The same script on Stop keeps the last 600 bytes of Codex's reply, per session, until the next
+#   prompt; a short prompt (at most 8 words) sends it along, a longer one stands on its own.
+# - The classifier prompt is codex/classifier.txt; the answer comes in a JSON Schema shape, with the
+#   models offered cut to those the client's catalog lists ($CODEX_HOME/models_cache.json, when readable).
 # Off until turned on, since it sends every prompt to a model once more: `codex_hint: on` in
 # ~/.config/coremodel/settings (COREMODEL_CONFIG names another file); without that key,
 # `coremodel_mode: on` in the corecrew settings file. COREMODEL_HINT_TIMEOUT seconds (default 20).
 [ -z "${COREMODEL_NESTED:-}" ] || exit 0
 command -v codex >/dev/null 2>&1 || exit 0
 here="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || exit 0
-ts="$here/../hooks/classifier.ts"
-[ -f "$ts" ] || exit 0
+[ -f "$here/classifier.txt" ] || exit 0
 
 # settings_file <ENV value> <folder> — the file the ENV value names (an absolute path), else <folder>/settings
 # under XDG_CONFIG_HOME or ~/.config; empty when there is no absolute place
@@ -48,9 +52,11 @@ trap 'exit 143' INT TERM HUP
 
 head -c 262144 > "$tmp/in" 2>/dev/null || exit 0
 
-# the prompt field of the event: a small JSON reader (top-level keys only; \" \\ \/ \b \f \n \r \t \uXXXX).
-# Linear in the input: strings are read in chunks; of the prompt only the first and the last 4000 bytes are kept.
-LC_ALL=C awk -v out="$tmp/prompt" -v mout="$tmp/model" '
+# the fields of the event: a small JSON reader (top-level keys only; \" \\ \/ \b \f \n \r \t \uXXXX).
+# Linear in the input: strings are read in chunks; of the prompt and the reply only the first and the last
+# bytes are kept. Writes the prompt (cut in the middle past 4000 bytes) on UserPromptSubmit and the last
+# 600 bytes of the reply, blanks folded, on Stop; the event name, the model and the session id on both.
+LC_ALL=C awk -v d="$tmp" '
 function hexv(h,  k, c, n) { n = 0; h = tolower(h)
   for (k = 1; k <= length(h); k++) { c = index("0123456789abcdef", substr(h, k, 1)); if (!c) return -1; n = n * 16 + c - 1 }
   return n }
@@ -59,7 +65,7 @@ function utf8(n) {
   if (n < 2048) return sprintf("%c%c", 192 + int(n / 64), 128 + n % 64)
   if (n < 65536) return sprintf("%c%c%c", 224 + int(n / 4096), 128 + int(n / 64) % 64, 128 + n % 64)
   return sprintf("%c%c%c%c", 240 + int(n / 262144), 128 + int(n / 4096) % 64, 128 + int(n / 64) % 64, 128 + n % 64) }
-# emit(p): a decoded piece of the string being read goes to V (short keys and values) or, for the prompt, to F (first bytes) and T (last bytes)
+# emit(p): a decoded piece of the string being read goes to V (short keys and values) or, for a long text, to F (first bytes) and T (last bytes)
 function emit(p) {
   if (!cap) { if (length(V) < 512) V = V p; return }
   if (p ~ /[^ \t\r\n]/) nonblank = 1
@@ -93,7 +99,7 @@ function str(  chunk, k, c, e, n, lo) {
 BEGIN { RS = "\001" }
 { s = $0 }
 END {
-  L = length(s); i = 1; depth = 0; ev = ""; have = 0; cap = 0; nonblank = 0; tl = 0
+  L = length(s); i = 1; depth = 0; ev = ""; have = 0; cap = 0; nonblank = 0; tl = 0; rtl = 0
   while (i <= L) {
     c = substr(s, i, 1)
     if (c == "{" || c == "[") { depth++; i++ }
@@ -104,24 +110,63 @@ END {
       while (substr(s, j, 1) ~ /[ \t\r\n]/) j++
       if (depth == 1 && substr(s, j, 1) == ":") {
         j++; while (substr(s, j, 1) ~ /[ \t\r\n]/) j++
-        if ((key == "prompt" || key == "hook_event_name" || key == "model") && substr(s, j, 1) == "\"") {
-          i = j; cap = (key == "prompt"); F = ""; T = ""; tl = 0; nonblank = 0
+        if ((key == "prompt" || key == "last_assistant_message" || key == "hook_event_name" || key == "model" || key == "session_id") && substr(s, j, 1) == "\"") {
+          i = j; cap = (key == "prompt" || key == "last_assistant_message"); F = ""; T = ""; tl = 0; nonblank = 0
           str(); cap = 0; if (!OK) break
-          if (key == "prompt") { have = 1; prompt_ok = nonblank; pF = F; pT = T; ptl = tl } else if (key == "model") mdl = V; else ev = V
+          if (key == "prompt") { have = 1; prompt_ok = nonblank; pF = F; pT = T; ptl = tl }
+          else if (key == "last_assistant_message") { rF = F; rT = T; rtl = tl }
+          else if (key == "model") mdl = V; else if (key == "session_id") sid = V; else ev = V
         } else i = j
       }
     } else i++
   }
-  if (!have || ev != "UserPromptSubmit" || !prompt_ok) exit 1
-  if (ptl <= 4000) pr = pF
-  else {
-    h = substr(pF, 1, 2000); sub(/[\300-\377][\200-\277]*$/, "", h)
-    t = substr(pT, length(pT) - 1999); sub(/^[\200-\277]+/, "", t)
-    pr = h "\n[…]\n" t
-  }
-  printf "%s", pr > out
-  printf "%s", mdl > mout
+  if (ev == "UserPromptSubmit") {
+    if (!have || !prompt_ok) exit 1
+    if (ptl <= 4000) pr = pF
+    else {
+      h = substr(pF, 1, 2000); sub(/[\300-\377][\200-\277]*$/, "", h)
+      t = substr(pT, length(pT) - 1999); sub(/^[\200-\277]+/, "", t)
+      pr = h "\n[…]\n" t
+    }
+    printf "%s", pr > (d "/prompt")
+  } else if (ev == "Stop") {
+    r = (rtl <= 4000) ? rF : rT
+    gsub(/[ \t\r\n]+/, " ", r); sub(/^ /, "", r); sub(/ $/, "", r)
+    if (length(r) > 600) { r = substr(r, length(r) - 599); sub(/^[\200-\277]+/, "", r) }
+    printf "%s", r > (d "/reply")
+  } else exit 1
+  printf "%s", ev > (d "/ev")
+  printf "%s", mdl > (d "/model")
+  printf "%s", sid > (d "/sid")
 }' < "$tmp/in" 2>/dev/null || exit 0
+ev="$(cat "$tmp/ev" 2>/dev/null)"
+# the session id names a file: a plain name only
+sid="$(cat "$tmp/sid" 2>/dev/null)"
+case "$sid" in ''|.*|*[!A-Za-z0-9._-]*) sid="" ;; esac
+[ "${#sid}" -le 128 ] || sid=""
+# the saved replies: one private file per session, under XDG_STATE_HOME or ~/.local/state
+case "${XDG_STATE_HOME:-}" in
+  /*) sd="${XDG_STATE_HOME%/}/coremodel/codex-replies" ;;
+  *) case "${HOME:-}" in /*) sd="$HOME/.local/state/coremodel/codex-replies" ;; *) sd="" ;; esac ;;
+esac
+[ -n "$sid" ] || sd=""
+
+# Stop: keep the end of the reply for the next prompt of this session; replies older than a day go
+if [ "$ev" = Stop ]; then
+  [ -n "$sd" ] || exit 0
+  mkdir -p "${sd%/*}" 2>/dev/null && { [ -d "$sd" ] || mkdir -m 700 "$sd" 2>/dev/null; } || exit 0
+  find "$sd" -type f -mtime +0 -exec rm -f {} + 2>/dev/null
+  if [ -s "$tmp/reply" ]; then
+    f="$(mktemp "$sd/.new.XXXXXX" 2>/dev/null)" || exit 0
+    if cat "$tmp/reply" > "$f" 2>/dev/null; then mv -f "$f" "$sd/$sid" 2>/dev/null || rm -f "$f"; else rm -f "$f"; fi
+  else
+    rm -f "$sd/$sid"
+  fi
+  exit 0
+fi
+
+# UserPromptSubmit: the saved reply is used once, whatever happens next
+if [ -n "$sd" ] && [ -f "$sd/$sid" ]; then cat "$sd/$sid" > "$tmp/ctx" 2>/dev/null; rm -f "$sd/$sid"; fi
 [ -s "$tmp/prompt" ] || exit 0
 
 # rank <codex model> — its place on the ladder the hint names; 0 for a model it does not name
@@ -130,43 +175,104 @@ now="$(rank "$(cat "$tmp/model" 2>/dev/null)")"
 # on the strongest model there is nothing to suggest: no call
 [ "$now" -lt 3 ] || exit 0
 
-# the template between the markers of classifier.ts; {{NOW}} and {{REPLY}} first, the prompt last
-tpl="$(sed -n '/^export const TEMPLATE = `/,/^\/\/ TEMPLATE-END/p' "$ts" | sed '1s/^export const TEMPLATE = `//' | sed '$d' | sed '$s/`$//')"
-[ -n "$tpl" ] || exit 0
-tpl="${tpl//\{\{NOW\}\}/unknown}"
-tpl="${tpl//\{\{REPLY\}\}/(none, this is the first prompt)}"
-case "$tpl" in *'{{PROMPT}}'*) ;; *) exit 0 ;; esac
-pre="${tpl%%\{\{PROMPT\}\}*}"; post="${tpl#*\{\{PROMPT\}\}}"
-{ printf '%s' "$pre"; cat "$tmp/prompt"; printf '%s' "$post"; } > "$tmp/full"
+# A whole prompt of at most 8 words made only of replies.txt phrases (case, punctuation and ё/е ignored,
+# phrases in any order) brings no new work: no call.
+LC_ALL=C awk -v pf="$tmp/prompt" '
+function norm(s,  k) {
+  s = tolower(s); for (k in UP) gsub(k, UP[k], s)
+  gsub(/[.,!?;:()"\047*-]/, " ", s); for (k in PU) gsub(k, " ", s)
+  gsub(/[ \t\r\n]+/, " ", s); sub(/^ /, "", s); sub(/ $/, "", s); return s }
+BEGIN {
+  for (c = 144; c <= 159; c++) UP[sprintf("%c%c", 208, c)] = sprintf("%c%c", 208, c + 32)
+  for (c = 160; c <= 175; c++) UP[sprintf("%c%c", 208, c)] = sprintf("%c%c", 209, c - 32)
+  UP[sprintf("%c%c", 208, 129)] = sprintf("%c%c", 208, 181); UP[sprintf("%c%c", 209, 145)] = sprintf("%c%c", 208, 181)
+  # the ellipsis, the em and en dashes, the guillemets and the curly quotes read as blanks
+  PU[sprintf("%c%c%c", 226, 128, 166)]; PU[sprintf("%c%c%c", 226, 128, 148)]; PU[sprintf("%c%c%c", 226, 128, 147)]
+  PU[sprintf("%c%c", 194, 171)]; PU[sprintf("%c%c", 194, 187)]
+  PU[sprintf("%c%c%c", 226, 128, 152)]; PU[sprintf("%c%c%c", 226, 128, 153)]
+  PU[sprintf("%c%c%c", 226, 128, 156)]; PU[sprintf("%c%c%c", 226, 128, 157)]
+}
+/^[ \t]*(#|$)/ { next }
+{ p = norm($0); if (p != "") P[++np] = p }
+END {
+  while ((getline line < pf) > 0) s = s " " line
+  s = norm(s)
+  if (s == "" || split(s, w, " ") > 8) exit 1
+  while (s != "") {
+    best = 0
+    for (k = 1; k <= np; k++) { p = P[k]; n = length(p); if ((s == p || substr(s, 1, n + 1) == p " ") && n > best) best = n }
+    if (!best) exit 1
+    s = substr(s, best + 2)
+  }
+}' "$here/replies.txt" 2>/dev/null && exit 0
+
+# The client's catalog, when readable: "slug effort effort ..." for each model it lists (visibility "list")
+catf="${CODEX_HOME:-${HOME:-}/.codex}/models_cache.json"
+: > "$tmp/cat"
+[ -f "$catf" ] && grep -oE '"(slug|visibility|effort)"[[:space:]]*:[[:space:]]*"[^"]*"' "$catf" 2>/dev/null |
+  awk -F'"' '$2 == "slug" { m = $4; S[m] = 1; next } $2 == "visibility" { V[m] = $4; next } $2 == "effort" { E[m] = E[m] " " $4 }
+    END { for (m in S) if (V[m] == "list") print m E[m] }' > "$tmp/cat" 2>/dev/null
+# the models offered: the ladder, cut to the catalog when there is one
+models=""; enum=""
+for m in gpt-6-luna gpt-6.1-sol gpt-6-astra; do
+  if [ -s "$tmp/cat" ]; then awk -v m="$m" '$1 == m { f = 1 } END { exit !f }' "$tmp/cat" || continue; fi
+  models="$models $m "; enum="$enum${enum:+,}\"$m\""
+done
+[ -n "$models" ] || exit 0
+printf '{"type":"object","additionalProperties":false,"required":["why","keep","model","effort"],"properties":{"why":{"type":"string"},"keep":{"type":"boolean"},"model":{"type":"string","enum":[%s]},"effort":{"type":"string","enum":["low","medium","high","xhigh","max"]}}}\n' "$enum" > "$tmp/schema.json"
+
+# The last reply goes only with a short prompt, which may lean on it; a missing one is said to be unknown
+if [ "$(wc -w < "$tmp/prompt" | tr -d ' ')" -gt 8 ]; then
+  printf '%s' '(not included: the prompt is long enough to judge on its own)' > "$tmp/ctx"
+elif [ ! -s "$tmp/ctx" ]; then
+  printf '%s' '(unknown: Codex did not pass its previous reply)' > "$tmp/ctx"
+fi
+
+# the template with the reply and the prompt spliced in, never read as patterns
+tpl="$(cat "$here/classifier.txt" 2>/dev/null)"
+case "$tpl" in *'{{REPLY}}'*'{{PROMPT}}'*) ;; *) exit 0 ;; esac
+pre="${tpl%%\{\{REPLY\}\}*}"; rest="${tpl#*\{\{REPLY\}\}}"
+mid="${rest%%\{\{PROMPT\}\}*}"; post="${rest#*\{\{PROMPT\}\}}"
+{ printf '%s' "$pre"; cat "$tmp/ctx"; printf '%s' "$mid"; cat "$tmp/prompt"; printf '%s\n' "$post"; } > "$tmp/full"
 
 to="${COREMODEL_HINT_TIMEOUT:-20}"
 case "$to" in ''|*[!0-9]*) to=20 ;; esac
 [ "$to" -gt 20 ] && to=20
 export COREMODEL_NESTED=1
 # project_doc_max_bytes=0: the project's AGENTS.md is not added to the classifier prompt
-codex exec --model gpt-6-luna --sandbox read-only --skip-git-repo-check --ephemeral --ignore-user-config -c 'model_reasoning_effort="low"' -c 'project_doc_max_bytes=0' - < "$tmp/full" > "$tmp/ans" 2>/dev/null &
+codex exec --model gpt-6-luna --sandbox read-only --skip-git-repo-check --ephemeral --ignore-user-config -c 'model_reasoning_effort="low"' -c 'project_doc_max_bytes=0' --output-schema "$tmp/schema.json" - < "$tmp/full" > "$tmp/ans" 2>/dev/null &
 cp=$!
 ( sleep "$to"; kill_tree "$cp" ) > /dev/null 2>&1 &
 wd=$!
 wait "$cp" 2>/dev/null; cp=""
 kill_tree "$wd"; wd=""
 
-# the first {...} of the answer that holds a level and a model (the Claude parser's rule, on the flat object)
+# the first flat {...} of the answer
 obj="$(tr '\n' ' ' < "$tmp/ans" 2>/dev/null | sed -n 's/^[^{]*\({[^{}]*}\).*$/\1/p')"
 [ -n "$obj" ] || exit 0
-lv="$(printf '%s' "$obj" | sed -n 's/.*"level"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | tr 'A-Z' 'a-z' | tr -d ' -')"
-md="$(printf '%s' "$obj" | sed -n 's/.*"model"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | tr 'A-Z' 'a-z' | tr -d ' ')"
-[ "$lv" = extrahigh ] && lv=xhigh
-case "$lv" in low|medium|high|xhigh|max) ;; *) exit 0 ;; esac
-case "$md" in
-  haiku) cm=gpt-6-luna ;;
-  sonnet) cm=gpt-6.1-sol ;;
-  opus|fable) cm=gpt-6-astra ;;
-  *) exit 0 ;;
-esac
-# the current model fits already (it is the pick or a stronger one): nothing to say
-[ "$now" -eq 0 ] || [ "$now" -lt "$(rank "$cm")" ] || exit 0
+val() { printf '%s' "$obj" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([A-Za-z0-9.-]*\).*/\1/p" | tr 'A-Z' 'a-z'; }
+[ "$(val keep)" = true ] && exit 0
+md="$(val model)"; ef="$(val effort)"
+case "$models" in *" $md "*) ;; *) exit 0 ;; esac
+case "$ef" in low|medium|high|xhigh|max) ;; *) exit 0 ;; esac
+# an effort the catalog does not list for that model drops to the highest one it does list below it
+effs="$(awk -v m="$md" '$1 == m { $1 = ""; print $0 " " }' "$tmp/cat" 2>/dev/null)"
+if [ -n "$effs" ]; then
+  case "$effs" in
+    *" $ef "*) ;;
+    *) lv=""
+       for l in low medium high xhigh max; do
+         case "$effs" in *" $l "*) lv="$l" ;; esac
+         [ "$l" = "$ef" ] && break
+       done
+       [ -n "$lv" ] || exit 0
+       ef="$lv" ;;
+  esac
+fi
+# the current model fits already (it is the pick or a stronger one): nothing to say. Codex does not tell
+# the hook the current effort, so the effort is named, never compared.
+[ "$now" -eq 0 ] || [ "$now" -lt "$(rank "$md")" ] || exit 0
 # additionalContext reaches only the model; systemMessage shows the same line to the user
-msg="coremodel: this prompt needs $cm at $lv effort; switch with /model if the current one differs."
+msg="coremodel: this prompt needs $md at $ef effort; switch with /model if the current one differs."
 printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"%s"},"systemMessage":"%s"}\n' "$msg" "$msg"
 exit 0
