@@ -7,6 +7,8 @@ full detail.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-11
+
 Codex: the hooks changed (a new `Stop` hook), so Codex keeps them off until you trust both again in
 `/hooks`.
 
