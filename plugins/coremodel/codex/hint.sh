@@ -272,7 +272,11 @@ fi
 # the current model fits already (it is the pick or a stronger one): nothing to say. Codex does not tell
 # the hook the current effort, so the effort is named, never compared.
 [ "$now" -eq 0 ] || [ "$now" -lt "$(rank "$md")" ] || exit 0
-# additionalContext reaches only the model; systemMessage shows the same line to the user
+# systemMessage is the line for clients that show hook warnings. Codex Desktop does not show it in the chat, so
+# additionalContext, which only the model reads, asks the model to name the pick in its first visible message.
 msg="coremodel: this prompt needs $md at $ef effort; switch with /model if the current one differs."
-printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"%s"},"systemMessage":"%s"}\n' "$msg" "$msg"
+case "$md" in gpt-6-luna) nm="GPT-6 Luna" ;; gpt-6.1-sol) nm="GPT-6.1 Sol" ;; *) nm="GPT-6 Astra" ;; esac
+case "$ef" in low) el=Low ;; medium) el=Medium ;; high) el=High ;; xhigh) el=XHigh ;; *) el=Max ;; esac
+ctx="CoreModel recommends $nm · $el for this prompt. Start your first visible message with one short line that names this pick in the user's language, for example: CoreModel recommends $nm · $el. Then continue with the request as usual. Do not wait for an answer: the person switches the model with /model if they want to."
+printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"%s"},"systemMessage":"%s"}\n' "$ctx" "$msg"
 exit 0

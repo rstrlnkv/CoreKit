@@ -166,7 +166,9 @@ In Codex the plugin gives a **hint only**, and it is **off until you turn it on*
 cannot switch the model or the effort, and the hint sends every prompt to a model once more. A
 `UserPromptSubmit` hook (`codex/hint.sh`) asks `gpt-6-luna` (`codex exec`, read-only) which model and
 effort the prompt needs and adds one line, for example "this prompt needs gpt-6-astra at high effort;
-switch with /model if the current one differs". You switch yourself with `/model`. The hint names
+switch with /model if the current one differs". Codex Desktop does not show that line in the chat, so
+the hook also asks Codex to open its reply with the pick in your language, for example "CoreModel
+рекомендует GPT-6 Astra · High", and then go on with your request. You switch yourself with `/model`. The hint names
 `gpt-6-luna`, `gpt-6.1-sol` or `gpt-6-astra`, and judges the model and the effort separately: a hard
 question with a short answer can get `gpt-6-astra` at low effort.
 

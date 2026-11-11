@@ -217,6 +217,26 @@ case "$out" in *high*) pass ;; *) fail "main: context lacks the effort 'high'" ;
 case "$out" in *xhigh*) fail "main: effort high reported as xhigh" ;; *) pass ;; esac
 case "$out" in */model*) pass ;; *) fail "main: context lacks /model" ;; esac
 case "$out" in *'fix the flaky login test'*) fail "main: the prompt is printed back" ;; *) pass ;; esac
+# Codex Desktop does not show systemMessage in the chat: additionalContext asks the model to name the pick in its first
+# visible message, in the person's language, and to carry on. systemMessage stays for clients that show it.
+ctx="$(printf '%s' "$out" | sed -n 's/.*"additionalContext":"\([^"]*\)".*/\1/p')"
+sysm="$(printf '%s' "$out" | sed -n 's/.*"systemMessage":"\([^"]*\)".*/\1/p')"
+assert_eq "$sysm" "coremodel: this prompt needs gpt-6-astra at high effort; switch with /model if the current one differs." "main: systemMessage as before"
+for w in 'CoreModel recommends GPT-6 Astra · High' 'first visible message' "user's language" 'Then continue' '/model'; do
+  case "$ctx" in *"$w"*) pass ;; *) fail "main: additionalContext lacks '$w': $ctx" ;; esac
+done
+[ "$ctx" != "$sysm" ] && pass || fail "main: additionalContext is the systemMessage line"
+# the label for each model and effort
+label() { # label <model> <effort> <expected label>
+  answer "{\"why\":\"x\",\"keep\":false,\"model\":\"$1\",\"effort\":\"$2\"}"
+  run_hint "$PATHSTUB" "$(event 'do the thing in the code')"
+  json_ok "$SANDBOX/out" && pass || fail "label $1/$2: stdout is not valid JSON"
+  assert_contains "$SANDBOX/out" "\"additionalContext\":\"CoreModel recommends $3 "
+}
+label gpt-6-luna low 'GPT-6 Luna · Low'
+label gpt-6.1-sol medium 'GPT-6.1 Sol · Medium'
+label gpt-6-astra xhigh 'GPT-6 Astra · XHigh'
+label gpt-6-astra max 'GPT-6 Astra · Max'
 
 # model and effort are read on their own: a strong model at low effort stays low, a light one at high stays high
 check_pair() { # <model> <effort> <other names that must not appear>

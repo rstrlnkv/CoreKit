@@ -19,6 +19,9 @@ Codex: the hooks changed (a new `Stop` hook), so Codex keeps them off until you 
   that chat, and a short follow-up ("почини", "the second one") is judged with it. A missing reply is
   now sent as unknown; the hint no longer tells the classifier that every prompt is the first one, which
   turned "да, давай" into a low-effort pick instead of "keep". The README lists what is sent.
+- Codex hint: Codex Desktop does not show the hook's line in the chat, so the hook now asks Codex to
+  name the pick at the top of its reply, in your language ("CoreModel рекомендует GPT-6 Astra ·
+  High"), and then go on. The line for clients that show hook messages stays as it was.
 
 ### Changed
 
