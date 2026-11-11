@@ -40,4 +40,9 @@ check: <set after scaffolding>
 - Tests (`**/test/**`, `**/tests/**`, `*_test.*`, `*.test.*`): write the failing test first, watch it
   fail, then implement. Tests must not depend on network access or real accounts. Keep test names
   descriptive: what behavior, under which condition.
+- Before building, state the assumptions the change rests on. When a request reads two ways, ask
+  instead of picking one, and say so when a simpler way would do.
+- Write only what the request needs: no feature, abstraction, option or error path nobody asked for.
+- Touch only the lines the change needs, in the style around them. Remove what your change
+  left unused; mention older dead code instead of deleting it.
 - Never read `.env` files or `~/.ssh`.

@@ -9,6 +9,15 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off until then.
+
+### Changed
+- The engineer agent and the `CLAUDE.md` of a new project now carry four coding rules, after
+  Andrej Karpathy's notes on LLM coding pitfalls: say the assumptions and ask when a request reads
+  two ways, write nothing speculative, touch only the lines the change needs (and remove only what
+  the change itself left unused), and name a simpler way when there is one. An engineer brief that
+  reads two ways now comes back with both readings in `Open` instead of being guessed.
+
 ## [1.1.0] - 2026-11-11
 
 Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off until then.
