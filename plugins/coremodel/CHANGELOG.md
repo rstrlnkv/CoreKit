@@ -7,6 +7,8 @@ full detail.
 
 ## [Unreleased]
 
+Codex: an update keeps the hook off until you trust it again in `/hooks`.
+
 ### Changed
 
 - A new pane layout. The mode is a list at the top. A card shows CoreModel's pick with **Reset**
