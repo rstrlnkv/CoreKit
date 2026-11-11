@@ -13,7 +13,7 @@ plugins/corecrew/                 project workflow
   .claude-plugin/plugin.json      Claude Code manifest: name, version, settings (userConfig), icon
   .codex-plugin/plugin.json       Codex manifest: the same name, version and description, Codex listing fields
   assets/icon.png                 the plugin icon (SVG source in docs/icons/)
-  skills/                         new-project, task, ship, new-standard (SKILL.md + references/)
+  skills/                         new-project, task, ship, new-standard, bloat-audit (SKILL.md + references/)
     new-project/scripts/          scaffold.sh, merge-generated.sh, preflight.sh (scaffold.sh and
                                   preflight.sh source scripts/lib.sh)
     */agents/openai.yaml          Codex: keeps task, ship and new-standard out of implicit invocation

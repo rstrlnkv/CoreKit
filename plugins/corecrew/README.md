@@ -66,7 +66,7 @@ Then:
    start it as `codex --add-dir "<Core>"` (`~/Projects/Core` by default). For new-project, start it
    as `codex --add-dir "<Projects>"` (the folder that holds the Core): the Core may not exist yet,
    and the new code folder goes there. Every skill checks this and tells you the command.
-4. **Name the skills.** Codex may pick `new-project` by itself. Name the others in your prompt
+4. **Name the skills.** Codex may pick `new-project` and `bloat-audit` by itself. Name the others in your prompt
    (`$corecrew:task <task>`, `$corecrew:ship`, `$corecrew:new-standard`) or pick them from the
    skill list.
 5. **Optional: the secrets profile.** See [SECURITY.md](../../SECURITY.md#recommended-host-settings).
@@ -115,6 +115,7 @@ Coming from `coredev` (0.2.x), `corekit` (0.1.x) or a project made by corecrew 0
 | `task` | Runs a task through the crew of agents and ends with a report and one commit; also prepares a release and adopts an existing project |
 | `ship` | Releases the current branch: pushes it after your yes, tags it and publishes a GitHub release after a second yes |
 | `new-standard` | Helps you write a standard of your own into the Core |
+| `bloat-audit` | Reads a whole repo and lists, ranked, what can be deleted, merged or replaced; changes nothing |
 | [The guards](#what-the-hooks-do) | Hooks refuse to read secrets and to write internal files into the code folder; git hooks keep internal files out of commits and pushes |
 | Save and undo | `save` commits one step in the code repo and the Core together; `undo-step` reverts the last one in both |
 | [The settings](#settings) | The Core folder, attribution, the crew's models and the language of the hook messages |
@@ -138,6 +139,7 @@ Coming from `coredev` (0.2.x), `corekit` (0.1.x) or a project made by corecrew 0
 | `/corecrew:task adopt <folder>` | Brings an existing project into the Core layout |
 | `/corecrew:ship [<part>] [patch\|minor\|major\|<version>]` | Releases the current branch (in a repo with several versioned parts, the one `<part>` you name; from the default branch it offers a release branch), then, after your yes, pushes the branch, waits for its CI checks, fast-forwards the default branch and pushes it; after a second yes, tags the version and publishes a GitHub release |
 | `/corecrew:new-standard` | Helps you write a standard of your own into the Core |
+| `/corecrew:bloat-audit` | Lists what the repo could lose: duplicates, hand-written standard library, one-user abstractions, unused settings, dead code |
 
 ### `new-project`
 

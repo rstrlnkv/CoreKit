@@ -9,6 +9,14 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off until then.
+
+### Added
+- `bloat-audit`: a read-only audit of a whole repository that lists, ranked, what can be deleted,
+  merged or replaced (duplicated logic, a hand-written standard library, an abstraction with one
+  user, configuration nobody changes, dead code). It triggers by meaning, works in any git repo and
+  changes nothing; in a corecrew project it offers `/corecrew:task` for each finding you pick.
+
 ## [1.0.1] - 2026-11-11
 
 Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off until then.

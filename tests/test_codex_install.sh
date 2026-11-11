@@ -65,6 +65,7 @@ if grep -qiE 'openai\.yaml|plugin\.json|invalid|failed to' "$SANDBOX/prompt.err"
 text="$(sed 's/\\n/\n/g' "$SANDBOX/prompt.json")"
 listed() { printf '%s\n' "$text" | grep -c "^- corecrew:$1: "; }
 assert_eq "$(listed new-project)" "1" "new-project is listed"
+assert_eq "$(listed bloat-audit)" "1" "bloat-audit is listed (it triggers by meaning)"
 # allow_implicit_invocation: false keeps these out of the model's skills list (observed, codex 0.166.0)
 for s in task ship new-standard; do assert_eq "$(listed $s)" "0" "$s is not listed (implicit invocation off)"; done
 assert_eq "$(printf '%s\n' "$text" | grep -c '^- coreopinion:second-opinion: ')" "0" "coreopinion's skill is not listed in Codex"

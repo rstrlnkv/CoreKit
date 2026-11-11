@@ -58,7 +58,7 @@ Each plugin's README has the full description, its commands and its settings.
 
 | Feature | What it does |
 |---|---|
-| [**corecrew**](plugins/corecrew/README.md) | Runs every project the same way: it starts from an interview, works with a crew of agents and keeps the docs in a private repo. Commands: `/corecrew:new-project`, `/corecrew:task`, `/corecrew:ship` and `/corecrew:new-standard`; hooks keep secrets and internal files out of your public code; `save` and `undo-step` go one step at a time. Hosts: Claude Code, Codex. |
+| [**corecrew**](plugins/corecrew/README.md) | Runs every project the same way: it starts from an interview, works with a crew of agents and keeps the docs in a private repo. Commands: `/corecrew:new-project`, `/corecrew:task`, `/corecrew:ship`, `/corecrew:new-standard` and `/corecrew:bloat-audit`; hooks keep secrets and internal files out of your public code; `save` and `undo-step` go one step at a time. Hosts: Claude Code, Codex. |
 | [**coremodel**](plugins/coremodel/README.md) | Picks Haiku, Sonnet, Opus or Fable and the effort level before Claude starts on a prompt, and asks before the costly ones. Command: `/coremodel` shows and changes what it does. Hosts: Claude Code; in Codex, a hint you turn on. |
 | [**coreopinion**](plugins/coreopinion/README.md) | Gets a second opinion from GPT on your code or plan through the Codex CLI, with a narrow read-only permission profile, and sends only the files you confirm; Claude stays the only one that edits. Command: `/coreopinion:second-opinion`. Host: Claude Code. |
 
