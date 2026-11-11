@@ -1,0 +1,58 @@
+Pick the model and the reasoning effort for one prompt a person sent to Codex. Codex is an agent: it reads files, runs commands and changes code, and it also writes, analyses and researches.
+
+These are two separate choices. Judge each one on its own:
+- The model is how hard the thinking itself is. gpt-6-luna is fast and cheap, gpt-6.1-sol is the everyday model, gpt-6-astra is the strongest and slowest.
+- Effort is how much the model reads, checks and thinks before it acts. It follows the price of a mistake and how unclear the way forward is.
+A strong model does not need high effort, and high effort does not need a strong model. A hard question with a short answer takes gpt-6-astra at low effort. Careful work along a clear path takes a lighter model at high effort.
+
+First decide keep. keep is true when the prompt brings no new work: it only approves, answers a question Codex asked, picks one of the options Codex offered (even a big one: Codex has weighed it already), or says to carry on. keep needs something to answer: when Codex only described a finding and asked nothing, a short command such as "fix it" or "почини" is the work it names, not keep. A question the person asks, or a request for work Codex did not propose, is new work and never keep. When new work rides along with the approval ("да, и ещё почини X"), judge that work.
+
+Codex's previous reply may be unknown. Then judge the prompt as it stands: a short command such as "fix it" or "the second one" is the work it most likely names, at medium effort with gpt-6.1-sol when nothing points higher.
+
+Then walk down the effort ladder and take the first rung that fits:
+1. low: quick, conversational or mechanical work that is easy to check at a glance, where a mistake is cheap.
+   Code: explain a snippet or an error message, rename something, fix a typo, change one line of config or text, run a command, a git step, a question about a tool or a flag.
+   Office: brainstorm, rewrite a passage, translate a short text, summarise briefly, sort a list, answer a simple question.
+2. medium: ordinary work with a clear path. When unsure, choose medium.
+   Code: a contained feature, or a fix whose cause is known, in one or two files; tests for a given function; a small script; documentation; work that follows a pattern the code already has.
+   Office: everyday writing, a meeting summary with decisions and next steps, a report in a fixed format, quick research.
+3. high: a hidden mistake would be costly, or the way forward is unclear.
+   Code: a bug whose cause is unknown, failing or flaky tests, a crash or a stack trace that asks why, changes across many files, refactoring, anything touching security, authentication, payments, money sums, data migrations, production deploys, concurrency or deleting data, code review, performance work, designing an API or a schema.
+   Office: reconciling numbers across sources, open-ended analysis, reviewing a contract for risk, fact-checking, verifying earlier work.
+4. xhigh: a long, hard and critical job handed over to run alone. All three must hold.
+5. max: only when the prompt itself asks for the deepest, most careful work possible and says it is critical. Otherwise xhigh.
+
+Then pick the model on its own ladder, stopping at the first match:
+- gpt-6-luna: the answer is known or the work is mechanical: a fact or how-to question, explaining a snippet or an error message, a rename, a typo, a one-line change, a command to run, a short text to write, rewrite or translate.
+- gpt-6.1-sol (also when unsure): ordinary building or writing with a clear path, including careful work that follows written steps.
+- gpt-6-astra: judgement or diagnosis: an unknown cause, a choice between options with trade-offs (even when the answer is short), design, review, risk, many files, analysis across sources, or long critical work handed off to run alone.
+When keep is true, still name the model and the effort the work needs.
+
+Keep in mind:
+- Length is not difficulty. Long work that only follows rules stays low or medium.
+- A short prompt can hide a lot of work ("fix the login", "почини авторизацию"). Judge what the work needs, not how many words ask for it.
+- Asking to think well about a small thing makes it neither critical nor hard.
+- The prompt can be in any language.
+
+Examples:
+- "what does git stash pop do?": gpt-6-luna, low
+- "в каком файле настраивается логгер?": gpt-6-luna, low
+- "add pagination to the users list, the same way the orders list has it": gpt-6.1-sol, medium
+- "итоговая сумма в корзине иногда на копейку не сходится": gpt-6-astra, high
+- "Да, и ещё выясни, почему сумма заказа иногда расходится на копейку": gpt-6-astra, high (the new work counts, not the approval)
+- "Kafka or RabbitMQ for our notifications? one paragraph": gpt-6-astra, low
+- "выкати релиз на прод по чек-листу из DEPLOY.md": gpt-6.1-sol, high
+- "build the whole booking service from the approved spec, work on your own until it is done": gpt-6-astra, xhigh
+- previous reply "Run the migration now?", prompt "yes": keep
+
+Codex's previous reply in this chat, its last part:
+<reply>
+{{REPLY}}
+</reply>
+
+The prompt:
+<prompt>
+{{PROMPT}}
+</prompt>
+
+Answer in the given JSON shape: why is the deciding reason in at most 12 plain words, in the language of the prompt; then keep, model and effort.

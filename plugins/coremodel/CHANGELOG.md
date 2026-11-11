@@ -7,7 +7,7 @@ full detail.
 
 ## [Unreleased]
 
-Codex: an update keeps the hook off until you trust it again in `/hooks`.
+Codex: an update keeps the hooks off until you trust them again in `/hooks`.
 
 ### Changed
 
@@ -17,6 +17,31 @@ Codex: an update keeps the hook off until you trust it again in `/hooks`.
   adapts to its width: blocks stand side by side when it is wide and stack when it is narrow.
 - The pane's warnings are one short line each. The mode hint and the last pick are no longer shown
   in the pane; `/coremodel` still says the mode and what it does.
+
+## [0.10.0] - 2026-11-11
+
+Codex: the hooks changed (a new `Stop` hook), so Codex keeps them off until you trust both again in
+`/hooks`.
+
+### Added
+
+- Codex hint: a prompt that is only a greeting, thanks, an approval or "go on" ("привет", "да,
+  давай", "ok, go ahead") gets no classifier call, so it no longer waits 7 seconds for nothing. A
+  prompt with new work after the approval ("да, и ещё проверь расчёты") is still checked.
+- Codex hint: a new `Stop` hook keeps the last 600 bytes of Codex's reply until your next prompt in
+  that chat, and a short follow-up ("почини", "the second one") is judged with it. A missing reply is
+  now sent as unknown; the hint no longer tells the classifier that every prompt is the first one, which
+  turned "да, давай" into a low-effort pick instead of "keep". The README lists what is sent.
+- Codex hint: Codex Desktop does not show the hook's line in the chat, so the hook now asks Codex to
+  name the pick at the top of its reply, in your language ("CoreModel рекомендует GPT-6 Astra ·
+  High"), and then go on. The line for clients that show hook messages stays as it was.
+
+### Changed
+
+- Codex hint: its own classifier prompt (`codex/classifier.txt`) with Codex's model names, which
+  judges the model and the effort separately, and an answer in a fixed JSON shape (`--output-schema`).
+- Codex hint: when Codex's model catalog is readable, only the models it lists are offered, and an
+  effort a model does not support is lowered to the highest one it does.
 
 ## [0.9.0] - 2026-11-10
 

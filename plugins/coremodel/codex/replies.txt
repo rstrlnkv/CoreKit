@@ -1,0 +1,95 @@
+# Replies that bring no new work: greetings, thanks, approvals and "go on". codex/hint.sh skips the
+# classifier when the whole prompt (at most 8 words) is a run of these phrases, case and punctuation
+# ignored, ё read as е. One lowercase phrase per line. Never add a phrase that names work ("fix it"),
+# turns a proposal down ("no") or depends on the options offered ("the second one").
+hi
+hello
+hey
+hey there
+good morning
+good afternoon
+good evening
+thanks
+thank you
+thanks a lot
+thx
+ok
+okay
+k
+yes
+yes please
+yep
+yeah
+yup
+sure
+of course
+fine
+great
+good
+perfect
+nice
+cool
+agreed
+correct
+right
+exactly
+sounds good
+looks good
+lgtm
+please
+please do
+go
+go ahead
+go on
+do it
+continue
+carry on
+keep going
+proceed
+approved
+confirmed
+let's go
+lets go
+👍
+привет
+приветик
+здравствуй
+здравствуйте
+добрый день
+доброе утро
+добрый вечер
+спасибо
+спасибо большое
+благодарю
+спс
+да
+ага
+угу
+ок
+окей
+ладно
+хорошо
+отлично
+супер
+класс
+понятно
+ясно
+согласен
+согласна
+верно
+точно
+конечно
+ну
+давай
+давайте
+делай
+сделай
+делаем
+поехали
+вперед
+продолжай
+продолжи
+продолжаем
+дальше
+пожалуйста
+подтверждаю
