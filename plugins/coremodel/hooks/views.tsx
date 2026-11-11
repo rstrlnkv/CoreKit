@@ -10,8 +10,9 @@ import { placedMarks, sessionStats } from './pick'
 import { type Mode, MODES, texts } from './policy'
 import { session } from './session'
 
-// The narrowest a block of the pane may be, in cells: two blocks side by side need twice this (and a
-// gap), so a pane narrower than that stacks them. The session groups wrap the same way at GROUP.
+// The base width of a block of the pane, in cells: blocks grow from it to fill the line, and two side by
+// side need twice this (and a gap), so a narrower pane stacks them. A base width, not a minimum: a block
+// holding a wrapping row would claim the whole line. The session groups wrap the same way at GROUP.
 const BLOCK = 28
 const GROUP = 20
 // The longest session bar, in cells; the others are drawn to scale, at least one cell.
@@ -79,7 +80,7 @@ export const drawViews: Register = (on, options) => {
       )
     // The pair: CoreModel's pick with Reset and what Claude has under it, or what Claude has alone.
     const now = (
-      <Box key="now" flexDirection="column" gap="xs" flexGrow={1} minWidth={BLOCK} borderStyle="round" paddingX={1}>
+      <Box key="now" flexDirection="column" gap="xs" flexGrow={1} width={BLOCK} borderStyle="round" paddingX={1}>
         {caption(isHeld ? t.pickedBy : t.inClaude)}
         <Box key="pair" flexDirection="row" flexWrap="wrap" gap="sm" justifyContent="space-between" alignItems="center">
           {nowPair ? <Text size="heading" weight="semibold">{nowPair}</Text> : <Text size="heading" dimColor>—</Text>}
@@ -91,7 +92,7 @@ export const drawViews: Register = (on, options) => {
     // The effort scale: one button per level, named by its label, drawn as a cell filled up to the current level.
     const at = nowLevel ? LEVELS.indexOf(nowLevel) : -1
     const choose = (
-      <Box key="choose" flexDirection="column" gap="sm" flexGrow={1} minWidth={BLOCK}>
+      <Box key="choose" flexDirection="column" gap="sm" flexGrow={1} width={BLOCK}>
         {withModel && allowed.length ? (
           <Box key="choose-model" flexDirection="column" gap="xs">
             {caption(t.model)}
@@ -106,11 +107,9 @@ export const drawViews: Register = (on, options) => {
           {caption(t.effort)}
           <Box key="levels" flexDirection="row">
             {LEVELS.map((l, i) => (
-              <Box key={`level-${l}-cell`} flexGrow={1}>
-                <Button key={`level-${l}`} label={t.levelName(l)} plain variant={l === nowLevel ? 'primary' : undefined} onPress={act('level', () => paneChoice($, l))}>
-                  {i <= at ? FILLED : EMPTY}
-                </Button>
-              </Box>
+              <Button key={`level-${l}`} label={t.levelName(l)} plain variant={l === nowLevel ? 'primary' : undefined} onPress={act('level', () => paneChoice($, l))}>
+                {i <= at ? FILLED : EMPTY}
+              </Button>
             ))}
           </Box>
         </Box>
@@ -122,7 +121,7 @@ export const drawViews: Register = (on, options) => {
       const most = Math.max(...rows.map(r => r[1]))
       const width = Math.max(...rows.map(r => r[0].length)) + 1
       return (
-        <Box key={key} flexDirection="column" gap="xs" flexGrow={1} minWidth={GROUP}>
+        <Box key={key} flexDirection="column" gap="xs" flexGrow={1} width={GROUP}>
           <Text weight="semibold">{title}</Text>
           {[...rows]
             .sort((a, b) => b[1] - a[1])

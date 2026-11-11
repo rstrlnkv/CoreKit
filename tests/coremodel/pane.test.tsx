@@ -161,11 +161,16 @@ test('the session group boxes wrap: side by side when wide, stacked when narrow'
       expect(b?.props.flexDirection).toBe('row')
       expect(b?.props.flexWrap).toBe('wrap')
     }
+    // a base width, not a minimum: a block holding a wrapping row would otherwise claim the whole
+    // line and push its neighbour down even in a wide pane (seen live in the terminal)
     for (const key of ['now', 'choose', 'session-models', 'session-levels']) {
       const b = await ui.find({ type: 'Box', key })
       expect(b?.props.flexGrow).toBe(1)
-      expect(typeof b?.props.minWidth).toBe('number')
+      expect(typeof b?.props.width).toBe('number')
+      expect(b?.props.minWidth).toBe(undefined)
     }
+    // the scale's cells stand together: no stretched cell boxes between them
+    expect(await ui.find({ type: 'Box', key: 'level-low-cell' })).toBe(undefined)
     await ui.unmount()
   }
 })
