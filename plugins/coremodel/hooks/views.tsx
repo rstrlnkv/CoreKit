@@ -1,4 +1,4 @@
-import type { Register, RenderChildren } from 'claude-code'
+import type { Register } from 'claude-code'
 
 import { acceptSuggestion, declineSuggestion, undoChange, undoTarget } from './actions'
 import { classifierFault, FAIL_SHOW } from './ask'
@@ -7,14 +7,18 @@ import { chatState, currentBand, heldPair, paneChoice, paneModel, setMode } from
 import { allowedModels, currentMode, log, pickOn, PLUGIN } from './host'
 import { LADDER, MODELS } from './models'
 import { placedMarks, sessionStats } from './pick'
-import { MODES, texts } from './policy'
+import { type Mode, MODES, texts } from './policy'
 import { session } from './session'
 
-const RULE = '─'.repeat(40)
-// The width of the captions in the pane's rows, in cells: the longest caption of the language, plus one,
-// so every row's value starts in the same column.
-const captionWidth = (t: ReturnType<typeof texts>) =>
-  Math.max(...[t.thisChat, t.model, t.effort, t.thisSession, t.lastPick].map(c => c.length)) + 1
+// The narrowest a block of the pane may be, in cells: two blocks side by side need twice this (and a
+// gap), so a pane narrower than that stacks them. The session groups wrap the same way at GROUP.
+const BLOCK = 28
+const GROUP = 20
+// The longest session bar, in cells; the others are drawn to scale, at least one cell.
+const BAR = 10
+// A cell of the effort scale: filled up to the current level.
+const FILLED = '▰'
+const EMPTY = '▱'
 
 /** What CoreModel draws: the footer button, the pane, the transcript rows and the band above the prompt. */
 export const drawViews: Register = (on, options) => {
@@ -42,8 +46,12 @@ export const drawViews: Register = (on, options) => {
   })
 
   // A hook's filter is read from literals in its own file, so the pane id is spelled out here.
+  // The layout: the name and the mode list; then two blocks that sit side by side in a wide pane and
+  // stack in a narrow one (the pair, the model and effort controls); then the session, a model group
+  // and an effort group that wrap the same way; then the warnings.
   on('ui.render', { component: 'Pane', requestId: 'coremodel' }, async ($, e) => {
-    const { Box, Button, Text } = $.ui.resolve(e)
+    const ui = $.ui.resolve(e)
+    const { Box, Button, Text } = ui
     const t = texts(session.lastLang)
     const mode = await currentMode($, options)
     const { nowModel, nowLevel, isHeld, defaultModel, defaultLevel } = chatState(await heldPair($), options)
@@ -55,85 +63,113 @@ export const drawViews: Register = (on, options) => {
     const act = (what: string, f: () => Promise<unknown>) => () => {
       f().catch(err => log($, what, err))
     }
-    // A selected button says so in its words, not by colour alone; the colour stays as a second cue.
-    const mark = (label: string, isOn: boolean) => (isOn ? `● ${label}` : label)
     const nowPair = t.pair(nowModel, nowLevel)
     const yours = t.pair(defaultModel, defaultLevel)
-    const caption = captionWidth(t)
-    const row = (key: string, label: string, body: RenderChildren) => (
-      <Box key={key} flexDirection="row" gap="sm">
-        <Box key={`${key}-caption`} minWidth={caption}>
-          <Text dimColor>{label}</Text>
-        </Box>
-        {body}
-      </Box>
-    )
-    const rule = (key: string) => (
-      <Text key={key} dimColor wrap="truncate-end">
-        {RULE}
-      </Text>
-    )
-    // The session in one line: models, then efforts, then the prompts left as they were.
-    const sessionLine = s
-      ? [
-          ...(withModel ? LADDER.filter(m => s.models[m] > 0).map(m => `${MODELS[m].name} ${s.models[m]}`) : []),
-          ...LEVELS.filter(l => s.picks[l] > 0).map(l => `${t.levelName(l)} ${s.picks[l]}`),
-          ...(s.kept > 0 ? [t.unchanged(s.kept)] : []),
-        ].join(' · ')
-      : ''
-    // The last pick, only when it says something the chat does not: it was not applied, or it differs.
-    const last = s?.last
-    const lastPair = last ? t.pair(withModel && last.model ? last.model : '', last.level) : ''
-    const showLast = !!last && (!!last.declined || last.level !== nowLevel || (withModel && !!last.model && last.model !== nowModel))
-    const lastLine = last ? [lastPair, last.why, last.declined ? t.notApplied : ''].filter(Boolean).join(' · ') : ''
-    return (
-      <Box flexDirection="column" gap="sm">
-        <Box key="mode" flexDirection="column" gap="xs">
-          <Text weight="semibold">{`CoreModel · ${t.modeName(mode)}`}</Text>
-          <Box key="modes" flexWrap="wrap" gap="xs">
-            {MODES.map(m => (
-              <Button key={`mode-${m}`} label={mark(t.modeName(m), m === mode)} variant={m === mode ? 'primary' : undefined} onPress={act('mode', () => setMode($, options, m))} />
-            ))}
-          </Box>
-          <Text dimColor>{t.modeHintFor(mode, withModel)}</Text>
-        </Box>
-        {rule('d1')}
-        <Box key="now" flexDirection="column" gap="xs">
-          {row('chat', t.thisChat, nowPair ? <Text weight="semibold">{nowPair}</Text> : <Text dimColor>{t.shownLater}</Text>)}
-          {isHeld ? <Text dimColor>{yours ? `${t.setBy} · ${t.yourDefault(yours)}` : t.setBy}</Text> : null}
-          {isHeld ? (
-            <Box key="release-row">
-              <Button key="release" label={t.useDefault} onPress={act('release', () => paneChoice($, null))} />
-            </Box>
-          ) : null}
-          {fault && fault.count >= FAIL_SHOW ? <Text key="fault" color="warning">{`⚠ ${t.classifierDown(fault.reason)}`}</Text> : null}
-          {[...session.unavailable].map(m => (
-            <Text key={`unavailable-${m}`} color="warning">{`⚠ ${t.unavailableModel(m)}`}</Text>
+    const caption = (text: string) => <Text dimColor>{text}</Text>
+    // A surface with no Select (the mobile app) gets the modes as buttons, the selected one marked in words.
+    const modes =
+      'Select' in ui ? (
+        <ui.Select key="mode" value={mode} options={MODES.map(m => ({ value: m, label: t.modeName(m) }))} onSelect={v => act('mode', () => setMode($, options, v as Mode))()} />
+      ) : (
+        <Box key="modes" flexWrap="wrap" gap="xs">
+          {MODES.map(m => (
+            <Button key={`mode-${m}`} label={m === mode ? `● ${t.modeName(m)}` : t.modeName(m)} variant={m === mode ? 'primary' : undefined} onPress={act('mode', () => setMode($, options, m))} />
           ))}
         </Box>
-        {withModel && allowed.length
-          ? row(
-              'choose-model',
-              t.model,
-              <Box key="models" flexWrap="wrap" gap="xs" flexShrink={1}>
-                {allowed.map(m => (
-                  <Button key={`model-${m}`} label={mark(MODELS[m].name, m === nowModel)} variant={m === nowModel ? 'primary' : undefined} onPress={act('model', () => paneModel($, m))} />
-                ))}
-              </Box>,
-            )
-          : null}
-        {row(
-          'choose',
-          t.effort,
-          <Box key="levels" flexWrap="wrap" gap="xs" flexShrink={1}>
-            {LEVELS.map(l => (
-              <Button key={`level-${l}`} label={mark(t.levelName(l), l === nowLevel)} variant={l === nowLevel ? 'primary' : undefined} onPress={act('level', () => paneChoice($, l))} />
+      )
+    // The pair: CoreModel's pick with Reset and what Claude has under it, or what Claude has alone.
+    const now = (
+      <Box key="now" flexDirection="column" gap="xs" flexGrow={1} minWidth={BLOCK} borderStyle="round" paddingX={1}>
+        {caption(isHeld ? t.pickedBy : t.inClaude)}
+        <Box key="pair" flexDirection="row" flexWrap="wrap" gap="sm" justifyContent="space-between" alignItems="center">
+          {nowPair ? <Text size="heading" weight="semibold">{nowPair}</Text> : <Text size="heading" dimColor>—</Text>}
+          {isHeld ? <Button key="release" label={t.reset} onPress={act('release', () => paneChoice($, null))} /> : null}
+        </Box>
+        {isHeld && yours ? <Text dimColor>{t.inClaudeIs(yours)}</Text> : null}
+      </Box>
+    )
+    // The effort scale: one button per level, named by its label, drawn as a cell filled up to the current level.
+    const at = nowLevel ? LEVELS.indexOf(nowLevel) : -1
+    const choose = (
+      <Box key="choose" flexDirection="column" gap="sm" flexGrow={1} minWidth={BLOCK}>
+        {withModel && allowed.length ? (
+          <Box key="choose-model" flexDirection="column" gap="xs">
+            {caption(t.model)}
+            <Box key="models" flexWrap="wrap" gap="xs">
+              {allowed.map(m => (
+                <Button key={`model-${m}`} label={m === nowModel ? `● ${MODELS[m].name}` : MODELS[m].name} variant={m === nowModel ? 'primary' : undefined} onPress={act('model', () => paneModel($, m))} />
+              ))}
+            </Box>
+          </Box>
+        ) : null}
+        <Box key="choose-level" flexDirection="column" gap="xs">
+          {caption(t.effort)}
+          <Box key="levels" flexDirection="row">
+            {LEVELS.map((l, i) => (
+              <Box key={`level-${l}-cell`} flexGrow={1}>
+                <Button key={`level-${l}`} label={t.levelName(l)} plain variant={l === nowLevel ? 'primary' : undefined} onPress={act('level', () => paneChoice($, l))}>
+                  {i <= at ? FILLED : EMPTY}
+                </Button>
+              </Box>
             ))}
-          </Box>,
-        )}
-        {sessionLine || showLast ? rule('d2') : null}
-        {sessionLine ? row('session', t.thisSession, <Text>{sessionLine}</Text>) : null}
-        {showLast ? row('last', t.lastPick, <Text>{lastLine}</Text>) : null}
+          </Box>
+        </Box>
+      </Box>
+    )
+    // One group of the session: the most used first, a bar of up to BAR cells to scale, the count.
+    const group = (key: string, title: string, rows: [string, number][]) => {
+      if (!rows.length) return null
+      const most = Math.max(...rows.map(r => r[1]))
+      const width = Math.max(...rows.map(r => r[0].length)) + 1
+      return (
+        <Box key={key} flexDirection="column" gap="xs" flexGrow={1} minWidth={GROUP}>
+          <Text weight="semibold">{title}</Text>
+          {[...rows]
+            .sort((a, b) => b[1] - a[1])
+            .map(([name, n]) => (
+              <Box key={`${key}-${name}`} flexDirection="row" gap="sm">
+                <Box key={`${key}-${name}-name`} minWidth={width}>
+                  <Text>{name}</Text>
+                </Box>
+                <Text dimColor>{'█'.repeat(Math.max(1, Math.round((n / most) * BAR)))}</Text>
+                <Text tabular>{String(n)}</Text>
+              </Box>
+            ))}
+        </Box>
+      )
+    }
+    const models = s && withModel ? group('session-models', t.model, LADDER.filter(m => s.models[m] > 0).map(m => [MODELS[m].name, s.models[m]])) : null
+    const levels = s ? group('session-levels', t.effort, LEVELS.filter(l => s.picks[l] > 0).map(l => [t.levelName(l), s.picks[l]])) : null
+    const kept = s && s.kept > 0 ? s.kept : 0
+    const warnings = [
+      ...(fault && fault.count >= FAIL_SHOW ? [t.classifierSilent] : []),
+      ...[...session.unavailable].map(m => t.unavailableModel(m)),
+    ]
+    return (
+      <Box flexDirection="column" gap="md">
+        <Box key="head" flexDirection="row" flexWrap="wrap" gap="sm" justifyContent="space-between" alignItems="center">
+          <Text weight="semibold">CoreModel</Text>
+          {modes}
+        </Box>
+        <Box key="top" flexDirection="row" flexWrap="wrap" gap="md">
+          {now}
+          {choose}
+        </Box>
+        {models || levels || kept ? (
+          <Box key="session" flexDirection="column" gap="xs">
+            <Box key="session-head" flexDirection="row" gap="sm" justifyContent="space-between">
+              {caption(t.thisSession)}
+              {kept ? caption(t.unchanged(kept)) : null}
+            </Box>
+            <Box key="session-groups" flexDirection="row" flexWrap="wrap" gap="md">
+              {models}
+              {levels}
+            </Box>
+          </Box>
+        ) : null}
+        {warnings.map(w => (
+          <Text key={`warn-${w}`} color="warning">{`⚠ ${w}`}</Text>
+        ))}
       </Box>
     )
   })

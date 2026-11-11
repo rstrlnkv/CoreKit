@@ -51,18 +51,16 @@ export const en = {
   insteadOf: (from: string, to: string) => `${from} is not available, ${to} instead`,
 
   // the pane
-  thisChat: 'This chat',
-  shownLater: 'shown after your first message',
-  setBy: 'Set by CoreModel for this chat',
-  yourDefault: (pair: string) => `your default: ${pair}`,
-  useDefault: 'Use my default',
+  pickedBy: "CoreModel's pick",
+  inClaude: 'In Claude',
+  inClaudeIs: (pair: string) => `In Claude: ${pair}`,
+  reset: '↺ Reset',
   model: 'Model',
   effort: 'Effort',
   thisSession: 'This session',
   unchanged: (n: number) => `unchanged ${n}`,
-  lastPick: 'Last pick',
-  notApplied: 'not applied',
-  unavailable: (model: string) => `${model} is not available — CoreModel will not pick it again this session (/coremodel recheck tries again)`,
+  unavailable: (model: string) => `${model} is not available · /coremodel recheck`,
+  classifierSilent: 'The classifier is not answering · claude --debug',
   classifierDown: (reason: string) => `CoreModel cannot get an answer from its classifier (${reason}). Your prompts run unchanged. Details: claude --debug.`,
 
   // the /coremodel replies

@@ -193,7 +193,7 @@ test('the unavailable note offers recheck and never sends the person to the mode
   await start($)
   await switchPair($, w, 'opus', 'medium')
   await $.classic.StopFailure({ error: 'model_not_found' } as never)
-  expect(await has($, /Opus is not available — CoreModel will not pick it again this session \(\/coremodel recheck tries again\)/)).toBe(true)
+  expect(await has($, /^⚠ Opus is not available · \/coremodel recheck$/)).toBe(true)
   expect(await has($, /models setting/)).toBe(false)
 })
 
@@ -202,7 +202,7 @@ test('the unavailable note is the same when the model is switched on in the sett
   await start($)
   await switchPair($, w, 'opus', 'medium')
   await $.classic.StopFailure({ error: 'model_not_found' } as never)
-  expect(await has($, /recheck tries again/)).toBe(true)
+  expect(await has($, /\/coremodel recheck$/)).toBe(true)
   expect(await has($, /remove it from/)).toBe(false)
 })
 

@@ -88,26 +88,35 @@ interrupted. `/coremodel panel` opens it too. Its keys and the close mark are Cl
 ctrl+x x).
 
 ```
-CoreModel · Auto
-[ ● Auto ]  [ Suggest ]  [ Off ]
-Asks only before Fable, Extra high, Max and a stronger model mid-chat
-────────────────────────────────────────
-This chat     Opus · High
-Set by CoreModel for this chat · your default: Sonnet · Medium
-[ Use my default ]
-Model         [ Haiku ]  [ Sonnet ]  [ ● Opus ]  [ Fable ]
-Effort        [ Low ]  [ Medium ]  [ ● High ]  [ Extra high ]  [ Max ]
-────────────────────────────────────────
-This session  Sonnet 3 · Opus 2 · High 4 · unchanged 2
+CoreModel                             Auto ▾
+╭──────────────────────────────────────────╮
+│ CoreModel's pick                         │
+│ Opus · High                  [ ↺ Reset ] │
+│ In Claude: Sonnet · Medium               │
+╰──────────────────────────────────────────╯
+Model
+[ Haiku ]  [ Sonnet ]  [ ● Opus ]  [ Fable ]
+Effort
+▰ ▰ ▰ ▱ ▱
+
+This session                     unchanged 2
+Model                Effort
+Sonnet ██████████ 3  High   ██████████ 4
+Opus   ███████    2  Medium █████      2
 ```
 
-- The selected button carries **●**, so the selection does not rest on colour alone.
+- The top line is the mode list. The card under it shows **CoreModel's pick** with **Reset** and,
+  below, what you chose in Claude; when CoreModel holds nothing, it shows **In Claude** alone.
+- The selected model carries **●**, so the selection does not rest on colour alone. The effort is a
+  scale of five cells filled up to the current level; each cell is a button named by its level.
 - A **Model** or **Effort** button holds your pick at once, Fable, Extra high and Max included: your
-  own press is your yes. A model pressed mid-chat first shows the cost question. **Use my default**
-  lets go of what coremodel set.
-- **Last pick** shows only when it says something new: a pick you kept away, or one that differs
-  from what the chat runs at.
-- Button rows wrap, so nothing is hidden in a narrow pane.
+  own press is your yes. A model pressed mid-chat first shows the cost question. **Reset** lets go
+  of what coremodel set.
+- **This session** counts the models and the efforts apart, the most used first, with bars to scale.
+- The pane adapts to its width: in a wide pane the card and the controls, and the two session
+  groups, stand side by side; in a narrow one they stack. Button rows wrap, so nothing is hidden.
+- A warning is one short line: a model the account refused (with `/coremodel recheck`), or a
+  classifier that keeps failing (details in `claude --debug`).
 
 ### Your menus do not move
 

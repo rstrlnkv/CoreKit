@@ -1,182 +1,210 @@
 // The pane: its layout, captions and the lines it shows.
 import { expect, test } from 'claude-code/testing'
 
-import { engineParts, has, OPUS_HIGH, PANE, pane, paneTexts, pick, pressPane, run, SURFACES, switchPair, switchTo } from './surfaces'
+import { engineParts, has, OPUS_HIGH, PANE, pane, paneTexts, pick, pressPane, run, selectMode, SURFACES, switchPair, switchTo } from './surfaces'
 import { start, step, submit, world } from './world'
 
-test('the pane puts state and mode first, marks the selection in text and says it in plain words', { options: { mode: 'auto' } }, async ($, on) => {
+/** The texts after `caption`, up to the next caption in `stops`. */
+function section(texts: string[], caption: string, stops: string[]) {
+  const from = texts.indexOf(caption)
+  if (from < 0) return []
+  const rest = texts.slice(from + 1)
+  const end = rest.findIndex(t => stops.includes(t))
+  return end < 0 ? rest : rest.slice(0, end)
+}
+
+test('the pane opens with its name and the mode list, then CoreModel\'s pick and what Claude has', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   await start($)
   await pick($, w, OPUS_HIGH)
   for (const surface of SURFACES) {
-    const p = await paneTexts($, surface)
-    expect(p.texts[0]).toBe('CoreModel · Auto')
-    expect(p.buttons['mode-auto']).toBe('● Auto')
-    expect(p.buttons['mode-suggest']).toBe('Suggest')
-    expect(p.buttons['mode-off']).toBe('Off')
-    expect(p.texts).toContain('Asks only before Fable, Extra high, Max and a stronger model mid-chat')
-    expect(p.texts).toContain('This chat')
-    expect(p.texts).toContain('Opus · High')
-    expect(p.texts).toContain('Set by CoreModel for this chat · your default: Sonnet · Medium')
-    expect(p.buttons.release).toBe('Use my default')
-    expect(p.buttons['model-opus']).toBe('● Opus')
-    expect(p.buttons['model-sonnet']).toBe('Sonnet')
-    expect(p.buttons['level-high']).toBe('● High')
-    expect(p.texts).toContain('Effort')
-    expect(p.texts.some(t => /Level/.test(t))).toBe(false)
-    expect(p.texts).toContain('This session')
-    expect(p.texts).toContain('Opus 1 · High 1')
-    // the last pick is what the chat runs at: not repeated
-    expect(p.texts).not.toContain('Last pick')
+    const ui = await pane($, surface)
+    const texts = (await ui.findAll({ type: 'Text' })).map(t => String(t.text))
+    expect(texts[0]).toBe('CoreModel')
+    const mode = await ui.find({ type: 'Select', key: 'mode' })
+    expect(mode?.props.value).toBe('auto')
+    expect((mode?.props.options as { value: string; label: string }[]).map(o => [o.value, o.label])).toEqual([
+      ['auto', 'Auto'],
+      ['suggest', 'Suggest'],
+      ['off', 'Off'],
+    ])
+    expect(texts.slice(1, 4)).toEqual(["CoreModel's pick", 'Opus · High', 'In Claude: Sonnet · Medium'])
+    expect(String((await ui.find({ type: 'Button', key: 'release' }))?.props.label)).toBe('↺ Reset')
+    // the mode hint and the old captions are gone
+    expect(texts.some(t => /Asks only|This chat|Set by|your default|Last pick/.test(t))).toBe(false)
+    expect(await ui.find({ type: 'Button', key: 'mode-auto' })).toBe(undefined)
+    await ui.unmount()
   }
+})
+
+test('the pair is the heading of the pane, drawn with weight', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await pick($, w, OPUS_HIGH)
+  const ui = await pane($)
+  const t = await ui.find({ type: 'Text', text: /^Opus · High$/ })
+  expect(t?.props.size).toBe('heading')
+  expect(t?.props.weight).toBe('semibold')
+  await ui.unmount()
+})
+
+test('with nothing held the card names what Claude has and offers no reset', async ($, on) => {
+  world(on)
+  await start($)
+  await step($, 'medium')
+  const p = await paneTexts($)
+  expect(p.texts.slice(1, 3)).toEqual(['In Claude', 'Sonnet · Medium'])
+  expect(p.buttons.release).toBe(undefined)
+  expect(p.texts.some(t => /CoreModel's pick/.test(t))).toBe(false)
+})
+
+test('a fresh pane shows a dash for the pair and no stray session block', async ($, on) => {
+  world(on)
+  await start($)
+  for (const surface of SURFACES) {
+    const p = await paneTexts($, surface)
+    expect(p.texts.slice(1, 3)).toEqual(['In Claude', '—'])
+    expect(p.texts).not.toContain('This session')
+    expect(p.texts.some(t => /^─+$/.test(t))).toBe(false)
+  }
+})
+
+test('the model row comes before the effort scale', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await pick($, w, OPUS_HIGH)
+  const ui = await pane($)
+  const keys = (await ui.findAll({ type: 'Button' })).map(b => String(b.key))
+  expect(keys.indexOf('model-haiku')).toBeLessThan(keys.indexOf('level-low'))
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => String(t.text))
+  expect(texts.indexOf('Model')).toBeLessThan(texts.indexOf('Effort'))
+  await ui.unmount()
+})
+
+test('the effort scale: one button per level, named by the level, filled up to the current one', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await pick($, w, OPUS_HIGH)
+  for (const surface of SURFACES) {
+    const ui = await pane($, surface)
+    const levels = (await ui.findAll({ type: 'Button' })).filter(b => String(b.key).startsWith('level-'))
+    expect(levels.map(b => String(b.key))).toEqual(['level-low', 'level-medium', 'level-high', 'level-xhigh', 'level-max'])
+    // the label names the control for a screen reader and the tests; the glyph is what is drawn
+    expect(levels.map(b => String(b.props.label))).toEqual(['Low', 'Medium', 'High', 'Extra high', 'Max'])
+    expect(levels.map(b => String(b.text))).toEqual(['▰', '▰', '▰', '▱', '▱'])
+    expect(levels.map(b => b.props.variant)).toEqual([undefined, undefined, 'primary', undefined, undefined])
+    await ui.unmount()
+  }
+})
+
+test('the selected model is marked in words and by colour', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await pick($, w, OPUS_HIGH)
+  const p = await paneTexts($)
+  expect(p.buttons['model-opus']).toBe('● Opus')
+  expect(p.buttons['model-sonnet']).toBe('Sonnet')
+  const ui = await pane($)
+  expect((await ui.find({ type: 'Button', key: 'model-opus' }))?.props.variant).toBe('primary')
+  expect((await ui.find({ type: 'Button', key: 'model-sonnet' }))?.props.variant).toBe(undefined)
+  await ui.unmount()
 })
 
 test('the mode order is Auto, Suggest, Off everywhere', async ($, on) => {
   const w = world(on)
   await start($)
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await ui.findAll({ type: 'Button' })).map(b => String(b.key)).filter(k => k.startsWith('mode-'))).toEqual(['mode-auto', 'mode-suggest', 'mode-off'])
+  expect(((await ui.find({ type: 'Select', key: 'mode' }))?.props.options as { value: string }[]).map(o => o.value)).toEqual(['auto', 'suggest', 'off'])
   await ui.unmount()
   w.reply = null
   await run($, '')
   expect(w.asked.at(-1)).toEqual(['Auto', 'Suggest', 'Off'])
 })
 
-test('an empty pane says when the state shows and draws no stray separator', async ($, on) => {
+test('a mode picked in the list is the mode', { options: { mode: 'auto' } }, async ($, on) => {
   world(on)
   await start($)
-  const p = await paneTexts($, 'terminal')
-  expect(p.texts).toContain('shown after your first message')
-  expect(p.texts).not.toContain('This session')
-  expect(p.texts.filter(t => /^─+$/.test(t)).length).toBe(1)
-  expect(/^─+$/.test(p.texts.at(-1) ?? '')).toBe(false)
-})
-
-test('the last pick shows when it was not applied', { options: { mode: 'auto' } }, async ($, on) => {
-  const w = world(on)
-  w.reply = 'Keep Medium'
-  await start($)
-  await pick($, w, '{"level":"xhigh","why":"whole app"}')
-  const p = await paneTexts($)
-  expect(p.texts).toContain('Last pick')
-  expect(p.texts).toContain('Extra high · whole app · not applied')
-  expect(p.texts.some(t => /unchanged 1/.test(t))).toBe(true)
-})
-
-test('the pane draws no picture: the session is one line of text on every surface', { options: { mode: 'auto' } }, async ($, on) => {
-  const w = world(on)
-  await start($)
-  await pick($, w, OPUS_HIGH)
-  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await ui.findAll({ type: 'Svg' })).toHaveLength(0)
+  await selectMode($, 'suggest')
+  const ui = await pane($)
+  expect((await ui.find({ type: 'Select', key: 'mode' }))?.props.value).toBe('suggest')
   await ui.unmount()
+  expect(await run($, 'x')).toContain('Suggest')
 })
 
-test('the pane shows the mode, what the chat runs at, and the session', { options: { mode: 'auto' } }, async ($, on) => {
+test('the session splits into a model group and an effort group, each with its own bars', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   await start($)
+  // a pick counts only when it changes something: Reset between the picks lets each one count
+  await switchPair($, w, 'opus', 'low')
+  await pressPane($, 'release')
+  await switchTo($, w, 'high', 'medium')
+  await pressPane($, 'release')
   await switchTo($, w, 'high', 'medium')
   for (const surface of SURFACES) {
-    expect(await has($, /^CoreModel · Auto$/, surface)).toBe(true)
-    expect(await has($, /^This chat$/, surface)).toBe(true)
-    expect(await has($, /^Sonnet · High$/, surface)).toBe(true)
-    expect(await has($, /^Set by CoreModel for this chat · your default: Medium$/, surface)).toBe(true)
-    expect(await has($, /^This session$/, surface)).toBe(true)
-    expect(await has($, /^High 1$/, surface)).toBe(true)
-    // the last pick is what the chat runs at: not said twice
-    expect(await has($, /^Last pick$/, surface)).toBe(false)
-    expect(await has($, /^Model$/, surface)).toBe(true)
-    expect(await has($, /^Effort$/, surface)).toBe(true)
-    expect(await has($, /Asks only before Fable/, surface)).toBe(true)
+    const p = await paneTexts($, surface)
+    const s = section(p.texts, 'This session', [])
+    // each group holds only its own names
+    expect(section(s, 'Model', ['Effort'])).toEqual(['Opus', '██████████', '1'])
+    // most used first, not in the order picked; the longest bar is ten cells, the others to scale
+    expect(section(s, 'Effort', [])).toEqual(['High', '██████████', '2', 'Low', '█████', '1'])
+  }
+})
+
+test('the session group boxes wrap: side by side when wide, stacked when narrow', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await switchPair($, w, 'opus', 'high')
+  for (const surface of SURFACES) {
     const ui = await pane($, surface)
-    const auto = await ui.find({ type: 'Button', key: 'mode-auto' })
-    expect(String(auto?.props.label)).toBe('● Auto')
-    expect(auto?.props.variant).toBe('primary')
-    expect((await ui.find({ type: 'Button', key: 'mode-off' }))?.props.variant).toBe(undefined)
-    expect((await ui.find({ type: 'Button', key: 'level-high' }))?.props.variant).toBe('primary')
-    expect((await ui.find({ type: 'Button', key: 'level-medium' }))?.props.variant).toBe(undefined)
-    expect((await ui.find({ type: 'Button', key: 'model-sonnet' }))?.props.variant).toBe('primary')
-    expect(String((await ui.find({ type: 'Button', key: 'release' }))?.props.label)).toBe('Use my default')
+    for (const key of ['top', 'session-groups']) {
+      const b = await ui.find({ type: 'Box', key })
+      expect(b?.props.flexDirection).toBe('row')
+      expect(b?.props.flexWrap).toBe('wrap')
+    }
+    for (const key of ['now', 'choose', 'session-models', 'session-levels']) {
+      const b = await ui.find({ type: 'Box', key })
+      expect(b?.props.flexGrow).toBe(1)
+      expect(typeof b?.props.minWidth).toBe('number')
+    }
     await ui.unmount()
   }
 })
 
-test('the pane captions are as wide as the longest English caption, plus one', { options: { mode: 'auto' } }, async ($, on) => {
-  const w = world(on)
-  await start($)
-  await switchTo($, w, 'high', 'medium')
-  const ui = await pane($)
-  // "This session" is the longest English caption
-  for (const key of ['chat-caption', 'choose-caption', 'session-caption']) {
-    expect((await ui.find({ type: 'Box', key }))?.props.minWidth).toBe('This session'.length + 1)
-  }
-  await ui.unmount()
-})
-
-test('the pane captions are as wide as the longest Russian caption, plus one', { options: { mode: 'auto' } }, async ($, on) => {
-  const w = world(on)
-  w.hostLanguage = 'russian'
-  await start($)
-  await switchTo($, w, 'high', 'medium', 'почини авторизацию')
-  const ui = await pane($)
-  // "Последний выбор" is the longest Russian caption: every row's value starts in the same column
-  for (const key of ['chat-caption', 'choose-caption', 'session-caption']) {
-    expect((await ui.find({ type: 'Box', key }))?.props.minWidth).toBe('Последний выбор'.length + 1)
-  }
-  await ui.unmount()
-})
-
-test('the pane marks what the chat runs at when nothing is held', async ($, on) => {
-  world(on)
-  await start($)
-  await step($, 'medium')
-  const ui = await pane($)
-  expect((await ui.find({ type: 'Button', key: 'level-medium' }))?.props.variant).toBe('primary')
-  expect((await ui.find({ type: 'Button', key: 'model-sonnet' }))?.props.variant).toBe('primary')
-  expect(await ui.find({ type: 'Button', key: 'release' })).toBe(undefined)
-  await ui.unmount()
-  expect(await has($, /Set by/)).toBe(false)
-})
-
-test('a fresh pane says when the chat shows what it runs at', async ($, on) => {
-  const w = world(on)
-  w.hostLanguage = 'russian'
-  await start($)
-  await submit($, 'почини авторизацию')
-  expect(await has($, /^появится после первого сообщения$/)).toBe(true)
-})
-
-test('the pane counts kept prompts', { options: { mode: 'auto' } }, async ($, on) => {
+test('the kept count stands in the session header, apart from both groups', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.reply = 'Keep Medium'
   await start($)
   await switchTo($, w, 'xhigh', 'medium')
   await switchTo($, w, 'keep', 'medium', 'ok')
+  const p = await paneTexts($)
+  const s = p.texts.indexOf('This session')
+  expect(p.texts[s + 1]).toBe('unchanged 2')
   // Prompts the person kept are not counted as picks.
-  expect(await has($, /Extra high 1/)).toBe(false)
-  expect(await has($, /^unchanged 2$/)).toBe(true)
-  // The person answered Keep, so the last pick is shown as not applied.
-  expect(await has($, /^Extra high · auth bug · not applied$/)).toBe(true)
+  expect(p.texts).not.toContain('Extra high')
+  expect(p.texts.some(t => /not applied/.test(t))).toBe(false)
 })
 
-test('the pane button rows wrap in a narrow pane', async ($, on) => {
-  world(on)
+test('with pickModel off the pane shows no model buttons or model counts', { options: { mode: 'auto', pickModel: 'off' } }, async ($, on) => {
+  const w = world(on)
   await start($)
-  for (const surface of SURFACES) {
-    const ui = await pane($, surface)
-    for (const key of ['models', 'modes', 'levels']) expect((await ui.find({ type: 'Box', key }))?.props.flexWrap).toBe('wrap')
-    await ui.unmount()
-  }
+  await switchPair($, w, 'opus', 'high')
+  const ui = await pane($)
+  expect(await ui.find({ type: 'Button', key: 'model-opus' })).toBe(undefined)
+  expect(await ui.find({ type: 'Box', key: 'session-models' })).toBe(undefined)
+  expect(await ui.find({ type: 'Text', text: /Opus/ })).toBe(undefined)
+  expect(await ui.find({ type: 'Text', text: /Fable/ })).toBe(undefined)
+  expect((await ui.find({ type: 'Text', text: /^High$/ })) !== undefined).toBe(true)
+  await ui.unmount()
 })
 
-test('the pane names your default only once a request shows it', async ($, on) => {
+test('the pane names what Claude has only once a request shows it', async ($, on) => {
   world(on)
   await start($)
   await pressPane($, 'level-high')
-  expect(await has($, /your default/)).toBe(false)
-  expect(await has($, /^Set by CoreModel for this chat$/)).toBe(true)
+  expect(await has($, /^CoreModel's pick$/)).toBe(true)
+  expect(await has($, /In Claude/)).toBe(false)
   await step($, 'medium')
-  expect(await has($, /your default: Medium/)).toBe(true)
+  expect(await has($, /^In Claude: Medium$/)).toBe(true)
 })
 
 test('with only the model held, the pane and /coremodel name the same default: the held part', async ($, on) => {
@@ -186,45 +214,11 @@ test('with only the model held, the pane and /coremodel name the same default: t
   await start($)
   await step($, 'medium')
   await pressPane($, 'model-opus')
-  expect(await has($, /^Set by CoreModel for this chat · your default: Sonnet$/)).toBe(true)
+  expect(await has($, /^In Claude: Sonnet$/)).toBe(true)
   expect(await run($, '')).toContain('set by CoreModel; your default: Sonnet)')
 })
 
-test('pane counts per model', { options: { mode: 'auto' } }, async ($, on) => {
-  const w = world(on)
-  await start($)
-  await switchPair($, w, 'opus', 'high')
-  for (const surface of SURFACES) expect(await has($, /^Opus 1 · High 1$/, surface)).toBe(true)
-  expect(await has($, /^Opus · High$/)).toBe(true)
-  expect(await has($, /^Set by CoreModel for this chat · your default: Sonnet · Medium$/)).toBe(true)
-  const ui = await pane($)
-  expect((await ui.find({ type: 'Button', key: 'model-opus' }))?.props.variant).toBe('primary')
-  expect((await ui.find({ type: 'Button', key: 'model-sonnet' }))?.props.variant).toBe(undefined)
-  await ui.unmount()
-})
-
-// The README draws this line: the models weakest first, whatever order they were picked in.
-test('the session line lists the models from the lightest up, not in the order they were picked', { options: { mode: 'auto' } }, async ($, on) => {
-  const w = world(on)
-  await start($)
-  await switchPair($, w, 'opus', 'high')
-  await switchPair($, w, 'sonnet', 'high')
-  for (const surface of SURFACES) expect(await has($, /^Sonnet 1 · Opus 1 · High 1$/, surface)).toBe(true)
-})
-
-test('with pickModel off the pane shows no model buttons or model counts', { options: { mode: 'auto', pickModel: 'off' } }, async ($, on) => {
-  const w = world(on)
-  await start($)
-  await switchPair($, w, 'opus', 'high')
-  const ui = await pane($)
-  expect(await ui.find({ type: 'Button', key: 'model-opus' })).toBe(undefined)
-  expect(await ui.find({ type: 'Text', text: /Opus/ })).toBe(undefined)
-  expect(await ui.find({ type: 'Text', text: /Fable/ })).toBe(undefined)
-  expect((await ui.find({ type: 'Text', text: /^High$/ })) !== undefined).toBe(true)
-  await ui.unmount()
-})
-
-test('after Back the pane shows the menu level at once', { options: { mode: 'auto' } }, async ($, on) => {
+test('after Reset the pane shows the menu level at once', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   await start($)
   await switchTo($, w, 'high', 'medium')
@@ -234,17 +228,6 @@ test('after Back the pane shows the menu level at once', { options: { mode: 'aut
   expect(await has($, /^Sonnet · High$/)).toBe(false)
 })
 
-test('a pick the person kept is marked not applied in the pane', { options: { mode: 'auto' } }, async ($, on) => {
-  const w = world(on)
-  w.reply = 'Keep Medium'
-  await start($)
-  await switchTo($, w, 'xhigh', 'medium')
-  expect(await has($, /^Extra high · auth bug · not applied$/)).toBe(true)
-  w.reply = 'Extra high (recommended)'
-  await switchTo($, w, 'xhigh', 'medium')
-  expect(await has($, /not applied/)).toBe(false)
-})
-
 test('session counts follow what was applied, not what the classifier asked for', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   w.answer = '{"level":"xhigh","model":"fable","why":"x"}'
@@ -252,24 +235,13 @@ test('session counts follow what was applied, not what the classifier asked for'
   await start($)
   await submit($, 'build the whole app')
   await step($, 'medium')
-  for (const surface of SURFACES) expect(await has($, /^Extra high 1$/, surface)).toBe(true)
-})
-
-test('every pane row keeps its caption apart from what follows', { options: { mode: 'auto' } }, async ($, on) => {
-  const w = world(on)
-  await start($)
-  await switchPair($, w, 'opus', 'high')
-  const ui = await pane($, 'desktop')
-  for (const key of ['mode', 'now']) expect((await ui.find({ type: 'Box', key }))?.props.gap).toBe('xs')
-  for (const key of ['chat', 'choose-model', 'choose', 'session']) {
-    const b = await ui.find({ type: 'Box', key })
-    expect(b?.props.flexDirection).toBe('row')
-    expect(b?.props.gap).toBe('sm')
+  for (const surface of SURFACES) {
+    const p = await paneTexts($, surface)
+    expect(section(p.texts, 'This session', [])).toEqual(['Effort', 'Extra high', '██████████', '1'])
   }
-  await ui.unmount()
 })
 
-test('the pane names a classifier that keeps failing, and drops the line once a pick works', { options: { mode: 'auto' } }, async ($, on) => {
+test('the warnings are short: a model that is not available, a classifier that keeps failing', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   await start($)
   for (let i = 0; i < 2; i += 1) {
@@ -277,19 +249,18 @@ test('the pane names a classifier that keeps failing, and drops the line once a 
     await submit($, 'fix the login')
     await step($, 'medium')
   }
-  expect(await has($, /classifier.*api-error.*unchanged/)).toBe(true)
+  expect(await has($, /^⚠ The classifier is not answering · claude --debug$/)).toBe(true)
   w.answers = ['{"level":"high","why":"auth bug"}']
   await submit($, 'fix the login')
   await step($, 'medium')
   expect(await has($, /classifier/)).toBe(false)
 })
 
-test('the pane draws its bold text with weight, not the deprecated bold', { options: { mode: 'auto' } }, async ($, on) => {
+test('the pane draws no picture: the bars are text on every surface', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   await start($)
-  await switchPair($, w, 'opus', 'high')
-  const ui = await pane($)
-  const t = await ui.find({ type: 'Text', text: /^Opus · High$/ })
-  expect(t?.props.weight).toBe('semibold')
+  await pick($, w, OPUS_HIGH)
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.findAll({ type: 'Svg' })).toHaveLength(0)
   await ui.unmount()
 })

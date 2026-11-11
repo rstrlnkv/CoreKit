@@ -1,7 +1,7 @@
-// The pane's buttons: mode, level, model and Release, and a press against a pick on its way.
+// The pane's controls: the mode list, the level, model and Reset buttons, and a press against a pick on its way.
 import { expect, test } from 'claude-code/testing'
 
-import { ABOVE, engineParts, MID, OPUS_HIGH, pane, pressPane, SURFACES, switchTo, undoButton } from './surfaces'
+import { ABOVE, engineParts, MID, OPUS_HIGH, pane, pressPane, selectMode, SURFACES, switchTo, undoButton } from './surfaces'
 import { start, step, submit, world, type World } from './world'
 
 async function waitForQuestion(w: World) {
@@ -14,11 +14,11 @@ async function waitForQuestion(w: World) {
 test('a mode button in the pane sets the mode', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   await start($)
-  await pressPane($, 'mode-off')
+  await selectMode($, 'off')
   await switchTo($, w, 'high', 'medium')
   expect(w.model.length).toBe(0)
   const ui = await pane($)
-  expect((await ui.find({ type: 'Button', key: 'mode-off' }))?.props.variant).toBe('primary')
+  expect((await ui.find({ type: 'Select', key: 'mode' }))?.props.value).toBe('off')
   await ui.unmount()
 })
 
@@ -61,7 +61,7 @@ test('off from the pane clears the band and its undo', { options: { mode: 'auto'
   engineParts(on)
   await start($)
   await switchTo($, w, 'high', 'medium')
-  await pressPane($, 'mode-off')
+  await selectMode($, 'off')
   const ui = await $.ui.mount({ ...ABOVE, surface: 'desktop' })
   expect((await ui.find({ type: 'Text', text: /engine/ })) !== undefined).toBe(true)
   expect(await ui.find({ type: 'Button', key: 'undo' })).toBe(undefined)
@@ -79,7 +79,7 @@ test('off pressed while the classifier runs leaves the level alone', { options: 
   await start($)
   await submit($, 'fix the login')
   const running = step($, 'medium')
-  await pressPane($, 'mode-off')
+  await selectMode($, 'off')
   answer('{"level":"high","why":"auth bug"}')
   await running
   expect(w.efforts).toEqual(['medium'])

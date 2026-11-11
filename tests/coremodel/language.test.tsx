@@ -11,7 +11,7 @@ test('the language setting wins over the prompt', { options: { mode: 'auto', lan
   await start($)
   await pick($, w, OPUS_HIGH)
   expect((await band($)).texts.some(t => /^✓ CoreModel: Opus · Высокое \(было Sonnet · Среднее\)/.test(t))).toBe(true)
-  expect((await paneTexts($)).texts).toContain('Этот чат')
+  expect((await paneTexts($)).texts).toContain('Выбор CoreModel')
 })
 
 // The words follow the host, never the prompt: a Ukrainian or a Russian prompt on an English host stays English.
@@ -21,10 +21,10 @@ test('in auto a Cyrillic prompt does not turn the words Russian', { options: { m
   await pick($, w, '{"level":"keep","why":"x"}', 'виправ авторизацію')
   await pick($, w, '{"level":"keep","why":"x"}', 'почини авторизацию')
   const p = await paneTexts($)
-  expect(p.texts[0]).toBe('CoreModel · ' + texts('en').mode.auto)
-  expect(p.buttons['mode-suggest']).toBe(texts('en').mode.suggest)
-  expect(p.texts).toContain(texts('en').thisChat)
-  expect(p.texts).not.toContain(texts('ru').thisChat)
+  expect(p.modes[0]).toBe(texts('en').mode.auto)
+  expect(p.modes[1]).toBe(texts('en').mode.suggest)
+  expect(p.texts).toContain(texts('en').inClaude)
+  expect(p.texts).not.toContain(texts('ru').inClaude)
 })
 
 test('in auto the host language setting picks Russian', { options: { mode: 'auto' } }, async ($, on) => {
@@ -33,9 +33,9 @@ test('in auto the host language setting picks Russian', { options: { mode: 'auto
   await start($)
   await pick($, w, '{"level":"keep","why":"x"}', 'fix the login')
   const p = await paneTexts($)
-  expect(p.texts[0]).toBe('CoreModel · Автоматически')
-  expect(p.buttons['mode-suggest']).toBe('Советовать')
-  expect(p.texts).toContain('Этот чат')
+  expect(p.modes[0]).toBe('Автоматически')
+  expect(p.modes[1]).toBe('Советовать')
+  expect(p.texts).toContain('В Claude выбрано')
 })
 
 test('the language setting wins over the host language', { options: { mode: 'auto', language: 'en' } }, async ($, on) => {
@@ -44,8 +44,8 @@ test('the language setting wins over the host language', { options: { mode: 'aut
   await start($)
   await pick($, w, '{"level":"keep","why":"x"}')
   const p = await paneTexts($)
-  expect(p.texts[0]).toBe('CoreModel · ' + texts('en').mode.auto)
-  expect(p.texts).toContain(texts('en').thisChat)
+  expect(p.modes[0]).toBe(texts('en').mode.auto)
+  expect(p.texts).toContain(texts('en').inClaude)
 })
 
 test('the language setting ru wins over an English host', { options: { mode: 'auto', language: 'ru' } }, async ($, on) => {
@@ -53,8 +53,8 @@ test('the language setting ru wins over an English host', { options: { mode: 'au
   await start($)
   await pick($, w, '{"level":"keep","why":"x"}')
   const p = await paneTexts($)
-  expect(p.texts[0]).toBe('CoreModel · Автоматически')
-  expect(p.texts).toContain('Этот чат')
+  expect(p.modes[0]).toBe('Автоматически')
+  expect(p.texts).toContain('В Claude выбрано')
 })
 
 // 0.7.0 kept the last prompt's language under the store key `lang`. It stays in the store, untouched and unread.
@@ -62,8 +62,8 @@ test('a language stored by 0.7.0 is ignored', { options: { mode: 'auto' } }, asy
   const w = world(on, { lang: 'ru' })
   await start($)
   const p = await paneTexts($)
-  expect(p.texts[0]).toBe('CoreModel · ' + texts('en').mode.auto)
-  expect(p.texts).toContain(texts('en').thisChat)
+  expect(p.modes[0]).toBe(texts('en').mode.auto)
+  expect(p.texts).toContain(texts('en').inClaude)
 })
 
 // The failure path: a host whose settings cannot be read gets English, a debug line and no toast; the pick still runs.
@@ -74,7 +74,7 @@ test('an unreadable host setting falls back to English and the pick still runs',
   await start($)
   await pick($, w, OPUS_HIGH)
   expect((await band($)).texts.some(t => /^✓ CoreModel: Opus · High \(was Sonnet · Medium\)/.test(t))).toBe(true)
-  expect((await paneTexts($)).texts).toContain(texts('en').thisChat)
+  expect((await paneTexts($)).texts).toContain(texts('en').pickedBy)
   expect(w.logs.some(l => l.includes('language'))).toBe(true)
   expect(w.logSinks.every(s => s === 'debug')).toBe(true)
   expect(w.toasts).toEqual([])
@@ -87,9 +87,11 @@ test('the Russian pane and band', { options: { mode: 'auto' } }, async ($, on) =
   await start($)
   await pick($, w, '{"level":"high","model":"opus","why":"ошибка входа"}', 'почини авторизацию')
   const p = await paneTexts($)
-  expect(p.buttons['mode-auto']).toBe('● Автоматически')
-  expect(p.texts).toContain('Выбрано CoreModel для этого чата · ваш выбор по умолчанию: Sonnet · Среднее')
-  expect(p.buttons.release).toBe('Вернуть мой выбор')
+  expect(p.modes).toEqual(['Автоматически', 'Советовать', 'Выкл'])
+  expect(p.mode).toBe('auto')
+  expect(p.texts.slice(1, 4)).toEqual(['Выбор CoreModel', 'Opus · Высокое', 'В Claude выбрано: Sonnet · Среднее'])
+  expect(p.buttons.release).toBe('↺ Сбросить')
+  expect(p.texts).toContain('Модель')
   expect(p.texts).toContain('Усилие')
   expect(p.texts).toContain('За сессию')
   expect((await band($)).buttons[0]?.label).toBe('Вернуть Sonnet · Среднее')
@@ -111,29 +113,15 @@ test('the pane speaks Russian after a Russian prompt', { options: { mode: 'auto'
   w.hostLanguage = 'russian'
   await start($)
   await switchTo($, w, 'high', 'medium', 'почини авторизацию')
-  expect(await has($, /^Этот чат$/)).toBe(true)
+  expect(await has($, /^Выбор CoreModel$/)).toBe(true)
   expect(await has($, /^Sonnet · Высокое$/)).toBe(true)
-  expect(await has($, /^Выбрано CoreModel для этого чата · ваш выбор по умолчанию: Среднее$/)).toBe(true)
-  expect(await has($, /^CoreModel · Автоматически$/)).toBe(true)
-  expect(await has($, /^Модель$/)).toBe(true)
+  expect(await has($, /^В Claude выбрано: Среднее$/)).toBe(true)
   expect(await has($, /^Усилие$/)).toBe(true)
   expect(await has($, /^За сессию$/)).toBe(true)
-  expect(await has($, /Спрашивает только перед Fable/)).toBe(true)
   const ui = await pane($)
-  expect(String((await ui.find({ type: 'Button', key: 'mode-suggest' }))?.props.label)).toBe('Советовать')
-  expect(String((await ui.find({ type: 'Button', key: 'mode-auto' }))?.props.label)).toBe('● Автоматически')
-  expect(String((await ui.find({ type: 'Button', key: 'mode-off' }))?.props.label)).toBe('Выкл')
-  expect(String((await ui.find({ type: 'Button', key: 'release' }))?.props.label)).toBe('Вернуть мой выбор')
+  const levels = (await ui.findAll({ type: 'Button' })).filter(b => String(b.key).startsWith('level-'))
+  expect(levels.map(b => String(b.props.label))).toEqual(['Низкое', 'Среднее', 'Высокое', 'Очень высокое', 'Максимальное'])
   await ui.unmount()
-})
-
-test('a not applied pick reads in Russian too', { options: { mode: 'auto' } }, async ($, on) => {
-  const w = world(on)
-  w.reply = 'Оставить «Среднее»'
-  w.hostLanguage = 'russian'
-  await start($)
-  await switchTo($, w, 'xhigh', 'medium', 'почини авторизацию')
-  expect(await has($, /^Очень высокое · auth bug · не применён$/)).toBe(true)
 })
 
 test('the mode question and the kept count read in Russian', async ($, on) => {

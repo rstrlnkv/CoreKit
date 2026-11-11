@@ -7,6 +7,15 @@ full detail.
 
 ## [Unreleased]
 
+### Changed
+
+- A new pane layout. The mode is a list at the top. A card shows CoreModel's pick with **Reset**
+  (was **Use my default**) and what you chose in Claude. The model buttons come before an effort
+  scale of five cells. The session counts the models and the efforts apart, with bars. The pane
+  adapts to its width: blocks stand side by side when it is wide and stack when it is narrow.
+- The pane's warnings are one short line each. The mode hint and the last pick are no longer shown
+  in the pane; `/coremodel` still says the mode and what it does.
+
 ## [0.9.0] - 2026-11-10
 
 Codex: the hook changed, so Codex keeps it off until you trust it again in `/hooks`.

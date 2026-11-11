@@ -89,13 +89,16 @@ export async function pane($: Eng, surface: 'terminal' | 'desktop' = 'desktop') 
   return $.ui.mount({ ...PANE, surface })
 }
 
-/** The pane's texts, and its button labels by key. */
+/** The pane's texts, its button labels by key, and the mode list: its labels and the value picked. */
 export async function paneTexts($: Eng, surface: 'terminal' | 'desktop' = 'desktop') {
   const ui = await pane($, surface)
   const texts = (await ui.findAll({ type: 'Text' })).map(t => String(t.text))
   const buttons = Object.fromEntries((await ui.findAll({ type: 'Button' })).map(b => [String(b.key), String(b.props.label)]))
+  const list = await ui.find({ type: 'Select', key: 'mode' })
+  const modes = ((list?.props.options ?? []) as { label?: string }[]).map(o => String(o.label))
+  const mode = String(list?.props.value)
   await ui.unmount()
-  return { texts, buttons }
+  return { texts, buttons, modes, mode }
 }
 
 /** True when a text of the pane matches `text`. */
@@ -109,6 +112,13 @@ export async function has($: Eng, text: RegExp, surface: 'terminal' | 'desktop' 
 export async function pressPane($: Eng, key: string) {
   const ui = await pane($)
   await ui.press({ key })
+  await ui.unmount()
+}
+
+/** Picks a mode in the pane's mode list. */
+export async function selectMode($: Eng, value: string) {
+  const ui = await pane($)
+  await ui.select({ key: 'mode', value })
   await ui.unmount()
 }
 
