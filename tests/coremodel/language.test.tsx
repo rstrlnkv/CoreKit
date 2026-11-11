@@ -89,7 +89,7 @@ test('the Russian pane and band', { options: { mode: 'auto' } }, async ($, on) =
   const p = await paneTexts($)
   expect(p.modes).toEqual(['Автоматически', 'Советовать', 'Выкл'])
   expect(p.mode).toBe('auto')
-  expect(p.texts.slice(1, 4)).toEqual(['Выбор CoreModel', 'Opus · Высокое', 'В Claude выбрано: Sonnet · Среднее'])
+  expect(p.texts.filter(t => !/^─+$/.test(t)).slice(1, 4)).toEqual(['Выбор CoreModel', 'Opus · Высокое', 'В Claude выбрано: Sonnet · Среднее'])
   expect(p.buttons.release).toBe('↺ Сбросить')
   expect(p.texts).toContain('Модель')
   expect(p.texts).toContain('Усилие')
@@ -120,7 +120,7 @@ test('the pane speaks Russian after a Russian prompt', { options: { mode: 'auto'
   expect(await has($, /^За сессию$/)).toBe(true)
   const ui = await pane($)
   const levels = (await ui.findAll({ type: 'Button' })).filter(b => String(b.key).startsWith('level-'))
-  expect(levels.map(b => String(b.props.label))).toEqual(['Низкое', 'Среднее', 'Высокое', 'Очень высокое', 'Максимальное'])
+  expect(levels.map(b => String(b.props.label))).toEqual(['Низкое', 'Среднее', '● Высокое', 'Очень высокое', 'Максимальное'])
   await ui.unmount()
 })
 

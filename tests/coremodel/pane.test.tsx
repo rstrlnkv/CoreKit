@@ -19,7 +19,8 @@ test('the pane opens with its name and the mode list, then CoreModel\'s pick and
   await pick($, w, OPUS_HIGH)
   for (const surface of SURFACES) {
     const ui = await pane($, surface)
-    const texts = (await ui.findAll({ type: 'Text' })).map(t => String(t.text))
+    // the rules are checked on their own below
+    const texts = (await ui.findAll({ type: 'Text' })).map(t => String(t.text)).filter(t => !/^─+$/.test(t))
     expect(texts[0]).toBe('CoreModel')
     const mode = await ui.find({ type: 'Select', key: 'mode' })
     expect(mode?.props.value).toBe('auto')
@@ -81,18 +82,41 @@ test('the model row comes before the effort scale', { options: { mode: 'auto' } 
   await ui.unmount()
 })
 
-test('the effort scale: one button per level, named by the level, filled up to the current one', { options: { mode: 'auto' } }, async ($, on) => {
+test('the effort scale: five segments across the width, filled up to the current level', { options: { mode: 'auto' } }, async ($, on) => {
   const w = world(on)
   await start($)
   await pick($, w, OPUS_HIGH)
   for (const surface of SURFACES) {
     const ui = await pane($, surface)
+    expect((await ui.find({ type: 'Box', key: 'scale' }))?.props.flexDirection).toBe('row')
+    const cells = await Promise.all(['low', 'medium', 'high', 'xhigh', 'max'].map(l => ui.find({ type: 'Box', key: `scale-${l}` })))
+    // each segment stretches, so the scale fills its block on any width (seen live on the desktop: a row of
+    // fixed buttons ran past the pane's edge)
+    expect(cells.map(c => c?.props.flexGrow)).toEqual([1, 1, 1, 1, 1])
+    const colours = cells.map(c => c?.props.backgroundColor)
+    expect(typeof colours[0]).toBe('string')
+    expect(new Set(colours.slice(0, 3)).size).toBe(1)
+    expect(new Set(colours.slice(3)).size).toBe(1)
+    expect(colours[3]).not.toBe(colours[0])
+    await ui.unmount()
+  }
+})
+
+test('the levels are pressed by name under the scale: a row that wraps, the current one marked in words', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await pick($, w, OPUS_HIGH)
+  for (const surface of SURFACES) {
+    const ui = await pane($, surface)
+    const row = await ui.find({ type: 'Box', key: 'levels' })
+    expect(row?.props.flexWrap).toBe('wrap')
     const levels = (await ui.findAll({ type: 'Button' })).filter(b => String(b.key).startsWith('level-'))
     expect(levels.map(b => String(b.key))).toEqual(['level-low', 'level-medium', 'level-high', 'level-xhigh', 'level-max'])
-    // the label names the control for a screen reader and the tests; the glyph is what is drawn
-    expect(levels.map(b => String(b.props.label))).toEqual(['Low', 'Medium', 'High', 'Extra high', 'Max'])
-    expect(levels.map(b => String(b.text))).toEqual(['▰', '▰', '▰', '▱', '▱'])
-    expect(levels.map(b => b.props.variant)).toEqual([undefined, undefined, 'primary', undefined, undefined])
+    // a desktop draws a Button's label, not its children: the label is what the person reads
+    expect(levels.map(b => String(b.props.label))).toEqual(['Low', 'Medium', '● High', 'Extra high', 'Max'])
+    expect(levels.map(b => b.props.dimColor)).toEqual([true, true, undefined, true, true])
+    // no glyph cells are left from the old scale
+    expect((await ui.findAll({ type: 'Text' })).some(t => /[▰▱]/.test(String(t.text)))).toBe(false)
     await ui.unmount()
   }
 })
@@ -143,10 +167,44 @@ test('the session splits into a model group and an effort group, each with its o
   for (const surface of SURFACES) {
     const p = await paneTexts($, surface)
     const s = section(p.texts, 'This session', [])
-    // each group holds only its own names
-    expect(section(s, 'Model', ['Effort'])).toEqual(['Opus', '██████████', '1'])
-    // most used first, not in the order picked; the longest bar is ten cells, the others to scale
-    expect(section(s, 'Effort', [])).toEqual(['High', '██████████', '2', 'Low', '█████', '1'])
+    // each group holds only its own names; most used first, not in the order picked
+    expect(section(s, 'Model', ['Effort'])).toEqual(['Opus', '1'])
+    expect(section(s, 'Effort', [])).toEqual(['High', '2', 'Low', '1'])
+    // the bars are boxes sized in shares of the group's width, the longest full: text bars ran past the
+    // edge on the desktop and hid the count
+    const ui = await pane($, surface)
+    const bar = async (key: string) => (await ui.find({ type: 'Box', key }))?.props
+    expect((await bar('session-models-Opus-bar'))?.width).toBe('100%')
+    expect((await bar('session-levels-High-bar'))?.width).toBe('100%')
+    expect((await bar('session-levels-Low-bar'))?.width).toBe('50%')
+    expect(typeof (await bar('session-levels-Low-bar'))?.backgroundColor).toBe('string')
+    expect((await bar('session-levels-Low-track'))?.flexGrow).toBe(1)
+    await ui.unmount()
+  }
+})
+
+test('rules divide the card, the session and the warnings, as in the concept', { options: { mode: 'auto' } }, async ($, on) => {
+  const w = world(on)
+  await start($)
+  await switchTo($, w, 'high', 'medium')
+  for (const surface of SURFACES) {
+    const p = await paneTexts($, surface)
+    const rule = (t: string) => /^─+$/.test(t)
+    const pair = p.texts.indexOf('Sonnet · High')
+    expect(rule(p.texts[pair + 1])).toBe(true)
+    expect(p.texts[pair + 2]).toBe('In Claude: Medium')
+    expect(rule(p.texts[p.texts.indexOf('This session') - 1])).toBe(true)
+    const ui = await pane($, surface)
+    const rules = (await ui.findAll({ type: 'Text' })).filter(t => rule(String(t.text)))
+    expect(rules.length).toBe(2)
+    expect(rules.every(r => r.props.dimColor === true && r.props.wrap === undefined)).toBe(true)
+    // one line that clips the rest at the pane's edge: a truncated text ends in an ellipsis on the terminal
+    for (const key of ['now-rule', 'session-rule']) {
+      const b = await ui.find({ type: 'Box', key })
+      expect(b?.props.height).toBe(1)
+      expect(b?.props.overflow).toBe('hidden')
+    }
+    await ui.unmount()
   }
 })
 
@@ -169,8 +227,6 @@ test('the session group boxes wrap: side by side when wide, stacked when narrow'
       expect(typeof b?.props.width).toBe('number')
       expect(b?.props.minWidth).toBe(undefined)
     }
-    // the scale's cells stand together: no stretched cell boxes between them
-    expect(await ui.find({ type: 'Box', key: 'level-low-cell' })).toBe(undefined)
     await ui.unmount()
   }
 })
@@ -242,7 +298,7 @@ test('session counts follow what was applied, not what the classifier asked for'
   await step($, 'medium')
   for (const surface of SURFACES) {
     const p = await paneTexts($, surface)
-    expect(section(p.texts, 'This session', [])).toEqual(['Effort', 'Extra high', '██████████', '1'])
+    expect(section(p.texts, 'This session', [])).toEqual(['Effort', 'Extra high', '1'])
   }
 })
 

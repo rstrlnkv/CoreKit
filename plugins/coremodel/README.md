@@ -92,23 +92,26 @@ CoreModel                             Auto ▾
 ╭──────────────────────────────────────────╮
 │ CoreModel's pick                         │
 │ Opus · High                  [ ↺ Reset ] │
+│ ──────────────────────────────────────── │
 │ In Claude: Sonnet · Medium               │
 ╰──────────────────────────────────────────╯
 Model
 [ Haiku ]  [ Sonnet ]  [ ● Opus ]  [ Fable ]
 Effort
-▰ ▰ ▰ ▱ ▱
-
+▬▬▬▬▬▬▬▬ ▬▬▬▬▬▬▬▬ ▬▬▬▬▬▬▬▬ ▭▭▭▭▭▭▭▭ ▭▭▭▭▭▭▭▭
+Low  Medium  ● High  Extra high  Max
+────────────────────────────────────────────
 This session                     unchanged 2
 Model                Effort
-Sonnet ██████████ 3  High   ██████████ 4
-Opus   ███████    2  Medium █████      2
+Sonnet ▬▬▬▬▬▬▬▬ 3    High   ▬▬▬▬▬▬▬▬ 4
+Opus   ▬▬▬▬▬    2    Medium ▬▬▬▬     2
 ```
 
 - The top line is the mode list. The card under it shows **CoreModel's pick** with **Reset** and,
   below, what you chose in Claude; when CoreModel holds nothing, it shows **In Claude** alone.
 - The selected model carries **●**, so the selection does not rest on colour alone. The effort is a
-  scale of five cells filled up to the current level; each cell is a button named by its level.
+  scale of five segments across the block, filled up to the current level; under it the levels are
+  buttons by name, the current one marked with **●**.
 - A **Model** or **Effort** button holds your pick at once, Fable, Extra high and Max included: your
   own press is your yes. A model pressed mid-chat first shows the cost question. **Reset** lets go
   of what coremodel set.

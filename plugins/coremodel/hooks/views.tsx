@@ -15,11 +15,16 @@ import { session } from './session'
 // holding a wrapping row would claim the whole line. The session groups wrap the same way at GROUP.
 const BLOCK = 28
 const GROUP = 20
-// The longest session bar, in cells; the others are drawn to scale, at least one cell.
-const BAR = 10
-// A cell of the effort scale: filled up to the current level.
-const FILLED = '▰'
-const EMPTY = '▱'
+// Theme colours, so both surfaces follow the person's theme: the effort scale's filled and empty segments,
+// and the session bars. Boxes, not glyphs: a desktop draws a Button's label, not its children, and text bars
+// ran past the pane's edge there.
+const FILL = 'claude'
+const TRACK = 'subtle'
+const BAR = 'inactive'
+// The shortest session bar, in percent of its track, so a count of one still shows.
+const BAR_MIN = 5
+// A rule between parts of the pane, clipped at the pane's edge.
+const RULE = '─'.repeat(200)
 
 /** What CoreModel draws: the footer button, the pane, the transcript rows and the band above the prompt. */
 export const drawViews: Register = (on, options) => {
@@ -67,6 +72,12 @@ export const drawViews: Register = (on, options) => {
     const nowPair = t.pair(nowModel, nowLevel)
     const yours = t.pair(defaultModel, defaultLevel)
     const caption = (text: string) => <Text dimColor>{text}</Text>
+    // A row of one line that clips the rest: a truncated text would end in an ellipsis.
+    const rule = (key: string) => (
+      <Box key={key} height={1} overflow="hidden">
+        <Text dimColor>{RULE}</Text>
+      </Box>
+    )
     // A surface with no Select (the mobile app) gets the modes as buttons, the selected one marked in words.
     const modes =
       'Select' in ui ? (
@@ -86,10 +97,12 @@ export const drawViews: Register = (on, options) => {
           {nowPair ? <Text size="heading" weight="semibold">{nowPair}</Text> : <Text size="heading" dimColor>—</Text>}
           {isHeld ? <Button key="release" label={t.reset} onPress={act('release', () => paneChoice($, null))} /> : null}
         </Box>
+        {isHeld && yours ? rule('now-rule') : null}
         {isHeld && yours ? <Text dimColor>{t.inClaudeIs(yours)}</Text> : null}
       </Box>
     )
-    // The effort scale: one button per level, named by its label, drawn as a cell filled up to the current level.
+    // The effort scale: five segments across the block, filled up to the current level; under it the levels
+    // by name, pressed to pick one. The names wrap, so the row fits a narrow pane.
     const at = nowLevel ? LEVELS.indexOf(nowLevel) : -1
     const choose = (
       <Box key="choose" flexDirection="column" gap="sm" flexGrow={1} width={BLOCK}>
@@ -105,17 +118,26 @@ export const drawViews: Register = (on, options) => {
         ) : null}
         <Box key="choose-level" flexDirection="column" gap="xs">
           {caption(t.effort)}
-          <Box key="levels" flexDirection="row">
+          <Box key="scale" flexDirection="row" gap="xs">
             {LEVELS.map((l, i) => (
-              <Button key={`level-${l}`} label={t.levelName(l)} plain variant={l === nowLevel ? 'primary' : undefined} onPress={act('level', () => paneChoice($, l))}>
-                {i <= at ? FILLED : EMPTY}
-              </Button>
+              <Box key={`scale-${l}`} flexGrow={1} height={1} backgroundColor={i <= at ? FILL : TRACK} />
+            ))}
+          </Box>
+          <Box key="levels" flexDirection="row" flexWrap="wrap" gap="sm">
+            {LEVELS.map(l => (
+              <Button
+                key={`level-${l}`}
+                label={l === nowLevel ? `● ${t.levelName(l)}` : t.levelName(l)}
+                plain
+                dimColor={l === nowLevel ? undefined : true}
+                onPress={act('level', () => paneChoice($, l))}
+              />
             ))}
           </Box>
         </Box>
       </Box>
     )
-    // One group of the session: the most used first, a bar of up to BAR cells to scale, the count.
+    // One group of the session: the most used first, a bar to scale in a track that fills the row, the count.
     const group = (key: string, title: string, rows: [string, number][]) => {
       if (!rows.length) return null
       const most = Math.max(...rows.map(r => r[1]))
@@ -126,11 +148,13 @@ export const drawViews: Register = (on, options) => {
           {[...rows]
             .sort((a, b) => b[1] - a[1])
             .map(([name, n]) => (
-              <Box key={`${key}-${name}`} flexDirection="row" gap="sm">
+              <Box key={`${key}-${name}`} flexDirection="row" gap="sm" alignItems="center">
                 <Box key={`${key}-${name}-name`} minWidth={width}>
                   <Text>{name}</Text>
                 </Box>
-                <Text dimColor>{'█'.repeat(Math.max(1, Math.round((n / most) * BAR)))}</Text>
+                <Box key={`${key}-${name}-track`} flexGrow={1} height={1}>
+                  <Box key={`${key}-${name}-bar`} width={`${Math.max(BAR_MIN, Math.round((n / most) * 100))}%`} height={1} backgroundColor={BAR} />
+                </Box>
                 <Text tabular>{String(n)}</Text>
               </Box>
             ))}
@@ -154,6 +178,7 @@ export const drawViews: Register = (on, options) => {
           {now}
           {choose}
         </Box>
+        {models || levels || kept ? rule('session-rule') : null}
         {models || levels || kept ? (
           <Box key="session" flexDirection="column" gap="xs">
             <Box key="session-head" flexDirection="row" gap="sm" justifyContent="space-between">
@@ -166,6 +191,7 @@ export const drawViews: Register = (on, options) => {
             </Box>
           </Box>
         ) : null}
+        {warnings.length ? rule('warnings-rule') : null}
         {warnings.map(w => (
           <Text key={`warn-${w}`} color="warning">{`⚠ ${w}`}</Text>
         ))}

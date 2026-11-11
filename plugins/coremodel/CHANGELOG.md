@@ -7,6 +7,16 @@ full detail.
 
 ## [Unreleased]
 
+Codex: an update keeps the hooks off until you trust them again in `/hooks`.
+
+### Fixed
+
+- The pane fits its width on the desktop. The effort scale is five segments across the block, filled up
+  to the current level, with the levels as buttons by name under it; the row wraps and marks the current
+  level with **●**. Before, the desktop drew the level names in one row that ran past the pane's edge,
+  with no mark. The session bars scale to the group's width, so the counts are no longer cut off. Rules
+  divide the card, the session and the warnings, as the layout intended.
+
 ## [0.11.0] - 2026-11-11
 
 Codex: an update keeps the hooks off until you trust them again in `/hooks`.
