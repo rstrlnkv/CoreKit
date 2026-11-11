@@ -405,4 +405,9 @@ T="$PLUGIN/templates/CLAUDE.md.tmpl"
 assert_not_contains "$T" "Never edit \`../docs/\` from a worktree"
 assert_contains "$T" "one wiki for every worktree"
 assert_contains "$T" "{{PROJECT_DIR}}/docs/"
+# coding discipline for the main session of a new project: assumptions said, ambiguity asked, no
+# speculative code, surgical edits
+[ "$(grep -ciF -- 'reads two ways' "$T")" = 1 ] && pass || fail "CLAUDE.md.tmpl does not state once: reads two ways"
+[ "$(grep -ciF -- 'nobody asked for' "$T")" = 1 ] && pass || fail "CLAUDE.md.tmpl does not state once: nobody asked for"
+[ "$(grep -ciF -- 'left unused' "$T")" = 1 ] && pass || fail "CLAUDE.md.tmpl does not state once: left unused"
 finish

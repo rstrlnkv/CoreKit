@@ -120,6 +120,12 @@ has "$E" 'never commit'
 has "$E" 'save'
 has "$E" 'never weaken'
 md_section_has "$E" "Reply format" 'Screens:'
+# Coding discipline (after Karpathy's notes on LLM coding pitfalls): every line traces to the brief,
+# no speculative options, an ambiguous brief comes back instead of being guessed
+[ "$(grep -ciF -- 'traces to the brief' "$E")" = 1 ] && pass || fail "engineer.md does not state once: traces to the brief"
+[ "$(grep -ciF -- 'left unused' "$E")" = 1 ] && pass || fail "engineer.md does not state once: left unused"
+[ "$(grep -ciF -- 'reads two ways' "$E")" = 1 ] && pass || fail "engineer.md does not state once: reads two ways"
+[ "$(grep -ciF -- 'simpler way' "$E")" = 1 ] && pass || fail "engineer.md does not state once: simpler way"
 # REV-16: the engineer reads the owner's session rules itself; SessionStart output reaches only the main session.
 md_section_has "$E" "What to read first" '<Core>/session-rules.md'
 rd="$(md_section "$E" "What to read first")"
