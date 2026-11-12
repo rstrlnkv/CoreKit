@@ -22,6 +22,8 @@
 #       staging; the line says how to recover: revert the repo commit, named by its hash, unless there is none or
 #       it is reverted already; remove the folder; rerun)
 #   Core is not set up
+#   cannot create symbolic links here; ... Developer Mode ...   (CLAUDE.local.md and AGENTS.md are links; on
+#       Windows Git Bash copies a file for ln -s unless winsymlinks:nativestrict, which adopt sets)
 #   CLAUDE.local.md exists in <folder>: move it away first (...)    (a file, or a link elsewhere)
 #   not found: <path>                  a --public-docs path that is not in the repo
 #   symlink: <path> -> <target>; replace it with a file first   (a tracked file to be copied)
@@ -217,6 +219,7 @@ preconditions() {
     refuse "leftover staged copy of $NAME: $d (an earlier adopt stopped); undo its repo commit with git -C \"$FROM\" revert --no-edit $mc, then remove $d and run adopt again"
   done
   { core_ready && [ -d "$CORE_DIR/.git" ]; } || refuse "Core is not set up"
+  symlinks_work || refuse "cannot create symbolic links here; on Windows turn on Developer Mode (Settings > System > For developers), then run adopt again"
   # CLAUDE.local.md becomes the link to the private CLAUDE.md: a file of the user's there is never replaced.
   LOC="$FROM/CLAUDE.local.md"
   if { [ -e "$LOC" ] || [ -L "$LOC" ]; } && ! { [ -L "$LOC" ] && [ "$(readlink "$LOC")" = "$P/CLAUDE.md" ]; }; then
@@ -411,11 +414,9 @@ stage() {
   fi
 
   # The wiki in the current format (front matter, wikilinks, Obsidian files, generated INDEX); dates
-  # from the repo the pages came from. It runs through a link named as the project (the INDEX title is
-  # the folder name). Its warnings are printed after the move.
-  ln -s p "$TMP/$NAME" || exit 1
-  MIG="$(WIKI_MIGRATE_DATES="$FROM" bash "$ROOT_DIR/scripts/wiki-migrate.sh" "$TMP/$NAME")" || exit 1
-  rm -f "$TMP/$NAME"
+  # from the repo the pages came from, the INDEX title from the project name (the staged folder is "p"; no link
+  # named as the project: on Windows a path through one breaks). Its warnings are printed after the move.
+  MIG="$(WIKI_MIGRATE_NAME="$NAME" WIKI_MIGRATE_DATES="$FROM" bash "$ROOT_DIR/scripts/wiki-migrate.sh" "$STAGE")" || exit 1
 }
 
 # restore_gi — .gitignore as it was before commit_repo: removed when adopt created it, else the backup copied back.

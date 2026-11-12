@@ -98,6 +98,23 @@ put_project_docs() {
   done <<< "$(project_docs_manifest)"
 }
 
+# symlink <target> <link> — ln -s that makes a real link or fails. Git Bash and Cygwin copy the target unless
+# winsymlinks:nativestrict is set (then: a native link, or an error when Windows allows none). Exit 1 and the
+# copied file taken out again when <link> is a plain file after it (a folder at <link>, there before or since,
+# gets the link inside it, as with ln; the caller judges that; a folder is never removed here).
+symlink() {
+  MSYS="${MSYS:+$MSYS }winsymlinks:nativestrict" CYGWIN="${CYGWIN:+$CYGWIN }winsymlinks:nativestrict" ln -s "$1" "$2" || return 1
+  if [ -L "$2" ] || [ -d "$2" ]; then return 0; fi
+  rm -f "$2"; echo "ln -s made a copy, not a link: $2" >&2; return 1
+}
+# symlinks_work — a symlink can be made (a probe in a temp folder of the system's own).
+symlinks_work() {
+  local d rc=1
+  d="$(mktemp -d "${TMPDIR:-/tmp}/corecrew-ln.XXXXXX")" || return 1
+  : > "$d/t" && symlink t "$d/l" 2>/dev/null && rc=0
+  rm -rf "$d"; return $rc
+}
+
 # link_file_to_claude <code_dir> <core_project_dir> <file name> — make <code_dir>/<file name> a
 # symlink to <core_project_dir>/CLAUDE.md. Prints "created|skipped <path>" ("would create" with DRY=1,
 # nothing written). Exit 1 when the target CLAUDE.md is missing (no dangling link). A real file or a link to somewhere else is never touched: exit 1 with a plain line.
@@ -116,7 +133,7 @@ link_file_to_claude() {
   mkdir -p "$1" || return 1
   # (a directory that appeared at $link since the -e test would take the link inside itself: BSD and GNU ln -n
   # only cover a link to a directory, so look again right after and take our stray link out)
-  lnerr="$(ln -s "$target" "$link" 2>&1)"; lnrc=$?
+  lnerr="$(symlink "$target" "$link" 2>&1)"; lnrc=$?
   if [ -d "$link" ] && [ ! -L "$link" ]; then
     [ ! -L "$link/CLAUDE.md" ] || [ "$(readlink "$link/CLAUDE.md")" != "$target" ] || rm -f "$link/CLAUDE.md"
     echo "$3 exists and is not a link to $target; leave it or remove it yourself" >&2

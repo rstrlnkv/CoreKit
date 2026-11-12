@@ -7,6 +7,8 @@
 #   --dry-run      print what would change; change nothing.
 # Env:   WIKI_MIGRATE_DATES  a folder in the git repo whose docs/ the pages came from (adopt passes the
 #                            code repo); default <project_dir>.
+#        WIKI_MIGRATE_NAME   the project name for the INDEX title (adopt converts a staged copy in a folder
+#                            with another name); default the folder name of <project_dir>.
 #
 # Pages are what wiki-pages.sh lists. Per page: title dropped; fields in the order type status
 # description files related updated, other fields kept after them in their order and warned about (a brief's
@@ -53,7 +55,8 @@ for a in "$@"; do
 done
 proj="${proj%/}"
 [ -n "$proj" ] && [ -d "$proj/docs" ] || usage
-docs="$proj/docs"; name="$(basename "$proj")"
+docs="$proj/docs"; name="${WIKI_MIGRATE_NAME:-$(basename "$proj")}"
+case "$name" in ""|.|..|*/*) usage ;; esac
 DATES="${WIKI_MIGRATE_DATES:-$proj}"
 TODAY="$(date +%Y-%m-%d)"
 export GIT_LITERAL_PATHSPECS=1
