@@ -5,8 +5,8 @@ stays where it is, in `<Projects>/<Name>` (`<Projects>` is the folder that holds
 internal files move to `<Core>/<name>/` (`<name>` is `<Name>` in lower case) and reach the
 session through `CLAUDE.local.md` and `AGENTS.md`, gitignored links to `<Core>/<name>/CLAUDE.md`.
 Start has already resolved `<Core>`, checked that it is set up, and noted `<scripts>` (the plugin
-scripts folder). No crew, no tester: only you and the script. Talk to the user in plain words;
-never run `adopt.sh` before "ok".
+scripts folder). Steps 1–8 are only you and the script; the crew comes in at step 9. Talk to the
+user in plain words; never run `adopt.sh` before "ok".
 
 1. **Inspect** `<folder>` (resolve it to an absolute path; `~` counts as home). Look at
    its name, `CLAUDE.md`, `AGENTS.md`, `docs/`, `.claude/` and the top level of the repo. Never open `.env`
@@ -23,6 +23,8 @@ never run `adopt.sh` before "ok".
      case, must be 3-40 Latin letters, digits and hyphens; the user renames the folder.
    - `target exists: <path>`: that folder is taken; nothing is merged or overwritten.
    - `CLAUDE.local.md exists`: the user moves their own file away first.
+   - `cannot create symbolic links here; on Windows turn on Developer Mode ...`: the links need it;
+     the user turns it on (Settings > System > For developers) and runs adopt again.
    - `leftover staged copy of <name>: <Core>/.adopt.<name>.XXXXXX`: an earlier adopt of this project
      stopped before its files reached `<Core>/<name>`. Follow the recovery the line gives, in order. When
      it names a `git -C "<folder>" revert --no-edit <hash>` command, run it first: it undoes the repo
@@ -51,6 +53,8 @@ never run `adopt.sh` before "ok".
      folded into `CLAUDE.md`);
    - the conversion of the old wiki by `wiki-migrate.sh` (a failure stops adopt with nothing changed);
    - what gets created.
+   - that after it the private pages are filled from the repo and the public documents are
+     checked against the Core standards; each rewrite waits for the user's own ok (step 9).
    If the plan lists `CLAUDE.md` or `.claude/` under "stays in the repo (ignored by git)", tell
    the user: the Core gets a template `CLAUDE.md`, and their own file stays in the repo.
    If the plan has the `warning: git tracks N CLAUDE.md / AGENTS.md file(s) that stay in the repo`
@@ -75,12 +79,15 @@ never run `adopt.sh` before "ok".
 8. **Verify** with `bash "<scripts>/wiki-check.sh" "<Core>/<name>"`.
    Red: say which pages and why; the usual cause is a link in an old page that
    no longer resolves, or a `warning:` line from `wiki-migrate.sh` (a page with no known type). Pages the script gave new front matter hold `TODO` descriptions and
-   `status: draft`: say they still need writing.
-9. **Report** in plain words, with these lines:
+   `status: draft`: step 9 fills them.
+9. **Documents.** Read `references/adopt-docs.md` and follow it: the private pages filled
+   from the repo, the audit of the public side, and a rewrite chain per item the user picks.
+10. **Report** in plain words, with these lines:
    - `Path: adopt`
    - the code folder (unchanged); the `check:` command or that it is not set yet
    - the rules folded into `CLAUDE.md`, and the files "kept in Core, no longer loaded"
    - the wiki result
+   - the `Private pages:` and `Documents:` lines of `adopt-docs.md`
    - `Open Claude Code in: <code folder>` (the script's last line, `open: ...`), and tell the
      user to restart Claude Code in that folder: the private `CLAUDE.md` loads through
      `CLAUDE.local.md` only in a new session. In Codex, say `Open Codex in: <code folder>` with

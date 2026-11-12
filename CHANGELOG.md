@@ -9,6 +9,20 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+### Added
+- `/corecrew:task adopt` now ends with a documents stage: the private `CLAUDE.md` (Stack,
+  Commands, `check:`), brief, architecture and first decision are filled in from what the repo
+  already says, never invented; the public side is checked against the Core standards (README
+  shape, CHANGELOG per language, SECURITY, ARCHITECTURE, NOTICE), for leftovers of older private
+  setups and for files not in the project's language; each item the user picks is rewritten in
+  its own task chain and commit.
+
+### Fixed
+- Windows (Git Bash): adopt, `new-project` and `prepare` made `CLAUDE.local.md` and `AGENTS.md`
+  plain copies instead of links, and adopt lost the converted wiki's `docs/INDEX.md` and left its
+  staging folder `<Core>/.adopt.<name>.*` behind. The links are now real symlinks; where Windows
+  allows none, adopt refuses before changing anything and says to turn on Developer Mode.
+
 ## [1.2.0] - 2026-11-11
 
 Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off until then.
