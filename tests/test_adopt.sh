@@ -46,6 +46,7 @@ refuses() {
   assert_eq "$after" "$before" "refusal changed something ($want)"
 }
 inode() { ls -di "$1" | awk '{ print $1 }'; }
+NOLINK_MSG="cannot create symbolic links here; on Windows turn on Developer Mode (Settings > System > For developers), then run adopt again"
 
 # The sections below each start their own sandbox and share nothing: six groups run side by side
 # (bg, lib.sh), which keeps the file well under its serial time.
@@ -868,6 +869,46 @@ assert_eq "$(grep -c '^- line-app ' "$CORE_DIR/PROJECTS.md")" "1" "one PROJECTS.
 echo "$OUT" | grep -qxF "updated PROJECTS.md entry" && pass || fail "no 'updated PROJECTS.md entry' line: $OUT"
 }
 bg part_late_phases
+
+part_copying_ln() {
+# --- Git Bash on Windows: "ln -s" copies unless MSYS has winsymlinks:nativestrict, which makes a real link
+# (Developer Mode on) or fails (off). The stub plays that ln. With a real link: CLAUDE.local.md and AGENTS.md
+# are links, the wiki converted through the stage link keeps its INDEX.md, no staging folder is left behind.
+new_sandbox; setup_core
+REAL_LN="$(command -v ln)"
+mkdir -p "$SANDBOX/stub"
+cat > "$SANDBOX/stub/ln" <<STUB
+#!/bin/sh
+case " \${MSYS:-} " in
+  *winsymlinks:nativestrict*) [ -z "\${LN_NO_LINKS:-}" ] || { echo "ln: Operation not permitted" >&2; exit 1; }
+                              exec "$REAL_LN" "\$@" ;;
+esac
+[ "\$1" = -s ] || exec "$REAL_LN" "\$@"
+case "\$2" in /*) t="\$2" ;; *) t="\$(dirname "\$3")/\$2" ;; esac
+exec cp -R "\$t" "\$3"
+STUB
+chmod +x "$SANDBOX/stub/ln"
+F="$SANDBOX/Projects/winlink"; mkrepo "$F"
+OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$AD" --from "$F" 2>&1)"; rc=$?
+assert_eq "$rc" "0" "adopt with a copying ln exit ($OUT)"
+P="$CORE_DIR/winlink"
+[ -L "$F/CLAUDE.local.md" ] && pass || fail "CLAUDE.local.md is not a symlink (copying ln)"
+[ -L "$F/AGENTS.md" ] && pass || fail "AGENTS.md is not a symlink (copying ln)"
+assert_file "$P/docs/INDEX.md"
+assert_eq "$(head -1 "$P/docs/INDEX.md")" "# winlink wiki" "INDEX title (staged copy converted under the project name)"
+assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "staging folder left in the Core (copying ln)"
+echo "$OUT" | grep -q 'Is a directory' && fail "rm on a directory: $OUT" || pass
+# Developer Mode off: no symlinks at all. A refusal before anything changes, in the plan as well.
+F="$SANDBOX/Projects/nolink"; mkrepo "$F"
+before="$(snap_tree "$SANDBOX")"
+for dry in --dry-run ""; do
+  OUT="$(LN_NO_LINKS=1 PATH="$SANDBOX/stub:$PATH" bash "$AD" --from "$F" $dry 2>&1)"; rc=$?
+  assert_eq "$rc" "2" "no-symlink refusal exit ($dry)"
+  assert_eq "$OUT" "$NOLINK_MSG" "no-symlink refusal message ($dry)"
+done
+assert_eq "$(snap_tree "$SANDBOX")" "$before" "the no-symlink refusal changed something"
+}
+bg part_copying_ln
 
 bg_wait
 finish

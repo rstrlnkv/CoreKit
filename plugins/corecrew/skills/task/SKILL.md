@@ -18,6 +18,7 @@ Detail lives in references, read when you reach that step:
 - `<skill>/references/report.md` — the final report
 - `<skill>/references/release.md` — the release postconditions (every chain that changed files)
 - `<skill>/references/adopt.md` — bringing an existing project into the Core layout
+- `<skill>/references/adopt-docs.md` — adopt's documents stage: private pages filled, public side audited and rewritten
 - `<skill>/references/codex.md` — running the chain in Codex (agents, Core access, read-only checks)
 - `<skill>/references/architect-explorer.md` — the architect and explorer roles when feature-dev is not installed, and in Codex
 
