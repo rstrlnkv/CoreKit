@@ -9,6 +9,8 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off until then.
+
 ### Added
 - `/corecrew:task adopt` now ends with a documents stage: the private `CLAUDE.md` (Stack,
   Commands, `check:`), brief, architecture and first decision are filled in from what the repo
