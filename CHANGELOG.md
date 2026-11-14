@@ -16,7 +16,8 @@ Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off
   testing and a release branch): the channels, their branches, tag forms and build numbers come
   from your versioning standard, or ship asks when the remote has branches that look like
   channels; `/corecrew:ship <channel>` publishes a prerelease build of that channel, the last
-  channel is the release, and fixes are merged back into the earlier branches.
+  channel is the release, and fixes are merged back into the earlier branches, each through its
+  own merge branch that is pushed and checked by CI before it lands.
 - `/corecrew:ship` with no level takes the version your versioning standard derives from the
   changelog, titles and writes the GitHub release as your release standard says, and its report
   also gives the command to delete the local branch.
