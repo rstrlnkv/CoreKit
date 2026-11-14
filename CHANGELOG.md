@@ -28,6 +28,8 @@ Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off
   its own task chain and commit.
 
 ### Fixed
+- The adopt documents stage no longer names a standard file you may not have; it works with
+  whatever standards your Core holds.
 - Windows (Git Bash): adopt, `new-project` and `prepare` made `CLAUDE.local.md` and `AGENTS.md`
   plain copies instead of links, and adopt lost the converted wiki's `docs/INDEX.md` and left its
   staging folder `<Core>/.adopt.<name>.*` behind. The links are now real symlinks; where Windows
