@@ -122,6 +122,42 @@ assert_eq "$(grep -c -- '--delete' "$SK")" "1" "the delete command is only in th
 # The release commit subject is short and valid in both worlds: chore(<part>): release <version>, or chore: release <version>.
 case "$steps" in *'chore(<part>): release <version>'*'chore: release <version>'*) pass ;; *) fail "the Release step gives the release commit subject" ;; esac
 
+# Release channels: the user's own scheme (its channels, their branches, their tag forms) comes from the
+# user's versioning standard, else from the user's answer; ship assumes no name of its own. The channel
+# flow lives in references/channels.md, read only when the scheme has more than one channel.
+CHN="$PLUGIN/skills/ship/references/channels.md"
+assert_file "$CHN"
+assert_contains "$SK" '<skill>/references/channels.md'
+grep -q '^argument-hint:.*<channel>' "$SK" && pass || fail "the argument hint names <channel>"
+for f in "$SK" "$CHN"; do
+  assert_eq "$(grep -nwE 'DEV|BETA|STABLE|Stable|Beta' "$f")" "" "$(basename "$f"): no channel name of one user's scheme"
+  assert_eq "$(grep -nE '(^|[ `"])main\.\.|origin main\b|refs/heads/main\b|ff-only main\b' "$f")" "" "$(basename "$f"): no command hard-codes main"
+done
+# The well-known branch names that hint at an unrecorded scheme stand in one place, one line.
+assert_eq "$(grep -cwE 'dev|beta|staging|nightly' "$CHN")" "1" "channels.md: the hint list of branch names is one line"
+assert_eq "$(grep -cwE 'dev|beta|staging|nightly' "$SK")" "0" "SKILL.md: no branch name of a scheme"
+chs="$(sed -nE 's/^## (.*)/\1/p' "$CHN" | tr '\n' '|')"
+assert_eq "$chs" 'Scheme|Channel|Build|Last channel|Merge back|Report|' "channels.md sections, in order"
+assert_contains "$CHN" '/corecrew:new-standard'
+assert_contains "$CHN" 'git branch -r'
+assert_contains "$CHN" '--ff-only'
+assert_contains "$CHN" 'git tag --list'
+assert_contains "$CHN" '--prerelease'
+assert_contains "$CHN" 'check:'
+for w in '--force' 'push -f' 'git tag -f' 'tag -d' '--delete' 'reset --hard' 'rebase'; do assert_not_contains "$CHN" "$w"; done
+for l in 'Channel:' 'Build:' 'Merged back:'; do assert_contains "$CHN" "$l"; done
+# A channel build checks the tree that will land before anything is pushed (live check of c96218b:
+# the text pushed <target> first, so a red check came after the push).
+bld="$(md_section "$CHN" Build)"
+nck="$(printf '%s\n' "$bld" | grep -n 'check:' | head -1 | cut -d: -f1)"
+nld="$(printf '%s\n' "$bld" | grep -n 'steps 3–6' | head -1 | cut -d: -f1)"
+[ -n "$nck" ] && [ -n "$nld" ] && [ "$nck" -lt "$nld" ] && pass || fail "channels.md Build: check: runs before the landing of steps 3–6 (lines $nck $nld)"
+# Title and notes of the GitHub release come from the user's release standard when there is one.
+printf '%s\n' "$steps" | grep -F 'gh release create' | grep -qF -- '--title "<title>"' && pass || fail "gh release create takes the title the release standard gives"
+# The report gives both delete commands for the shipped branch; ship deletes nothing itself.
+case "$rep" in *'git branch -d <branch>'*) pass ;; *) fail "the report gives the command to delete the local branch later" ;; esac
+assert_not_contains "$SK" 'branch -D'
+
 # The README lists the command.
 assert_contains "$ROOT/README.md" '/corecrew:ship'
 finish

@@ -38,7 +38,7 @@ Read-only; no agent. Ask the user once whether the repo is public (or will be). 
 skip the public-repository checks, keep the leftovers and the language.
 
 1. **Standards.** For each file in `<Core>/standards/` and `<P>/docs/standards/` that governs the
-   repository's files (for example `public-repository.md`: README shape, CHANGELOG in Keep a
+   repository's files (for example a standard for public repositories: README shape, CHANGELOG in Keep a
    Changelog with one file per project language, `SECURITY.md`, a short `ARCHITECTURE.md`,
    `NOTICE.md` complete per third-party item), run its "How to check" commands in `<folder>` and
    note each rule that fails. A check with no command (read `NOTICE.md` against the tree): read
@@ -53,7 +53,7 @@ skip the public-repository checks, keep the leftovers and the language.
    documents are in another language (UI text files the project localizes stay out).
 
 Show the result as one numbered list, one line per item: the file, what is wrong, the rule
-(`public-repository.md` rule 4, ...), and the chain that would fix it. Group items that touch the
+(the standard's file and rule, for example `<name>.md` rule 4), and the chain that would fix it. Group items that touch the
 same file into one item. Nothing failed: say so, go to the report.
 
 ## 3. Rewrite

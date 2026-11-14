@@ -12,6 +12,14 @@ commit log has the full detail.
 Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off until then.
 
 ### Added
+- `/corecrew:ship` follows the project's own release channels (for example a development, a
+  testing and a release branch): the channels, their branches, tag forms and build numbers come
+  from your versioning standard, or ship asks when the remote has branches that look like
+  channels; `/corecrew:ship <channel>` publishes a prerelease build of that channel, the last
+  channel is the release, and fixes are merged back into the earlier branches.
+- `/corecrew:ship` with no level takes the version your versioning standard derives from the
+  changelog, titles and writes the GitHub release as your release standard says, and its report
+  also gives the command to delete the local branch.
 - `/corecrew:task adopt` now ends with a documents stage: the private `CLAUDE.md` (Stack,
   Commands, `check:`), brief, architecture and first decision are filled in from what the repo
   already says, never invented; the public side is checked against the Core standards (README
@@ -20,6 +28,8 @@ Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off
   its own task chain and commit.
 
 ### Fixed
+- The adopt documents stage no longer names a standard file you may not have; it works with
+  whatever standards your Core holds.
 - Windows (Git Bash): adopt, `new-project` and `prepare` made `CLAUDE.local.md` and `AGENTS.md`
   plain copies instead of links, and adopt lost the converted wiki's `docs/INDEX.md` and left its
   staging folder `<Core>/.adopt.<name>.*` behind. The links are now real symlinks; where Windows
