@@ -158,6 +158,8 @@ mb="$(md_section "$CHN" 'Merge back')"
 case "$mb" in *'git switch -c'*) pass ;; *) fail "channels.md Merge back: cuts its own branch" ;; esac
 case "$mb" in *'steps 3–6'*) pass ;; *) fail "channels.md Merge back: lands the branch as SKILL.md steps 3–6" ;; esac
 case "$mb" in *'git push origin <e>'*) fail "channels.md Merge back: pushes the channel branch directly" ;; *) pass ;; esac
+# A merge branch left by an earlier run (ship deletes no branch) must not block the next one.
+case "$mb" in *'refs/heads/<m>'*'refs/remotes/origin/<m>'*) pass ;; *) fail "channels.md Merge back: picks a merge-branch name that is free locally and on origin" ;; esac
 # Title and notes of the GitHub release come from the user's release standard when there is one.
 printf '%s\n' "$steps" | grep -F 'gh release create' | grep -qF -- '--title "<title>"' && pass || fail "gh release create takes the title the release standard gives"
 # The report gives both delete commands for the shipped branch; ship deletes nothing itself.
