@@ -1,26 +1,25 @@
 ---
 name: ship
-description: Release the current branch (version, changelog, tests on that tree, commit), push it and wait for its CI checks, merge it into the default branch and push, then tag it and publish a GitHub release, each after your go-ahead. Use /corecrew:ship [<part>] [patch|minor|major|<version>].
+description: Release the current branch (version, changelog, tests on that tree, commit), push it and wait for its CI checks, merge it into the default branch and push, then tag it and publish a GitHub release, each after your go-ahead; follows the project's own release channels when it has them. Use /corecrew:ship [<part>] [<channel>] [patch|minor|major|<version>].
 disable-model-invocation: true
-argument-hint: "[<part>] [patch | minor | major | <version>]"
+argument-hint: "[<part>] [<channel>] [patch | minor | major | <version>]"
 ---
 
 # Ship
 
 ## Overview
-Ship takes a finished branch of a project's code repo to the repo's default branch on its remote:
-a version with a changelog entry, the tests on that tree and one commit, a stop for the user's go-ahead, a
-push of the branch and a wait for its CI checks (so a protected default branch accepts the release
-commit), a fast-forward merge and a push, then, after a second yes, a tag and a GitHub release. The
-release commit itself is the `release` path of the task skill; this skill adds the version choice,
-the branch push, the CI wait, the merge, the push, the tag and the GitHub release. It never forces
-anything: no forced push, no rewritten history, no merge commit made behind the user's back, no tag
-moved or deleted, no branch deleted.
+Ship takes a finished branch of a project's code repo to the repo's default branch on its remote: a version
+with a changelog entry, the tests on that tree and one commit, a stop for the user's go-ahead, a push of the
+branch and a wait for its CI checks (so a protected default branch accepts the release commit), a fast-forward
+merge and a push, then, after a second yes, a tag and a GitHub release. The release commit itself is the
+`release` path of the task skill. It never forces anything: no forced push, no rewritten history, no merge
+commit made behind the user's back, no tag moved or deleted, no branch deleted.
 
-Files of the task skill this skill follows (open them with Read):
+Files this skill follows (open them with Read):
 - `<plugin>/skills/task/SKILL.md` — sections Settings and Start
 - `<plugin>/skills/task/references/paths.md` — section `release`
 - `<plugin>/skills/task/references/release.md` — the release postconditions
+- `<skill>/references/channels.md` — release channels (the **Channels** step of Start)
 
 ## Paths
 This skill's folder is `${CLAUDE_SKILL_DIR}`; call it `<skill>`. Claude Code fills in that absolute
@@ -69,21 +68,23 @@ defaults are `core_dir` `~/Projects/Core`, `attribution` `allow`.
    code root (a conflict: stop and name the files). The tests below then run on the merged tree.
 5. **Remote.** `git remote` lists `origin` → it is the push target. No `origin`: say the push and
    the GitHub release will be skipped, and go on.
+6. **Channels.** Read section Scheme of `<skill>/references/channels.md` and follow it. One release
+   channel: go on below. Several: follow that file, which says which branches play `<branch>` and
+   `<main>` in the steps below.
 
 ## Steps
 1. **Version and tag names.** The argument is `[<part>] [<level or version>]`; a first word that is not a level or a version
-   is the `<part>`. The level picks the version: empty or `patch` raises the last
-   number, `minor` the middle one (last becomes 0), `major` the first (the others become 0); an
+   is the `<part>`. The level picks the version: empty takes the level the versioning standard derives
+   from the changelog (none: patch); `patch` raises the last number, `minor` the middle one (last becomes 0), `major` the first (the others become 0); an
    explicit `<version>` is used as given. Read the current version where the versioning standard in
    `<Core>/standards/` says it lives (a standard whose `applies-to` names `release`). No such
    standard: ask the user where the version lives and how it is written, before anything changes;
    this is the one place that asks, and the answer goes into the brief of step 2.
    A repo with several versioned parts (several packages or plugins) ships one part per run: the
    `<part>` the argument names. None named: list the parts whose changelog has lines under
-   `## [Unreleased]` and ask which one; the others wait for their own run.
-   The tag of each new version follows that standard; when it says nothing, a repo with one
-   versioned part uses `v<version>`, and a repo with several uses `<part>-v<version>` (the part's
-   name as its manifest gives it). A tag that already exists
+   `## [Unreleased]` and ask which one; the others wait for their own run. The tag follows that
+   standard; when it says nothing, a repo with one versioned part uses `v<version>`, and a repo
+   with several uses `<part>-v<version>` (the part's name as its manifest gives it). A tag that already exists
    (`git rev-parse --verify --quiet "refs/tags/<tag>"` prints a hash, here or after
    `git fetch origin --tags`): stop and name it before anything changes.
 2. **Release.** Run the `release` path of the task skill with that version:
@@ -130,9 +131,10 @@ defaults are `core_dir` `~/Projects/Core`, `attribution` `allow`.
    changelog entry as its notes?" Only on the user's explicit yes in their own message:
    - for each tag: `git tag -a "<tag>" -m "<tag>" <main>`, then `git push origin "refs/tags/<tag>"`;
    - the GitHub release, when `git remote get-url origin` is a GitHub URL and `gh auth status`
-     exits 0: write the new version's changelog section (its heading line up to the next `## `
-     heading) to a temp file from `mktemp`, then
-     `gh release create "<tag>" --verify-tag --title "<tag>" --notes-file "<that file>"`, and remove
+     exits 0: `<title>` and the notes follow a standard in `<Core>/standards/` on GitHub releases
+     (`applies-to` names `release`); none: the tag, and the version's changelog section (its heading
+     line up to the next `## ` heading). Write the notes to a temp file from `mktemp`, then
+     `gh release create "<tag>" --verify-tag --title "<title>" --notes-file "<that file>"`, and remove
      the file. Without `gh`, or not on GitHub: say the release was not made and why; the tag stays.
    A no: nothing is tagged; give the user the two commands above to run later. A failed tag push or
    release: stop and show the output. Never move, delete or force a tag.
@@ -142,7 +144,7 @@ defaults are `core_dir` `~/Projects/Core`, `attribution` `allow`.
    - `Version: <old> → <new>` (with the part's name in a repo with several)
    - `Tag: <tag> (pushed | local only)` or `Tag: none — <why>`; `Release: <url gh printed>` or `Release: none — <why>`
    - `Open:` what is left: a skipped push, tag or release, Core commits not on its remote
-     (`git -C "<Core>" status -sb`), release.md lines put under `Open`, or `none`. The remote
-     branch stays: give the command to delete it later, `git push origin --delete <branch>`.
+     (`git -C "<Core>" status -sb`), release.md lines put under `Open`, or `none`. The branch
+     stays: give the commands to delete it later, `git push origin --delete <branch>` and `git branch -d <branch>`.
    Then say how the user can check it (for example the release page, or the version on the remote's
    default branch).
