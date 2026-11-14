@@ -36,9 +36,10 @@ branch plays `<branch>` and `<main>` in the steps of SKILL.md.
 
 ## Build
 Every channel but the last. No release commit: the version and the changelog stay as they are.
-1. Land `<source>` on `<target>` as SKILL.md steps 3–6 do, with `<source>` as `<branch>` and
+1. In a clean checkout or worktree of `<source>` (the tree `<target>` becomes, since the merge only
+   fast-forwards), run the `check:` command. Red: show it, push and tag nothing.
+2. Land `<source>` on `<target>` as SKILL.md steps 3–6 do, with `<source>` as `<branch>` and
    `<target>` as `<main>`: the go-ahead, the branch push and CI, the merge with `--ff-only`, the push.
-2. In a clean checkout or worktree of `<target>`, run the `check:` command. Red: show it, tag nothing.
 3. The version is the one the standard derives (for example from `## [Unreleased]`, or frozen on
    this channel). The build number comes from the standard's command on `<target>`'s tip. Read
    every build number in `git tag --list` (the scheme's tag forms): the new one must be greater

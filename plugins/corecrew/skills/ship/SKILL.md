@@ -98,9 +98,9 @@ defaults are `core_dir` `~/Projects/Core`, `attribution` `allow`.
    one that stops the chain stops ship too: report and do not merge.
 3. **Go-ahead.** Show the user: the branch, the commits that will land on `<main>`
    (`git log --oneline <main>..HEAD`), the new version(s), the push target (or that there is no
-   remote), that the tests passed on the release commit, that the branch will be pushed and its CI
-   checks waited for first (step 4), and the tag(s) and GitHub release that step 7 will ask about
-   after the push. Wait for the user's explicit yes in their own message. Anything else: stop here;
+   remote), that the tests passed on the tree that lands (the release commit; a channel build has
+   none), that the branch will be pushed and its CI checks waited for first (step 4), and the
+   tag(s) and GitHub release that step 7 will ask about after the push. Wait for the user's explicit yes in their own message. Anything else: stop here;
    the release commit stays on the branch.
 4. **Branch push and CI.** With `origin`: `git push origin <branch>` (a new remote branch, or a
    fast-forward of one). A rejected push: stop, show the output, merge nothing; never retry with

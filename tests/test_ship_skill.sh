@@ -146,6 +146,12 @@ assert_contains "$CHN" '--prerelease'
 assert_contains "$CHN" 'check:'
 for w in '--force' 'push -f' 'git tag -f' 'tag -d' '--delete' 'reset --hard' 'rebase'; do assert_not_contains "$CHN" "$w"; done
 for l in 'Channel:' 'Build:' 'Merged back:'; do assert_contains "$CHN" "$l"; done
+# A channel build checks the tree that will land before anything is pushed (live check of c96218b:
+# the text pushed <target> first, so a red check came after the push).
+bld="$(md_section "$CHN" Build)"
+nck="$(printf '%s\n' "$bld" | grep -n 'check:' | head -1 | cut -d: -f1)"
+nld="$(printf '%s\n' "$bld" | grep -n 'steps 3–6' | head -1 | cut -d: -f1)"
+[ -n "$nck" ] && [ -n "$nld" ] && [ "$nck" -lt "$nld" ] && pass || fail "channels.md Build: check: runs before the landing of steps 3–6 (lines $nck $nld)"
 # Title and notes of the GitHub release come from the user's release standard when there is one.
 printf '%s\n' "$steps" | grep -F 'gh release create' | grep -qF -- '--title "<title>"' && pass || fail "gh release create takes the title the release standard gives"
 # The report gives both delete commands for the shipped branch; ship deletes nothing itself.
