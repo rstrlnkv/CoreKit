@@ -60,16 +60,18 @@ After a channel branch moved (a fix on a later channel, or the release commit), 
 channel branch must contain it. For each earlier branch `<e>`, nearest first, with `<l>` the branch
 after it:
 1. `git merge-base --is-ancestor <l> <e>` exits 0 → nothing to do.
-2. Otherwise, on the user's yes, in a clean checkout or worktree of `<e>`: `git merge --no-edit <l>`.
-   A conflict: name the files, run `git merge --abort`, give the user the merge command and stop.
-   A changelog conflict is solved by keeping under `## [Unreleased]` only the lines the release did
-   not take.
-3. Run `check:` on the merged tree; red: stop, the merge stays local, say so. Green:
-   `git push origin <e>`; rejected: stop and show the output.
+2. Otherwise, on the user's yes, cut a merge branch `<m>` from `<e>` in the clean tree. `<m>` is
+   `merge-<l>-into-<e>`, with `-2`, `-3` ... added while an earlier run's branch holds the name
+   (`git rev-parse --verify --quiet "refs/heads/<m>"` or `"refs/remotes/origin/<m>"` exits 0):
+   `git switch -c "<m>" <e>`, then `git merge --no-edit <l>`. A conflict: name the
+   files, run `git merge --abort`, give the user the merge command and stop. A changelog conflict
+   is solved by keeping under `## [Unreleased]` only the lines the release did not take.
+3. Run `check:` on `<m>`; red: stop, `<m>` stays local, say so. Green: land `<m>` on `<e>` as
+   SKILL.md steps 3–6 do, with `<m>` as `<branch>` and `<e>` as `<main>`.
 
 ## Report
 After the lines of SKILL.md's report:
 - `Channel: <name> (<target>)`
 - `Build: <number>`
-- `Merged back: <e> ← <l> (pushed | local only | conflict in <files>)`, one line each, or `Merged back: none`
+- `Merged back: <e> ← <l> via <m> (pushed | local only | conflict in <files>)`, one line each, or `Merged back: none`
 - a scheme the user answered: suggest `/corecrew:new-standard` to record it.
