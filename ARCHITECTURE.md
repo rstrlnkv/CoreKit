@@ -16,12 +16,12 @@ plugins/corecrew/                 project workflow
   skills/                         new-project, task, ship, new-standard, bloat-audit (SKILL.md + references/)
     new-project/scripts/          scaffold.sh, merge-generated.sh, preflight.sh (scaffold.sh and
                                   preflight.sh source scripts/lib.sh)
-    */agents/openai.yaml          Codex: keeps task, ship and new-standard out of implicit invocation
+    */agents/openai.yaml          Codex: keeps ship and new-standard out of implicit invocation
     task/references/codex.md      Codex: the task chain with Codex subagents
     task/references/architect-explorer.md  the architect and explorer roles when feature-dev is
                                   absent (Claude Code's Plan/Explore agents, and Codex)
   agents/                         engineer, tester, security, verifier, localizer, designer
-  hooks/                          hooks.json and the five hook scripts, messages.sh for their texts
+  hooks/                          hooks.json and the six hook scripts, messages.sh for their texts
                                   and for the settings warnings of the lib.sh CLI
   scripts/                        the machinery in portable bash; each file's header says what it does
     lib.sh                        shared helpers: scripts and hooks source it, or run it as a command
@@ -93,7 +93,7 @@ docs/                             icon sources (icons/)
 ```
                      Claude Code                         Codex CLI
 manifest             .claude-plugin/plugin.json          .codex-plugin/plugin.json
-corecrew hooks       hooks/hooks.json (all five)         the same hooks/hooks.json
+corecrew hooks       hooks/hooks.json (all six)          the same hooks/hooks.json
 coremodel hooks      hooks/ (TypeScript module)          codex/hooks.json -> codex/hint.sh
 coreopinion          yes                                 not supported
 hook trust           on install                          after you enable them in /hooks
@@ -112,6 +112,7 @@ Each hook rule, by host (the test file holds the cases of both hosts):
 | shell-patch refusal (both guards) | no | guard-code in any folder, guard-secrets inside a project | tests/test_shell_patch.sh, tests/test_shell_patch_exec.sh |
 | apply_patch that cannot be checked: over 100 paths, or the reader missing (both guards); an unreadable text that names an internal path (guard-code) | no | guard-code in any folder, guard-secrets inside a project | tests/test_hook_guard_code.sh, tests/test_hook_guard_secrets.sh |
 | stop-remind | yes | yes | tests/test_stop_hook.sh |
+| task-gate: an agent other than the main session asks the user before it starts corecrew:task | yes | no: Codex has no Skill tool (the task skill says the rule in words) | tests/test_hook_task_gate.sh |
 | coremodel hint (codex/hint.sh) | no (the TypeScript module) | yes | tests/test_coremodel_codex.sh |
 
 - **Manifests.** Each host reads its own manifest. The shared fields (name, version, description,
