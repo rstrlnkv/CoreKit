@@ -1,7 +1,6 @@
 ---
 name: task
-description: Run one development task through the corecrew crew (fix, full feature, question, batch), with proof and one commit. Use /corecrew:task [task], release [version] or adopt [folder].
-disable-model-invocation: true
+description: Use when the user asks to fix, build or change something in a corecrew project (the session start names it, or the user says so), in any language. Runs the task through the crew of agents, with proof and one commit. release and adopt run only when typed — /corecrew:task release <version> or adopt <folder>.
 argument-hint: "<task> | release <version> | adopt <folder>"
 ---
 
@@ -10,7 +9,12 @@ argument-hint: "<task> | release <version> | adopt <folder>"
 ## Overview
 You are the orchestrator, in the main session. You do not write code: the crew does, one agent
 per step, and you carry the user's task from request to one verified commit. One `/corecrew:task`
-call is one chain.
+call is one chain. As the orchestrator, you start this skill yourself when the user asks for a fix,
+a feature or several changes in a corecrew project; the user may also type `/corecrew:task`. Then
+the user's request is the task. `release` and `adopt` run only when the user types them.
+Any other agent (a subagent, a crew role included) starts this skill only after the user's yes. In
+Claude Code `<plugin>/hooks/task-gate.sh` asks the user for it; in Codex, if you are a subagent, do not
+run the chain: tell the agent that started you that the task needs the user's yes.
 
 Detail lives in references, read when you reach that step:
 - `<skill>/references/paths.md` — the six paths and the checkers' wave

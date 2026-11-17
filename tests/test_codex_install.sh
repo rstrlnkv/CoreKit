@@ -22,18 +22,18 @@ assert_exit 1 cx plugin add coreopinion@corekit
 ver="$(sed -n 's/^ *"version": *"\(.*\)",\{0,1\}$/\1/p' "$PLUGIN/.codex-plugin/plugin.json" | head -1)"
 inst="$CODEX_HOME/plugins/cache/corekit/corecrew/$ver"
 assert_file "$inst/.codex-plugin/plugin.json"
-assert_file "$inst/skills/task/agents/openai.yaml"
+assert_no_file "$inst/skills/task/agents/openai.yaml"
 assert_file "$inst/hooks/hooks.json"
 
-# Ask Codex (app-server hooks/list) which corecrew hooks it loads: exactly the five entries of hooks/hooks.json, each with
+# Ask Codex (app-server hooks/list) which corecrew hooks it loads: exactly the six entries of hooks/hooks.json, each with
 # the matcher of hooks.json and its "timeout" as timeoutSec (Codex reports 600 for a key it does not read), the command
 # on the installed path with no CLAUDE_PLUGIN_ROOT left, and no warning or error.
 HL="$SANDBOX/hooks-list.txt"
 codex_hooks_list "$SANDBOX/work" "$HL" && pass || fail "hooks/list: no answer in 10 s: $(head -3 "$HL.err")"
 grep '^{"key":"corecrew@' "$HL" > "$SANDBOX/cc-hooks"
 assert_eq "$(sed 's/^{"key":"\([^"]*\)".*/\1/' "$SANDBOX/cc-hooks" | LC_ALL=C sort | tr '\n' ' ')" \
-  "corecrew@corekit:hooks/hooks.json:pre_tool_use:0:0 corecrew@corekit:hooks/hooks.json:pre_tool_use:1:0 corecrew@corekit:hooks/hooks.json:pre_tool_use:2:0 corecrew@corekit:hooks/hooks.json:session_start:0:0 corecrew@corekit:hooks/hooks.json:stop:0:0 " \
-  "Codex loads exactly the five corecrew hooks"
+  "corecrew@corekit:hooks/hooks.json:pre_tool_use:0:0 corecrew@corekit:hooks/hooks.json:pre_tool_use:1:0 corecrew@corekit:hooks/hooks.json:pre_tool_use:2:0 corecrew@corekit:hooks/hooks.json:pre_tool_use:3:0 corecrew@corekit:hooks/hooks.json:session_start:0:0 corecrew@corekit:hooks/hooks.json:stop:0:0 " \
+  "Codex loads exactly the six corecrew hooks"
 # hooks.json is pretty-printed one key per line: "<Event>": [ opens an event, each inner "hooks": [ an entry
 # "<key>|<matcher>|<command>|<timeout>": the command JSON-escaped, as Codex prints it, with the plugin root filled in
 awk -v root="$inst" '
@@ -55,7 +55,7 @@ assert_not_contains "$HL.err" 'featured plugin'
 assert_eq "$(grep -c '"warnings":\[\],"errors":\[\]' "$HL")" "1" "hooks/list reports no warning or error"
 # trustStatus "untrusted" is Codex's default for a hook nobody reviewed: asserted only as the fact the README's Codex
 # section relies on (the person reviews and trusts the hooks in /hooks before they run), not as a corecrew choice
-assert_eq "$(grep -c '"trustStatus":"untrusted"' "$SANDBOX/cc-hooks")" "5" "every corecrew hook is untrusted until reviewed"
+assert_eq "$(grep -c '"trustStatus":"untrusted"' "$SANDBOX/cc-hooks")" "6" "every corecrew hook is untrusted until reviewed"
 
 cd "$SANDBOX/work" || exit 1
 cx debug prompt-input "hi" > "$SANDBOX/prompt.json" 2> "$SANDBOX/prompt.err"; assert_eq "$?" "0" "debug prompt-input exits 0"
@@ -66,8 +66,9 @@ text="$(sed 's/\\n/\n/g' "$SANDBOX/prompt.json")"
 listed() { printf '%s\n' "$text" | grep -c "^- corecrew:$1: "; }
 assert_eq "$(listed new-project)" "1" "new-project is listed"
 assert_eq "$(listed bloat-audit)" "1" "bloat-audit is listed (it triggers by meaning)"
+assert_eq "$(listed task)" "1" "task is listed (the orchestrator starts it by meaning)"
 # allow_implicit_invocation: false keeps these out of the model's skills list (observed, codex 0.166.0)
-for s in task ship new-standard; do assert_eq "$(listed $s)" "0" "$s is not listed (implicit invocation off)"; done
+for s in ship new-standard; do assert_eq "$(listed $s)" "0" "$s is not listed (implicit invocation off)"; done
 assert_eq "$(printf '%s\n' "$text" | grep -c '^- coreopinion:second-opinion: ')" "0" "coreopinion's skill is not listed in Codex"
 # (file: rN/<rest>/SKILL.md): rN is a root alias, defined under "Skill roots" (its value varies with
 # what else is listed, so look it up)

@@ -214,7 +214,7 @@ assert_file "$PLUGIN/hooks/hooks.json"
 H="$PLUGIN/hooks/hooks.json"
 assert_contains "$H" '"Stop"'
 assert_contains "$H" '"timeout"'
-# hooks.json wires all five hooks. One key per line, so awk can pair each event and
+# hooks.json wires all six hooks. One key per line, so awk can pair each event and
 # matcher with its command and timeout: "Event|matcher|script|timeout".
 WIRED="$(awk '
   /^    "[A-Za-z]+": \[/ { ev = $1; gsub(/[":]/, "", ev); m = "" }
@@ -226,6 +226,7 @@ want_wired="SessionStart|startup|resume|clear|compact|fork|session-start.sh|30
 PreToolUse|Bash|one-suite.sh|150
 PreToolUse|Write|Edit|NotebookEdit|apply_patch|Bash|guard-code.sh|15
 PreToolUse|Read|Grep|Glob|Edit|Write|NotebookEdit|apply_patch|Bash|guard-secrets.sh|15
+PreToolUse|Skill|task-gate.sh|10
 Stop||stop-remind.sh|10"
 assert_eq "$WIRED" "$want_wired" "hooks.json events, matchers, scripts, timeouts"
 # Codex edits files with apply_patch: both guards must be matched on that name (Codex lists it explicitly)
@@ -233,7 +234,7 @@ for g in guard-code guard-secrets; do
   m="$(printf '%s\n' "$WIRED" | awk -F'|' -v g="$g.sh" '$(NF-1) == g { print }')"
   case "|$m|" in *"|apply_patch|"*) pass ;; *) fail "hooks.json: the $g matcher lacks apply_patch" ;; esac
 done
-for s in session-start one-suite guard-code guard-secrets stop-remind; do
+for s in session-start one-suite guard-code guard-secrets task-gate stop-remind; do
   assert_contains "$H" "/hooks/$s.sh"
   assert_file "$PLUGIN/hooks/$s.sh"
 done
@@ -243,7 +244,7 @@ for s in $(printf '%s\n' "$WIRED" | awk -F'|' '{ print $(NF-1) }'); do
 done
 # every command runs through bash (the scripts are not executable) and via the plugin root
 n_cmd="$(grep -c '"command":' "$H")"; n_to="$(grep -c '"timeout":' "$H")"
-assert_eq "$n_cmd" "5" "hook commands in hooks.json"
+assert_eq "$n_cmd" "6" "hook commands in hooks.json"
 assert_eq "$n_to" "$n_cmd" "every hook command has a timeout"
 n_ok="$(grep -c '"command": "bash \\"${CLAUDE_PLUGIN_ROOT}/hooks/[a-z-]*\.sh\\""' "$H")"
 assert_eq "$n_ok" "$n_cmd" "every command is bash \"\${CLAUDE_PLUGIN_ROOT}/hooks/<script>\""
