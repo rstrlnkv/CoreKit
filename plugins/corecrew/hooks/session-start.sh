@@ -48,10 +48,6 @@ case "$(json_str "$in" source)" in
       warn="${warn:+$warn$WNL}$(msg_settings_warning "$wk" "$wv" "$ws" "$we" "$(settings_file_path)")"
     done <<< "$SETTINGS_WARN" ;;
 esac
-# json_text <text> — escaped for a JSON string, on one line.
-# Newlines (between several warnings) become the JSON escape \n.
-json_text() { printf '%s' "$1" | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | LC_ALL=C tr '\r\t' '  ' | LC_ALL=C awk 'NR>1{printf "\\n"} {printf "%s",$0}'; }
-
 # 2. Session elsewhere. Core not set up: the hint, once per machine; with no Core path at all (the settings_no_home
 # warning says why) there is no hint with an empty path. The hint is for the person: a systemMessage (plain stdout would
 # go to the model only, and the marker written after it would then mark a hint nobody read). Core set up: nothing to

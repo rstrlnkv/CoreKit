@@ -12,10 +12,21 @@ RP="$T/references/report.md"
 # SKILL.md frontmatter
 assert_file "$SK"
 assert_contains "$SK" "name: task"
-assert_contains "$SK" "disable-model-invocation: true"
 assert_contains "$SK" 'argument-hint: "<task> | release <version> | adopt <folder>"'
-desc="$(sed -n 's/^description: //p' "$SK" | head -1)"
-[ -n "$desc" ] && [ "${#desc}" -le 200 ] && pass || fail "description missing or over 200 chars (${#desc})"
+# the orchestrator (the main session) starts the chain by meaning, in both hosts; release and adopt stay typed
+fm="$(awk 'NR == 1 && $0 == "---" {on = 1; next} on && $0 == "---" {exit} on' "$SK")"
+printf '%s\n' "$fm" | grep -q 'disable-model-invocation' && fail "task must trigger by meaning" || pass
+assert_no_file "$T/agents/openai.yaml"
+desc="$(printf '%s\n' "$fm" | sed -n 's/^description: //p')"
+[ -n "$desc" ] && [ "${#desc}" -le 400 ] && pass || fail "description missing or over 400 chars (${#desc})"
+for w in 'Use when' 'in any language' 'corecrew project' 'release' 'adopt'; do
+  case "$desc" in *"$w"*) pass ;; *) fail "description lacks: $w" ;; esac
+done
+md_section_has "$SK" Overview 'orchestrator'
+md_section_has "$SK" Overview 'start this skill yourself'
+# any other agent starts it only after the user's yes: the hook asks in Claude Code, the text says it for Codex
+md_section_has "$SK" Overview 'hooks/task-gate.sh'
+md_section_has "$SK" Overview "the user's yes"
 
 # SKILL.md body
 for w in 'maxTurns' 'three engineer passes' 'foreground' \

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hooks/messages.sh and the language of every message the five hooks show. The plugin setting
+# hooks/messages.sh and the language of every message the six hooks show. The plugin setting
 # ui_language (CLAUDE_PLUGIN_OPTION_UI_LANGUAGE) is one of MSG_LANGS (en, the default, and ru); an unset, empty,
 # unknown or unsubstituted "${user_config.ui_language}" value means en. Arguments print verbatim. Every key in the
 # table has a text in every language. Exit codes and stdout/stderr channels stay as they were.

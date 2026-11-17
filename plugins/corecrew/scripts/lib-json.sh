@@ -1,4 +1,4 @@
-# lib-json.sh — json_str and json_fields, the hook JSON readers (no jq), for lib.sh (source lib.sh, not this file).
+# lib-json.sh — json_str and json_fields, the hook JSON readers (no jq), and json_text, the writer of a string, for lib.sh (source lib.sh, not this file).
 # The awk program is inline on purpose: the guards judge file tools through json_fields, and their documented contract is
 # that a missing scripts/*.awk (the Bash tokenizer) fails open only on the Bash path. A separate awk file here would make
 # a missing awk file let every tool pass.
@@ -138,3 +138,7 @@ json_fields() {
   printf '%s' "$j" 2>/dev/null | JSON_KEYS="$keys" LC_ALL=C awk -v NUL=1 "$_JSON_AWK" 2>/dev/null || true
   return 0
 }
+
+# json_text <text> — escaped for a JSON string, on one line: backslash and quote escaped, CR and tab as spaces,
+# newlines as the JSON escape \n.
+json_text() { printf '%s' "$1" | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | LC_ALL=C tr '\r\t' '  ' | LC_ALL=C awk 'NR>1{printf "\\n"} {printf "%s",$0}'; }

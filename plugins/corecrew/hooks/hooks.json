@@ -1,5 +1,5 @@
 {
-  "description": "corecrew: session-start context and tools refresh, one test suite at a time, guards for project docs in code and for secrets, and a save-the-step reminder",
+  "description": "corecrew: session-start context and tools refresh, one test suite at a time, guards for project docs in code and for secrets, the user's question before an agent starts the task chain, and a save-the-step reminder",
   "hooks": {
     "SessionStart": [
       {
@@ -42,6 +42,16 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-secrets.sh\"",
             "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/task-gate.sh\"",
+            "timeout": 10
           }
         ]
       }

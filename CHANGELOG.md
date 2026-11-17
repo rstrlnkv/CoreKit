@@ -9,6 +9,17 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off until then.
+
+### Changed
+- The orchestrator starts `/corecrew:task` by itself when you ask for a fix, a feature or several
+  changes in a corecrew project, in Claude Code and in Codex; you no longer have to type the
+  command. `release` and `adopt` still run only when you type them.
+
+### Added
+- In Claude Code, any other agent that tries to start `/corecrew:task` asks you first (the new
+  `task-gate` hook).
+
 ## [1.3.0] - 2026-11-15
 
 Codex: after the update, trust the hooks again in `/hooks`; Codex keeps them off until then.

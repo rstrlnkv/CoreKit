@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The one table of every message the corecrew hooks show. Sourced by all five hooks, by prepare.sh and by the
+# The one table of every message the corecrew hooks show. Sourced by all six hooks, by prepare.sh and by the
 # lib.sh CLI (core-dir and settings print their settings warnings in English with msg_settings_warning).
 #
 #   msg <key> [arg ...]    prints the text of <key> in the language of the setting ui_language
@@ -27,7 +27,7 @@ MSG_LANGS="en ru"
 # shellcheck disable=SC2034  # MSG_KEYS is read by tests/test_hook_messages.sh (every language for every key)
 MSG_KEYS="sync_failed sync_not_ours agents_in_core hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
 session_rules schema_none run_starting layout_note hooks_path hooks_path_empty guard_code_blocked guard_code_public guard_code_unread guard_code_too_many patch_too_many patch_unjudgeable patch_no_reader patch_shell secrets_blocked secrets_ask
-local_link_created agents_link_created agents_link_wrong agents_link_failed local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind
+local_link_created agents_link_created agents_link_wrong agents_link_failed local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind task_agent_ask
 readonly_agent settings_invalid_path settings_invalid_value settings_unreadable settings_no_home allowed_attribution allowed_model_profile
 src_env src_option src_file fix_env fix_option fix_file codex_trust codex_profile"
 # readonly_agent: the read-only checker's refusal is read only by a subagent (designer, localizer, security,
@@ -145,6 +145,8 @@ _msg_text() {
     ru:fix_file) MSG_T='Исправьте значение в файле @1.' ;;
     en:stop_remind) MSG_T='Uncommitted changes in @1. If this working step is finished, run: bash "@2" "<short English subject>"@3 (at most 72 characters, details after a blank line; a commit standard of the project wins). If you are waiting for the user'"'"'s answer or approval, do not save; just end your turn.' ;;
     ru:stop_remind) MSG_T='Есть несохранённые изменения: @1. Если этот рабочий шаг закончен, выполните: bash "@2" "<short English subject>"@3 (не длиннее 72 символов, подробности после пустой строки; стандарт коммитов проекта важнее). Если вы ждёте ответа или одобрения пользователя, не сохраняйте, просто закончите ответ.' ;;
+    en:task_agent_ask) MSG_T='corecrew: the agent @1 wants to start /corecrew:task. Only the orchestrator (the main session) starts it on its own; allow it only if you want this agent to run the task chain.' ;;
+    ru:task_agent_ask) MSG_T='corecrew: агент @1 хочет запустить /corecrew:task. Сам её запускает только оркестратор (главная сессия); разрешите, только если хотите, чтобы этот агент провёл цепочку задачи.' ;;
   esac
 }
 

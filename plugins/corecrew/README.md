@@ -66,9 +66,9 @@ Then:
    start it as `codex --add-dir "<Core>"` (`~/Projects/Core` by default). For new-project, start it
    as `codex --add-dir "<Projects>"` (the folder that holds the Core): the Core may not exist yet,
    and the new code folder goes there. Every skill checks this and tells you the command.
-4. **Name the skills.** Codex may pick `new-project` and `bloat-audit` by itself. Name the others in your prompt
-   (`$corecrew:task <task>`, `$corecrew:ship`, `$corecrew:new-standard`) or pick them from the
-   skill list.
+4. **Name the skills.** Codex may pick `new-project`, `bloat-audit` and `task` by itself. Name the others in your
+   prompt (`$corecrew:task release <version>`, `$corecrew:task adopt <folder>`, `$corecrew:ship`,
+   `$corecrew:new-standard`) or pick them from the skill list.
 5. **Optional: the secrets profile.** See [SECURITY.md](../../SECURITY.md#recommended-host-settings).
 
 What differs from Claude Code:
@@ -134,7 +134,7 @@ Coming from `coredev` (0.2.x), `corekit` (0.1.x) or a project made by corecrew 0
 | Command | What it does |
 |---|---|
 | `/corecrew:new-project` | Interview, stack and architecture analysis, project skeleton (below) |
-| `/corecrew:task <task>` | Runs a task through the crew of agents and ends with a report and one commit |
+| `/corecrew:task <task>` | Runs a task through the crew of agents and ends with a report and one commit. The main session starts it by itself when you ask for a fix, a feature or several changes in a corecrew project; another agent asks you first |
 | `/corecrew:task release <version>` | Prepares a release: version, changelog and the other release checks |
 | `/corecrew:task adopt <folder>` | Brings an existing project into the Core layout |
 | `/corecrew:ship [<part>] [patch\|minor\|major\|<version>]` | Releases the current branch (in a repo with several versioned parts, the one `<part>` you name; from the default branch it offers a release branch), then, after your yes, pushes the branch, waits for its CI checks, fast-forwards the default branch and pushes it; after a second yes, tags the version and publishes a GitHub release |
@@ -200,7 +200,8 @@ applies everywhere: the designer, localizer, security and verifier agents may wr
 temp folders; it does not act for Codex subagents, which the chain checks instead. In Codex the
 code guard also refuses, in any folder, a patch handed to the shell and a patch it cannot check
 (more than 100 files, a missing reader, or an unreadable patch that names an internal path).
-"Outside a Core project" means the session folder. The code guard judges the path written, so a
+In Claude Code the task gate acts everywhere too: an agent other than the main session asks you before it starts
+`/corecrew:task`. "Outside a Core project" means the session folder. The code guard judges the path written, so a
 write into a project's code folder is refused from any session folder. The secrets guard, the
 one-suite hook and the Stop reminder act only when the session folder is in a project.
 
