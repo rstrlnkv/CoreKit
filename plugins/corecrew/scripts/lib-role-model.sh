@@ -28,8 +28,8 @@ role_model() {
       v="$(_sf_get "$k" | tr -s '[:space:]' ' ')"; v="${v% }"
       [ -n "$v" ] || continue
       if [ "$v" = inherit ]; then out=""; break; fi
-      if printf '%s\n' "$v" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._:/-]*( [a-z]+)?$'; then out="$v"; break; fi
-      printf 'corecrew: %s "%s" in %s is not valid: use <model>, <model> <effort> or inherit. Skipped.\n' \
+      if printf '%s\n' "$v" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._:/-]*( (low|medium|high|xhigh|max|ultra))?$'; then out="$v"; break; fi
+      printf 'corecrew: %s "%s" in %s is not valid: use <model>, <model> <effort> or inherit. Effort: low, medium, high, xhigh, max or ultra. Skipped.\n' \
         "$k" "$v" "$(settings_file_path)" >&2
     done
   fi

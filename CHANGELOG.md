@@ -11,6 +11,10 @@ commit log has the full detail.
 
 Codex: after the update, trust the hooks again in `/hooks`.
 
+### Fixed
+- Codex task guidance follows the skill invocation policy and the active network permissions.
+- Invalid Codex role efforts report the supported values and fall back to the next model setting.
+
 ### Removed
 - The CoreKit marketplace no longer distributes CoreOpinion. Users with an existing Claude Code
   installation can remove it with `claude plugin uninstall coreopinion@corekit`.

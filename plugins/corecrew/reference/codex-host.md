@@ -23,7 +23,7 @@ Codex has no options screen. The settings live in the settings file, whose path
 stays literal in Codex, and the scripts treat it as unset and read the settings file.
 
 Codex calls a skill `$corecrew:<skill>`. Where a skill says `/corecrew:<skill>` (to the user, or in a
-hint), say `$corecrew:<skill>`. task, ship and new-standard start only when the user names them.
+hint), say `$corecrew:<skill>`. Use each skill’s invocation policy. The task skill defines when the orchestrator starts it and when a user must name a subcommand.
 
 Where a skill tells the user to open or restart Claude Code in a folder (`cd <folder> && claude`),
 say instead: open Codex there with `cd "<folder>" && codex --add-dir "<Core>"`. The private
@@ -45,14 +45,13 @@ session, so this check exits 1 there. The command that works is
 default it is `codex exec --add-dir "<Core>"`, because `--sandbox` switches the profile off.
 
 ## Approval outside the sandbox
-The Codex sandbox keeps `.git` read-only and has no network. Run these as commands that ask for
-approval to leave the sandbox (escalated permissions), and let the user approve each:
-- anything that writes to git: `save`, `undo-step`, `setup-core.sh`, `scaffold.sh`,
-  `install-hooks.sh`, `adopt.sh`, and `git init`, `add`,
-  `commit`, `merge`, `tag` or `fetch . <branch>:<branch>`;
-- anything that needs the network: `gh` (preflight's `gh auth status` too), `git push`,
-  `git fetch`, package installs and project generators (`npm create`, `npm install`,
-  `flutter create`, `uv add`, ...).
+Use the active permission profile. Run authorized commands inside the sandbox when it permits
+their filesystem and network access. If the profile restricts a required operation, or a command
+fails because of that restriction, request approval for that operation through the host.
+For example, `save` needs write access to both affected git directories. A read-only `gh`
+check needs the access required by that check; a `git push` needs network access and the
+user's authorization to publish. Follow the skill's confirmation steps for external writes even
+when the network is available.
 
 Approval applies to one step. When it is not possible (a non-interactive `codex exec`), only the step
 that needs it stops: do every other step that does not need its result as usual; report the stopped

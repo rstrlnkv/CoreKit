@@ -59,6 +59,13 @@ assert_eq "$(rmo codex balanced verifier | wc -l | tr -d ' ')" "1" "inherit stil
 assert_eq "$(rmo codex balanced engineer)" "my-model-1 high" "other roles keep codex_model"
 printf 'codex_model_engineer:   spaced-model    low  \n' > "$SF"
 assert_eq "$(rmo codex balanced engineer)" "spaced-model low" "blanks are trimmed and collapsed"
+for effort in low medium high xhigh max ultra; do
+  printf 'codex_model_tester: my-model %s\n' "$effort" > "$SF"
+  assert_eq "$(rmo codex balanced tester)" "my-model $effort" "accepts effort $effort"
+done
+printf 'codex_model_engineer: my-model banana\ncodex_model: shared-model low\n' > "$SF"
+assert_eq "$(rmo codex balanced engineer)" "shared-model low" "an unknown role effort falls back to the shared setting"
+assert_contains "$SANDBOX/err" "banana"
 for bad in 'two words more' 'bad;model' '$(touch x)' 'model HIGH' '-flag low'; do
   printf 'codex_model_engineer: %s\n' "$bad" > "$SF"
   out="$(rmo codex balanced engineer)"; rc=$?

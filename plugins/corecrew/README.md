@@ -78,16 +78,14 @@ What differs from Claude Code:
   `feature-dev` is not used.
 - The crew needs Codex subagents. In a session without the `spawn_agent` tool the chain stops and
   says so.
-- Commits ask for your approval: the Codex sandbox keeps `.git` read-only, so `save` runs outside
-  it after you approve.
+- If the active profile keeps `.git` read-only, Codex requests approval for `save`.
 - A non-interactive run needs a sandbox that can write, with the Core added. In a folder Codex
   does not trust yet, a plain `codex exec` is a read-only session and stops at the Core check.
   Run `codex exec --sandbox workspace-write --add-dir "<Core>"`. With the corecrew secrets profile
   as your default, run `codex exec --add-dir "<Core>"` instead: `--sandbox` switches the profile off.
-  Then the whole chain runs and only the commit stops, with
+  If the profile protects `.git` and approvals are unavailable, the commit stops with
   `Commit: stopped — Codex sandbox keeps .git read-only`, and the files stay uncommitted.
-- `gh`, pushes and project generators also run outside the sandbox after your approval: the
-  sandbox has no network.
+- Codex uses the network access allowed by your profile. It requests approval when a required operation is restricted.
 - Codex subagents cannot be made read-only, so the read-only steps are checked, not enforced: the
   chain compares `git status` before and after and stops on a change.
 
@@ -216,7 +214,7 @@ The Core's pre-push hook refuses to push unless the Core's GitHub repo is privat
 | `attribution` | `allow` / `forbid` | `allow` | Whether corecrew's own commits (`save`) may carry `Co-Authored-By` and "Generated with" lines; `forbid` strips them. A plain `git commit` is governed by the host's own attribution setting |
 | `model_profile` | `economy` / `balanced` / `strong` | `balanced` | Which models the crew uses per role |
 | `ui_language` | `en` / `ru` | `en` | Language of the hook messages |
-| `codex_model` | `<model> [<effort>]` or `inherit` | — | Codex only: the model (and effort) of every crew role, over `model_profile`; `inherit` leaves Codex's own default |
+| `codex_model` | `<model> [<effort>]` or `inherit` | — | Codex only: the model (optional effort: low, medium, high, xhigh, max or ultra) of every crew role, over `model_profile`; `inherit` leaves Codex's own default |
 | `codex_model_<role>` | `<model> [<effort>]` or `inherit` | — | Codex only: the same for one role (`engineer`, `tester`, ...), over `codex_model` |
 | `coremodel_mode` | see the [coremodel README](../coremodel/README.md#codex) | — | Read only by coremodel's Codex hint, from the settings file; corecrew ignores it |
 
@@ -265,8 +263,7 @@ the same way, except `ui_language`, which falls back to `en` silently.
 ### What it runs and sends
 
 - **Scripts:** portable bash scripts from the plugin (`scripts/`, `hooks/`), `git`, and `gh`.
-- **Network:** GitHub, through `gh` and `git`. Read-only checks run without a prompt (in Codex,
-  whose sandbox has no network, every network call asks first):
+- **Network:** GitHub, through `gh` and `git`. Read-only checks run under the active host permissions:
   `new-project` checks that `gh` is logged in (`gh auth status`) and that the project name is free
   on GitHub (`gh repo view <name>`); `/corecrew:ship` fetches tags from `origin` to check for a
   clash and reads the CI runs of the branch it pushed (`gh run list`, `gh run watch`); the Core

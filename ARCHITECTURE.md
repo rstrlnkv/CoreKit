@@ -124,7 +124,7 @@ Each hook rule, by host (the test file holds the cases of both hosts):
   again after each update. `prepare.sh` says so until the session-start hook has run once.
 - **Settings.** Claude Code passes the plugin options to the hooks. Codex has no options screen, so
   `lib.sh` also reads `~/.config/corecrew/settings`.
-- **Codex sandbox.** Codex keeps `.git` read-only, so `save` asks for approval to run outside it.
+- **Codex sandbox.** The active profile controls filesystem and network access. A read-only `.git` requires approval for `save`.
   Codex subagents cannot be made read-only, so the read-only steps are checked before and after.
 
 ## How the parts fit

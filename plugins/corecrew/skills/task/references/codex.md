@@ -17,7 +17,9 @@ Each step is one subagent, started as codex-host.md, section Subagents, says (fr
   (`model_profile` as resolved at Start): the first is `model`, a second one `reasoning_effort`. Pass only what it
   prints; an empty line means pass neither (the subagent gets Codex's own default). The user picks their own models
   with `codex_model: <model> [<effort>]` (every role) or `codex_model_<role>: <model> [<effort>] | inherit` in the
-  settings file (`lib.sh setting-path`); a line on stderr names a value that was skipped: tell the user;
+  settings file (`lib.sh setting-path`); a line on stderr names a value that was skipped: tell the user.
+  If the host lists supported efforts for the selected model and excludes the configured effort, omit
+  `reasoning_effort` and report that the model will use its default;
 - the message starts with "Read <plugin>/agents/<role>.md and act as that role; ignore its front matter." and then the
   brief (`references/brief.md`), with `<plugin>` filled in as an absolute path.
 
@@ -47,5 +49,5 @@ Read-only steps keep the parent session's permissions, so the check is all there
 In a wave, compare once after all have answered.
 
 ## Commit in Codex
-`save` writes to `.git`, which the sandbox keeps read-only: run it with approval to leave the sandbox. When approval
+`save` writes to `.git`. If the active profile restricts this write, request approval. When approval
 is not possible, codex-host.md, section Approval outside the sandbox, says what stops and what the report says.

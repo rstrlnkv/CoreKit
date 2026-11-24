@@ -176,7 +176,7 @@ Control (the phone or the web) are never checked. Errors go to Claude Code's deb
 
 In Codex the plugin gives a **hint only**, and it is **off until you turn it on**. Codex hooks leave
 model and effort changes to you. The hint makes a separate model call for prompts it checks. A
-`UserPromptSubmit` hook (`codex/hint.sh`) asks `gpt-6-luna` (`codex exec`, read-only) which model and
+`UserPromptSubmit` hook (`codex/hint.sh`) asks the lightest visible model in its ranking (`codex exec`, read-only) which model and
 effort the prompt needs. It sends a warning with the model ID, effort and the `/model` command.
 Codex Desktop does not show that warning in the chat, so the hook asks Codex to open its reply with
 the pick in your language, such as "CoreModel рекомендует GPT-6.2 Astra · High", and then go on with
@@ -202,7 +202,7 @@ Install: `codex plugin marketplace add rstrlnkv/CoreKit`, then `codex plugin add
   or truncated cache files can be misread. If the chosen model lacks the requested effort,
   the hint uses the highest listed effort below it, when available.
 - Codex shows "coremodel: choosing a model" while it runs. The nested call takes about 8 seconds; it
-  runs with `--ignore-user-config` and low reasoning effort, so it does not load your config, MCP
+  runs with `--ignore-user-config` and low reasoning effort (or an available level when low is missing), so it does not load your config, MCP
   servers or other plugins' hooks (your login still works). It waits at most 20 seconds
   (`COREMODEL_HINT_TIMEOUT`); any failure is silent and the prompt goes on. The nested call also
   ignores the `model_provider` of your Codex config, so it always goes to OpenAI with your Codex
@@ -213,7 +213,7 @@ Install: `codex plugin marketplace add rstrlnkv/CoreKit`, then `codex plugin add
   both (`UserPromptSubmit` and `Stop`) in `/hooks`. Without the `Stop` hook the hint still works, but
   the classifier is told that Codex's previous reply is unknown.
 
-What goes to `gpt-6-luna`, once per checked prompt: the classifier text of `codex/classifier.txt`,
+What goes to the classifier, once per checked prompt: the classifier text of `codex/classifier.txt`,
 your prompt (past 4000 bytes, its first and last 2000 bytes), and one of three things in place of
 Codex's previous reply:
 
@@ -225,15 +225,15 @@ Codex's previous reply:
 
 The `Stop` hook keeps those 600 bytes in `~/.local/state/coremodel/codex-replies/<session id>`
 (`$XDG_STATE_HOME` when set; the folder is readable only by you) until your next prompt in that chat,
-which removes the file whether or not it was sent; a file older than a day is removed by the next
-`Stop`. Nothing is kept while the hint is off.
+which removes the file whether or not it was sent. A reply at least a day old is discarded before use.
+Each `Stop` also removes expired replies from other chats. Nothing is kept while the hint is off.
 
 ## Requirements
 
 - **OS:** whatever Claude Code runs on; the plugin is a TypeScript module with no native code.
 - **Claude Code** 2.1.309 or newer: it names models by alias in its hooks.
 - **Network.** In Claude Code the classifier call uses your Claude Code account to reach Anthropic.
-  If you enable the Codex hint, it sends each checked prompt to OpenAI (`gpt-6-luna`) with
+  If you enable the Codex hint, it sends each checked prompt to OpenAI with
   `codex exec`. The hint needs `bash` and the `codex` CLI.
 - **Permissions:** it asks for none beyond the plugin hooks. It puts the pick on this chat's requests only and never writes your model or effort setting.
 - **Changes outside its own folder:** none in Claude Code; its log lines go to Claude Code's debug log. In Codex, with the hint on, the end of Codex's last reply waits in `~/.local/state/coremodel/codex-replies/` until your next prompt (see [Codex](#codex)).

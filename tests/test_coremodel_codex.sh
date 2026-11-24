@@ -375,6 +375,13 @@ assert_no_file "$REPLIES/old-session"
 assert_file "$REPLIES/s1"
 rm -rf "$STATE"
 
+run_hint "$PATHSTUB" "$(sevent resumed '"expired reply"')"
+touch -t 202001010000 "$REPLIES/resumed"
+run_hint "$PATHSTUB" "$(pevent resumed 'fix it')"
+assert_not_contains "$STDIN" 'expired reply'
+assert_contains "$STDIN" '(unknown'
+assert_no_file "$REPLIES/resumed"
+
 # ---- C3. the client's model catalog ----
 echo "  -- C3. catalog"
 CAT="$SANDBOX/cat-home"; mkdir -p "$CAT"
@@ -393,6 +400,13 @@ catalog() {
     done
     printf '\n  ]\n}\n'; } > "$CAT/models_cache.json"
 }
+printf '%s\n' '{"models":[{"visibility":"list","supported_reasoning_levels":[{"effort":"medium"}],"slug":"gpt-6.1-sol"},{"visibility":"list","slug":"gpt-6-astra"}]}' > "$CAT/models_cache.json"
+answer '{"keep":false,"model":"gpt-6.1-sol","effort":"high"}'
+run_hint "$PATHSTUB" "$(event 'rename the field everywhere')" CODEX_HOME="$CAT"
+assert_contains "$SANDBOX/out" 'needs gpt-6.1-sol at medium effort'
+tr '\0' '\n' < "$ARGV" > "$SANDBOX/argv.txt"
+assert_eq "$(awk '/^--model$/ { getline; print }' "$SANDBOX/argv.txt")" 'gpt-6.1-sol' "lightest available classifier"
+assert_contains "$SANDBOX/argv.txt" 'model_reasoning_effort="medium"'
 # luna offers no max here: a max pick on luna is lowered to its highest level
 catalog 'gpt-6-luna:list:low,medium,high' 'gpt-6.1-sol:list:low,medium,high,xhigh,max,ultra' 'gpt-6-astra:list:low,medium,high,xhigh,max,ultra'
 json_ok "$CAT/models_cache.json" && pass || fail "the test catalog is not valid JSON"
@@ -582,6 +596,9 @@ done
 run_hint "$PATHSTUB" '{"hook_event_name":"SessionStart","prompt":"fix the flaky login test"}'
 silent "other event"
 
+# Process enumeration can be denied by the host sandbox.
+printf '#!/bin/sh\nexit 1\n' > "$BIN/ps"
+chmod +x "$BIN/ps"
 # timeout: the stub sleeps 10 s, the limit is 2 s. Wall time on purpose: this times a real wait, not work.
 t0="$(date +%s)"
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" STUB_MODE=sleep COREMODEL_HINT_TIMEOUT=2

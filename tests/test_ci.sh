@@ -64,7 +64,7 @@ ci="$(printf '%s\n' "$suite" | grep -nE 'npm install -g "?@openai/codex@' | head
 [ -n "$ci" ] && [ -n "$nb" ] && [ "$ci" -lt "$nb" ] && pass || fail "the codex install step comes before the bash 3.2 step (lines $ci $nb)"
 cstep="$(printf '%s\n' "$suite" | awk '/- name: Install the codex CLI/{f=1; print; next} f && /- name:/{f=0} f')"
 case "$cstep" in *"if: runner.os == 'macOS'"*) pass ;; *) fail "the codex install step runs on macOS only" ;; esac
-case "$suite" in *'CODEX_VERSION:'*) pass ;; *) fail "the codex version is pinned in env (CODEX_VERSION)" ;; esac
+case "$(block "$WF" env)" in *'CODEX_VERSION:'*) pass ;; *) fail "the codex version is pinned in env (CODEX_VERSION)" ;; esac
 case "$suite" in *'@openai/codex@${CODEX_VERSION}'*) pass ;; *) fail "the codex install uses CODEX_VERSION" ;; esac
 # the macOS check is the step's if-block that names RUNNER_OS; it greps run.sh's SKIP lines for codex anywhere in
 # them (a file name such as test_codex_chain.sh counts), not for chosen skip texts
@@ -73,6 +73,15 @@ case "$mac" in *'macOS'*) pass ;; *) fail "the codex skip check is gated on macO
 case "$mac" in *"grep -E '^SKIP .*codex' "*) pass ;; *) fail "on macOS the suite step fails on every codex skip (grep -E '^SKIP .*codex')" ;; esac
 case "$mac" in *'not on PATH'*|*'--bundled failed'*) fail "the macOS codex check still names chosen skip texts" ;; *) pass ;; esac
 case "$mac" in *'exit 1'*) pass ;; *) fail "the macOS codex check exits 1" ;; esac
+
+# Linux compatibility checks run both installations against the baseline and current npm release.
+compat="$(job "$WF" codex-compat)"
+for required in 'runs-on: ubuntu-latest' 'channel: [pinned, latest]' 'CODEX_CHANNEL: ${{ matrix.channel }}' \
+  'version="$CODEX_VERSION"' '[ "$CODEX_CHANNEL" = latest ]' 'version=latest' \
+  'npm install -g "@openai/codex@$version"' 'codex --version' \
+  'bash tests/run.sh -j 2 codex_install coremodel_codex' "grep -q '^SKIP '"; do
+  case "$compat" in *"$required"*) pass ;; *) fail "Codex compatibility check missing $required" ;; esac
+done
 
 # The commit-subjects job: the whole history is fetched, the range is passed through env (never ${{ }} inside run:),
 # and only the new commits are checked.

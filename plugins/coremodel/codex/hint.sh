@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # coremodel in Codex: Codex hooks cannot switch the model, so this UserPromptSubmit hook asks a small
-# model (gpt-6-luna, one `codex exec` call) which model and effort the prompt needs and adds one line of
+# model (the lightest visible one, one `codex exec` call) which model and effort the prompt needs and adds one line of
 # context: "switch with /model". It stays silent when the current model is the one it would name or a
 # stronger one. It never blocks the prompt: any failure is silent, exit 0.
 # - A whole greeting, thanks, approval or "go on" (codex/replies.txt) gets no call at all.
@@ -39,14 +39,9 @@ on="$(read_key "$(settings_file "${COREMODEL_CONFIG:-}" coremodel)" codex_hint)"
 
 tmp="$(mktemp -d 2>/dev/null)" || exit 0
 wd=""; cp=""
-# kill_tree <pid> — the process and all its descendants
-kill_tree() {
-  local c
-  for c in $(ps -A -o pid= -o ppid= 2>/dev/null | awk -v p="$1" '$2 == p { print $1 }'); do kill_tree "$c"; done
-  kill -TERM "$1" 2>/dev/null
-  return 0
-}
-cleanup() { [ -z "$cp" ] || kill_tree "$cp"; [ -z "$wd" ] || kill_tree "$wd"; rm -rf "$tmp"; }
+# Each background job has its own process group. Its children inherit that group.
+kill_group() { kill -KILL -- "-$1" 2>/dev/null || :; }
+cleanup() { [ -z "$cp" ] || kill_group "$cp"; [ -z "$wd" ] || kill_group "$wd"; rm -rf "$tmp"; }
 trap cleanup EXIT
 trap 'exit 143' INT TERM HUP
 
@@ -166,7 +161,10 @@ if [ "$ev" = Stop ]; then
 fi
 
 # UserPromptSubmit: the saved reply is used once, whatever happens next
-if [ -n "$sd" ] && [ -f "$sd/$sid" ]; then cat "$sd/$sid" > "$tmp/ctx" 2>/dev/null; rm -f "$sd/$sid"; fi
+if [ -n "$sd" ] && [ -f "$sd/$sid" ]; then
+  find "$sd/$sid" -type f ! -mtime +0 -exec cat {} \; > "$tmp/ctx" 2>/dev/null
+  rm -f "$sd/$sid"
+fi
 [ -s "$tmp/prompt" ] || exit 0
 
 # A whole prompt of at most 8 words made only of replies.txt phrases (case, punctuation and ё/е ignored,
@@ -203,13 +201,35 @@ END {
 # Keep the visibility of each catalog row so hidden models are distinct from a missing catalog.
 catf="${CODEX_HOME:-${HOME:-}/.codex}/models_cache.json"
 : > "$tmp/cat"
-[ -f "$catf" ] && [ -r "$catf" ] && grep -oE '"(slug|visibility|effort)"[[:space:]]*:[[:space:]]*"[^"]*"' "$catf" 2>/dev/null |
-  awk -F'"' '$2 == "slug" { m = $4; next } $2 == "visibility" { V[m] = $4; next } $2 == "effort" { E[m] = E[m] " " $4 }
-    END { for (m in V) if (m ~ /^[A-Za-z0-9._-]+$/ && V[m] ~ /^[A-Za-z_]+$/) print m, V[m] E[m] }' > "$tmp/cat" 2>/dev/null
 have_catalog=""
-if [ -s "$tmp/cat" ] || { [ -f "$catf" ] && [ -r "$catf" ] &&
-  tr -d '\n' < "$catf" | grep -qE '"models"[[:space:]]*:[[:space:]]*\[[[:space:]]*\]'; }; then
-  have_catalog=1
+if [ -f "$catf" ] && [ -r "$catf" ]; then
+  # Tokenize complete quoted strings so braces and escaped quotes in descriptions are data.
+  LC_ALL=C grep -oE '"([^"\\]|\\.)*"|[][{}:,]' "$catf" 2>/dev/null |
+    awk '
+      $0 == ":" { key = value; taking = 1; next }
+      $0 == "{" || $0 == "[" {
+        depth++
+        if (depth == 2 && $0 == "[" && key == "models") models = 1
+        if (models && depth == 3) { slug = ""; visibility = ""; efforts = "" }
+        if (models && depth == 4 && $0 == "[" && key == "supported_reasoning_levels") levels = 1
+        key = ""; taking = 0; next
+      }
+      $0 == "}" || $0 == "]" {
+        if (levels && depth == 4) levels = 0
+        if (models && depth == 3 && slug ~ /^[A-Za-z0-9._-]+$/ && visibility ~ /^[a-z_]+$/)
+          print slug, visibility efforts
+        if (models && depth == 2) { print "#catalog"; models = 0 }
+        depth--; key = ""; taking = 0; next
+      }
+      /^"/ {
+        value = substr($0, 2, length($0)-2)
+        if (taking && models && depth == 3 && key == "slug") slug = value
+        if (taking && models && depth == 3 && key == "visibility") visibility = value
+        if (taking && levels && depth == 5 && key == "effort" && value ~ /^[a-z]+$/) efforts = efforts " " value
+      }
+      { taking = 0; key = "" }
+    ' > "$tmp/cat"
+  grep -qx '#catalog' "$tmp/cat" && have_catalog=1
 fi
 visible="$(awk '$2 == "list" { printf " %s ", $1 }' "$tmp/cat")"
 
@@ -227,7 +247,7 @@ model_tier() {
 }
 
 # Later entries in the same tier take precedence when visible.
-luna=""; sol=""; astra=""; top=""
+luna=""; sol=""; astra=""; top=""; classifier=""
 for m in "${ladder[@]}"; do
   if [ -n "$have_catalog" ]; then
     case "$visible" in *" $m "*) ;; *) continue ;; esac
@@ -235,6 +255,7 @@ for m in "${ladder[@]}"; do
     case "$m" in gpt-6.2-*) continue ;; esac
   fi
   case "$(model_tier "$m")" in Luna) luna="$m" ;; Sol) sol="$m" ;; Astra) astra="$m" ;; esac
+  [ -n "$classifier" ] || classifier="$m"
   top="$m"
 done
 now="$(rank "$(cat "$tmp/model" 2>/dev/null)")"
@@ -268,12 +289,21 @@ case "$to" in ''|*[!0-9]*) to=20 ;; esac
 [ "$to" -gt 20 ] && to=20
 export COREMODEL_NESTED=1
 # project_doc_max_bytes=0: the project's AGENTS.md is not added to the classifier prompt
-codex exec --model gpt-6-luna --sandbox read-only --skip-git-repo-check --ephemeral --ignore-user-config -c 'model_reasoning_effort="low"' -c 'project_doc_max_bytes=0' --output-schema "$tmp/schema.json" - < "$tmp/full" > "$tmp/ans" 2>/dev/null &
+classifier_effort=low
+supported="$(awk -v m="$classifier" '$1 == m { $1 = $2 = ""; print $0 " " }' "$tmp/cat")"
+if [ -n "${supported// /}" ]; then
+  for level in low minimal none medium high xhigh max ultra; do
+    case "$supported" in *" $level "*) classifier_effort="$level"; break ;; esac
+  done
+fi
+set -m
+codex exec --model "$classifier" --sandbox read-only --skip-git-repo-check --ephemeral --ignore-user-config -c "model_reasoning_effort=\"$classifier_effort\"" -c 'project_doc_max_bytes=0' --output-schema "$tmp/schema.json" - < "$tmp/full" > "$tmp/ans" 2>/dev/null &
 cp=$!
-( sleep "$to"; kill_tree "$cp" ) > /dev/null 2>&1 &
+( set +m; sleep "$to"; kill_group "$cp" ) > /dev/null 2>&1 &
 wd=$!
 wait "$cp" 2>/dev/null; cp=""
-kill_tree "$wd"; wd=""
+kill_group "$wd"; wait "$wd" 2>/dev/null; wd=""
+set +m
 
 # the first flat {...} of the answer
 obj="$(tr '\n' ' ' < "$tmp/ans" 2>/dev/null | sed -n 's/^[^{]*\({[^{}]*}\).*$/\1/p')"

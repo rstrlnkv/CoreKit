@@ -140,7 +140,7 @@ one). It does not cover git history (`git show HEAD:.env`).
 
 ## Data that leaves your machine
 
-- **corecrew** talks to GitHub through `gh` and `git` (stack generators you approve reach their own package hosts): read-only checks run without a prompt, every write (a repo, a push, a tag, a release) waits for your yes, and in Codex every network call asks first ([what it runs and sends](plugins/corecrew/README.md#what-it-runs-and-sends)).
+- **corecrew** talks to GitHub through `gh` and `git` (stack generators you approve reach their own package hosts): read-only checks run without a prompt, every write (a repo, a push, a tag, a release) waits for your yes, and Codex requests sandbox approval when its active profile restricts an operation ([what it runs and sends](plugins/corecrew/README.md#what-it-runs-and-sends)).
 - **coremodel**, in Claude Code, sends each prompt to a short classifier call through your own Claude Code account; in Codex it sends nothing until you turn its hint on, and then it sends each prompt a second time to OpenAI ([requirements](plugins/coremodel/README.md#requirements), [the Codex hint](plugins/coremodel/README.md#codex)).
 
 ## Scope

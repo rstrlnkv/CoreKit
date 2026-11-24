@@ -8,10 +8,10 @@ a release is made. [ARCHITECTURE.md](ARCHITECTURE.md) explains how the repo is l
 - macOS or Linux with `bash`, `git` and the usual command-line tools. CI runs the suite on both
   (macOS with the system bash 3.2, and Ubuntu).
 - Optional: the `claude` CLI and the `codex` CLI. Without them, the tests that need them print a
-  `SKIP` line and the run names them after `ALL TESTS PASSED`. CI installs `claude` on both runners
-  and `codex` on the macOS runner only (the versions are pinned in `.github/workflows/tests.yml`), so
-  there those parts run, and a `SKIP` for lack of one it installed fails the suite. On the Ubuntu
-  runner the `codex` parts skip: the sandbox checks expect the macOS sandbox's messages.
+  `SKIP` line and the run names them after `ALL TESTS PASSED`. The full CI suite installs `claude`
+  on both runners and `codex` on macOS, where the sandbox checks exercise native permissions.
+  Separate Ubuntu jobs install both plugins and check hook discovery with the pinned Codex CLI
+  and the latest npm release. Both jobs fail on a skipped check.
   - without `claude`: the coremodel module tests (`tests/test_coremodel.sh`) and the
     `claude plugin validate` checks (`tests/test_plugin_validate.sh`);
   - without `codex`: the checks against the real Codex CLI (patch parsing, the sandbox profiles,

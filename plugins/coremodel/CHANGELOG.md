@@ -11,6 +11,10 @@ Codex: an update keeps the hooks off until you trust them again in `/hooks`.
 
 ### Fixed
 
+- Codex reads catalog entries in any field order and runs the classifier on the lightest visible
+  supported model. A resumed chat discards expired reply context. Timeouts and interruptions stop
+  the classifier process group even when the host blocks process listing.
+
 - Codex hints prefer visible GPT-6.2 Sol and GPT-6.2 Astra models. The hook skips the classifier
   when your current model is at least as strong as every offered model.
 
