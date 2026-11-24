@@ -1,13 +1,13 @@
 # Architecture
 
 A bird's-eye view of the repository for contributors. CoreKit is a marketplace (`corekit`) for
-Claude Code and the Codex CLI that holds three independent plugins. Nothing here is compiled
+Claude Code and the Codex CLI that holds two independent plugins. Nothing here is compiled
 except the TypeScript module of `coremodel`.
 
 ## Where things live
 
 ```
-.claude-plugin/marketplace.json   the marketplace: lists the three plugins (Claude Code reads it)
+.claude-plugin/marketplace.json   the marketplace: lists the two plugins (Claude Code reads it)
 .agents/plugins/marketplace.json  the Codex marketplace: corecrew and coremodel only (Codex reads it first)
 plugins/corecrew/                 project workflow
   .claude-plugin/plugin.json      Claude Code manifest: name, version, settings (userConfig), icon
@@ -67,14 +67,10 @@ plugins/coremodel/                model and effort picker
                                   need no call
   types/index.d.ts                the plugin's type contract (the host API types are written by
                                   Claude Code into .claude-plugin/types/, which git does not track)
-plugins/coreopinion/              second opinion from GPT (Claude Code only)
-  skills/second-opinion/          SKILL.md; scripts/: ask-gpt.sh (the Codex run), allowed-files.sh and
-                                  secret-patterns.txt (the one secret list)
-    agents/openai.yaml            Codex: keeps the skill out of Codex (coreopinion is Claude Code only)
 scripts/commit-subjects.sh        the check of this repo's own commit subjects (CI job and optional commit-msg hook)
 scripts/eval.sh                   runs one plugin's trigger evals on a copy it assembles (real model calls,
                                   not part of tests/run.sh)
-evals/corecrew/, evals/coreopinion/  the trigger evals (does a skill start when it should); they live outside
+evals/corecrew/                    the trigger evals (does a skill start when it should); they live outside
                                   the plugins, so an install does not carry them
 tests/                            bash tests, run by tests/run.sh; lib.sh gives each test a sandbox
                                   and the shared helpers (snap_tree: the one "nothing changed" snapshot);
@@ -95,7 +91,6 @@ docs/                             icon sources (icons/)
 manifest             .claude-plugin/plugin.json          .codex-plugin/plugin.json
 corecrew hooks       hooks/hooks.json (all six)          the same hooks/hooks.json
 coremodel hooks      hooks/ (TypeScript module)          codex/hooks.json -> codex/hint.sh
-coreopinion          yes                                 not supported
 hook trust           on install                          after you enable them in /hooks
 ```
 
@@ -134,7 +129,7 @@ Each hook rule, by host (the test file holds the cases of both hosts):
 
 ## How the parts fit
 
-- **Skills** are the user's entry points (`/corecrew:task`, `/coreopinion:second-opinion`). They
+- **Skills** are the user's entry points (`/corecrew:task`, `/corecrew:new-project`). They
   find their plugin folder first (`lib.sh plugin-root`), then call scripts from it.
 - **Agents** are the roles `/corecrew:task` hands work to. The designer, localizer, security and
   verifier agents are read-only: in Claude Code a hook refuses their writes.

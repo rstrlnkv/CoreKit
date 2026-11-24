@@ -12,8 +12,7 @@ note "$(codex --version)"
 
 assert_exit 0 cx plugin marketplace add "$ROOT"
 assert_exit 0 cx plugin add corecrew@corekit
-# coreopinion is Claude Code only (P1): Codex reads .agents/plugins/marketplace.json, which lists corecrew and
-# coremodel only, so Codex neither offers nor installs coreopinion.
+# Check the catalog selected by Codex.
 lst="$(cx plugin list 2>&1)"
 case "$lst" in *'.agents/plugins/marketplace.json'*) pass ;; *) fail "Codex reads the Codex marketplace file: $lst" ;; esac
 case "$lst" in *'coremodel@corekit'*) pass ;; *) fail "Codex lists coremodel: $lst" ;; esac

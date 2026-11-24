@@ -215,7 +215,7 @@ LIST=(); while IFS= read -r f; do LIST[${#LIST[@]}]="$f"; done < <(scripts "$ROO
 scan "$ROOT" "${LIST[@]}" > "$SANDBOX/hits"
 [ -s "$SANDBOX/hits" ] && fail "not portable to macOS bash 3.2 / BSD: $(cat "$SANDBOX/hits")" || pass
 scripts "$ROOT" | grep -qx 'plugins/corecrew/scripts/save' && pass || fail "scripts without .sh not scanned"
-for want in plugins/corecrew/hooks/guard-code.sh plugins/corecrew/skills/new-project/scripts/scaffold.sh plugins/corecrew/scripts/git-hooks/pre-commit-code plugins/coreopinion/skills/second-opinion/scripts/ask-gpt.sh plugins/coremodel/codex/hint.sh; do
+for want in plugins/corecrew/hooks/guard-code.sh plugins/corecrew/skills/new-project/scripts/scaffold.sh plugins/corecrew/scripts/git-hooks/pre-commit-code plugins/coremodel/codex/hint.sh; do
   scripts "$ROOT" | grep -qx "$want" && pass || fail "$want not scanned"
 done
 # every awk program on disk is listed, tracked or not (the count follows the tree; no literal)

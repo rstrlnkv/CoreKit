@@ -26,21 +26,20 @@ run_eval() { local want="$1"; shift; assert_exit "$want" env PATH="$BIN:$PATH" S
 stub_dir() { sed -n '3s/^arg //p' "$LOG"; }
 
 # --- the real tree: each plugin that has evals is handed over whole, with its cases inside
-for pl in corecrew coreopinion; do
-  : > "$LOG"
-  run_eval 0 "$B" "$pl"
-  assert_contains "$LOG" "has manifest"
-  d="$(stub_dir)"
-  assert_eq "$(basename "$d")" "$pl" "$pl: the staged folder has the plugin's name"
-  assert_eq "$(grep '^arg ' "$LOG" | tr '\n' ' ')" "arg plugin arg eval arg $d arg --ablation arg none arg --no-publish " "$pl: the command"
-  # results/ (git-ignored output of an earlier real run) is left out of the copy, so it is no case
-  want="$(for c in "$ROOT/evals/$pl"/*/; do [ "$(basename "$c")" = results ] || echo "case $(basename "$c")"; done)"
-  assert_eq "$(grep '^case ' "$LOG")" "$want" "$pl: the staged cases"
-  [ -n "$want" ] && pass || fail "$pl: no case folder under evals/$pl"
-  # the copy is a throwaway one, outside the repo, and it is gone after the run
-  case "$d" in "$ROOT"/*) fail "$pl: staged inside the repo: $d" ;; *) pass ;; esac
-  assert_no_file "$(dirname "$d")"
-done
+pl=corecrew
+: > "$LOG"
+run_eval 0 "$B" "$pl"
+assert_contains "$LOG" "has manifest"
+d="$(stub_dir)"
+assert_eq "$(basename "$d")" "$pl" "$pl: the staged folder has the plugin's name"
+assert_eq "$(grep '^arg ' "$LOG" | tr '\n' ' ')" "arg plugin arg eval arg $d arg --ablation arg none arg --no-publish " "$pl: the command"
+# results/ (git-ignored output of an earlier real run) is left out of the copy, so it is no case
+want="$(for c in "$ROOT/evals/$pl"/*/; do [ "$(basename "$c")" = results ] || echo "case $(basename "$c")"; done)"
+assert_eq "$(grep '^case ' "$LOG")" "$want" "$pl: the staged cases"
+[ -n "$want" ] && pass || fail "$pl: no case folder under evals/$pl"
+# the copy is a throwaway one, outside the repo, and it is gone after the run
+case "$d" in "$ROOT"/*) fail "$pl: staged inside the repo: $d" ;; *) pass ;; esac
+assert_no_file "$(dirname "$d")"
 
 # --- a small repo of its own: results come back, extra arguments pass through, the exit code is claude's
 R="$SANDBOX/repo"; mkdir -p "$R/scripts" "$R/plugins/demo/.claude-plugin" "$R/plugins/demo/skills" "$R/evals/demo/one/graders" "$R/evals/demo/two"

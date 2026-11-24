@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The public-repository standard (<Core>/standards/public-repository.md), checks 1 to 4, which run offline:
 # the root files, no loose code at the root, nothing rule 2 keeps out, no CHANGELOG translation and the
-# order of the required README.md headings, all read from the tracked files. Rule 4 binds the plugin READMEs too (one shape for all three): `# <Name>`, a one-line description,
+# order of the required README.md headings, all read from the tracked files. Rule 4 binds the plugin READMEs too (one shape for all plugins): `# <Name>`, a one-line description,
 # one line of shields.io badges (platform, release, licence), then ## Install, ## Features (opening
 # with a `| Feature | What it does |` table), ## Requirements, ## Development, ## Licence, in that order.
 # Nothing in a plugin is built, so a plugin README says Development, never Build from source.

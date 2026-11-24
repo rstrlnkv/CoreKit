@@ -142,11 +142,10 @@ one). It does not cover git history (`git show HEAD:.env`).
 
 - **corecrew** talks to GitHub through `gh` and `git` (stack generators you approve reach their own package hosts): read-only checks run without a prompt, every write (a repo, a push, a tag, a release) waits for your yes, and in Codex every network call asks first ([what it runs and sends](plugins/corecrew/README.md#what-it-runs-and-sends)).
 - **coremodel**, in Claude Code, sends each prompt to a short classifier call through your own Claude Code account; in Codex it sends nothing until you turn its hint on, and then it sends each prompt a second time to OpenAI ([requirements](plugins/coremodel/README.md#requirements), [the Codex hint](plugins/coremodel/README.md#codex)).
-- **coreopinion** (Claude Code only) sends your question and the files you confirm to OpenAI through the Codex CLI; secret-looking files are filtered out, and a read-only permission profile keeps GPT away from them ([requirements](plugins/coreopinion/README.md#requirements)).
 
 ## Scope
 
 In scope: the plugins in this repository, their hooks and scripts (the secrets guard, the code
 guard, the git hooks, `save`, `undo-step`, `adopt.sh`), the Codex profile they print, and what they
-send to a third party (coremodel's Codex hint and coreopinion to OpenAI). Out of scope: the limits
+send to a third party (coremodel's Codex hint to OpenAI). Out of scope: the limits
 listed above, and the hosts themselves (Claude Code, Codex, GitHub).

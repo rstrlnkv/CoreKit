@@ -1,13 +1,19 @@
 # Changelog
 
-All notable changes to `corecrew` are listed here. The other two plugins keep their own:
-[coremodel](plugins/coremodel/CHANGELOG.md) and [coreopinion](plugins/coreopinion/CHANGELOG.md).
+All notable changes to `corecrew` are listed here. Coremodel keeps its own
+[changelog](plugins/coremodel/CHANGELOG.md).
 
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/), and the
 versions follow [Semantic Versioning](https://semver.org/). Older entries are shortened; the
 commit log has the full detail.
 
 ## [Unreleased]
+
+Codex: after the update, trust the hooks again in `/hooks`.
+
+### Removed
+- The CoreKit marketplace no longer distributes CoreOpinion. Users with an existing Claude Code
+  installation can remove it with `claude plugin uninstall coreopinion@corekit`.
 
 ## [1.4.0] - 2026-11-18
 

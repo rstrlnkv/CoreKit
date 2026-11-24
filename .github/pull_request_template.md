@@ -16,7 +16,7 @@ Read CONTRIBUTING.md first: it has the rules, the tests and the release steps.
 ## Release rule
 
 - [ ] Every plugin whose behaviour changes has a line under `## [Unreleased]` in its CHANGELOG
-      (corecrew: the root CHANGELOG.md; coremodel and coreopinion: their own).
+      (corecrew: the root CHANGELOG.md; coremodel: its own).
 - [ ] I did not bump versions or add tags. A release turns `[Unreleased]` into `[X.Y.Z] - YYYY-MM-DD` and bumps
       every manifest of that plugin (`.claude-plugin/plugin.json`, and `.codex-plugin/plugin.json` where it has one)
       in the same commit; the tag `<plugin>-vX.Y.Z` comes after the push.

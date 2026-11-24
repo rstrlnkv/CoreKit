@@ -46,7 +46,7 @@ while read -r g opt; do
   [ -n "$got" ] || [ "$opt" = optional ] && pass || fail "the document glob $g finds no file under the repo root"
   docs="$docs $got"
 done <<< "$DOC_GLOBS"
-for doc in README.md SECURITY.md ARCHITECTURE.md CONTRIBUTING.md plugins/corecrew/README.md plugins/coremodel/README.md plugins/coreopinion/README.md; do
+for doc in README.md SECURITY.md ARCHITECTURE.md CONTRIBUTING.md plugins/corecrew/README.md plugins/coremodel/README.md; do
   assert_file "$ROOT/$doc"
 done
 for doc in $docs; do
@@ -137,11 +137,6 @@ for f in "$ROOT"/plugins/*/skills/*/scripts/*; do
   [ -e "$f" ] || continue
   named_in_tree "${f##*/}" "$ROOT/ARCHITECTURE.md" && pass || fail "ARCHITECTURE.md tree does not name ${f#"$ROOT"/}"
 done
-# coreopinion's agents/openai.yaml keeps its skill out of Codex (coreopinion is Claude Code only): the tree names it
-for f in "$ROOT"/plugins/coreopinion/skills/*/agents/openai.yaml; do
-  [ -f "$f" ] || continue
-  tree_paths "$ROOT/ARCHITECTURE.md" | grep -qxF "${f#"$ROOT"/}" && pass || fail "ARCHITECTURE.md tree does not name ${f#"$ROOT"/}"
-done
 
 # anchors_of <file> — the anchors of its headings outside ``` fences, as GitHub makes them: lowercased,
 # everything but letters, digits, spaces, - and _ dropped, spaces turned into dashes
@@ -224,8 +219,8 @@ printf 'See docs/migration-0.3.md and evals/gone/evals.json, plugins/<name>/x an
 got="$(paths_in "$SANDBOX/x.md" "$ROOT_DIRS" | tr '\n' ' ')"
 assert_eq "$got" "docs/migration-0.3.md evals/gone/evals.json " "path extraction"
 [ -e "$ROOT/evals/gone/evals.json" ] && fail "self-check path exists" || pass
-printf 'Run `scripts/ask-gpt.sh` (see skills/x/SKILL.md).\n' > "$SANDBOX/y.md"
-assert_eq "$(paths_in "$SANDBOX/y.md" "$PLUGIN_DIRS" | tr '\n' ' ')" "scripts/ask-gpt.sh skills/x/SKILL.md " "plugin-relative paths"
+printf 'Run `scripts/example.sh` (see skills/x/SKILL.md).\n' > "$SANDBOX/y.md"
+assert_eq "$(paths_in "$SANDBOX/y.md" "$PLUGIN_DIRS" | tr '\n' ' ')" "scripts/example.sh skills/x/SKILL.md " "plugin-relative paths"
 printf 'See skills/x/SKILL.md and hooks/h.sh.\n' > "$SANDBOX/y2.md"
 assert_eq "$(paths_in "$SANDBOX/y2.md" "$ROOT_DIRS")" "" "root docs ignore plugin-relative paths"
 # a root doc's scripts/ and .github/ paths are read, at the start of a line (the dot stays) and inside one;

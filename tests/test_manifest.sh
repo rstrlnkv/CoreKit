@@ -39,7 +39,7 @@ assert_contains "$M" '"coreeffort": "coremodel"'
 assert_not_contains "$M" 'allowCrossMarketplaceDependenciesOn'
 assert_contains "$M" '"name": "coremodel"'
 # The Codex marketplace (P1): Codex reads .agents/plugins/marketplace.json before .claude-plugin's. It lists
-# exactly the plugins that have a .codex-plugin manifest (so not coreopinion, Claude Code only), each from its folder.
+# exactly the plugins that have a .codex-plugin manifest, each from its folder.
 XM="$ROOT/.agents/plugins/marketplace.json"
 assert_file "$XM"
 assert_contains "$XM" '"name": "corekit"'
@@ -47,6 +47,8 @@ want="$(cd "$ROOT/plugins" && for d in */; do [ -f "$d.codex-plugin/plugin.json"
 got="$(sed -n 's/.*"path": *"\.\/plugins\/\([a-z]*\)".*/\1/p' "$XM")"
 assert_eq "$got" "$want" "the Codex marketplace lists the plugins with a .codex-plugin manifest"
 assert_not_contains "$XM" 'coreopinion'
+assert_not_contains "$M" 'coreopinion'
+assert_no_file "$ROOT/plugins/coreopinion"
 assert_contains "$M" '"source": "./plugins/corecrew"'
 assert_contains "$M" '"source": "./plugins/coremodel"'
 
@@ -146,10 +148,10 @@ for pl in $plugins; do
   # one sentence of at most 120 characters, benefit first
   [ "${#desc}" -le 120 ] && pass || fail "$pl description is ${#desc} characters, want 120 at most"
   case "$desc" in *.*.*) fail "$pl description is more than one sentence" ;; *.) pass ;; *) fail "$pl description does not end with a full stop" ;; esac
-  # the README's line 3 is this description (R3-38); coremodel's and coreopinion's line 3 is longer on purpose:
+  # the README's line 3 is this description (R3-38); coremodel's line 3 is longer on purpose:
   # it says what each does in Codex
   case "$pl" in
-    coremodel|coreopinion) ;;
+    coremodel) ;;
     *) assert_eq "$(sed -n 3p "$ROOT/plugins/$pl/README.md")" "$desc" "$pl README.md line 3 vs its manifest description" ;;
   esac
   # the icon: ./assets/icon.png, named in every manifest, a square PNG of 512 to 2048 px, under 256 KiB
@@ -284,18 +286,17 @@ for d in "$ROOT"/plugins/*/tests "$ROOT"/plugins/*/evals; do assert_no_file "$d"
 
 # trigger evals (claude plugin eval): every case has a prompt and a grader; the frontmatter
 # description is quoted (a bare ": " breaks the YAML); results stay out of git. scripts/eval.sh runs them.
-for pl in corecrew coreopinion; do
-  n=0
-  for c in "$ROOT/evals/$pl"/*/; do
-    [ -f "$c/prompt.md" ] || continue
-    n=$((n + 1))
-    ls "$c"graders/*.md >/dev/null 2>&1 && pass || fail "$c: no grader"
-    d="$(sed -n 's/^description: //p' "$c/prompt.md" | head -1)"
-    case "$d" in '"'*'"') pass ;; *) fail "$c/prompt.md: description not quoted" ;; esac
-  done
-  [ "$n" -ge 3 ] && pass || fail "$pl: fewer than 3 trigger eval cases ($n)"
-  assert_contains "$ROOT/evals/$pl/.gitignore" 'results/'
+pl=corecrew
+n=0
+for c in "$ROOT/evals/$pl"/*/; do
+  [ -f "$c/prompt.md" ] || continue
+  n=$((n + 1))
+  ls "$c"graders/*.md >/dev/null 2>&1 && pass || fail "$c: no grader"
+  d="$(sed -n 's/^description: //p' "$c/prompt.md" | head -1)"
+  case "$d" in '"'*'"') pass ;; *) fail "$c/prompt.md: description not quoted" ;; esac
 done
+[ "$n" -ge 3 ] && pass || fail "$pl: fewer than 3 trigger eval cases ($n)"
+assert_contains "$ROOT/evals/$pl/.gitignore" 'results/'
 # Codex manifest: Codex reads .codex-plugin/plugin.json instead of .claude-plugin/plugin.json, so the
 # shared fields must not drift. No root plugin.json: Codex treats it as an AgentPlugin manifest and
 # skips the plugin's hooks.

@@ -15,3 +15,5 @@ docs/superpowers/
 !.env.template
 # test_no_personal.sh: the owner-specific terms list stays local
 tests/personal-terms.local
+# Keep local eval output ignored after a plugin is retired.
+/evals/*/results/

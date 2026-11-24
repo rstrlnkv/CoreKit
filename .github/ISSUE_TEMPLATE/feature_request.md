@@ -1,10 +1,10 @@
 ---
 name: Feature request
-about: Suggest a change to corecrew, coremodel or coreopinion
+about: Suggest a change to corecrew or coremodel
 labels: enhancement
 ---
 
-**Plugin:** <!-- corecrew / coremodel / coreopinion -->
+**Plugin:** <!-- corecrew / coremodel -->
 
 **Host:** <!-- Claude Code, Codex, or both -->
 

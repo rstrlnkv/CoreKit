@@ -13,7 +13,7 @@ a release is made. [ARCHITECTURE.md](ARCHITECTURE.md) explains how the repo is l
   there those parts run, and a `SKIP` for lack of one it installed fails the suite. On the Ubuntu
   runner the `codex` parts skip: the sandbox checks expect the macOS sandbox's messages.
   - without `claude`: the coremodel module tests (`tests/test_coremodel.sh`) and the
-    `claude plugin validate` checks (`tests/test_plugin_validate.sh`, and coreopinion's own);
+    `claude plugin validate` checks (`tests/test_plugin_validate.sh`);
   - without `codex`: the checks against the real Codex CLI (patch parsing, the sandbox profiles,
     plugin install, parts of the boundary and plugin-root tests).
 - `python3`, `node` and `sips` (macOS) are used by a few checks when present (JSON syntax, icon
@@ -26,7 +26,7 @@ bash tests/run.sh                 # every test file; prints ALL TESTS PASSED
 bash tests/run.sh -j 4 guard      # 4 files at a time, only the files whose name contains "guard"
 bash tests/test_hooks.sh          # one file
 claude plugin validate .          # the marketplace
-claude plugin validate plugins/corecrew   # one plugin; also plugins/coremodel, plugins/coreopinion
+claude plugin validate plugins/corecrew   # one plugin; also plugins/coremodel
 ```
 
 The full run takes about ten minutes on a laptop and needs no network; run one file while you work.
@@ -44,7 +44,7 @@ of the plugins, the tests and `scripts/`. Run it on the files you changed before
 `shellcheck --severity=warning <files>` (settings: `.shellcheckrc`, `tests/.shellcheckrc`).
 
 Trigger evals (does a skill start when it should) make real model calls and are not part of the
-run: `bash scripts/eval.sh <plugin>` (`corecrew` or `coreopinion`). The cases are in
+run: `bash scripts/eval.sh corecrew`. The cases are in
 `evals/<plugin>/`, the results land in `evals/<plugin>/results/` (ignored by git), and extra
 options such as `--case '<glob>'` pass through to `claude plugin eval`.
 

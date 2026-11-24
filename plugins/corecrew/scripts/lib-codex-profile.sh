@@ -12,11 +12,10 @@ _toml_read_line() {
 }
 
 # codex_profile — prints a TOML fragment for ~/.codex/config.toml (never written by corecrew): a workspace-write permission
-# profile that keeps secret files unreadable. Patterns as in coreopinion's ask-gpt.sh review profile. Checked with
+# profile that keeps secret files unreadable. Checked with
 # `codex sandbox`, codex 0.166 (tests/test_codex_profile.sh).
 # It opens these places of this machine for reading, or corecrew's own commands fail in the sandbox: the folder Codex
-# keeps this marketplace's plugins in (codex_home and marketplace_name; scripts, skills, role files; coremodel and
-# coreopinion lie there too), the tools copy (<Codex home>/plugins/data/corecrew-<marketplace>/tools; save, undo-step;
+# keeps this marketplace's plugins in (codex_home and marketplace_name; scripts, skills, role files), the tools copy (<Codex home>/plugins/data/corecrew-<marketplace>/tools; save, undo-step;
 # not the rest of the data folder), the settings file (settings_file_path), the hooks marker (hooks_marker_path for
 # Codex; a version string), the two global git config files (~/.gitconfig, $XDG_CONFIG_HOME/git/config; git fails
 # when one exists and cannot be read) and git's default global ignore file ($XDG_CONFIG_HOME/git/ignore; patterns only,

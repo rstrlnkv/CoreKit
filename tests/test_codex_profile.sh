@@ -26,25 +26,13 @@ done
 grep -qi 'tokens.*includ\|includ.*tokens' "$ROOT/SECURITY.md" && pass || fail "SECURITY.md: keep tokens out of an included git file"
 # the broad name patterns are gone: they blocked tokenizer.py, secret_santa.py
 for g in '*[tT]oken*' '*TOKEN*' '*[sS]ecret*' '*SECRET*'; do grep -qF "\"**/$g\"" "$FRAG" && fail "broad pattern still denied: $g" || pass; done
-for g in '.env' '.env.*' '*.env' '*.pem' 'id_rsa*' 'id_ecdsa*' 'id_dsa*' '.npmrc' '.aws/**' '.kube/**' '.docker/config.json' '.htpasswd' '.pgpass' '*.token' '[tT]oken' '[sS]ecrets*' '*.secret' '*_[tT]oken' '*-[tT]oken' '*_[tT]oken.*' '.*[tT]oken' '.secrets*' '*client_secret*.json' '.dockercfg' '*-secret.*' '*_secret.*'; do assert_contains "$FRAG" "\"**/$g\" = \"deny\""; done
+for g in '.env' '.env.*' '*.env' '*.env.*' '*.key' '*.p12' '*.pfx' '*.p8' '*.ppk' '*.jks' '*.keystore' '*.keytab' '*.kdbx' 'id_ed25519*' '.ssh/**' '.gnupg/**' '*[cC]redentials*' '*CREDENTIALS*' '.netrc' '.pypirc' '.git-credentials' '.s3cfg' '*.tfvars' '*.tfstate*' '*[kK]ube[cC]onfig*' '*KUBECONFIG*' '*[sS]ervice?[aA]ccount*.json' '*[sS]ervice[aA]ccount*.json' '*SERVICE?ACCOUNT*.json' '*.pem' 'id_rsa*' 'id_ecdsa*' 'id_dsa*' '.npmrc' '.aws/**' '.kube/**' '.docker/config.json' '.htpasswd' '.pgpass' '*.token' '[tT]oken' '[sS]ecrets*' '*.secret' '*_[tT]oken' '*-[tT]oken' '*_[tT]oken.*' '.*[tT]oken' '.secrets*' '*client_secret*.json' '.dockercfg' '*-secret.*' '*_secret.*'; do assert_contains "$FRAG" "\"**/$g\" = \"deny\""; done
 assert_contains "$FRAG" '"." = "write"'
 assert_contains "$FRAG" '":minimal" = "read"'
 assert_eq "$(grep -v '^#' "$FRAG" | grep 'ssh' | grep -vxF '"**/.ssh/**" = "deny"')" "" "~/.ssh stays closed by not being listed"
 # Codex 0.166 documents ":workspace_roots" and "deny"; ":project_roots" and "none" are legacy aliases kept for now
 assert_contains "$FRAG" '[permissions.corecrew.filesystem.":workspace_roots"]'
 assert_eq "$(grep -v '^#' "$FRAG" | grep -cE ':project_roots|= "none"$')" "0" "no legacy alias (:project_roots, \"none\") outside comments"
-# the deny patterns are the ones coreopinion's review profile blocks (it builds them from secret-patterns.txt)
-pat="$ROOT/plugins/coreopinion/skills/second-opinion/scripts/secret-patterns.txt"
-assert_file "$pat"
-miss=""; set -f   # the patterns are globs: do not expand them
-for g in $(sed -e 's/^[[:space:]]*//' -e 's/[[:space:]].*$//' -e '/^#/d' -e '/^$/d' "$pat"); do
-  case "$g" in .env\*) continue ;; esac   # the review profile's .env* is spelled .env, .env.* here
-  grep -qF "\"**/$g\" = \"deny\"" "$FRAG" || miss="$miss $g"
-done
-# the review profile still has the broad token and secret globs; this one narrows them on purpose (tokenizer.py, secret_santa.py)
-miss="$(printf '%s\n' $miss | grep -vxE '\*\[tT\]oken\*|\*TOKEN\*|\*\[sS\]ecret\*|\*SECRET\*' | tr '\n' ' ' | sed 's/ $//')"
-set +f
-assert_eq "$miss" "" "every secret pattern of the review profile is denied, but the four broad token and secret globs"
 # --- corecrew's own files: one read line for the folder Codex keeps this marketplace's plugins in, one for the tools
 # copy, one for the settings file, one for the hooks marker, and the two global git config files (each file alone, not
 # its folder: ~/.config/git may hold a credentials file). All sit in the filesystem table (before the workspace table),
