@@ -9,6 +9,8 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-25
+
 Codex: after the update, trust the hooks again in `/hooks`.
 
 ### Fixed
