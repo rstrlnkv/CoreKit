@@ -7,6 +7,13 @@ full detail.
 
 ## [Unreleased]
 
+Codex: an update keeps the hooks off until you trust them again in `/hooks`.
+
+### Fixed
+
+- Codex hints prefer visible GPT-6.2 Sol and GPT-6.2 Astra models. The hook skips the classifier
+  when your current model is at least as strong as every offered model.
+
 ## [0.11.1] - 2026-11-11
 
 Codex: an update keeps the hooks off until you trust them again in `/hooks`.

@@ -167,7 +167,6 @@ T_FIRST="$(head -1 "$TPL" 2>/dev/null)"
 T_LAST="$(tail -1 "$TPL" 2>/dev/null)"
 for ph in '{{REPLY}}' '{{PROMPT}}'; do assert_eq "$(grep -cF "$ph" "$TPL" 2>/dev/null)" "1" "classifier.txt has $ph once"; done
 assert_not_contains "$TPL" '{{NOW}}'   # Codex does not tell the hook the current effort
-for m in gpt-6-luna gpt-6.1-sol gpt-6-astra; do assert_contains "$TPL" "$m"; done
 for w in Claude haiku sonnet opus fable; do assert_not_contains "$TPL" "$w"; done
 # {{PROMPT}} after {{REPLY}}: the person's text is spliced in last
 if [ "$(grep -nF '{{REPLY}}' "$TPL" | cut -d: -f1)" -lt "$(grep -nF '{{PROMPT}}' "$TPL" | cut -d: -f1)" ] 2>/dev/null; then pass; else fail "{{PROMPT}} must come after {{REPLY}}"; fi
@@ -175,7 +174,7 @@ if [ "$(grep -nF '{{REPLY}}' "$TPL" | cut -d: -f1)" -lt "$(grep -nF '{{PROMPT}}'
 assert_contains "$CM/hooks/classifier.ts" 'Pick the effort level and the model for one prompt sent to Claude Code.'
 
 # main path: high, astra
-answer '{"why":"flaky test, cause unknown","keep":false,"model":"gpt-6-astra","effort":"high"}'
+answer '{"keep":false,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
 assert_eq "$RC" "0" "main: exit 0"
 assert_eq "$(ncalls)" "1" "main: codex called once"
@@ -192,14 +191,17 @@ if [ -f "$ARGV" ]; then
   assert_contains "$SANDBOX/sent.txt" 'fix the flaky login test'
   assert_not_contains "$SANDBOX/sent.txt" '{{PROMPT}}'
   assert_not_contains "$SANDBOX/sent.txt" '{{REPLY}}'
+  for m in gpt-6-luna gpt-6.1-sol gpt-6-astra; do assert_contains "$SANDBOX/sent.txt" "$m"; done
+  if grep -iE 'JSON (shape|schema)|keep, model and effort' "$SANDBOX/sent.txt" | grep -iqw why; then fail "main: classifier prompt requests a why field"; else pass; fi
   # the hook never claims a first prompt: it cannot know that
   assert_not_contains "$STDIN" 'first prompt'
   # the answer shape goes as a JSON Schema file: keep, model and effort, each on its own
   grep -A1 -xF -- '--output-schema' "$SANDBOX/argv.txt" | sed -n 2p | grep -q . && pass || fail "main: argv lacks --output-schema <file>"
-  for k in '"why"' '"keep"' '"model"' '"effort"' '"additionalProperties":false' '"required":["why","keep","model","effort"]' \
+  for k in '"keep"' '"model"' '"effort"' '"additionalProperties":false' '"required":["keep","model","effort"]' \
     '"gpt-6-luna"' '"gpt-6.1-sol"' '"gpt-6-astra"' '"low"' '"medium"' '"high"' '"xhigh"' '"max"'; do
     assert_contains "$SANDBOX/schema" "$k"
   done
+  assert_not_contains "$SANDBOX/schema" '"why"'
   assert_not_contains "$SANDBOX/schema" '"ultra"'   # a delegation mode, not a depth: never recommended
   json_ok "$SANDBOX/schema" && pass || fail "main: the schema is not valid JSON"
 fi
@@ -409,6 +411,15 @@ silent "catalog without astra: astra not named"
 catalog 'gpt-7-x:list:low,high'
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" CODEX_HOME="$CAT"
 silent "catalog without the ladder"; assert_eq "$(ncalls)" "0" "catalog without the ladder: Luna not called"
+# A readable catalog may list no visible models, or contain no models at all.
+catalog 'gpt-6-luna:hide:low,high' 'gpt-6.1-sol:hide:low,high' 'gpt-6-astra:hide:low,high'
+json_ok "$CAT/models_cache.json" && pass || fail "all-hidden catalog is not valid JSON"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" CODEX_HOME="$CAT"
+silent "all-hidden catalog"; assert_eq "$(ncalls)" "0" "all-hidden catalog: Luna not called"
+catalog
+json_ok "$CAT/models_cache.json" && pass || fail "empty catalog is not valid JSON"
+run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" CODEX_HOME="$CAT"
+silent "empty catalog"; assert_eq "$(ncalls)" "0" "empty catalog: Luna not called"
 # an unreadable catalog is no catalog: all three are offered
 printf 'not json' > "$CAT/models_cache.json"
 answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
@@ -418,6 +429,59 @@ case "$(cat "$SANDBOX/out")" in *'needs gpt-6-astra at high effort'*) pass ;; *)
 # no catalog at all: the same
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" CODEX_HOME="$SANDBOX/no-such-home"
 case "$(cat "$SANDBOX/out")" in *'needs gpt-6-astra at high effort'*) pass ;; *) fail "no catalog: no hint" ;; esac
+
+# A visible 6.2 model takes its tier's place in the schema, prompt, and hint.
+mevent() { hook_event codex UserPromptSubmit /tmp model="$1" prompt="$2"; }   # mevent <model> <prompt>
+catalog 'gpt-6-luna:list:low,medium,high' 'gpt-6.1-sol:list:low,medium,high' 'gpt-6.2-sol:list:low,medium,high' \
+  'gpt-6-astra:list:low,medium,high' 'gpt-6.2-astra:list:low,medium,high'
+answer '{"keep":false,"model":"gpt-6.2-sol","effort":"medium"}'
+run_hint "$PATHSTUB" "$(mevent gpt-6.1-sol 'add a field')" CODEX_HOME="$CAT"
+assert_eq "$(ncalls)" "1" "visible 6.2 models: codex was asked"
+for m in gpt-6-luna gpt-6.2-sol gpt-6.2-astra; do
+  assert_contains "$SANDBOX/schema" "\"$m\""
+  assert_contains "$STDIN" "$m"
+done
+for m in gpt-6.1-sol gpt-6-astra; do
+  assert_not_contains "$SANDBOX/schema" "\"$m\""
+  assert_not_contains "$STDIN" "$m"
+done
+assert_contains "$SANDBOX/out" 'needs gpt-6.2-sol at medium effort'
+assert_contains "$SANDBOX/out" 'CoreModel recommends GPT-6.2 Sol · Medium'
+
+answer '{"keep":false,"model":"gpt-6.2-astra","effort":"high"}'
+run_hint "$PATHSTUB" "$(mevent gpt-6-astra 'fix the flaky login test')" CODEX_HOME="$CAT"
+assert_eq "$(ncalls)" "1" "legacy Astra with visible 6.2 Astra: codex was asked"
+assert_contains "$SANDBOX/out" 'needs gpt-6.2-astra at high effort'
+assert_contains "$SANDBOX/out" 'CoreModel recommends GPT-6.2 Astra · High'
+run_hint "$PATHSTUB" "$(mevent gpt-6.2-astra 'fix the flaky login test')" CODEX_HOME="$CAT"
+silent "on the strongest 6.2 model"; assert_eq "$(ncalls)" "0" "on the strongest 6.2 model: codex not called"
+
+# Fallback is independent for the two tiers, and hidden entries are unavailable.
+catalog 'gpt-6-luna:list:low,medium,high' 'gpt-6.1-sol:list:low,medium,high' 'gpt-6.2-sol:hide:low,medium,high' \
+  'gpt-6-astra:list:low,medium,high' 'gpt-6.2-astra:list:low,medium,high'
+answer '{"keep":false,"model":"gpt-6.1-sol","effort":"medium"}'
+run_hint "$PATHSTUB" "$(event 'add a field')" CODEX_HOME="$CAT"
+assert_contains "$SANDBOX/schema" '"gpt-6.1-sol"'
+assert_contains "$SANDBOX/schema" '"gpt-6.2-astra"'
+assert_not_contains "$SANDBOX/schema" '"gpt-6.2-sol"'
+assert_contains "$STDIN" 'gpt-6.1-sol'
+assert_not_contains "$STDIN" 'gpt-6.2-sol'
+assert_contains "$SANDBOX/out" 'needs gpt-6.1-sol at medium effort'
+run_hint "$PATHSTUB" "$(mevent gpt-6.2-sol 'add a field')" CODEX_HOME="$CAT"
+assert_eq "$(ncalls)" "1" "6.2 Sol with legacy Sol offered: codex was asked"
+silent "6.2 Sol is stronger than legacy Sol"
+
+catalog 'gpt-6-luna:list:low,medium,high' 'gpt-6.1-sol:list:low,medium,high' 'gpt-6.2-sol:list:low,medium,high' 'gpt-6-astra:list:low,medium,high'
+answer '{"keep":false,"model":"gpt-6-astra","effort":"high"}'
+run_hint "$PATHSTUB" "$(mevent gpt-6.2-sol 'fix the flaky login test')" CODEX_HOME="$CAT"
+assert_contains "$SANDBOX/schema" '"gpt-6.2-sol"'
+assert_contains "$SANDBOX/schema" '"gpt-6-astra"'
+assert_not_contains "$SANDBOX/schema" '"gpt-6.2-astra"'
+assert_contains "$STDIN" 'gpt-6-astra'
+assert_not_contains "$STDIN" 'gpt-6.2-astra'
+assert_contains "$SANDBOX/out" 'needs gpt-6-astra at high effort'
+run_hint "$PATHSTUB" "$(mevent gpt-6.2-astra 'fix the flaky login test')" CODEX_HOME="$CAT"
+silent "6.2 Astra is stronger than legacy Astra"
 
 # recursion guard
 answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
@@ -467,7 +531,6 @@ run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_CONFIG= COR
 silent "off via CORECREW_CONFIG"; assert_eq "$(ncalls)" "0" "off via CORECREW_CONFIG: codex not called"
 
 # the current model: silent when it is the pick or a stronger one
-mevent() { hook_event codex UserPromptSubmit /tmp model="$1" prompt="$2"; }   # mevent <model> <prompt>
 answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(mevent gpt-6-astra 'fix the flaky login test')"
 silent "on the strongest model"; assert_eq "$(ncalls)" "0" "on the strongest model: codex not called"

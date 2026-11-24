@@ -174,38 +174,41 @@ Control (the phone or the web) are never checked. Errors go to Claude Code's deb
 
 ## Codex
 
-In Codex the plugin gives a **hint only**, and it is **off until you turn it on**: Codex hooks
-cannot switch the model or the effort, and the hint sends every prompt to a model once more. A
+In Codex the plugin gives a **hint only**, and it is **off until you turn it on**. Codex hooks leave
+model and effort changes to you. The hint makes a separate model call for prompts it checks. A
 `UserPromptSubmit` hook (`codex/hint.sh`) asks `gpt-6-luna` (`codex exec`, read-only) which model and
-effort the prompt needs and adds one line, for example "this prompt needs gpt-6-astra at high effort;
-switch with /model if the current one differs". Codex Desktop does not show that line in the chat, so
-the hook also asks Codex to open its reply with the pick in your language, for example "CoreModel
-рекомендует GPT-6 Astra · High", and then go on with your request. You switch yourself with `/model`. The hint names
-`gpt-6-luna`, `gpt-6.1-sol` or `gpt-6-astra`, and judges the model and the effort separately: a hard
-question with a short answer can get `gpt-6-astra` at low effort.
+effort the prompt needs. It sends a warning with the model ID, effort and the `/model` command.
+Codex Desktop does not show that warning in the chat, so the hook asks Codex to open its reply with
+the pick in your language, such as "CoreModel рекомендует GPT-6.2 Astra · High", and then go on with
+your request. You can switch with `/model`. The hint judges model and effort separately. A hard
+question with a short answer can get Astra at low effort.
 
 Install: `codex plugin marketplace add rstrlnkv/CoreKit`, then `codex plugin add coremodel@corekit`.
 
 - Turn it on with `codex_hint: on` in `~/.config/coremodel/settings` (`$XDG_CONFIG_HOME/coremodel/settings`
   when that is set; `COREMODEL_CONFIG` names another file). Without that key, `coremodel_mode: on` in
   the corecrew settings file (`~/.config/corecrew/settings`) turns it on too; `codex_hint: off` wins.
-- It stays silent when your current model is the one it would name or a stronger one; on
-  `gpt-6-astra` it makes no call at all. The hint ranks only `gpt-6-luna`, `gpt-6.1-sol` and
-  `gpt-6-astra`; on any other model it cannot compare and names its pick each time (except when the
-  answer is "keep"). Codex does not tell hooks the current effort, so the hint names an effort but
-  never compares it with yours.
+- From lightest to strongest, the hint ranks GPT-6 Luna, GPT-6.1 Sol, GPT-6.2 Sol, GPT-6 Astra
+  and GPT-6.2 Astra. It skips the call when no offered model is stronger than
+  your current model. For a current model outside this list, it can still give a hint. Codex does
+  not pass your current effort to hooks.
 - A prompt that is only a greeting, thanks, an approval or "go on" ("привет", "да, давай", "ok, go
   ahead", at most 8 words, the list is `codex/replies.txt`) gets no call and no hint. "Да, и ещё
   проверь расчёты" brings new work, so it is checked.
-- When Codex's model catalog (`$CODEX_HOME/models_cache.json`) is readable, the hint offers only
-  the models it lists and lowers an effort a model does not support to the highest one it does.
+- The hint uses visible model entries it recognizes in Codex's current cache format
+  (`$CODEX_HOME/models_cache.json`). Each tier offers one model. Sol and Astra prefer GPT-6.2
+  when visible and fall back to their visible predecessors, GPT-6.1 Sol and GPT-6 Astra. If the
+  file is missing or unreadable, the hint offers those two predecessors and GPT-6 Luna. Edited
+  or truncated cache files can be misread. If the chosen model lacks the requested effort,
+  the hint uses the highest listed effort below it, when available.
 - Codex shows "coremodel: choosing a model" while it runs. The nested call takes about 8 seconds; it
   runs with `--ignore-user-config` and low reasoning effort, so it does not load your config, MCP
   servers or other plugins' hooks (your login still works). It waits at most 20 seconds
   (`COREMODEL_HINT_TIMEOUT`); any failure is silent and the prompt goes on. The nested call also
   ignores the `model_provider` of your Codex config, so it always goes to OpenAI with your Codex
   login, whatever provider your config names; without an OpenAI login (Bedrock, a gateway, a local
-  model) leave the hint off, because it gives no hint and holds each prompt up to 20 seconds.
+  model) leave the hint off, because it gives no hint and can hold each checked prompt for up to
+  20 seconds.
 - Codex asks you to trust the hooks the first time, and again after each update: review and enable
   both (`UserPromptSubmit` and `Stop`) in `/hooks`. Without the `Stop` hook the hint still works, but
   the classifier is told that Codex's previous reply is unknown.
@@ -229,7 +232,9 @@ which removes the file whether or not it was sent; a file older than a day is re
 
 - **OS:** whatever Claude Code runs on; the plugin is a TypeScript module with no native code.
 - **Claude Code** 2.1.309 or newer: it names models by alias in its hooks.
-- **Network:** no host of its own. In Claude Code the classifier call goes through your own Claude Code account, so it reaches the same Anthropic service Claude Code does. In Codex, once you turn the hint on, every prompt is sent a second time to OpenAI (`gpt-6-luna`) through `codex exec`; the hint needs `bash` and the `codex` CLI.
+- **Network.** In Claude Code the classifier call uses your Claude Code account to reach Anthropic.
+  If you enable the Codex hint, it sends each checked prompt to OpenAI (`gpt-6-luna`) with
+  `codex exec`. The hint needs `bash` and the `codex` CLI.
 - **Permissions:** it asks for none beyond the plugin hooks. It puts the pick on this chat's requests only and never writes your model or effort setting.
 - **Changes outside its own folder:** none in Claude Code; its log lines go to Claude Code's debug log. In Codex, with the hint on, the end of Codex's last reply waits in `~/.local/state/coremodel/codex-replies/` until your next prompt (see [Codex](#codex)).
 

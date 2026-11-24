@@ -6,8 +6,8 @@
 # - A whole greeting, thanks, approval or "go on" (codex/replies.txt) gets no call at all.
 # - The same script on Stop keeps the last 600 bytes of Codex's reply, per session, until the next
 #   prompt; a short prompt (at most 8 words) sends it along, a longer one stands on its own.
-# - The classifier prompt is codex/classifier.txt; the answer comes in a JSON Schema shape, with the
-#   models offered cut to those the client's catalog lists ($CODEX_HOME/models_cache.json, when readable).
+# - The classifier prompt is codex/classifier.txt; the prompt and JSON Schema offer the preferred
+#   model in each tier listed in the client's catalog ($CODEX_HOME/models_cache.json, when readable).
 # Off until turned on, since it sends every prompt to a model once more: `codex_hint: on` in
 # ~/.config/coremodel/settings (COREMODEL_CONFIG names another file); without that key,
 # `coremodel_mode: on` in the corecrew settings file. COREMODEL_HINT_TIMEOUT seconds (default 20).
@@ -169,12 +169,6 @@ fi
 if [ -n "$sd" ] && [ -f "$sd/$sid" ]; then cat "$sd/$sid" > "$tmp/ctx" 2>/dev/null; rm -f "$sd/$sid"; fi
 [ -s "$tmp/prompt" ] || exit 0
 
-# rank <codex model> — its place on the ladder the hint names; 0 for a model it does not name
-rank() { case "$1" in gpt-6-luna) echo 1 ;; gpt-6.1-sol) echo 2 ;; gpt-6-astra) echo 3 ;; *) echo 0 ;; esac; }
-now="$(rank "$(cat "$tmp/model" 2>/dev/null)")"
-# on the strongest model there is nothing to suggest: no call
-[ "$now" -lt 3 ] || exit 0
-
 # A whole prompt of at most 8 words made only of replies.txt phrases (case, punctuation and ё/е ignored,
 # phrases in any order) brings no new work: no call.
 LC_ALL=C awk -v pf="$tmp/prompt" '
@@ -206,20 +200,53 @@ END {
   }
 }' "$here/replies.txt" 2>/dev/null && exit 0
 
-# The client's catalog, when readable: "slug effort effort ..." for each model it lists (visibility "list")
+# Keep the visibility of each catalog row so hidden models are distinct from a missing catalog.
 catf="${CODEX_HOME:-${HOME:-}/.codex}/models_cache.json"
 : > "$tmp/cat"
-[ -f "$catf" ] && grep -oE '"(slug|visibility|effort)"[[:space:]]*:[[:space:]]*"[^"]*"' "$catf" 2>/dev/null |
-  awk -F'"' '$2 == "slug" { m = $4; S[m] = 1; next } $2 == "visibility" { V[m] = $4; next } $2 == "effort" { E[m] = E[m] " " $4 }
-    END { for (m in S) if (V[m] == "list") print m E[m] }' > "$tmp/cat" 2>/dev/null
-# the models offered: the ladder, cut to the catalog when there is one
-models=""; enum=""
-for m in gpt-6-luna gpt-6.1-sol gpt-6-astra; do
-  if [ -s "$tmp/cat" ]; then awk -v m="$m" '$1 == m { f = 1 } END { exit !f }' "$tmp/cat" || continue; fi
-  models="$models $m "; enum="$enum${enum:+,}\"$m\""
+[ -f "$catf" ] && [ -r "$catf" ] && grep -oE '"(slug|visibility|effort)"[[:space:]]*:[[:space:]]*"[^"]*"' "$catf" 2>/dev/null |
+  awk -F'"' '$2 == "slug" { m = $4; next } $2 == "visibility" { V[m] = $4; next } $2 == "effort" { E[m] = E[m] " " $4 }
+    END { for (m in V) if (m ~ /^[A-Za-z0-9._-]+$/ && V[m] ~ /^[A-Za-z_]+$/) print m, V[m] E[m] }' > "$tmp/cat" 2>/dev/null
+have_catalog=""
+if [ -s "$tmp/cat" ] || { [ -f "$catf" ] && [ -r "$catf" ] &&
+  tr -d '\n' < "$catf" | grep -qE '"models"[[:space:]]*:[[:space:]]*\[[[:space:]]*\]'; }; then
+  have_catalog=1
+fi
+visible="$(awk '$2 == "list" { printf " %s ", $1 }' "$tmp/cat")"
+
+# Absolute rank is independent of which models the classifier can pick.
+ladder=(gpt-6-luna gpt-6.1-sol gpt-6.2-sol gpt-6-astra gpt-6.2-astra)
+rank() {
+  local i
+  for i in "${!ladder[@]}"; do
+    if [ "$1" = "${ladder[$i]}" ]; then printf '%s\n' "$((i + 1))"; return; fi
+  done
+  printf '0\n'
+}
+model_tier() {
+  case "$1" in *-luna) printf 'Luna' ;; *-sol) printf 'Sol' ;; *-astra) printf 'Astra' ;; esac
+}
+
+# Later entries in the same tier take precedence when visible.
+luna=""; sol=""; astra=""; top=""
+for m in "${ladder[@]}"; do
+  if [ -n "$have_catalog" ]; then
+    case "$visible" in *" $m "*) ;; *) continue ;; esac
+  else
+    case "$m" in gpt-6.2-*) continue ;; esac
+  fi
+  case "$(model_tier "$m")" in Luna) luna="$m" ;; Sol) sol="$m" ;; Astra) astra="$m" ;; esac
+  top="$m"
 done
-[ -n "$models" ] || exit 0
-printf '{"type":"object","additionalProperties":false,"required":["why","keep","model","effort"],"properties":{"why":{"type":"string"},"keep":{"type":"boolean"},"model":{"type":"string","enum":[%s]},"effort":{"type":"string","enum":["low","medium","high","xhigh","max"]}}}\n' "$enum" > "$tmp/schema.json"
+now="$(rank "$(cat "$tmp/model" 2>/dev/null)")"
+[ "$now" -lt "$(rank "$top")" ] || exit 0
+
+models=""; enum=""; choices=""
+for m in "$luna" "$sol" "$astra"; do
+  [ -n "$m" ] || continue
+  models="$models $m "; enum="$enum${enum:+,}\"$m\""
+  choices="$choices${choices:+$'\n'}- $(model_tier "$m"): $m"
+done
+printf '{"type":"object","additionalProperties":false,"required":["keep","model","effort"],"properties":{"keep":{"type":"boolean"},"model":{"type":"string","enum":[%s]},"effort":{"type":"string","enum":["low","medium","high","xhigh","max"]}}}\n' "$enum" > "$tmp/schema.json"
 
 # The last reply goes only with a short prompt, which may lean on it; a missing one is said to be unknown
 if [ "$(wc -w < "$tmp/prompt" | tr -d ' ')" -gt 8 ]; then
@@ -228,9 +255,10 @@ elif [ ! -s "$tmp/ctx" ]; then
   printf '%s' '(unknown: Codex did not pass its previous reply)' > "$tmp/ctx"
 fi
 
-# the template with the reply and the prompt spliced in, never read as patterns
+# The template with the offered models, reply and prompt spliced in.
 tpl="$(cat "$here/classifier.txt" 2>/dev/null)"
-case "$tpl" in *'{{REPLY}}'*'{{PROMPT}}'*) ;; *) exit 0 ;; esac
+case "$tpl" in *'{{MODELS}}'*'{{REPLY}}'*'{{PROMPT}}'*) ;; *) exit 0 ;; esac
+tpl="${tpl/\{\{MODELS\}\}/$choices}"
 pre="${tpl%%\{\{REPLY\}\}*}"; rest="${tpl#*\{\{REPLY\}\}}"
 mid="${rest%%\{\{PROMPT\}\}*}"; post="${rest#*\{\{PROMPT\}\}}"
 { printf '%s' "$pre"; cat "$tmp/ctx"; printf '%s' "$mid"; cat "$tmp/prompt"; printf '%s\n' "$post"; } > "$tmp/full"
@@ -256,7 +284,7 @@ md="$(val model)"; ef="$(val effort)"
 case "$models" in *" $md "*) ;; *) exit 0 ;; esac
 case "$ef" in low|medium|high|xhigh|max) ;; *) exit 0 ;; esac
 # an effort the catalog does not list for that model drops to the highest one it does list below it
-effs="$(awk -v m="$md" '$1 == m { $1 = ""; print $0 " " }' "$tmp/cat" 2>/dev/null)"
+effs="$(awk -v m="$md" '$1 == m && $2 == "list" && NF > 2 { $1 = $2 = ""; print $0 " " }' "$tmp/cat" 2>/dev/null)"
 if [ -n "$effs" ]; then
   case "$effs" in
     *" $ef "*) ;;
@@ -275,7 +303,8 @@ fi
 # systemMessage is the line for clients that show hook warnings. Codex Desktop does not show it in the chat, so
 # additionalContext, which only the model reads, asks the model to name the pick in its first visible message.
 msg="coremodel: this prompt needs $md at $ef effort; switch with /model if the current one differs."
-case "$md" in gpt-6-luna) nm="GPT-6 Luna" ;; gpt-6.1-sol) nm="GPT-6.1 Sol" ;; *) nm="GPT-6 Astra" ;; esac
+version="${md%-*}"
+nm="GPT-${version#gpt-} $(model_tier "$md")"
 case "$ef" in low) el=Low ;; medium) el=Medium ;; high) el=High ;; xhigh) el=XHigh ;; *) el=Max ;; esac
 ctx="CoreModel recommends $nm · $el for this prompt. Start your first visible message with one short line that names this pick in the user's language, for example: CoreModel recommends $nm · $el. Then continue with the request as usual. Do not wait for an answer: the person switches the model with /model if they want to."
 printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"%s"},"systemMessage":"%s"}\n' "$ctx" "$msg"

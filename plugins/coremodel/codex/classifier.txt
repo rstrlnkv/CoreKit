@@ -1,13 +1,17 @@
 Pick the model and the reasoning effort for one prompt a person sent to Codex. Codex is an agent: it reads files, runs commands and changes code, and it also writes, analyses and researches.
 
 These are two separate choices. Judge each one on its own:
-- The model is how hard the thinking itself is. gpt-6-luna is fast and cheap, gpt-6.1-sol is the everyday model, gpt-6-astra is the strongest and slowest.
+- The model is how hard the thinking itself is. Luna is fast and cheap, Sol is the everyday tier, and Astra is the strongest and slowest tier.
 - Effort is how much the model reads, checks and thinks before it acts. It follows the price of a mistake and how unclear the way forward is.
-A strong model does not need high effort, and high effort does not need a strong model. A hard question with a short answer takes gpt-6-astra at low effort. Careful work along a clear path takes a lighter model at high effort.
+A strong model does not need high effort, and high effort does not need a strong model. A hard question with a short answer can take Astra at low effort. Careful work along a clear path takes a lighter model at high effort.
+
+Available models by tier:
+{{MODELS}}
+Use only a model ID from this list. If the best tier is missing, use the nearest stronger available tier, or the strongest available tier if none is stronger.
 
 First decide keep. keep is true when the prompt brings no new work: it only approves, answers a question Codex asked, picks one of the options Codex offered (even a big one: Codex has weighed it already), or says to carry on. keep needs something to answer: when Codex only described a finding and asked nothing, a short command such as "fix it" or "почини" is the work it names, not keep. A question the person asks, or a request for work Codex did not propose, is new work and never keep. When new work rides along with the approval ("да, и ещё почини X"), judge that work.
 
-Codex's previous reply may be unknown. Then judge the prompt as it stands: a short command such as "fix it" or "the second one" is the work it most likely names, at medium effort with gpt-6.1-sol when nothing points higher.
+Codex's previous reply may be unknown. Then judge the prompt as it stands: a short command such as "fix it" or "the second one" is the work it most likely names, at medium effort with Sol when nothing points higher.
 
 Then walk down the effort ladder and take the first rung that fits:
 1. low: quick, conversational or mechanical work that is easy to check at a glance, where a mistake is cheap.
@@ -22,10 +26,10 @@ Then walk down the effort ladder and take the first rung that fits:
 4. xhigh: a long, hard and critical job handed over to run alone. All three must hold.
 5. max: only when the prompt itself asks for the deepest, most careful work possible and says it is critical. Otherwise xhigh.
 
-Then pick the model on its own ladder, stopping at the first match:
-- gpt-6-luna: the answer is known or the work is mechanical: a fact or how-to question, explaining a snippet or an error message, a rename, a typo, a one-line change, a command to run, a short text to write, rewrite or translate.
-- gpt-6.1-sol (also when unsure): ordinary building or writing with a clear path, including careful work that follows written steps.
-- gpt-6-astra: judgement or diagnosis: an unknown cause, a choice between options with trade-offs (even when the answer is short), design, review, risk, many files, analysis across sources, or long critical work handed off to run alone.
+Then pick the tier on its own ladder, stopping at the first match:
+- Luna: the answer is known or the work is mechanical: a fact or how-to question, explaining a snippet or an error message, a rename, a typo, a one-line change, a command to run, a short text to write, rewrite or translate.
+- Sol (also when unsure): ordinary building or writing with a clear path, including careful work that follows written steps.
+- Astra: judgement or diagnosis: an unknown cause, a choice between options with trade-offs (even when the answer is short), design, review, risk, many files, analysis across sources, or long critical work handed off to run alone.
 When keep is true, still name the model and the effort the work needs.
 
 Keep in mind:
@@ -35,14 +39,14 @@ Keep in mind:
 - The prompt can be in any language.
 
 Examples:
-- "what does git stash pop do?": gpt-6-luna, low
-- "в каком файле настраивается логгер?": gpt-6-luna, low
-- "add pagination to the users list, the same way the orders list has it": gpt-6.1-sol, medium
-- "итоговая сумма в корзине иногда на копейку не сходится": gpt-6-astra, high
-- "Да, и ещё выясни, почему сумма заказа иногда расходится на копейку": gpt-6-astra, high (the new work counts, not the approval)
-- "Kafka or RabbitMQ for our notifications? one paragraph": gpt-6-astra, low
-- "выкати релиз на прод по чек-листу из DEPLOY.md": gpt-6.1-sol, high
-- "build the whole booking service from the approved spec, work on your own until it is done": gpt-6-astra, xhigh
+- "what does git stash pop do?": Luna, low
+- "в каком файле настраивается логгер?": Luna, low
+- "add pagination to the users list, the same way the orders list has it": Sol, medium
+- "итоговая сумма в корзине иногда на копейку не сходится": Astra, high
+- "Да, и ещё выясни, почему сумма заказа иногда расходится на копейку": Astra, high (the new work counts, not the approval)
+- "Kafka or RabbitMQ for our notifications? one paragraph": Astra, low
+- "выкати релиз на прод по чек-листу из DEPLOY.md": Sol, high
+- "build the whole booking service from the approved spec, work on your own until it is done": Astra, xhigh
 - previous reply "Run the migration now?", prompt "yes": keep
 
 Codex's previous reply in this chat, its last part:
@@ -55,4 +59,4 @@ The prompt:
 {{PROMPT}}
 </prompt>
 
-Answer in the given JSON shape: why is the deciding reason in at most 12 plain words, in the language of the prompt; then keep, model and effort.
+Return keep, model and effort in the given JSON shape. Use the exact ID from the list for model.
