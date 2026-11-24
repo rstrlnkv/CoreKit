@@ -7,6 +7,8 @@ full detail.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-25
+
 Codex: an update keeps the hooks off until you trust them again in `/hooks`.
 
 ### Added
