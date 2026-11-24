@@ -2,7 +2,7 @@
 # coremodel in Codex: Codex hooks cannot switch the model, so this UserPromptSubmit hook asks a small
 # model (the lightest visible one, one `codex exec` call) which model and effort the prompt needs and adds one line of
 # context: "switch with /model". It stays silent when the current model is the one it would name or a
-# stronger one. It never blocks the prompt: any failure is silent, exit 0.
+# stronger one. Confirm mode can pause the prompt once. Classifier failures pass silently.
 # - A whole greeting, thanks, approval or "go on" (codex/replies.txt) gets no call at all.
 # - The same script on Stop keeps the last 600 bytes of Codex's reply, per session, until the next
 #   prompt; a short prompt (at most 8 words) sends it along, a longer one stands on its own.
@@ -32,10 +32,12 @@ read_key() {
   [ -n "$1" ] && [ -f "$1" ] && [ -r "$1" ] || return 0
   tr -d '\r' < "$1" | sed -n "s/^[[:space:]]*$2[[:space:]]*:[[:space:]]*\(.*[^[:space:]]\)[[:space:]]*\$/\1/p" | head -1
 }
-on="$(read_key "$(settings_file "${COREMODEL_CONFIG:-}" coremodel)" codex_hint)"
+settings="$(settings_file "${COREMODEL_CONFIG:-}" coremodel)"
+on="$(read_key "$settings" codex_hint)"
 # the corecrew file is the fallback, found the way corecrew's lib.sh does (coremodel does not need corecrew)
 [ -n "$on" ] || on="$(read_key "$(settings_file "${CORECREW_CONFIG:-}" corecrew)" coremodel_mode)"
 [ "$on" = on ] || exit 0
+confirm="$(read_key "$settings" codex_confirm)"
 
 tmp="$(mktemp -d 2>/dev/null)" || exit 0
 wd=""; cp=""
@@ -51,7 +53,7 @@ head -c 262144 > "$tmp/in" 2>/dev/null || exit 0
 # Linear in the input: strings are read in chunks; of the prompt and the reply only the first and the last
 # bytes are kept. Writes the prompt (cut in the middle past 4000 bytes) on UserPromptSubmit and the last
 # 600 bytes of the reply, blanks folded, on Stop; the event name, the model and the session id on both.
-LC_ALL=C awk -v d="$tmp" '
+LC_ALL=C awk -v d="$tmp" -v confirm="$confirm" '
 function hexv(h,  k, c, n) { n = 0; h = tolower(h)
   for (k = 1; k <= length(h); k++) { c = index("0123456789abcdef", substr(h, k, 1)); if (!c) return -1; n = n * 16 + c - 1 }
   return n }
@@ -105,11 +107,15 @@ END {
       while (substr(s, j, 1) ~ /[ \t\r\n]/) j++
       if (depth == 1 && substr(s, j, 1) == ":") {
         j++; while (substr(s, j, 1) ~ /[ \t\r\n]/) j++
-        if ((key == "prompt" || key == "last_assistant_message" || key == "hook_event_name" || key == "model" || key == "session_id") && substr(s, j, 1) == "\"") {
+        if ((key == "prompt" || key == "last_assistant_message" || key == "hook_event_name" || key == "model" || key == "reasoning_effort" || key == "session_id") && substr(s, j, 1) == "\"") {
           i = j; cap = (key == "prompt" || key == "last_assistant_message"); F = ""; T = ""; tl = 0; nonblank = 0
           str(); cap = 0; if (!OK) break
-          if (key == "prompt") { have = 1; prompt_ok = nonblank; pF = F; pT = T; ptl = tl }
+          if (key == "prompt") {
+            # Identify the whole prompt even when the classifier receives a shortened copy.
+            if (confirm == "on") printf "%s", substr(s, j, i-j) > (d "/prompt-id")
+            have = 1; prompt_ok = nonblank; pF = F; pT = T; ptl = tl }
           else if (key == "last_assistant_message") { rF = F; rT = T; rtl = tl }
+          else if (key == "reasoning_effort") effort = V
           else if (key == "model") mdl = V; else if (key == "session_id") sid = V; else ev = V
         } else i = j
       }
@@ -132,6 +138,7 @@ END {
   } else exit 1
   printf "%s", ev > (d "/ev")
   printf "%s", mdl > (d "/model")
+  printf "%s", effort > (d "/effort")
   printf "%s", sid > (d "/sid")
 }' < "$tmp/in" 2>/dev/null || exit 0
 ev="$(cat "$tmp/ev" 2>/dev/null)"
@@ -166,6 +173,23 @@ if [ -n "$sd" ] && [ -f "$sd/$sid" ]; then
   rm -f "$sd/$sid"
 fi
 [ -s "$tmp/prompt" ] || exit 0
+
+# Claim the previous offer by rename. A retry in this session is allowed through once.
+od=""; sum=""
+if [ "$confirm" = on ] && [ -n "$sd" ]; then
+  od="${sd%/*}/codex-offered"
+  sum="$(cksum < "$tmp/prompt-id" 2>/dev/null)"
+  if [ -f "$od/$sid" ]; then
+    claim="$(mktemp "$od/.claim.XXXXXX" 2>/dev/null)"
+    if [ -n "$claim" ]; then
+      match=""
+      if mv -f "$od/$sid" "$claim" 2>/dev/null && [ -n "$sum" ] &&
+         [ -n "$(find "$claim" -mmin -10 2>/dev/null)" ] && [ "$(cat "$claim" 2>/dev/null)" = "$sum" ]; then match=1; fi
+      rm -f "$claim"
+      [ -z "$match" ] || exit 0
+    fi
+  fi
+fi
 
 # A whole prompt of at most 8 words made only of replies.txt phrases (case, punctuation and ё/е ignored,
 # phrases in any order) brings no new work: no call.
@@ -259,7 +283,8 @@ for m in "${ladder[@]}"; do
   top="$m"
 done
 now="$(rank "$(cat "$tmp/model" 2>/dev/null)")"
-[ "$now" -lt "$(rank "$top")" ] || exit 0
+[ -n "$top" ] || exit 0
+[ "$confirm" = on ] || [ "$now" -lt "$(rank "$top")" ] || exit 0
 
 models=""; enum=""; choices=""
 for m in "$luna" "$sol" "$astra"; do
@@ -296,20 +321,26 @@ if [ -n "${supported// /}" ]; then
     case "$supported" in *" $level "*) classifier_effort="$level"; break ;; esac
   done
 fi
+mkdir "$tmp/work" || exit 0
+schema="$(cd "$tmp" && pwd -P)/schema.json"
 set -m
-codex exec --model "$classifier" --sandbox read-only --skip-git-repo-check --ephemeral --ignore-user-config -c "model_reasoning_effort=\"$classifier_effort\"" -c 'project_doc_max_bytes=0' --output-schema "$tmp/schema.json" - < "$tmp/full" > "$tmp/ans" 2>/dev/null &
+(
+  cd "$tmp/work" || exit 1
+  exec codex exec --model "$classifier" --sandbox read-only --skip-git-repo-check --ephemeral --ignore-user-config -c "model_reasoning_effort=\"$classifier_effort\"" -c 'project_doc_max_bytes=0' --output-schema "$schema" -
+) < "$tmp/full" > "$tmp/ans" 2>/dev/null &
 cp=$!
 ( set +m; sleep "$to"; kill_group "$cp" ) > /dev/null 2>&1 &
 wd=$!
-wait "$cp" 2>/dev/null; cp=""
+wait "$cp" 2>/dev/null; classifier_rc=$?; cp=""
 kill_group "$wd"; wait "$wd" 2>/dev/null; wd=""
 set +m
+[ "$classifier_rc" -eq 0 ] || exit 0
 
 # the first flat {...} of the answer
 obj="$(tr '\n' ' ' < "$tmp/ans" 2>/dev/null | sed -n 's/^[^{]*\({[^{}]*}\).*$/\1/p')"
 [ -n "$obj" ] || exit 0
 val() { printf '%s' "$obj" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([A-Za-z0-9.-]*\).*/\1/p" | tr 'A-Z' 'a-z'; }
-[ "$(val keep)" = true ] && exit 0
+[ "$(val keep)" = false ] || exit 0
 md="$(val model)"; ef="$(val effort)"
 case "$models" in *" $md "*) ;; *) exit 0 ;; esac
 case "$ef" in low|medium|high|xhigh|max) ;; *) exit 0 ;; esac
@@ -327,9 +358,25 @@ if [ -n "$effs" ]; then
        ef="$lv" ;;
   esac
 fi
-# the current model fits already (it is the pick or a stronger one): nothing to say. Codex does not tell
-# the hook the current effort, so the effort is named, never compared.
-[ "$now" -eq 0 ] || [ "$now" -lt "$(rank "$md")" ] || exit 0
+# Confirm mode checks both selections, including downward changes. Older hosts omit effort.
+if [ "$confirm" = on ]; then
+  current_model="$(cat "$tmp/model")"; current_effort="$(cat "$tmp/effort")"
+  [ "$current_model" != "$md" ] || [ "$current_effort" != "$ef" ] || exit 0
+  if [ -n "$od" ] && [ -n "$sum" ] && mkdir -p "${od%/*}" 2>/dev/null &&
+     { [ -d "$od" ] || mkdir -m 700 "$od" 2>/dev/null; }; then
+    find "$od" -type f -mtime +0 -exec rm -f {} + 2>/dev/null
+    f="$(mktemp "$od/.new.XXXXXX" 2>/dev/null)"
+    if [ -n "$f" ] && printf '%s' "$sum" > "$f" && mv -f "$f" "$od/$sid" 2>/dev/null; then
+      detail=""
+      if [ "$current_model" = "$md" ] && [ -z "$current_effort" ]; then detail=" Codex does not report the current effort."; fi
+      printf '{"decision":"block","reason":"coremodel: this prompt needs %s at %s effort.%s Check /model, then send the same prompt again to proceed with your chosen settings."}\n' "$md" "$ef" "$detail"
+      exit 0
+    fi
+    [ -z "$f" ] || rm -f "$f"
+  fi
+else
+  [ "$now" -eq 0 ] || [ "$now" -lt "$(rank "$md")" ] || exit 0
+fi
 # systemMessage is the line for clients that show hook warnings. Codex Desktop does not show it in the chat, so
 # additionalContext, which only the model reads, asks the model to name the pick in its first visible message.
 msg="coremodel: this prompt needs $md at $ef effort; switch with /model if the current one differs."

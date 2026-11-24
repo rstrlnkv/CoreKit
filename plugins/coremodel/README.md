@@ -174,7 +174,7 @@ Control (the phone or the web) are never checked. Errors go to Claude Code's deb
 
 ## Codex
 
-In Codex the plugin gives a **hint only**, and it is **off until you turn it on**. Codex hooks leave
+Codex recommendations are **off until you enable them**. Codex hooks leave
 model and effort changes to you. The hint makes a separate model call for prompts it checks. A
 `UserPromptSubmit` hook (`codex/hint.sh`) asks the lightest visible model in its ranking (`codex exec`, read-only) which model and
 effort the prompt needs. It sends a warning with the model ID, effort and the `/model` command.
@@ -188,8 +188,13 @@ Install: `codex plugin marketplace add rstrlnkv/CoreKit`, then `codex plugin add
 - Turn it on with `codex_hint: on` in `~/.config/coremodel/settings` (`$XDG_CONFIG_HOME/coremodel/settings`
   when that is set; `COREMODEL_CONFIG` names another file). Without that key, `coremodel_mode: on` in
   the corecrew settings file (`~/.config/corecrew/settings`) turns it on too; `codex_hint: off` wins.
+- To pause before a prompt runs, also set `codex_confirm: on` in the CoreModel settings file.
+  When the suggested model or effort differs, Codex stops the prompt and shows the recommendation.
+  Check `/model`, then resend the same prompt within ten minutes to proceed once with your chosen settings.
+  If Codex omits the current effort, the hook asks you to check it even when the model matches.
+  A keep decision passes. If the hook cannot save the retry marker, it gives a hint.
 - From lightest to strongest, the hint ranks GPT-6 Luna, GPT-6.1 Sol, GPT-6.2 Sol, GPT-6 Astra
-  and GPT-6.2 Astra. It skips the call when no offered model is stronger than
+  and GPT-6.2 Astra. In hint-only mode it skips the call when no offered model is stronger than
   your current model. For a current model outside this list, it can still give a hint. Codex does
   not pass your current effort to hooks.
 - A prompt that is only a greeting, thanks, an approval or "go on" ("привет", "да, давай", "ok, go
@@ -204,7 +209,7 @@ Install: `codex plugin marketplace add rstrlnkv/CoreKit`, then `codex plugin add
 - Codex shows "coremodel: choosing a model" while it runs. The nested call takes about 8 seconds; it
   runs with `--ignore-user-config` and low reasoning effort (or an available level when low is missing), so it does not load your config, MCP
   servers or other plugins' hooks (your login still works). It waits at most 20 seconds
-  (`COREMODEL_HINT_TIMEOUT`); any failure is silent and the prompt goes on. The nested call also
+  (`COREMODEL_HINT_TIMEOUT`); any failure is silent and the prompt goes on. The classifier starts in a new empty temporary folder for each call. The hook removes it after use. The nested call also
   ignores the `model_provider` of your Codex config, so it always goes to OpenAI with your Codex
   login, whatever provider your config names; without an OpenAI login (Bedrock, a gateway, a local
   model) leave the hint off, because it gives no hint and can hold each checked prompt for up to
@@ -226,6 +231,7 @@ Codex's previous reply:
 The `Stop` hook keeps those 600 bytes in `~/.local/state/coremodel/codex-replies/<session id>`
 (`$XDG_STATE_HOME` when set; the folder is readable only by you) until your next prompt in that chat,
 which removes the file whether or not it was sent. A reply at least a day old is discarded before use.
+Confirm mode stores a checksum of the blocked prompt under the same state root in `coremodel/codex-offered/<session id>`.
 Each `Stop` also removes expired replies from other chats. Nothing is kept while the hint is off.
 
 ## Requirements
@@ -236,13 +242,13 @@ Each `Stop` also removes expired replies from other chats. Nothing is kept while
   If you enable the Codex hint, it sends each checked prompt to OpenAI with
   `codex exec`. The hint needs `bash` and the `codex` CLI.
 - **Permissions:** it asks for none beyond the plugin hooks. It puts the pick on this chat's requests only and never writes your model or effort setting.
-- **Changes outside its own folder:** none in Claude Code; its log lines go to Claude Code's debug log. In Codex, with the hint on, the end of Codex's last reply waits in `~/.local/state/coremodel/codex-replies/` until your next prompt (see [Codex](#codex)).
+- **Changes outside its own folder:** none in Claude Code; its log lines go to Claude Code's debug log. In Codex, with the hint on, confirm mode can store a retry checksum and the end of Codex's last reply waits in `~/.local/state/coremodel/codex-replies/` until your next prompt (see [Codex](#codex)).
 
 ## Uninstall
 
 `claude plugin uninstall coremodel@corekit` (or `/plugin` → Installed → coremodel → Uninstall). Your
 model and effort settings were never changed, so nothing needs undoing. In Codex: `codex plugin remove coremodel@corekit`. For Codex, remove the
-`codex_hint` line from `~/.config/coremodel/settings` if you added it, and the folder
+`codex_hint` and `codex_confirm` lines from `~/.config/coremodel/settings` if you added it, and the folder
 `~/.local/state/coremodel/` if it is there.
 
 ## Development

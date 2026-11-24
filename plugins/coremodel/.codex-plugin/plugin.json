@@ -1,7 +1,7 @@
 {
   "name": "coremodel",
   "version": "0.11.1",
-  "description": "Hints which Codex model and effort a prompt needs; you switch with /model. Off until you turn it on.",
+  "description": "Suggests a Codex model and effort, with an optional pause to review the choice in /model.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",
   "repository": "https://github.com/rstrlnkv/CoreKit",

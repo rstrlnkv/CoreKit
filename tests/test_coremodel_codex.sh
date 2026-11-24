@@ -118,11 +118,14 @@ cat > "$BIN/codex" <<'STUB'
 #!/bin/bash
 # fake codex: records argv (NUL-separated), stdin, COREMODEL_NESTED; answers with $STUB_ANSWER (or fails as $STUB_MODE says)
 echo x >> "$STUB_DIR/calls"
+pwd -P > "$STUB_DIR/classifier-cwd"
+find . ! -name . -prune -print > "$STUB_DIR/classifier-files"
 printf '%s\0' "$@" > "$STUB_DIR/argv"
 cat > "$STUB_DIR/stdin"
 echo "NESTED=${COREMODEL_NESTED:-}" > "$STUB_DIR/env"
 echo $$ > "$STUB_DIR/pid"
 case "${STUB_MODE:-ok}" in
+  partial) cat "$STUB_DIR/answer"; exit 1 ;;
   fail) echo "boom" >&2; exit 1 ;;
   empty) exit 0 ;;
   sleep) sleep 10.37 & echo $! > "$STUB_DIR/sleep.pid"; wait $!; exit 0 ;;
@@ -178,6 +181,8 @@ answer '{"keep":false,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')"
 assert_eq "$RC" "0" "main: exit 0"
 assert_eq "$(ncalls)" "1" "main: codex called once"
+assert_eq "$(cat "$SANDBOX/classifier-files")" "" "classifier starts in an empty folder"
+assert_no_file "$(cat "$SANDBOX/classifier-cwd")"
 if [ -f "$ARGV" ]; then
   tr '\0' '\n' < "$ARGV" > "$SANDBOX/argv.txt"
   assert_eq "$(sed -n 1p "$SANDBOX/argv.txt")" "exec" "main: first argument is exec"
@@ -694,6 +699,133 @@ if [ -n "$slp" ] && ! poll 50 gone "$slp"; then fail "SIGTERM: the stub's sleep 
 decoy_kept SIGTERM   # the others are gone or were killed above
 # the limit is clamped to 20 s
 if grep -qE 'to=20' "$HINT" && grep -q -- '-gt 20' "$HINT"; then pass; else fail "COREMODEL_HINT_TIMEOUT is not clamped to 20"; fi
+
+# ---- C5. confirm: block the prompt once, the person switches, the same prompt goes through ----
+# Codex hooks have no field that switches the model or asks a question (checked on codex 0.166.0 and 0.167.0-alpha.3.2:
+# the UserPromptSubmit output schema holds continue, decision "block", reason, stopReason, suppressOutput, systemMessage,
+# hookSpecificOutput.additionalContext). So "confirm" is: block once with a reason, remember the prompt, let the same
+# prompt through when it comes again. Off until `codex_confirm: on` (and the hint itself is on). A block that cannot be
+# remembered would trap the person: then it falls back to the plain hint.
+echo "  -- C5. confirm"
+CONF_SF="$SANDBOX/coremodel-confirm"; printf 'codex_hint: on\ncodex_confirm: on\n' > "$CONF_SF"
+CONF_ONLY_SF="$SANDBOX/coremodel-confirm-only"; printf 'codex_confirm: on\n' > "$CONF_ONLY_SF"
+MARKS="$STATE/coremodel/codex-offered"
+# cevent <session> <prompt> [model] — a prompt in that session, from the current model (default gpt-6.1-sol)
+cevent() { printf '{"session_id":"%s","turn_id":"t","cwd":"/tmp","hook_event_name":"UserPromptSubmit","model":"%s","permission_mode":"default","transcript_path":null,"prompt":"%s"}' "$1" "${3:-gpt-6.1-sol}" "$(json_esc "$2")"; }
+blocked() { # blocked <label> <model> <effort> — one-line block object that names the pick, and nothing else on stdout
+  local o; o="$(cat "$SANDBOX/out")"
+  assert_eq "$RC" "0" "$1: exit 0"
+  case "$o" in
+    '{"decision":"block","reason":"coremodel: this prompt needs '"$2"' at '"$3"' effort'*'"}') pass ;;
+    *) fail "$1: stdout is not the block object for $2/$3: $o" ;;
+  esac
+  assert_eq "$(printf '%s' "$o" | wc -l | tr -d ' ')" "0" "$1: stdout is one line"
+  json_ok "$SANDBOX/out" && pass || fail "$1: stdout is not valid JSON"
+  case "$o" in *'/model'*) pass ;; *) fail "$1: the reason does not say how to switch (/model)" ;; esac
+  case "$o" in *'send'*'again'*) pass ;; *) fail "$1: the reason does not say to send the prompt again" ;; esac
+  assert_not_contains "$SANDBOX/out" 'hookSpecificOutput'   # a block carries no additionalContext: the prompt does not run
+  assert_not_contains "$SANDBOX/out" 'fix the flaky login test'   # the prompt is not printed back
+}
+plain_hint() { # plain_hint <label> — the old output: additionalContext, never a block
+  assert_eq "$RC" "0" "$1: exit 0"
+  assert_contains "$SANDBOX/out" '"hookSpecificOutput"'
+  assert_not_contains "$SANDBOX/out" '"decision"'
+}
+answer '{"why":"flaky test, cause unknown","keep":false,"model":"gpt-6-astra","effort":"high"}'
+
+# off by default: with codex_hint alone the output is the plain hint (the main check above), never a block
+run_hint "$PATHSTUB" "$(cevent c1 'fix the flaky login test')"
+plain_hint "confirm off"
+# the confirm key alone does nothing: the hint (the classifier) is off
+run_hint "$PATHSTUB" "$(cevent c1 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_ONLY_SF"
+silent "confirm without codex_hint"; assert_eq "$(ncalls)" "0" "confirm without codex_hint: Luna not called"
+assert_no_file "$MARKS/c1"
+
+# first send: blocked, and the prompt is remembered (as a hash, in a private file)
+rm -rf "$STATE"
+run_hint "$PATHSTUB" "$(cevent c1 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_SF"
+blocked "first send" gpt-6-astra high
+assert_eq "$(ncalls)" "1" "first send: Luna asked once"
+assert_file "$MARKS/c1"
+assert_not_contains "$MARKS/c1" 'fix the flaky login test'
+case "$(ls -ld "$MARKS" | cut -c1-10)" in drwx------) pass ;; *) fail "the offered folder is not private: $(ls -ld "$MARKS")" ;; esac
+case "$(ls -l "$MARKS/c1" | cut -c1-10)" in -rw-------) pass ;; *) fail "the offered mark is not private: $(ls -l "$MARKS/c1")" ;; esac
+
+# the same prompt again, same session: it goes through, with no classifier call and no output; the mark is used once
+run_hint "$PATHSTUB" "$(cevent c1 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_SF"
+silent "resend"; assert_eq "$(ncalls)" "0" "resend: Luna not called"
+assert_no_file "$MARKS/c1"
+# a third time is a new offer
+run_hint "$PATHSTUB" "$(cevent c1 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_SF"
+blocked "third send" gpt-6-astra high
+assert_eq "$(ncalls)" "1" "third send: Luna asked again"
+
+# a different prompt after an offer is judged on its own (and offered again), not waved through
+run_hint "$PATHSTUB" "$(cevent c1 'fix the flaky login test, then the signup test')" COREMODEL_CONFIG="$CONF_SF"
+blocked "other prompt" gpt-6-astra high
+assert_eq "$(ncalls)" "1" "other prompt: Luna asked"
+# another session's offer does not let this prompt through
+run_hint "$PATHSTUB" "$(cevent c2 'fix the flaky login test, then the signup test')" COREMODEL_CONFIG="$CONF_SF"
+blocked "other session" gpt-6-astra high
+assert_eq "$(ncalls)" "1" "other session: Luna asked"
+assert_file "$MARKS/c1"; assert_file "$MARKS/c2"
+
+# The middle of a long prompt can change even when its classifier excerpt stays the same.
+long_edge="$(reps 2100 a)"
+for middle in first second; do
+  run_hint "$PATHSTUB" "$(cevent long "$long_edge $middle $long_edge")" COREMODEL_CONFIG="$CONF_SF"
+  blocked "long prompt with $middle middle" gpt-6-astra high
+done
+
+# a stale offer is ignored: the prompt is judged and offered again
+run_hint "$PATHSTUB" "$(cevent c3 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_SF"
+blocked "stale: offer" gpt-6-astra high
+touch -t 200001010000 "$MARKS/c3"
+run_hint "$PATHSTUB" "$(cevent c3 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_SF"
+blocked "stale: after the limit" gpt-6-astra high
+assert_eq "$(ncalls)" "1" "stale: Luna asked again"
+
+# A known matching pair passes. Older clients omit effort, so a single confirmation lets the person check it.
+pair_event() { printf '%s' "$(cevent c4 'test the queue' gpt-6-astra)" | sed "s/^{/{\"reasoning_effort\":\"$1\",/"; }
+run_hint "$PATHSTUB" "$(pair_event high)" COREMODEL_CONFIG="$CONF_SF"
+silent "matching model and effort"
+run_hint "$PATHSTUB" "$(pair_event low)" COREMODEL_CONFIG="$CONF_SF"
+blocked "different effort on the same model" gpt-6-astra high
+run_hint "$PATHSTUB" "$(cevent c7 'test the queue' gpt-6-astra)" COREMODEL_CONFIG="$CONF_SF"
+blocked "unknown effort on highest model" gpt-6-astra high
+assert_contains "$SANDBOX/out" 'does not report the current effort'
+answer '{"keep":false,"model":"gpt-6-luna","effort":"low"}'
+run_hint "$PATHSTUB" "$(cevent c8 'rename the variable')" COREMODEL_CONFIG="$CONF_SF"
+blocked "different lighter model" gpt-6-luna low
+# keep: nothing to say and nothing remembered
+answer '{"why":"picks an offered option","keep":true,"model":"gpt-6-astra","effort":"high"}'
+run_hint "$PATHSTUB" "$(cevent c4 'option 2')" COREMODEL_CONFIG="$CONF_SF"
+silent "keep"; assert_no_file "$MARKS/c4"
+answer '{"why":"flaky test, cause unknown","keep":false,"model":"gpt-6-astra","effort":"high"}'
+
+# a legitimate prompt always passes: a whole approval is never blocked (no call, no mark), nested calls stay silent
+run_hint "$PATHSTUB" "$(cevent c4 'да, давай')" COREMODEL_CONFIG="$CONF_SF"
+silent "approval"; assert_eq "$(ncalls)" "0" "approval: Luna not called"; assert_no_file "$MARKS/c4"
+run_hint "$PATHSTUB" "$(cevent c4 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_SF" COREMODEL_NESTED=1
+silent "nested"; assert_eq "$(ncalls)" "0" "nested: Luna not called"; assert_no_file "$MARKS/c4"
+
+# the classifier fails or says nothing: the prompt goes through, nothing is remembered
+for mode in fail empty partial; do
+  run_hint "$PATHSTUB" "$(cevent c5 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_SF" STUB_MODE=$mode
+  silent "classifier $mode"; assert_no_file "$MARKS/c5"
+done
+
+# a block that cannot be remembered would trap the person (the resend would be blocked again): fall back to the plain hint
+# - the state folder cannot be made
+: > "$SANDBOX/not-a-folder"
+run_hint "$PATHSTUB" "$(cevent c6 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_SF" XDG_STATE_HOME="$SANDBOX/not-a-folder"
+plain_hint "state folder unusable"
+# - the event has no usable session id
+run_hint "$PATHSTUB" "$(hook_event codex UserPromptSubmit /tmp prompt='fix the flaky login test' | sed 's/"session_id":"[^"]*",\{0,1\}//')" COREMODEL_CONFIG="$CONF_SF"
+plain_hint "no session id"
+run_hint "$PATHSTUB" "$(cevent '../up' 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_SF"
+plain_hint "unsafe session id"
+assert_no_file "$STATE/coremodel/up"
 
 # ---- D. hint.sh is a bash script (tests/test_portability.sh scans it) ----
 echo "  -- D. hint.sh is a bash script"

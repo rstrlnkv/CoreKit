@@ -9,7 +9,13 @@ full detail.
 
 Codex: an update keeps the hooks off until you trust them again in `/hooks`.
 
+### Added
+
+- Enable `codex_confirm` with the Codex hint to pause a prompt for model and effort review. Resending the same prompt once accepts the current settings.
+
 ### Fixed
+
+- Each Codex classifier call starts in an empty temporary folder.
 
 - Codex reads catalog entries in any field order and runs the classifier on the lightest visible
   supported model. A resumed chat discards expired reply context. Timeouts and interruptions stop

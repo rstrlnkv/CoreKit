@@ -1,0 +1,16 @@
+{"id":"rename-en","lang":"en","prompt":"Change the billing page heading from Invoice history to Past invoices.","expected":"luna:low"}
+{"id":"rename-ru","lang":"ru","prompt":"Замени заголовок «История счетов» на «Прошлые счета».","expected":"luna:low"}
+{"id":"export-en","lang":"en","prompt":"Add a CSV export button to the orders page using the existing customers export as the example.","expected":"sol:medium"}
+{"id":"export-ru","lang":"ru","prompt":"Добавь кнопку выгрузки заказов в CSV по образцу существующей выгрузки клиентов.","expected":"sol:medium"}
+{"id":"duplicate-en","lang":"en","prompt":"After the worker restarts a few orders get billed twice. Find out why and fix it.","expected":"astra:high"}
+{"id":"duplicate-ru","lang":"ru","prompt":"После перезапуска обработчика у нескольких заказов дважды списываются деньги. Найди причину и исправь.","expected":"astra:high"}
+{"id":"option-en","lang":"en","reply":"For the menu I can use a drawer or a dropdown. Which do you prefer?","prompt":"Let's use the dropdown.","expected":"keep"}
+{"id":"option-ru","lang":"ru","reply":"Для меню могу сделать боковую панель или выпадающий список. Что выбрать?","prompt":"Давай выпадающий список.","expected":"keep"}
+{"id":"new-work-en","lang":"en","reply":"The report now opens correctly.","prompt":"Great, also investigate why totals sometimes double.","expected":"astra:high"}
+{"id":"new-work-ru","lang":"ru","reply":"Отчёт теперь открывается правильно.","prompt":"Да, ещё выясни, почему иногда удваиваются суммы.","expected":"astra:high"}
+{"id":"deploy-en","lang":"en","prompt":"Deploy the release to production following every step of our approved checklist.","expected":"sol:high"}
+{"id":"deploy-ru","lang":"ru","prompt":"Выкати релиз в прод по готовой утверждённой инструкции, выполни каждый шаг.","expected":"sol:high"}
+{"id":"mro-en","lang":"en","prompt":"In the MRO documentation, correct “all the class” to “all the classes”.","expected":"luna:low"}
+{"id":"mro-ru","lang":"ru","prompt":"Исправь в документации по MRO «all the class» на «all the classes».","expected":"luna:low"}
+{"id":"working-directory-ru","lang":"ru","prompt":"Запускай классификатор из пустой временной папки.","expected":"sol:medium"}
+{"id":"working-directory-en","lang":"en","prompt":"Run the classifier from an empty temporary directory.","expected":"sol:medium"}

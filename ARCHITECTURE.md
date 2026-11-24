@@ -112,7 +112,7 @@ Each hook rule, by host (the test file holds the cases of both hosts):
 
 - **Manifests.** Each host reads its own manifest. The shared fields (name, version, description,
   licence) must match; `tests/test_manifest.sh` checks it. coremodel's Codex description differs
-  on purpose: in Codex it only hints. A root `plugin.json` would make Codex skip the hooks, so there
+  on purpose: in Codex it recommends a model and effort and can pause the prompt for confirmation. A root `plugin.json` would make Codex skip the hooks, so there
   is none.
 - **Hooks in Codex.** Codex fires PreToolUse for its shell (`Bash`) and for `apply_patch`; it has no
   read, search or list tools to hook. The guards therefore read `apply_patch` patches with
