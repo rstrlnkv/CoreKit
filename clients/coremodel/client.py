@@ -145,12 +145,16 @@ class AppServer:
 
 def catalog(server, path):
     models = {}
+    defaults = {}
     cursor = None
     while True:
         page = server.request("model/list", {"cursor": cursor})
         for row in page["data"]:
             if not row.get("hidden"):
+                defaults[row["model"]] = row["defaultReasoningEffort"]
                 models[row["model"]] = [e["reasoningEffort"] for e in row["supportedReasoningEfforts"]]
+                if not models[row["model"]]:
+                    models[row["model"]] = [defaults[row["model"]]]
         cursor = page.get("nextCursor")
         if not cursor:
             break
@@ -159,7 +163,7 @@ def catalog(server, path):
          "supported_reasoning_levels": [{"effort": e} for e in efforts]}
         for name, efforts in models.items()
     ]}))
-    return models
+    return models, defaults
 
 
 def recommend(bash, prompt, model, reply, catalog_file, models):
@@ -181,32 +185,109 @@ def recommend(bash, prompt, model, reply, catalog_file, models):
     return None
 
 
+def choose(label, options, recommended, current):
+    print(f"Choose {label}:")
+    for number, value in enumerate(options, 1):
+        marks = [name for name, choice in (("recommended", recommended), ("current", current))
+                 if value == choice]
+        suffix = f" ({', '.join(marks)})" if marks else ""
+        print(f"  {number}. {value}{suffix}")
+    while True:
+        try:
+            answer = input("Enter a number or name (c to cancel): ").strip()
+        except KeyboardInterrupt:
+            print()
+            return None
+        if answer == "c":
+            return None
+        if answer in options:
+            return answer
+        if answer.isascii() and answer.isdecimal() and len(answer) <= len(str(len(options))):
+            number = int(answer)
+            if 1 <= number <= len(options):
+                return options[number - 1]
+
+
+def edit_prompt(draft):
+    if not draft:
+        return input("> ")
+    if sys.stdin.isatty():
+        try:
+            import readline
+        except ImportError:
+            pass
+        else:
+            readline.set_startup_hook(lambda: readline.insert_text(draft))
+            try:
+                return input("> ")
+            finally:
+                readline.set_startup_hook(None)
+    print(f"Draft: {draft}")
+    return input("Edit the draft, or press Enter to resubmit it: ") or draft
+
+
+def routing_settings(bash):
+    result = subprocess.run([bash, HOOK.as_posix(), "--settings"], check=True,
+                            capture_output=True, encoding="utf-8")
+    settings = json.loads(result.stdout)
+    return settings["mode"], settings["pickModel"]
+
+
 def chat(server, bash, auto, catalog_file):
     server.request("initialize", {"clientInfo": {"name": "coremodel_terminal", "version": "1"}})
     server.send({"method": "initialized"})
-    models = catalog(server, catalog_file)
+    mode, pick_model = routing_settings(bash)
+    if auto and mode != "off":
+        mode = "auto"
+    models, defaults = catalog(server, catalog_file)
     thread = server.request("thread/start", {"cwd": str(Path.cwd())})
     thread_id = thread["thread"]["id"]
-    current = thread["model"], thread.get("reasoningEffort")
+    baseline_model = thread["model"]
+    baseline_effort = thread.get("reasoningEffort")
+    restore_effort = baseline_effort or defaults.get(baseline_model)
+    active = baseline_model, restore_effort
     reply = ""
+    draft = ""
     while True:
-        prompt = input("> ")
+        prompt = edit_prompt(draft)
+        draft = ""
         if not prompt.strip():
             continue
-        pick = recommend(bash, prompt, current[0], reply, catalog_file, models)
-        params = {"threadId": thread_id, "input": [{"type": "text", "text": prompt}]}
-        if pick and pick != current:
+        model, effort = baseline_model, baseline_effort
+        pick = None if mode == "off" else recommend(bash, prompt, model, reply, catalog_file, models)
+        if pick and (pick_model or pick[0] == model) and pick != (model, effort):
             print(f"CoreModel recommends {pick[0]} · {pick[1]}.", flush=True)
-            answer = "y" if auto else ""
-            while answer not in ("y", "n", "c"):
-                answer = input("Apply [y], keep current [n], cancel [c]? ").strip().lower()
-            if answer == "c":
-                continue
-            if answer == "y":
-                params.update(model=pick[0], effort=pick[1])
+            if mode == "auto":
+                model, effort = pick
+            else:
+                effort_only = not pick_model or (model == pick[0] and effort is None)
+                if not effort_only:
+                    options = list(models)
+                    if baseline_model not in models:
+                        options.append(baseline_model)
+                    model = choose("model", options, pick[0], model)
+                if model is None:
+                    draft = prompt
+                    continue
+                # An unlisted current model has no published effort options.
+                if model in models:
+                    effort = choose("effort", models[model], pick[1] if model == pick[0] else None,
+                                    effort if model == baseline_model else None)
+                    if effort is None:
+                        draft = prompt
+                        continue
+        if not restore_effort and (model, effort) != (baseline_model, baseline_effort):
+            print("Codex did not report a restorable effort for the current model. "
+                  f"In ordinary Codex enter /model {model} --reasoning={effort}, "
+                  f"then resend your prompt: {prompt}")
+            continue
+        # App Server can carry overrides forward. Restore the chat baseline explicitly.
+        params = {"threadId": thread_id, "input": [{"type": "text", "text": prompt}]}
+        effective_effort = effort or restore_effort
+        if active != (model, effective_effort):
+            params.update(model=model, effort=effective_effort)
         turn = server.request("turn/start", params)
-        if "model" in params:
-            current = pick
+        active = model, effective_effort
         reply = server.finish_turn(thread_id, turn["turn"]["id"])
 
 

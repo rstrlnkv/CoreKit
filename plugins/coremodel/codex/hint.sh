@@ -1,18 +1,6 @@
 #!/usr/bin/env bash
-# coremodel in Codex: Codex hooks cannot switch the model, so this UserPromptSubmit hook asks a small
-# model (the lightest visible one, one `codex exec` call) which model and effort the prompt needs and adds one line of
-# context: "switch with /model". It stays silent when the current model is the one it would name or a
-# stronger one. Confirm mode can pause the prompt once. Classifier failures pass silently.
-# - A whole greeting, thanks, approval or "go on" (codex/replies.txt) gets no call at all.
-# - The same script on Stop keeps the last 600 bytes of Codex's reply, per session, until the next
-#   prompt; a short prompt (at most 8 words) sends it along, a longer one stands on its own.
-# - The classifier prompt is codex/classifier.txt; the prompt and JSON Schema offer the preferred
-#   model in each tier listed in the client's catalog ($CODEX_HOME/models_cache.json, when readable).
-# Off until turned on, since it sends every prompt to a model once more: `codex_hint: on` in
-# ~/.config/coremodel/settings (COREMODEL_CONFIG names another file); without that key,
-# `coremodel_mode: on` in the corecrew settings file. COREMODEL_HINT_TIMEOUT seconds (default 20).
+# The native hook returns routing instructions; --recommend returns the decision to a standalone client.
 [ -z "${COREMODEL_NESTED:-}" ] || exit 0
-command -v codex >/dev/null 2>&1 || exit 0
 script="$0"
 case "$script" in
   [A-Za-z]:[\\/]*|\\\\*) command -v cygpath >/dev/null 2>&1 && script="$(cygpath -u "$script")" ;;
@@ -26,25 +14,33 @@ read_key() {
   [ -n "$1" ] && [ -f "$1" ] && [ -r "$1" ] || return 0
   tr -d '\r' < "$1" | sed -n "s/^[[:space:]]*$2[[:space:]]*:[[:space:]]*\(.*[^[:space:]]\)[[:space:]]*\$/\1/p" | head -1
 }
-# An explicit client call supplies a prompt event and optionally its last assistant reply.
-# Output: a validated {model,effort} pair, {"keep":true}, or empty on failure.
 mode=hook
-confirm=""
-if [ "${1:-}" = --recommend ]; then
-  mode=client
-else
-  settings="$(settings_file "${COREMODEL_CONFIG:-}" coremodel)"
+settings="$(settings_file "${COREMODEL_CONFIG:-}" coremodel)"
+routing="$(read_key "$settings" codex_mode)"
+pick_model=true
+[ "$(read_key "$settings" codex_pick_model)" != off ] || pick_model=false
+case "$routing" in ask|auto|off|'') ;; *) routing=off ;; esac
+case "${1:-}" in
+  --settings)
+    printf '{"mode":"%s","pickModel":%s}\n' "${routing:-ask}" "$pick_model"
+    exit 0 ;;
+  --recommend) mode=client ;;
+esac
+command -v codex >/dev/null 2>&1 || exit 0
+if [ "$mode" = hook ] && [ -z "$routing" ]; then
+  # Both legacy enabled modes migrate to ask. An explicit legacy off wins.
   on="$(read_key "$settings" codex_hint)"
-  # the corecrew file is the fallback, found the way corecrew's lib.sh does (coremodel does not need corecrew)
   [ -n "$on" ] || on="$(read_key "$(settings_file "${CORECREW_CONFIG:-}" corecrew)" coremodel_mode)"
   [ "$on" = on ] || exit 0
-  confirm="$(read_key "$settings" codex_confirm)"
 fi
+routing="${routing:-ask}"
 
 keep() {
   if [ "$mode" = client ]; then printf '%s\n' '{"keep":true}'; fi
   exit 0
 }
+
+[ "$routing" != off ] || keep
 
 tmp="$(mktemp -d 2>/dev/null)" || exit 0
 wd=""; cp=""
@@ -56,11 +52,8 @@ trap 'exit 143' INT TERM HUP
 
 head -c 262144 > "$tmp/in" 2>/dev/null || exit 0
 
-# the fields of the event: a small JSON reader (top-level keys only; \" \\ \/ \b \f \n \r \t \uXXXX).
-# Linear in the input: strings are read in chunks; of the prompt and the reply only the first and the last
-# bytes are kept. Writes the prompt (cut in the middle past 4000 bytes) on UserPromptSubmit and the last
-# 600 bytes of the reply, blanks folded, on Stop; the event name, the model and the session id on both.
-LC_ALL=C awk -v d="$tmp" -v confirm="$confirm" -v mode="$mode" '
+# Decode top-level JSON fields in chunks. Keep the ends of long prompts and the tail of the previous reply.
+LC_ALL=C awk -v d="$tmp" -v mode="$mode" '
 function hexv(h,  k, c, n) { n = 0; h = tolower(h)
   for (k = 1; k <= length(h); k++) { c = index("0123456789abcdef", substr(h, k, 1)); if (!c) return -1; n = n * 16 + c - 1 }
   return n }
@@ -119,7 +112,7 @@ END {
           str(); cap = 0; if (!OK) break
           if (key == "prompt") {
             # Identify the whole prompt even when the classifier receives a shortened copy.
-            if (confirm == "on") printf "%s", substr(s, j, i-j) > (d "/prompt-id")
+            if (mode == "hook") printf "%s", substr(s, j, i-j) > (d "/prompt-id")
             have = 1; prompt_ok = nonblank; pF = F; pT = T; ptl = tl }
           else if (key == "last_assistant_message") { rF = F; rT = T; rtl = tl }
           else if (key == "reasoning_effort") effort = V
@@ -182,10 +175,17 @@ fi
 
 # Claim the previous offer by rename. A retry in this session is allowed through once.
 od=""; sum=""
-if [ "$confirm" = on ] && [ -n "$sd" ]; then
+if [ -n "$sd" ]; then
   od="${sd%/*}/codex-offered"
   sum="$(cksum < "$tmp/prompt-id" 2>/dev/null)"
   if [ -f "$od/$sid" ]; then
+    # A numbered text-menu reply continues the dialog without consuming the task's retry.
+    if [ "$routing" = ask ] && grep -Eq '^[[:space:]]*[0-9]+[[:space:]]*$' "$tmp/prompt" &&
+       [ "$(wc -l < "$tmp/prompt")" -eq 0 ] &&
+       [ -n "$(find "$od/$sid" -mmin -10 2>/dev/null)" ] && [ "$(cat "$od/$sid" 2>/dev/null)" != "$sum" ]; then
+      if grep -Eq '^[[:space:]]*0[[:space:]]*$' "$tmp/prompt"; then rm -f "$od/$sid"; fi
+      exit 0
+    fi
     claim="$(mktemp "$od/.claim.XXXXXX" 2>/dev/null)"
     if [ -n "$claim" ]; then
       match=""
@@ -244,21 +244,13 @@ if [ -f "$catf" ] && [ -r "$catf" ]; then
 fi
 visible="$(awk '$2 == "list" { printf " %s ", $1 }' "$tmp/cat")"
 
-# Absolute rank is independent of which models the classifier can pick.
 ladder=(gpt-6-luna gpt-6.1-sol gpt-6.2-sol gpt-6-astra gpt-6.2-astra)
-rank() {
-  local i
-  for i in "${!ladder[@]}"; do
-    if [ "$1" = "${ladder[$i]}" ]; then printf '%s\n' "$((i + 1))"; return; fi
-  done
-  printf '0\n'
-}
 model_tier() {
   case "$1" in *-luna) printf 'Luna' ;; *-sol) printf 'Sol' ;; *-astra) printf 'Astra' ;; esac
 }
 
 # Later entries in the same tier take precedence when visible.
-luna=""; sol=""; astra=""; top=""; classifier=""
+luna=""; sol=""; astra=""; classifier=""
 for m in "${ladder[@]}"; do
   if [ -n "$have_catalog" ]; then
     case "$visible" in *" $m "*) ;; *) continue ;; esac
@@ -267,18 +259,29 @@ for m in "${ladder[@]}"; do
   fi
   case "$(model_tier "$m")" in Luna) luna="$m" ;; Sol) sol="$m" ;; Astra) astra="$m" ;; esac
   [ -n "$classifier" ] || classifier="$m"
-  top="$m"
 done
-now="$(rank "$(cat "$tmp/model" 2>/dev/null)")"
-[ -n "$top" ] || exit 0
-[ "$mode" = client ] || [ "$confirm" = on ] || [ "$now" -lt "$(rank "$top")" ] || exit 0
+current_model="$(cat "$tmp/model")"
+case "$current_model" in -*|*[!A-Za-z0-9._-]*) current_model="" ;; esac
+candidates=("$luna" "$sol" "$astra")
+if [ "$pick_model" = false ]; then
+  [ -n "$current_model" ] || keep
+  candidates=("$current_model")
+  # A non-ladder model can still classify its own effort when it is visible.
+  if [ -z "$classifier" ]; then
+    case "$visible" in *" $current_model "*) classifier="$current_model" ;; esac
+  fi
+fi
+[ -n "$classifier" ] || exit 0
 
 models=""; enum=""; choices=""
-for m in "$luna" "$sol" "$astra"; do
+for m in "${candidates[@]}"; do
   [ -n "$m" ] || continue
   models="$models $m "; enum="$enum${enum:+,}\"$m\""
   choices="$choices${choices:+$'\n'}- $(model_tier "$m"): $m"
 done
+if [ "$pick_model" = false ]; then
+  choices="$choices. The user locked this model. Judge effort specifically for this model."
+fi
 printf '{"type":"object","additionalProperties":false,"required":["keep","model","effort"],"properties":{"keep":{"type":"boolean"},"model":{"type":"string","enum":[%s]},"effort":{"type":"string","enum":["low","medium","high","xhigh","max"]}}}\n' "$enum" > "$tmp/schema.json"
 
 # The last reply goes only with a short prompt, which may lean on it; a missing one is said to be unknown
@@ -326,9 +329,10 @@ set +m
 # the first flat {...} of the answer
 obj="$(tr '\n' ' ' < "$tmp/ans" 2>/dev/null | sed -n 's/^[^{]*\({[^{}]*}\).*$/\1/p')"
 [ -n "$obj" ] || exit 0
-val() { printf '%s' "$obj" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([A-Za-z0-9.-]*\).*/\1/p" | tr 'A-Z' 'a-z'; }
+val() { printf '%s' "$obj" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([A-Za-z0-9._-]*\).*/\1/p" | tr 'A-Z' 'a-z'; }
 case "$(val keep)" in true) keep ;; false) ;; *) exit 0 ;; esac
 md="$(val model)"; ef="$(val effort)"
+[ -n "$md" ] || exit 0
 case "$models" in *" $md "*) ;; *) exit 0 ;; esac
 case "$ef" in low|medium|high|xhigh|max) ;; *) exit 0 ;; esac
 # an effort the catalog does not list for that model drops to the highest one it does list below it
@@ -349,35 +353,47 @@ if [ "$mode" = client ]; then
   printf '{"model":"%s","effort":"%s"}\n' "$md" "$ef"
   exit 0
 fi
-current_model="$(cat "$tmp/model")"
+current_effort="$(cat "$tmp/effort")"
+case "$current_effort" in none|minimal|low|medium|high|xhigh|max|ultra) ;; *) current_effort="" ;; esac
+[ "$current_model" != "$md" ] || [ "$current_effort" != "$ef" ] || exit 0
 model_command="/model $md --reasoning=$ef"
 if [ "$current_model" = "$md" ]; then model_command="/model --reasoning=$ef"; fi
 
-# Confirm mode checks both selections, including downward changes. Older hosts omit effort.
-if [ "$confirm" = on ]; then
-  current_effort="$(cat "$tmp/effort")"
-  [ "$current_model" != "$md" ] || [ "$current_effort" != "$ef" ] || exit 0
-  if [ -n "$od" ] && [ -n "$sum" ] && mkdir -p "${od%/*}" 2>/dev/null &&
-     { [ -d "$od" ] || mkdir -m 700 "$od" 2>/dev/null; }; then
-    find "$od" -type f -mtime +0 -exec rm -f {} + 2>/dev/null
-    f="$(mktemp "$od/.new.XXXXXX" 2>/dev/null)"
-    if [ -n "$f" ] && printf '%s' "$sum" > "$f" && mv -f "$f" "$od/$sid" 2>/dev/null; then
-      detail=""
-      if [ "$current_model" = "$md" ] && [ -z "$current_effort" ]; then detail=" Codex does not report the current effort."; fi
-      printf '{"decision":"block","reason":"coremodel: this prompt needs %s at %s effort.%s To apply it, run %s. Then send the same prompt again to proceed with your chosen settings."}\n' "$md" "$ef" "$detail" "$model_command"
-      exit 0
-    fi
+# Mark the original request, so the manual /model fallback can run it once.
+marked=""
+if [ -n "$od" ] && [ -n "$sum" ] && mkdir -p "${od%/*}" 2>/dev/null &&
+   { [ -d "$od" ] || mkdir -m 700 "$od" 2>/dev/null; }; then
+  find "$od" -type f -mtime +0 -exec rm -f {} + 2>/dev/null
+  f="$(mktemp "$od/.new.XXXXXX" 2>/dev/null)"
+  if [ -n "$f" ] && printf '%s' "$sum" > "$f" && mv -f "$f" "$od/$sid" 2>/dev/null; then
+    marked=1
+  else
     [ -z "$f" ] || rm -f "$f"
   fi
-else
-  [ "$now" -eq 0 ] || [ "$now" -lt "$(rank "$md")" ] || exit 0
 fi
-# systemMessage is the line for clients that show hook warnings. Codex Desktop does not show it in the chat, so
-# additionalContext, which only the model reads, asks the model to name the pick in its first visible message.
-msg="coremodel: this prompt needs $md at $ef effort; run $model_command to apply the recommendation."
+
+msg="coremodel: this prompt needs $md at $ef effort."
 version="${md%-*}"
-nm="GPT-${version#gpt-} $(model_tier "$md")"
+nm="$md"
+case "$md" in gpt-*-luna|gpt-*-sol|gpt-*-astra) nm="GPT-${version#gpt-} $(model_tier "$md")" ;; esac
 case "$ef" in low) el=Low ;; medium) el=Medium ;; high) el=High ;; xhigh) el=XHigh ;; *) el=Max ;; esac
-ctx="CoreModel recommends $nm · $el for this prompt. Start your first visible message with one short line that names this pick in the user's language, for example: CoreModel recommends $nm · $el. Show the exact command \`$model_command\` so the person can copy it. Then continue with the request as usual."
+ctx="CoreModel recommends $nm · $el for this prompt. Use the user's language. Current model: ${current_model:-unknown}. Current effort: ${current_effort:-unknown}."
+if [ -z "$marked" ]; then
+  ctx="$ctx If the chat shows this exact task was resent after the CoreModel command, proceed immediately with the user's settings."
+fi
+if [ "$routing" = ask ]; then
+  # Only validated IDs and effort names from catalog.awk are interpolated into JSON.
+  menu="$(awk '$2 == "list" { printf "%s", $1; for (i=3; i<=NF; i++) printf "%s%s", (i==3 ? ":" : ","), $i; printf "; " }' "$tmp/cat")"
+  if [ -z "$menu" ]; then menu="$luna $sol $astra (fallback catalog; confirm available levels with /model)"; fi
+  ctx="$ctx Before starting the task ask one question at a time using request_user_input_async or the available question tool. Wait for an explicit answer at each step. If buttons are unavailable or all choices do not fit, use a numbered text list with 0 to cancel. Request the option number for text replies. Catalog (model:efforts): $menu."
+  if [ "$pick_model" = false ] || { [ "$current_model" = "$md" ] && [ -z "$current_effort" ]; }; then
+    ctx="$ctx Ask only for effort for $current_model."
+  else
+    ctx="$ctx First ask for the model. Offer every available model, including the current one, and label current and recommended. After the answer ask for effort for that selected model."
+  fi
+  ctx="$ctx Offer supported efforts only. Mark current and recommended where applicable. If effort data is missing, ask the user to choose a level offered by /model. On dismissal or cancellation cancel the task, discard both selections and restore the original draft if the client supports it; otherwise give the original text back for editing. If the selected settings already match, proceed with the task."
+else
+  ctx="$ctx Use the recommendation without asking."
+fi
+ctx="$ctx When a change is needed this host requires a manual command. Show /model MODEL --reasoning=EFFORT for the final selection (omit MODEL when unchanged), then ask to resend the original task. For the recommended pair: $model_command. Wait instead of executing under the old settings. Manual /model can persist; tell the user to restore their previous settings after this task."
 printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"%s"},"systemMessage":"%s"}\n' "$ctx" "$msg"
-exit 0

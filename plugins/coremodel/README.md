@@ -1,6 +1,6 @@
 # coremodel
 
-A Claude Code plugin that picks the model and the effort level each prompt needs, before Claude starts on it; in Codex it gives an opt-in hint (see [Codex](#codex)).
+A Claude Code plugin that picks the model and the effort level each prompt needs, before Claude starts on it; in Codex it can ask you to choose the model and effort for a task (see [Codex](#codex)).
 
 ![platform](https://img.shields.io/badge/platform-Claude%20Code%202.1.309%2B-lightgrey) ![release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frstrlnkv%2FCoreKit%2Fmain%2Fplugins%2Fcoremodel%2F.claude-plugin%2Fplugin.json&query=%24.version&label=release) ![licence](https://img.shields.io/github/license/rstrlnkv/CoreKit)
 
@@ -161,7 +161,7 @@ stops using that model for the session and says so in the pane (`/coremodel rech
 | `useHaiku`, `useSonnet`, `useOpus`, `useFable` | on (default) or off | **Allow …**: the models coremodel may pick; they narrow what your account lists, never add one. All off: the effort only |
 | `pickModel` | `on` (default), `off` | `off`: pick the effort only, never the model |
 
-To add a language: copy `hooks/locales/ru.ts` to `hooks/locales/<code>.ts` and translate the values and `hostNames` (the Claude Code `language` values that choose it under `auto`); add the table to `LOCALES` in `hooks/policy.ts`, which `settingLang` and `hostLang` read; add `<code>` to `Lang` in `types/index.d.ts` and to the `language` options in `.claude-plugin/plugin.json` (a test checks the options against the locale files). The Codex hint stays English.
+To add a language: copy `hooks/locales/ru.ts` to `hooks/locales/<code>.ts` and translate the values and `hostNames` (the Claude Code `language` values that choose it under `auto`); add the table to `LOCALES` in `hooks/policy.ts`, which `settingLang` and `hostLang` read; add `<code>` to `Lang` in `types/index.d.ts` and to the `language` options in `.claude-plugin/plugin.json` (a test checks the options against the locale files). The Codex hook asks the agent to use the user's language.
 
 ### Cost
 
@@ -174,40 +174,36 @@ Control (the phone or the web) are never checked. Errors go to Claude Code's deb
 
 ## Codex
 
-Codex recommendations are **off until you enable them**. Codex hooks leave
-model and effort changes to you. The hint makes a separate model call for prompts it checks. A
-`UserPromptSubmit` hook (`codex/hint.sh`) asks the lightest visible model in its ranking (`codex exec`, read-only) which model and
-effort the prompt needs. It sends a warning with the model ID, effort and the `/model` command.
-Codex Desktop does not show that warning in the chat, so the hook asks Codex to open its reply with
-the pick in your language, such as "CoreModel рекомендует GPT-6.2 Astra · High", and then go on with
-your request. Copy the suggested command, for example `/model gpt-6-astra --reasoning=high`, to apply both settings. The hint judges model and effort separately. A hard
-question with a short answer can get Astra at low effort.
+Install with `codex plugin marketplace add rstrlnkv/CoreKit` and `codex plugin add coremodel@corekit`. Enable routing in `~/.config/coremodel/settings` (under `$XDG_CONFIG_HOME` when set, or the path named by `COREMODEL_CONFIG`).
 
-Install: `codex plugin marketplace add rstrlnkv/CoreKit`, then `codex plugin add coremodel@corekit`.
+```text
+codex_mode: ask
+codex_pick_model: on
+```
 
-- Turn it on with `codex_hint: on` in `~/.config/coremodel/settings` (`$XDG_CONFIG_HOME/coremodel/settings`
-  when that is set; `COREMODEL_CONFIG` names another file). Without that key, `coremodel_mode: on` in
-  the corecrew settings file (`~/.config/corecrew/settings`) turns it on too; `codex_hint: off` wins.
-- To pause before a prompt runs, also set `codex_confirm: on` in the CoreModel settings file.
-  When the suggested model or effort differs, Codex stops the prompt and shows the recommendation.
-  Use the suggested command, then resend the same prompt within ten minutes to proceed once with your chosen settings.
-  When the model already matches, the command only sets effort, for example `/model --reasoning=high`.
-  If Codex omits the current effort, the hook asks you to check it even when the model matches.
-  A keep decision passes. If the hook cannot save the retry marker, it gives a hint.
-- From lightest to strongest, the hint ranks GPT-6 Luna, GPT-6.1 Sol, GPT-6.2 Sol, GPT-6 Astra
-  and GPT-6.2 Astra. In hint-only mode it skips the call when no offered model is stronger than
-  your current model. For a current model outside this list, it can still give a hint. Codex does
-  not pass your current effort to hooks.
+| Setting | Effect |
+|---|---|
+| `codex_mode: ask` | Ask when the recommendation differs from the current settings. Choose from all visible models first, then from the efforts available for the chosen model. The choices identify the current and recommended values. |
+| `codex_mode: auto` | Use the recommended settings without asking for a selection. Recommendations can raise or lower the model, including mid-chat. |
+| `codex_mode: off` | Skip the classifier and the questions. |
+| `codex_pick_model: off` | In either active mode, evaluate effort for the current model. Skip the model question. The default is `on`. |
+
+Existing enabled `codex_hint` and `codex_confirm` configurations use ask mode. A previously disabled installation stays off. The legacy CoreCrew setting `coremodel_mode: on` can still enable ask mode when CoreModel has no explicit mode or hint setting.
+
+Matching settings and approvals pass without a question. When the model already fits but Codex omits its current effort, ask mode asks only about effort. Closing either question cancels the task and discards a partial choice.
+
+**Codex Desktop and CLI hooks.** The hook passes selection instructions to the agent. Clients with a question tool can present buttons. Text questions provide the fallback. In these clients the hook cannot apply new settings to the submitted turn. After selection, follow the supplied `/model` command and resend the original prompt. Auto mode uses the same manual fallback. A hook cannot write into the host's composer or restore settings changed through `/model`. Use the original prompt text to edit a cancelled task, and restore your previous settings after the task if needed.
+
 - A prompt that is only a greeting, thanks, an approval or "go on" ("привет", "да, давай", "ok, go
   ahead", at most 8 words, the list is `codex/replies.txt`) gets no call and no hint. "Да, и ещё
   проверь расчёты" brings new work, so it is checked.
-- The hint uses visible model entries it recognizes in Codex's current cache format
-  (`$CODEX_HOME/models_cache.json`). Each tier offers one model. Sol and Astra prefer GPT-6.2
+- The classifier uses visible model entries it recognizes in Codex's current cache format
+  (`$CODEX_HOME/models_cache.json`). For recommendations it considers one model per tier. The model question also includes visible models outside these tiers. Sol and Astra prefer GPT-6.2
   when visible and fall back to their visible predecessors, GPT-6.1 Sol and GPT-6 Astra. If the
   file is missing or unreadable, the hint offers those two predecessors and GPT-6 Luna. Edited
   or truncated cache files can be misread. If the chosen model lacks the requested effort,
   the hint uses the highest listed effort below it, when available.
-- Codex shows "coremodel: choosing a model" while it runs. The nested call takes about 8 seconds; it
+- Codex shows “CoreModel: Choosing a model and reasoning effort” while it runs. The nested call takes about 8 seconds; it
   runs with `--ignore-user-config` and low reasoning effort (or an available level when low is missing), so it does not load your config, MCP
   servers or other plugins' hooks (your login still works). It waits at most 20 seconds
   (`COREMODEL_HINT_TIMEOUT`); any failure is silent and the prompt goes on. The classifier starts in a new empty temporary folder for each call. The hook removes it after use. The nested call also
@@ -232,12 +228,12 @@ Codex's previous reply:
 The `Stop` hook keeps those 600 bytes in `~/.local/state/coremodel/codex-replies/<session id>`
 (`$XDG_STATE_HOME` when set; the folder is readable only by you) until your next prompt in that chat,
 which removes the file whether or not it was sent. A reply at least a day old is discarded before use.
-Confirm mode stores a checksum of the blocked prompt under the same state root in `coremodel/codex-offered/<session id>`.
+The manual fallback stores a checksum of the submitted prompt under the same state root in `coremodel/codex-offered/<session id>`. The next identical submission in the same chat within ten minutes can pass once without classification. The hook cannot see when you dismiss a question, so resending the identical text after cancellation can also use this retry.
 Each `Stop` also removes expired replies from other chats. Nothing is kept while the hint is off.
 
 ### Standalone terminal client
 
-With a CoreKit checkout, Python 3 and a signed-in Codex CLI, run `python3 /path/to/CoreKit/clients/coremodel/client.py` from your project directory. The client starts a new chat. Enter a prompt, then choose **y** to apply the suggested model and effort, **n** to keep the current settings, or **c** to cancel the prompt. Add `--auto` to apply suggestions automatically. End the chat with Ctrl+D. Each submitted prompt goes to the classifier when needed and the original prompt goes to the selected model once.
+With a CoreKit checkout, Python 3 and a signed-in Codex CLI, run `python3 /path/to/CoreKit/clients/coremodel/client.py` from your project directory. The client starts a new chat. When a change is recommended, select the model and then its effort at the text prompts. Cancelling either selection lets you edit the original task. Add `--auto` to apply the recommendation without questions. The client sets the pair before it starts the turn and sends the task once. A manual choice applies to that task only. If the catalog lists no effort levels for your selected model, the client offers its catalog default. If Codex supplies neither the original effort nor a restorable default, the client gives you the manual command before sending the task. End the chat with Ctrl+D.
 
 In Windows PowerShell with the Python launcher, run:
 
@@ -255,13 +251,13 @@ Put Git for Windows and the native Codex CLI on PATH. The client locates Bash th
   If you enable the Codex hint, it sends each checked prompt to OpenAI with
   `codex exec`. The hint needs `bash` and the `codex` CLI.
 - **Permissions:** it asks for none beyond the plugin hooks. It puts the pick on this chat's requests only and never writes your model or effort setting.
-- **Changes outside its own folder:** none in Claude Code; its log lines go to Claude Code's debug log. In Codex, with the hint on, confirm mode can store a retry checksum and the end of Codex's last reply waits in `~/.local/state/coremodel/codex-replies/` until your next prompt (see [Codex](#codex)).
+- **Changes outside its own folder:** none in Claude Code; its log lines go to Claude Code's debug log. In Codex, with the hint on, the hook can store a retry checksum and the end of Codex's last reply waits in `~/.local/state/coremodel/codex-replies/` until your next prompt (see [Codex](#codex)).
 
 ## Uninstall
 
 `claude plugin uninstall coremodel@corekit` (or `/plugin` → Installed → coremodel → Uninstall). Your
-model and effort settings were never changed, so nothing needs undoing. In Codex: `codex plugin remove coremodel@corekit`. For Codex, remove the
-`codex_hint` and `codex_confirm` lines from `~/.config/coremodel/settings` if you added it, and the folder
+model and effort settings were never changed, so nothing needs undoing. In Codex: `codex plugin remove coremodel@corekit`. For Codex, remove any
+`codex_mode`, `codex_pick_model`, `codex_hint` or `codex_confirm` lines from `~/.config/coremodel/settings` if you added it, and the folder
 `~/.local/state/coremodel/` if it is there.
 
 ## Development
