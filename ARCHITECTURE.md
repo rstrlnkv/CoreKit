@@ -67,6 +67,7 @@ plugins/coremodel/                model and effort picker
                                   need no call
   types/index.d.ts                the plugin's type contract (the host API types are written by
                                   Claude Code into .claude-plugin/types/, which git does not track)
+clients/coremodel/client.py        terminal client that requests a CoreModel recommendation before each Codex app-server turn
 scripts/commit-subjects.sh        the check of this repo's own commit subjects (CI job and optional commit-msg hook)
 scripts/eval.sh                   runs one plugin's trigger evals on a copy it assembles (real model calls,
                                   not part of tests/run.sh)

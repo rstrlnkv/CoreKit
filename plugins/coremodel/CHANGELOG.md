@@ -7,6 +7,14 @@ full detail.
 
 ## [Unreleased]
 
+Codex: after updating the plugin, trust its hooks again in `/hooks`.
+
+### Added
+
+- The standalone terminal client applies the recommended model and effort before each Codex turn, with confirmation or automatically using `--auto`.
+
+- CoreModel hints and paused prompts include a ready-to-copy `/model` command for the recommended model and effort.
+
 ## [0.12.0] - 2026-11-25
 
 Codex: an update keeps the hooks off until you trust them again in `/hooks`.

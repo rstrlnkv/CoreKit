@@ -228,8 +228,8 @@ case "$out" in *'fix the flaky login test'*) fail "main: the prompt is printed b
 # visible message, in the person's language, and to carry on. systemMessage stays for clients that show it.
 ctx="$(printf '%s' "$out" | sed -n 's/.*"additionalContext":"\([^"]*\)".*/\1/p')"
 sysm="$(printf '%s' "$out" | sed -n 's/.*"systemMessage":"\([^"]*\)".*/\1/p')"
-assert_eq "$sysm" "coremodel: this prompt needs gpt-6-astra at high effort; switch with /model if the current one differs." "main: systemMessage as before"
-for w in 'CoreModel recommends GPT-6 Astra · High' 'first visible message' "user's language" 'Then continue' '/model'; do
+case "$sysm" in *'/model gpt-6-astra --reasoning=high'*) pass ;; *) fail "main: no complete model command in systemMessage" ;; esac
+for w in 'CoreModel recommends GPT-6 Astra · High' 'first visible message' "user's language" 'Then continue' '/model gpt-6-astra --reasoning=high'; do
   case "$ctx" in *"$w"*) pass ;; *) fail "main: additionalContext lacks '$w': $ctx" ;; esac
 done
 [ "$ctx" != "$sysm" ] && pass || fail "main: additionalContext is the systemMessage line"
@@ -791,12 +791,14 @@ run_hint "$PATHSTUB" "$(pair_event high)" COREMODEL_CONFIG="$CONF_SF"
 silent "matching model and effort"
 run_hint "$PATHSTUB" "$(pair_event low)" COREMODEL_CONFIG="$CONF_SF"
 blocked "different effort on the same model" gpt-6-astra high
+assert_contains "$SANDBOX/out" "/model --reasoning=high"
 run_hint "$PATHSTUB" "$(cevent c7 'test the queue' gpt-6-astra)" COREMODEL_CONFIG="$CONF_SF"
 blocked "unknown effort on highest model" gpt-6-astra high
 assert_contains "$SANDBOX/out" 'does not report the current effort'
 answer '{"keep":false,"model":"gpt-6-luna","effort":"low"}'
 run_hint "$PATHSTUB" "$(cevent c8 'rename the variable')" COREMODEL_CONFIG="$CONF_SF"
 blocked "different lighter model" gpt-6-luna low
+assert_contains "$SANDBOX/out" "/model gpt-6-luna --reasoning=low"
 # keep: nothing to say and nothing remembered
 answer '{"why":"picks an offered option","keep":true,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(cevent c4 'option 2')" COREMODEL_CONFIG="$CONF_SF"
@@ -833,4 +835,20 @@ assert_file "$CM/codex/hint.sh"
 if [ -f "$CM/codex/hint.sh" ]; then
   head -1 "$CM/codex/hint.sh" | grep -qE '^#!.*bash' && pass || fail "hint.sh starts with a bash shebang"
 fi
+# The client requests structured decisions independently of hook settings and previous offers.
+recommend() {
+  printf '%s' "$1" | env PATH="$PATHSTUB" COREMODEL_CONFIG="$CONF_ONLY_SF" XDG_STATE_HOME="$STATE" \
+    COREMODEL_CATALOG="$SANDBOX/client-models.json" /bin/bash "$HINT" --recommend
+}
+printf '%s' '{"models":[{"slug":"gpt-6-luna","visibility":"list"},{"slug":"gpt-6.2-astra","visibility":"list"}]}' > "$SANDBOX/client-models.json"
+client_event='{"hook_event_name":"UserPromptSubmit","model":"gpt-6.2-astra","last_assistant_message":"Replace the queue implementation?","prompt":"replace it"}'
+answer '{"keep":false,"model":"gpt-6-luna","effort":"low"}'
+assert_eq "$(recommend "$client_event")" '{"model":"gpt-6-luna","effort":"low"}' "client can recommend a cheaper model"
+assert_contains "$STDIN" 'Replace the queue implementation?'
+assert_contains "$STDIN" 'gpt-6.2-astra'
+answer '{"keep":true,"model":"gpt-6-luna","effort":"low"}'
+assert_eq "$(recommend "$client_event")" '{"keep":true}' "explicit keep"
+assert_eq "$(recommend "$(event 'hello')")" '{"keep":true}' "local keep"
+answer 'invalid'
+assert_eq "$(recommend "$client_event")" '' "unavailable classifier"
 finish

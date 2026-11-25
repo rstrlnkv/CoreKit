@@ -180,7 +180,7 @@ model and effort changes to you. The hint makes a separate model call for prompt
 effort the prompt needs. It sends a warning with the model ID, effort and the `/model` command.
 Codex Desktop does not show that warning in the chat, so the hook asks Codex to open its reply with
 the pick in your language, such as "CoreModel рекомендует GPT-6.2 Astra · High", and then go on with
-your request. You can switch with `/model`. The hint judges model and effort separately. A hard
+your request. Copy the suggested command, for example `/model gpt-6-astra --reasoning=high`, to apply both settings. The hint judges model and effort separately. A hard
 question with a short answer can get Astra at low effort.
 
 Install: `codex plugin marketplace add rstrlnkv/CoreKit`, then `codex plugin add coremodel@corekit`.
@@ -190,7 +190,8 @@ Install: `codex plugin marketplace add rstrlnkv/CoreKit`, then `codex plugin add
   the corecrew settings file (`~/.config/corecrew/settings`) turns it on too; `codex_hint: off` wins.
 - To pause before a prompt runs, also set `codex_confirm: on` in the CoreModel settings file.
   When the suggested model or effort differs, Codex stops the prompt and shows the recommendation.
-  Check `/model`, then resend the same prompt within ten minutes to proceed once with your chosen settings.
+  Use the suggested command, then resend the same prompt within ten minutes to proceed once with your chosen settings.
+  When the model already matches, the command only sets effort, for example `/model --reasoning=high`.
   If Codex omits the current effort, the hook asks you to check it even when the model matches.
   A keep decision passes. If the hook cannot save the retry marker, it gives a hint.
 - From lightest to strongest, the hint ranks GPT-6 Luna, GPT-6.1 Sol, GPT-6.2 Sol, GPT-6 Astra
@@ -233,6 +234,10 @@ The `Stop` hook keeps those 600 bytes in `~/.local/state/coremodel/codex-replies
 which removes the file whether or not it was sent. A reply at least a day old is discarded before use.
 Confirm mode stores a checksum of the blocked prompt under the same state root in `coremodel/codex-offered/<session id>`.
 Each `Stop` also removes expired replies from other chats. Nothing is kept while the hint is off.
+
+### Standalone terminal client
+
+With a CoreKit checkout, Python 3 and a signed-in Codex CLI, run `python3 /path/to/CoreKit/clients/coremodel/client.py` from your project directory. The client starts a new chat. Enter a prompt, then choose **y** to apply the suggested model and effort, **n** to keep the current settings, or **c** to cancel the prompt. Add `--auto` to apply suggestions automatically. End the chat with Ctrl+D. Each submitted prompt goes to the classifier when needed and the original prompt goes to the selected model once.
 
 ## Requirements
 

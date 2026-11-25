@@ -41,6 +41,15 @@ new or changed hooks, or open `/hooks`. Until you trust them they do not run. `c
 other non-interactive runs do not ask and skip them silently, so corecrew's `new-project`, `task`
 and `ship` remind you when they run. The plugin READMEs list the remaining steps.
 
+For a terminal chat that applies CoreModel recommendations directly, run the [CoreModel client](clients/coremodel/client.py) from a checkout of this repository. From your project directory:
+
+```bash
+python3 /path/to/CoreKit/clients/coremodel/client.py         # ask before applying a recommendation
+python3 /path/to/CoreKit/clients/coremodel/client.py --auto  # apply the recommendation automatically
+```
+
+Both modes send your prompt to the classifier and then start the selected Codex turn in the current chat.
+
 ### Update
 
 ```bash

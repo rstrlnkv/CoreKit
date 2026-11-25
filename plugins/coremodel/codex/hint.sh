@@ -32,12 +32,25 @@ read_key() {
   [ -n "$1" ] && [ -f "$1" ] && [ -r "$1" ] || return 0
   tr -d '\r' < "$1" | sed -n "s/^[[:space:]]*$2[[:space:]]*:[[:space:]]*\(.*[^[:space:]]\)[[:space:]]*\$/\1/p" | head -1
 }
-settings="$(settings_file "${COREMODEL_CONFIG:-}" coremodel)"
-on="$(read_key "$settings" codex_hint)"
-# the corecrew file is the fallback, found the way corecrew's lib.sh does (coremodel does not need corecrew)
-[ -n "$on" ] || on="$(read_key "$(settings_file "${CORECREW_CONFIG:-}" corecrew)" coremodel_mode)"
-[ "$on" = on ] || exit 0
-confirm="$(read_key "$settings" codex_confirm)"
+# An explicit client call supplies a prompt event and optionally its last assistant reply.
+# Output: a validated {model,effort} pair, {"keep":true}, or empty on failure.
+mode=hook
+confirm=""
+if [ "${1:-}" = --recommend ]; then
+  mode=client
+else
+  settings="$(settings_file "${COREMODEL_CONFIG:-}" coremodel)"
+  on="$(read_key "$settings" codex_hint)"
+  # the corecrew file is the fallback, found the way corecrew's lib.sh does (coremodel does not need corecrew)
+  [ -n "$on" ] || on="$(read_key "$(settings_file "${CORECREW_CONFIG:-}" corecrew)" coremodel_mode)"
+  [ "$on" = on ] || exit 0
+  confirm="$(read_key "$settings" codex_confirm)"
+fi
+
+keep() {
+  if [ "$mode" = client ]; then printf '%s\n' '{"keep":true}'; fi
+  exit 0
+}
 
 tmp="$(mktemp -d 2>/dev/null)" || exit 0
 wd=""; cp=""
@@ -53,7 +66,7 @@ head -c 262144 > "$tmp/in" 2>/dev/null || exit 0
 # Linear in the input: strings are read in chunks; of the prompt and the reply only the first and the last
 # bytes are kept. Writes the prompt (cut in the middle past 4000 bytes) on UserPromptSubmit and the last
 # 600 bytes of the reply, blanks folded, on Stop; the event name, the model and the session id on both.
-LC_ALL=C awk -v d="$tmp" -v confirm="$confirm" '
+LC_ALL=C awk -v d="$tmp" -v confirm="$confirm" -v mode="$mode" '
 function hexv(h,  k, c, n) { n = 0; h = tolower(h)
   for (k = 1; k <= length(h); k++) { c = index("0123456789abcdef", substr(h, k, 1)); if (!c) return -1; n = n * 16 + c - 1 }
   return n }
@@ -130,12 +143,13 @@ END {
       pr = h "\n[…]\n" t
     }
     printf "%s", pr > (d "/prompt")
-  } else if (ev == "Stop") {
+  } else if (ev != "Stop") exit 1
+  if (ev == "Stop" || mode == "client") {
     r = (rtl <= 4000) ? rF : rT
     gsub(/[ \t\r\n]+/, " ", r); sub(/^ /, "", r); sub(/ $/, "", r)
     if (length(r) > 600) { r = substr(r, length(r) - 599); sub(/^[\200-\277]+/, "", r) }
-    printf "%s", r > (d "/reply")
-  } else exit 1
+    printf "%s", r > (d ((mode == "client") ? "/ctx" : "/reply"))
+  }
   printf "%s", ev > (d "/ev")
   printf "%s", mdl > (d "/model")
   printf "%s", effort > (d "/effort")
@@ -151,7 +165,7 @@ case "${XDG_STATE_HOME:-}" in
   /*) sd="${XDG_STATE_HOME%/}/coremodel/codex-replies" ;;
   *) case "${HOME:-}" in /*) sd="$HOME/.local/state/coremodel/codex-replies" ;; *) sd="" ;; esac ;;
 esac
-[ -n "$sid" ] || sd=""
+[ -n "$sid" ] && [ "$mode" = hook ] || sd=""
 
 # Stop: keep the end of the reply for the next prompt of this session; replies older than a day go
 if [ "$ev" = Stop ]; then
@@ -220,39 +234,19 @@ END {
     if (!best) exit 1
     s = substr(s, best + 2)
   }
-}' "$here/replies.txt" 2>/dev/null && exit 0
+}' "$here/replies.txt" 2>/dev/null && keep
 
 # Keep the visibility of each catalog row so hidden models are distinct from a missing catalog.
 catf="${CODEX_HOME:-${HOME:-}/.codex}/models_cache.json"
+if [ "$mode" = client ]; then
+  case "${COREMODEL_CATALOG:-}" in /*) catf="$COREMODEL_CATALOG" ;; esac
+fi
 : > "$tmp/cat"
 have_catalog=""
 if [ -f "$catf" ] && [ -r "$catf" ]; then
   # Tokenize complete quoted strings so braces and escaped quotes in descriptions are data.
   LC_ALL=C grep -oE '"([^"\\]|\\.)*"|[][{}:,]' "$catf" 2>/dev/null |
-    awk '
-      $0 == ":" { key = value; taking = 1; next }
-      $0 == "{" || $0 == "[" {
-        depth++
-        if (depth == 2 && $0 == "[" && key == "models") models = 1
-        if (models && depth == 3) { slug = ""; visibility = ""; efforts = "" }
-        if (models && depth == 4 && $0 == "[" && key == "supported_reasoning_levels") levels = 1
-        key = ""; taking = 0; next
-      }
-      $0 == "}" || $0 == "]" {
-        if (levels && depth == 4) levels = 0
-        if (models && depth == 3 && slug ~ /^[A-Za-z0-9._-]+$/ && visibility ~ /^[a-z_]+$/)
-          print slug, visibility efforts
-        if (models && depth == 2) { print "#catalog"; models = 0 }
-        depth--; key = ""; taking = 0; next
-      }
-      /^"/ {
-        value = substr($0, 2, length($0)-2)
-        if (taking && models && depth == 3 && key == "slug") slug = value
-        if (taking && models && depth == 3 && key == "visibility") visibility = value
-        if (taking && levels && depth == 5 && key == "effort" && value ~ /^[a-z]+$/) efforts = efforts " " value
-      }
-      { taking = 0; key = "" }
-    ' > "$tmp/cat"
+    awk -f "$here/catalog.awk" > "$tmp/cat"
   grep -qx '#catalog' "$tmp/cat" && have_catalog=1
 fi
 visible="$(awk '$2 == "list" { printf " %s ", $1 }' "$tmp/cat")"
@@ -284,7 +278,7 @@ for m in "${ladder[@]}"; do
 done
 now="$(rank "$(cat "$tmp/model" 2>/dev/null)")"
 [ -n "$top" ] || exit 0
-[ "$confirm" = on ] || [ "$now" -lt "$(rank "$top")" ] || exit 0
+[ "$mode" = client ] || [ "$confirm" = on ] || [ "$now" -lt "$(rank "$top")" ] || exit 0
 
 models=""; enum=""; choices=""
 for m in "$luna" "$sol" "$astra"; do
@@ -340,7 +334,7 @@ set +m
 obj="$(tr '\n' ' ' < "$tmp/ans" 2>/dev/null | sed -n 's/^[^{]*\({[^{}]*}\).*$/\1/p')"
 [ -n "$obj" ] || exit 0
 val() { printf '%s' "$obj" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([A-Za-z0-9.-]*\).*/\1/p" | tr 'A-Z' 'a-z'; }
-[ "$(val keep)" = false ] || exit 0
+case "$(val keep)" in true) keep ;; false) ;; *) exit 0 ;; esac
 md="$(val model)"; ef="$(val effort)"
 case "$models" in *" $md "*) ;; *) exit 0 ;; esac
 case "$ef" in low|medium|high|xhigh|max) ;; *) exit 0 ;; esac
@@ -358,9 +352,17 @@ if [ -n "$effs" ]; then
        ef="$lv" ;;
   esac
 fi
+if [ "$mode" = client ]; then
+  printf '{"model":"%s","effort":"%s"}\n' "$md" "$ef"
+  exit 0
+fi
+current_model="$(cat "$tmp/model")"
+model_command="/model $md --reasoning=$ef"
+if [ "$current_model" = "$md" ]; then model_command="/model --reasoning=$ef"; fi
+
 # Confirm mode checks both selections, including downward changes. Older hosts omit effort.
 if [ "$confirm" = on ]; then
-  current_model="$(cat "$tmp/model")"; current_effort="$(cat "$tmp/effort")"
+  current_effort="$(cat "$tmp/effort")"
   [ "$current_model" != "$md" ] || [ "$current_effort" != "$ef" ] || exit 0
   if [ -n "$od" ] && [ -n "$sum" ] && mkdir -p "${od%/*}" 2>/dev/null &&
      { [ -d "$od" ] || mkdir -m 700 "$od" 2>/dev/null; }; then
@@ -369,7 +371,7 @@ if [ "$confirm" = on ]; then
     if [ -n "$f" ] && printf '%s' "$sum" > "$f" && mv -f "$f" "$od/$sid" 2>/dev/null; then
       detail=""
       if [ "$current_model" = "$md" ] && [ -z "$current_effort" ]; then detail=" Codex does not report the current effort."; fi
-      printf '{"decision":"block","reason":"coremodel: this prompt needs %s at %s effort.%s Check /model, then send the same prompt again to proceed with your chosen settings."}\n' "$md" "$ef" "$detail"
+      printf '{"decision":"block","reason":"coremodel: this prompt needs %s at %s effort.%s To apply it, run %s. Then send the same prompt again to proceed with your chosen settings."}\n' "$md" "$ef" "$detail" "$model_command"
       exit 0
     fi
     [ -z "$f" ] || rm -f "$f"
@@ -379,10 +381,10 @@ else
 fi
 # systemMessage is the line for clients that show hook warnings. Codex Desktop does not show it in the chat, so
 # additionalContext, which only the model reads, asks the model to name the pick in its first visible message.
-msg="coremodel: this prompt needs $md at $ef effort; switch with /model if the current one differs."
+msg="coremodel: this prompt needs $md at $ef effort; run $model_command to apply the recommendation."
 version="${md%-*}"
 nm="GPT-${version#gpt-} $(model_tier "$md")"
 case "$ef" in low) el=Low ;; medium) el=Medium ;; high) el=High ;; xhigh) el=XHigh ;; *) el=Max ;; esac
-ctx="CoreModel recommends $nm · $el for this prompt. Start your first visible message with one short line that names this pick in the user's language, for example: CoreModel recommends $nm · $el. Then continue with the request as usual. Do not wait for an answer: the person switches the model with /model if they want to."
+ctx="CoreModel recommends $nm · $el for this prompt. Start your first visible message with one short line that names this pick in the user's language, for example: CoreModel recommends $nm · $el. Show the exact command \`$model_command\` so the person can copy it. Then continue with the request as usual."
 printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"%s"},"systemMessage":"%s"}\n' "$ctx" "$msg"
 exit 0
