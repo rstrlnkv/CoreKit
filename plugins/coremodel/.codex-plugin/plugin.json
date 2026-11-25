@@ -1,6 +1,6 @@
 {
   "name": "coremodel",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Suggests a Codex model and effort, with an optional pause to review the choice in /model.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",
