@@ -1,7 +1,7 @@
 {
   "name": "coremodel",
   "version": "0.14.0",
-  "description": "Suggests a Codex model and effort, with an optional pause to review the choice in /model.",
+  "description": "Recommends settings for each Codex task. Choose a model and effort, or effort alone, and apply changes with /model.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",
   "repository": "https://github.com/rstrlnkv/CoreKit",
@@ -10,7 +10,7 @@
   "hooks": "./codex/hooks.json",
   "interface": {
     "displayName": "CoreModel",
-    "shortDescription": "Hints which model and effort a prompt needs",
+    "shortDescription": "Choose a model and reasoning effort per task",
     "developerName": "rstrlnkv",
     "category": "Coding",
     "websiteURL": "https://github.com/rstrlnkv/CoreKit",

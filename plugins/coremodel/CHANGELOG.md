@@ -13,6 +13,7 @@ Codex: after updating the plugin, trust its hooks again in `/hooks`.
 
 ### Changed
 
+- Codex combines hints and confirmation into model-then-effort questions. Both ask and auto modes support effort-only routing. The terminal client applies the choice before the task, while standard Codex clients guide you through `/model` and resubmission.
 - Codex hook statuses describe model and effort selection and when reply context is saved.
 
 ## [0.13.1] - 2026-11-25

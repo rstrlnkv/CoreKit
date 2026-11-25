@@ -66,7 +66,7 @@ Each plugin's README has the full description, its commands and its settings.
 | Feature | What it does |
 |---|---|
 | [**corecrew**](plugins/corecrew/README.md) | Runs every project the same way: it starts from an interview, works with a crew of agents and keeps the docs in a private repo. Commands: `/corecrew:new-project`, `/corecrew:task`, `/corecrew:ship`, `/corecrew:new-standard` and `/corecrew:bloat-audit`; hooks keep secrets and internal files out of your public code; `save` and `undo-step` go one step at a time. Hosts: Claude Code, Codex. |
-| [**coremodel**](plugins/coremodel/README.md) | Picks Haiku, Sonnet, Opus or Fable and the effort level before Claude starts on a prompt, and asks before the costly ones. Command: `/coremodel` shows and changes what it does. Hosts: Claude Code; in Codex, an opt-in hint with optional confirmation. |
+| [**coremodel**](plugins/coremodel/README.md) | Picks Haiku, Sonnet, Opus or Fable and the effort level before Claude starts on a prompt, and asks before the costly ones. Command: `/coremodel` shows and changes what it does. Hosts: Claude Code; in Codex, opt-in model and effort questions, or effort alone. The standalone Codex client can also apply recommendations automatically. |
 
 ## Requirements
 

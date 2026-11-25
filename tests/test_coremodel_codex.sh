@@ -154,7 +154,7 @@ run_hint() {
 }
 ncalls() { [ -f "$CALLS" ] && wc -l < "$CALLS" | tr -d ' ' || echo 0; }
 # event <prompt> — the hook's stdin JSON for a prompt (Codex's shape, tests/lib-hook.sh)
-event() { hook_event codex UserPromptSubmit /tmp prompt="$1"; }
+event() { hook_event codex UserPromptSubmit /tmp prompt="$1" | sed 's/"session_id":"s",//'; }
 silent() { # silent <label> — exit 0, nothing on stdout
   assert_eq "$RC" "0" "$1: exit 0"
   assert_eq "$(cat "$SANDBOX/out")" "" "$1: no stdout"
@@ -220,15 +220,14 @@ json_ok "$SANDBOX/out" && pass || fail "main: stdout is not valid JSON"
 case "$out" in *'"systemMessage":"coremodel: this prompt needs gpt-6-astra'*) pass ;; *) fail "main: no systemMessage: $out" ;; esac
 case "$out" in *gpt-6-astra*) pass ;; *) fail "main: context lacks gpt-6-astra: $out" ;; esac
 case "$out" in *high*) pass ;; *) fail "main: context lacks the effort 'high'" ;; esac
-case "$out" in *xhigh*) fail "main: effort high reported as xhigh" ;; *) pass ;; esac
+
 case "$out" in */model*) pass ;; *) fail "main: context lacks /model" ;; esac
 case "$out" in *'fix the flaky login test'*) fail "main: the prompt is printed back" ;; *) pass ;; esac
-# Codex Desktop does not show systemMessage in the chat: additionalContext asks the model to name the pick in its first
-# visible message, in the person's language, and to carry on. systemMessage stays for clients that show it.
+# Native clients receive the decision through additionalContext and a status message.
 ctx="$(printf '%s' "$out" | sed -n 's/.*"additionalContext":"\([^"]*\)".*/\1/p')"
 sysm="$(printf '%s' "$out" | sed -n 's/.*"systemMessage":"\([^"]*\)".*/\1/p')"
-case "$sysm" in *'/model gpt-6-astra --reasoning=high'*) pass ;; *) fail "main: no complete model command in systemMessage" ;; esac
-for w in 'CoreModel recommends GPT-6 Astra · High' 'first visible message' "user's language" 'Then continue' '/model gpt-6-astra --reasoning=high'; do
+
+for w in 'CoreModel recommends GPT-6 Astra · High' 'request_user_input_async' "user's language" 'text' '/model gpt-6-astra --reasoning=high'; do
   case "$ctx" in *"$w"*) pass ;; *) fail "main: additionalContext lacks '$w': $ctx" ;; esac
 done
 [ "$ctx" != "$sysm" ] && pass || fail "main: additionalContext is the systemMessage line"
@@ -245,21 +244,21 @@ label gpt-6-astra xhigh 'GPT-6 Astra · XHigh'
 label gpt-6-astra max 'GPT-6 Astra · Max'
 
 # model and effort are read on their own: a strong model at low effort stays low, a light one at high stays high
-check_pair() { # <model> <effort> <other names that must not appear>
+check_pair() { # <model> <effort>
   answer "{\"why\":\"x\",\"keep\":false,\"model\":\"$1\",\"effort\":\"$2\"}"
   run_hint "$PATHSTUB" "$(event 'do the thing in the code')"
   local o; o="$(cat "$SANDBOX/out")"
   assert_eq "$RC" "0" "pair $1/$2: exit 0"
   case "$o" in *"needs $1 at $2 effort"*) pass ;; *) fail "pair $1/$2: context lacks '$1 at $2 effort': $o" ;; esac
   case "$o" in */model*) pass ;; *) fail "pair $1/$2: context lacks /model" ;; esac
-  local m; for m in $3; do case "$o" in *"$m"*) fail "pair $1/$2: context names $m too: $o" ;; *) pass ;; esac; done
+
 }
-check_pair gpt-6-luna low "gpt-6.1-sol gpt-6-astra"
-check_pair gpt-6-luna high "gpt-6.1-sol gpt-6-astra"
-check_pair gpt-6.1-sol medium "gpt-6-luna gpt-6-astra"
-check_pair gpt-6-astra low "gpt-6-luna gpt-6.1-sol"
-check_pair gpt-6-astra xhigh "gpt-6-luna gpt-6.1-sol"
-check_pair gpt-6-astra max "gpt-6-luna gpt-6.1-sol"
+check_pair gpt-6-luna low
+check_pair gpt-6-luna high
+check_pair gpt-6.1-sol medium
+check_pair gpt-6-astra low
+check_pair gpt-6-astra xhigh
+check_pair gpt-6-astra max
 # the answer may come wrapped in prose or a fence
 answer 'Sure! ```json
 {"why":"x","keep":false,"model":"gpt-6.1-sol","effort":"medium"}
@@ -327,7 +326,7 @@ assert_contains "$STDIN" 'Should I fix the rounding in cart.ts?'
 assert_not_contains "$STDIN" '(unknown'
 assert_no_file "$REPLIES/s1"
 # without a saved reply: said to be unknown, never "first prompt"
-run_hint "$PATHSTUB" "$(pevent s1 'почини')"
+run_hint "$PATHSTUB" "$(pevent s1 'исправь')"
 assert_contains "$STDIN" '(unknown'
 assert_not_contains "$STDIN" 'first prompt'
 assert_not_contains "$STDIN" 'cart.ts'
@@ -449,7 +448,7 @@ run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" CODEX_HOME="$SANDBOX/
 case "$(cat "$SANDBOX/out")" in *'needs gpt-6-astra at high effort'*) pass ;; *) fail "no catalog: no hint" ;; esac
 
 # A visible 6.2 model takes its tier's place in the schema, prompt, and hint.
-mevent() { hook_event codex UserPromptSubmit /tmp model="$1" prompt="$2"; }   # mevent <model> <prompt>
+mevent() { hook_event codex UserPromptSubmit /tmp model="$1" prompt="$2" | sed 's/"session_id":"s",//'; }
 catalog 'gpt-6-luna:list:low,medium,high' 'gpt-6.1-sol:list:low,medium,high' 'gpt-6.2-sol:list:low,medium,high' \
   'gpt-6-astra:list:low,medium,high' 'gpt-6.2-astra:list:low,medium,high'
 answer '{"keep":false,"model":"gpt-6.2-sol","effort":"medium"}'
@@ -465,6 +464,7 @@ for m in gpt-6.1-sol gpt-6-astra; do
 done
 assert_contains "$SANDBOX/out" 'needs gpt-6.2-sol at medium effort'
 assert_contains "$SANDBOX/out" 'CoreModel recommends GPT-6.2 Sol · Medium'
+assert_contains "$SANDBOX/out" 'gpt-6.1-sol:low,medium,high'
 
 answer '{"keep":false,"model":"gpt-6.2-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(mevent gpt-6-astra 'fix the flaky login test')" CODEX_HOME="$CAT"
@@ -472,7 +472,7 @@ assert_eq "$(ncalls)" "1" "legacy Astra with visible 6.2 Astra: codex was asked"
 assert_contains "$SANDBOX/out" 'needs gpt-6.2-astra at high effort'
 assert_contains "$SANDBOX/out" 'CoreModel recommends GPT-6.2 Astra · High'
 run_hint "$PATHSTUB" "$(mevent gpt-6.2-astra 'fix the flaky login test')" CODEX_HOME="$CAT"
-silent "on the strongest 6.2 model"; assert_eq "$(ncalls)" "0" "on the strongest 6.2 model: codex not called"
+assert_contains "$SANDBOX/out" "effort"; assert_eq "$(ncalls)" "1" "on the strongest 6.2 model: codex was asked"
 
 # Fallback is independent for the two tiers, and hidden entries are unavailable.
 catalog 'gpt-6-luna:list:low,medium,high' 'gpt-6.1-sol:list:low,medium,high' 'gpt-6.2-sol:hide:low,medium,high' \
@@ -487,7 +487,7 @@ assert_not_contains "$STDIN" 'gpt-6.2-sol'
 assert_contains "$SANDBOX/out" 'needs gpt-6.1-sol at medium effort'
 run_hint "$PATHSTUB" "$(mevent gpt-6.2-sol 'add a field')" CODEX_HOME="$CAT"
 assert_eq "$(ncalls)" "1" "6.2 Sol with legacy Sol offered: codex was asked"
-silent "6.2 Sol is stronger than legacy Sol"
+assert_contains "$SANDBOX/out" "effort"
 
 catalog 'gpt-6-luna:list:low,medium,high' 'gpt-6.1-sol:list:low,medium,high' 'gpt-6.2-sol:list:low,medium,high' 'gpt-6-astra:list:low,medium,high'
 answer '{"keep":false,"model":"gpt-6-astra","effort":"high"}'
@@ -499,7 +499,7 @@ assert_contains "$STDIN" 'gpt-6-astra'
 assert_not_contains "$STDIN" 'gpt-6.2-astra'
 assert_contains "$SANDBOX/out" 'needs gpt-6-astra at high effort'
 run_hint "$PATHSTUB" "$(mevent gpt-6.2-astra 'fix the flaky login test')" CODEX_HOME="$CAT"
-silent "6.2 Astra is stronger than legacy Astra"
+assert_contains "$SANDBOX/out" "effort"
 
 # recursion guard
 answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
@@ -548,22 +548,22 @@ printf 'coremodel_mode: off\n' > "$SANDBOX/alt-settings"
 run_hint "$PATHSTUB" "$(event 'fix the flaky login test')" COREMODEL_CONFIG= CORECREW_CONFIG="$SANDBOX/alt-settings"
 silent "off via CORECREW_CONFIG"; assert_eq "$(ncalls)" "0" "off via CORECREW_CONFIG: codex not called"
 
-# the current model: silent when it is the pick or a stronger one
+# Missing effort and downgrades are decisions, including on the strongest model.
 answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(mevent gpt-6-astra 'fix the flaky login test')"
-silent "on the strongest model"; assert_eq "$(ncalls)" "0" "on the strongest model: codex not called"
+assert_contains "$SANDBOX/out" "effort"; assert_eq "$(ncalls)" "1" "on the strongest model: codex was asked"
 answer '{"why":"x","keep":false,"model":"gpt-6.1-sol","effort":"medium"}'
 run_hint "$PATHSTUB" "$(mevent gpt-6.1-sol 'add a field')"
-silent "current model is the pick"; assert_eq "$(ncalls)" "1" "current model is the pick: codex was asked"
+assert_contains "$SANDBOX/out" "effort"; assert_eq "$(ncalls)" "1" "current model is the pick: codex was asked"
 answer '{"why":"x","keep":false,"model":"gpt-6-luna","effort":"low"}'
 run_hint "$PATHSTUB" "$(mevent gpt-6.1-sol 'rename x')"
-silent "current model is stronger than the pick"
+assert_contains "$SANDBOX/out" "effort"
 answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(mevent gpt-6.1-sol 'fix the flaky login test')"
 case "$(cat "$SANDBOX/out")" in *gpt-6-astra*) pass ;; *) fail "a weaker current model: no hint: $(cat "$SANDBOX/out")" ;; esac
 answer '{"why":"x","keep":false,"model":"gpt-6-luna","effort":"low"}'
 run_hint "$PATHSTUB" "$(mevent gpt-6-luna 'rename x')"
-silent "luna for a haiku pick"
+assert_contains "$SANDBOX/out" "effort"
 # a model it does not know, or a model key that is not the event's own: the hint as before
 answer '{"why":"x","keep":false,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(mevent some-other-model 'fix the flaky login test')"
@@ -699,56 +699,53 @@ decoy_kept SIGTERM   # the others are gone or were killed above
 # the limit is clamped to 20 s
 if grep -qE 'to=20' "$HINT" && grep -q -- '-gt 20' "$HINT"; then pass; else fail "COREMODEL_HINT_TIMEOUT is not clamped to 20"; fi
 
-# ---- C5. confirm: block the prompt once, the person switches, the same prompt goes through ----
-# Codex hooks have no field that switches the model or asks a question (checked on codex 0.166.0 and 0.167.0-alpha.3.2:
-# the UserPromptSubmit output schema holds continue, decision "block", reason, stopReason, suppressOutput, systemMessage,
-# hookSpecificOutput.additionalContext). So "confirm" is: block once with a reason, remember the prompt, let the same
-# prompt through when it comes again. Off until `codex_confirm: on` (and the hint itself is on). A block that cannot be
-# remembered would trap the person: then it falls back to the plain hint.
-echo "  -- C5. confirm"
+# ---- C5. Ask, auto and one-time manual retries ----
+echo "  -- C5. routing"
 CONF_SF="$SANDBOX/coremodel-confirm"; printf 'codex_hint: on\ncodex_confirm: on\n' > "$CONF_SF"
 CONF_ONLY_SF="$SANDBOX/coremodel-confirm-only"; printf 'codex_confirm: on\n' > "$CONF_ONLY_SF"
 MARKS="$STATE/coremodel/codex-offered"
 # cevent <session> <prompt> [model] — a prompt in that session, from the current model (default gpt-6.1-sol)
 cevent() { printf '{"session_id":"%s","turn_id":"t","cwd":"/tmp","hook_event_name":"UserPromptSubmit","model":"%s","permission_mode":"default","transcript_path":null,"prompt":"%s"}' "$1" "${3:-gpt-6.1-sol}" "$(json_esc "$2")"; }
-blocked() { # blocked <label> <model> <effort> — one-line block object that names the pick, and nothing else on stdout
-  local o; o="$(cat "$SANDBOX/out")"
+offered() {
   assert_eq "$RC" "0" "$1: exit 0"
-  case "$o" in
-    '{"decision":"block","reason":"coremodel: this prompt needs '"$2"' at '"$3"' effort'*'"}') pass ;;
-    *) fail "$1: stdout is not the block object for $2/$3: $o" ;;
-  esac
-  assert_eq "$(printf '%s' "$o" | wc -l | tr -d ' ')" "0" "$1: stdout is one line"
-  json_ok "$SANDBOX/out" && pass || fail "$1: stdout is not valid JSON"
-  case "$o" in *'/model'*) pass ;; *) fail "$1: the reason does not say how to switch (/model)" ;; esac
-  case "$o" in *'send'*'again'*) pass ;; *) fail "$1: the reason does not say to send the prompt again" ;; esac
-  assert_not_contains "$SANDBOX/out" 'hookSpecificOutput'   # a block carries no additionalContext: the prompt does not run
-  assert_not_contains "$SANDBOX/out" 'fix the flaky login test'   # the prompt is not printed back
+  assert_contains "$SANDBOX/out" "needs $2 at $3 effort"
+  assert_contains "$SANDBOX/out" 'request_user_input_async'
+  json_ok "$SANDBOX/out" && pass || fail "$1: output is not valid JSON"
 }
-plain_hint() { # plain_hint <label> — the old output: additionalContext, never a block
+plain_hint() { # Fall back to chat history when a private retry marker cannot be stored.
   assert_eq "$RC" "0" "$1: exit 0"
+  assert_contains "$SANDBOX/out" 'resent after the CoreModel command'
   assert_contains "$SANDBOX/out" '"hookSpecificOutput"'
   assert_not_contains "$SANDBOX/out" '"decision"'
 }
 answer '{"why":"flaky test, cause unknown","keep":false,"model":"gpt-6-astra","effort":"high"}'
 
-# off by default: with codex_hint alone the output is the plain hint (the main check above), never a block
+# Both legacy opt-ins migrate to questions.
 run_hint "$PATHSTUB" "$(cevent c1 'fix the flaky login test')"
-plain_hint "confirm off"
+offered "legacy hint" gpt-6-astra high
+rm -f "$MARKS/c1"
 # the confirm key alone does nothing: the hint (the classifier) is off
 run_hint "$PATHSTUB" "$(cevent c1 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_ONLY_SF"
 silent "confirm without codex_hint"; assert_eq "$(ncalls)" "0" "confirm without codex_hint: Luna not called"
 assert_no_file "$MARKS/c1"
 
-# first send: blocked, and the prompt is remembered (as a hash, in a private file)
+# First offer: only a hash of the request is saved privately.
 rm -rf "$STATE"
 run_hint "$PATHSTUB" "$(cevent c1 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_SF"
-blocked "first send" gpt-6-astra high
+offered "first send" gpt-6-astra high
 assert_eq "$(ncalls)" "1" "first send: Luna asked once"
 assert_file "$MARKS/c1"
 assert_not_contains "$MARKS/c1" 'fix the flaky login test'
 case "$(ls -ld "$MARKS" | cut -c1-10)" in drwx------) pass ;; *) fail "the offered folder is not private: $(ls -ld "$MARKS")" ;; esac
 case "$(ls -l "$MARKS/c1" | cut -c1-10)" in -rw-------) pass ;; *) fail "the offered mark is not private: $(ls -l "$MARKS/c1")" ;; esac
+
+# A numbered response to either question belongs to the pending dialog.
+for option in 2 3; do
+  run_hint "$PATHSTUB" "$(cevent c1 "$option")" COREMODEL_CONFIG="$CONF_SF"
+  silent "numbered reply"
+  assert_eq "$(ncalls)" "0" "numbered reply skips classifier"
+  assert_file "$MARKS/c1"
+done
 
 # the same prompt again, same session: it goes through, with no classifier call and no output; the mark is used once
 run_hint "$PATHSTUB" "$(cevent c1 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_SF"
@@ -756,16 +753,23 @@ silent "resend"; assert_eq "$(ncalls)" "0" "resend: Luna not called"
 assert_no_file "$MARKS/c1"
 # a third time is a new offer
 run_hint "$PATHSTUB" "$(cevent c1 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_SF"
-blocked "third send" gpt-6-astra high
+offered "third send" gpt-6-astra high
 assert_eq "$(ncalls)" "1" "third send: Luna asked again"
+
+# Cancelling a text menu releases the retry, so a later submission gets a new decision.
+run_hint "$PATHSTUB" "$(cevent c1 '0')" COREMODEL_CONFIG="$CONF_SF"
+silent "cancel"
+assert_no_file "$MARKS/c1"
+run_hint "$PATHSTUB" "$(cevent c1 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_SF"
+offered "submit after cancellation" gpt-6-astra high
 
 # a different prompt after an offer is judged on its own (and offered again), not waved through
 run_hint "$PATHSTUB" "$(cevent c1 'fix the flaky login test, then the signup test')" COREMODEL_CONFIG="$CONF_SF"
-blocked "other prompt" gpt-6-astra high
+offered "other prompt" gpt-6-astra high
 assert_eq "$(ncalls)" "1" "other prompt: Luna asked"
 # another session's offer does not let this prompt through
 run_hint "$PATHSTUB" "$(cevent c2 'fix the flaky login test, then the signup test')" COREMODEL_CONFIG="$CONF_SF"
-blocked "other session" gpt-6-astra high
+offered "other session" gpt-6-astra high
 assert_eq "$(ncalls)" "1" "other session: Luna asked"
 assert_file "$MARKS/c1"; assert_file "$MARKS/c2"
 
@@ -773,15 +777,15 @@ assert_file "$MARKS/c1"; assert_file "$MARKS/c2"
 long_edge="$(reps 2100 a)"
 for middle in first second; do
   run_hint "$PATHSTUB" "$(cevent long "$long_edge $middle $long_edge")" COREMODEL_CONFIG="$CONF_SF"
-  blocked "long prompt with $middle middle" gpt-6-astra high
+  offered "long prompt with $middle middle" gpt-6-astra high
 done
 
 # a stale offer is ignored: the prompt is judged and offered again
 run_hint "$PATHSTUB" "$(cevent c3 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_SF"
-blocked "stale: offer" gpt-6-astra high
+offered "stale: offer" gpt-6-astra high
 touch -t 200001010000 "$MARKS/c3"
 run_hint "$PATHSTUB" "$(cevent c3 'fix the flaky login test')" COREMODEL_CONFIG="$CONF_SF"
-blocked "stale: after the limit" gpt-6-astra high
+offered "stale: after the limit" gpt-6-astra high
 assert_eq "$(ncalls)" "1" "stale: Luna asked again"
 
 # A known matching pair passes. Older clients omit effort, so a single confirmation lets the person check it.
@@ -789,15 +793,28 @@ pair_event() { printf '%s' "$(cevent c4 'test the queue' gpt-6-astra)" | sed "s/
 run_hint "$PATHSTUB" "$(pair_event high)" COREMODEL_CONFIG="$CONF_SF"
 silent "matching model and effort"
 run_hint "$PATHSTUB" "$(pair_event low)" COREMODEL_CONFIG="$CONF_SF"
-blocked "different effort on the same model" gpt-6-astra high
+offered "different effort on the same model" gpt-6-astra high
 assert_contains "$SANDBOX/out" "/model --reasoning=high"
 run_hint "$PATHSTUB" "$(cevent c7 'test the queue' gpt-6-astra)" COREMODEL_CONFIG="$CONF_SF"
-blocked "unknown effort on highest model" gpt-6-astra high
-assert_contains "$SANDBOX/out" 'does not report the current effort'
+offered "unknown effort on highest model" gpt-6-astra high
+assert_contains "$SANDBOX/out" 'Ask only for effort'
 answer '{"keep":false,"model":"gpt-6-luna","effort":"low"}'
 run_hint "$PATHSTUB" "$(cevent c8 'rename the variable')" COREMODEL_CONFIG="$CONF_SF"
-blocked "different lighter model" gpt-6-luna low
+offered "different lighter model" gpt-6-luna low
 assert_contains "$SANDBOX/out" "/model gpt-6-luna --reasoning=low"
+printf 'codex_mode: ask\ncodex_pick_model: off\n' > "$SANDBOX/effort-only"
+answer '{"keep":false,"model":"gpt-6-astra","effort":"high"}'
+run_hint "$PATHSTUB" "$(cevent effort-only 'test the queue' gpt-6-astra)" COREMODEL_CONFIG="$SANDBOX/effort-only"
+assert_contains "$SANDBOX/out" 'Ask only for effort'
+assert_not_contains "$SANDBOX/schema" 'gpt-6-luna'
+printf 'codex_mode: auto\n' > "$SANDBOX/auto"
+run_hint "$PATHSTUB" "$(cevent auto 'test the queue')" COREMODEL_CONFIG="$SANDBOX/auto"
+assert_contains "$SANDBOX/out" '/model gpt-6-astra --reasoning=high'
+assert_not_contains "$SANDBOX/out" 'request_user_input_async'
+printf 'codex_hint: on\ncodex_mode: off\n' > "$SANDBOX/off"
+run_hint "$PATHSTUB" "$(cevent off 'test the queue')" COREMODEL_CONFIG="$SANDBOX/off"
+silent "new off overrides legacy on"
+assert_eq "$(ncalls)" "0" "off skips classifier"
 # keep: nothing to say and nothing remembered
 answer '{"why":"picks an offered option","keep":true,"model":"gpt-6-astra","effort":"high"}'
 run_hint "$PATHSTUB" "$(cevent c4 'option 2')" COREMODEL_CONFIG="$CONF_SF"
@@ -850,6 +867,12 @@ assert_eq "$(recommend "$client_event")" '{"keep":true}' "explicit keep"
 assert_eq "$(recommend "$(event 'hello')")" '{"keep":true}' "local keep"
 answer 'invalid'
 assert_eq "$(recommend "$client_event")" '' "unavailable classifier"
+# A non-ladder model can classify its own effort when explicitly locked.
+printf 'codex_mode: auto\ncodex_pick_model: off\n' > "$CONF_ONLY_SF"
+assert_eq "$(COREMODEL_CONFIG="$CONF_ONLY_SF" bash "$HINT" --settings)" '{"mode":"auto","pickModel":false}' "shared routing settings"
+printf '%s' '{"models":[{"slug":"custom_model","visibility":"list","supported_reasoning_levels":[{"effort":"medium"}]}]}' > "$SANDBOX/client-models.json"
+answer '{"keep":false,"model":"custom_model","effort":"high"}'
+assert_eq "$(recommend "$(mevent custom_model 'test the queue')")" '{"model":"custom_model","effort":"medium"}' "effort for the actual custom model"
 # Native Windows hosts pass drive paths into Git Bash. cygpath converts only absolute paths.
 mkdir -p "$SANDBOX/winpath"
 cat > "$SANDBOX/winpath/cygpath" <<'SH'
