@@ -84,7 +84,9 @@
 # old_string, new_string, pattern of a Grep, description) are never looked at, so a Write whose
 # content mentions .env or ~/.ssh passes, and so does odd input that has no secret-looking string.
 # An odd input with no cwd, or with a cwd outside a project, is inert like any other.
-SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
+script="$0"
+case "$OSTYPE:$script" in msys*:*\\*) script="$(cygpath -u "$script")" || exit 0 ;; esac
+SELF="$(cd "$(dirname "$script")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/scripts/shell-patch.sh" 2>/dev/null || exit 0   # shell_patch_host, shell_patch_refused (Codex)

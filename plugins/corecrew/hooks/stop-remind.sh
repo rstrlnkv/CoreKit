@@ -5,10 +5,12 @@
 # Inert outside a project (<Core>/<project>/ or
 # its code folder beside the Core): a repo with the same shape elsewhere passes.
 # _locate.sh, lib.sh and `save` sit under ../scripts in the plugin.
-D="$(dirname "$0")/../scripts"
+script="$0"
+case "$OSTYPE:$script" in msys*:*\\*) script="$(cygpath -u "$script")" || exit 0 ;; esac
+D="$(dirname "$script")/../scripts"
 . "$D/_locate.sh"
 . "$D/lib.sh" 2>/dev/null || exit 0   # json_str, load_settings, project_of; next to _locate.sh
-. "$(dirname "$0")/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
+. "$(dirname "$script")/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 SAVE="$(cd "$D" && pwd)/save"
 in=$(cat)
 printf '%s' "$in" | tr -d '\r\n' | grep -qE '"stop_hook_active"[[:space:]]*:[[:space:]]*true' && exit 0

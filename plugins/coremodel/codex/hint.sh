@@ -13,20 +13,12 @@
 # `coremodel_mode: on` in the corecrew settings file. COREMODEL_HINT_TIMEOUT seconds (default 20).
 [ -z "${COREMODEL_NESTED:-}" ] || exit 0
 command -v codex >/dev/null 2>&1 || exit 0
-here="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || exit 0
+script="$0"
+case "$OSTYPE" in msys*|cygwin*) script="${script//\\//}" ;; esac
+here="$(cd "$(dirname "$script")" 2>/dev/null && pwd)" || exit 0
 [ -f "$here/classifier.txt" ] || exit 0
+. "$here/paths.sh" || exit 0
 
-# settings_file <ENV value> <folder> — the file the ENV value names (an absolute path), else <folder>/settings
-# under XDG_CONFIG_HOME or ~/.config; empty when there is no absolute place
-settings_file() {
-  case "$1" in
-    /*) printf '%s' "$1" ;;
-    *) case "${XDG_CONFIG_HOME:-}" in
-         /*) printf '%s' "${XDG_CONFIG_HOME%/}/$2/settings" ;;
-         *) case "${HOME:-}" in /*) printf '%s' "$HOME/.config/$2/settings" ;; esac ;;
-       esac ;;
-  esac
-}
 # read_key <file> <key> — the value of `key: value` in the file; empty when the file or the key is missing
 read_key() {
   [ -n "$1" ] && [ -f "$1" ] && [ -r "$1" ] || return 0
@@ -161,10 +153,8 @@ sid="$(cat "$tmp/sid" 2>/dev/null)"
 case "$sid" in ''|.*|*[!A-Za-z0-9._-]*) sid="" ;; esac
 [ "${#sid}" -le 128 ] || sid=""
 # the saved replies: one private file per session, under XDG_STATE_HOME or ~/.local/state
-case "${XDG_STATE_HOME:-}" in
-  /*) sd="${XDG_STATE_HOME%/}/coremodel/codex-replies" ;;
-  *) case "${HOME:-}" in /*) sd="$HOME/.local/state/coremodel/codex-replies" ;; *) sd="" ;; esac ;;
-esac
+state_root="$(base_dir "${XDG_STATE_HOME:-}" .local/state)"
+sd="${state_root:+$state_root/coremodel/codex-replies}"
 [ -n "$sid" ] && [ "$mode" = hook ] || sd=""
 
 # Stop: keep the end of the reply for the next prompt of this session; replies older than a day go
@@ -237,9 +227,10 @@ END {
 }' "$here/replies.txt" 2>/dev/null && keep
 
 # Keep the visibility of each catalog row so hidden models are distinct from a missing catalog.
-catf="${CODEX_HOME:-${HOME:-}/.codex}/models_cache.json"
+catalog_root="$(base_dir "${CODEX_HOME:-}" .codex)"
+catf="${catalog_root:+$catalog_root/models_cache.json}"
 if [ "$mode" = client ]; then
-  case "${COREMODEL_CATALOG:-}" in /*) catf="$COREMODEL_CATALOG" ;; esac
+  override="$(absolute_path "${COREMODEL_CATALOG:-}")" && catf="$override"
 fi
 : > "$tmp/cat"
 have_catalog=""

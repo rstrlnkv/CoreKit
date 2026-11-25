@@ -7,6 +7,12 @@ full detail.
 
 ## [Unreleased]
 
+Codex: after updating the plugin, trust its hooks again in `/hooks`.
+
+### Fixed
+
+- On Windows the terminal client finds Git Bash and the Codex CLI, including the npm launcher. The hook reads native absolute paths for settings, saved replies and model catalogs.
+
 ## [0.13.0] - 2026-11-25
 
 Codex: after updating the plugin, trust its hooks again in `/hooks`.

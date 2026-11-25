@@ -89,9 +89,33 @@ jobs:
       - name: Check both plugins with the installed CLI
         shell: bash
         run: |
-          bash tests/run.sh -j 2 codex_install coremodel_codex | tee "$RUNNER_TEMP/codex.out"
+          bash tests/run.sh -j 2 codex_install coremodel_codex platform_smoke | tee "$RUNNER_TEMP/codex.out"
           if grep -q '^SKIP ' "$RUNNER_TEMP/codex.out"; then
             echo '::error::Codex compatibility checks skipped'; exit 1
+          fi
+
+  windows-smoke:
+    name: Plugins on Windows (Git Bash)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the pinned native Codex CLI
+        run: |
+          npm install -g "@openai/codex@$CODEX_VERSION"
+          codex --version
+      - name: Check native paths and both installed plugins
+        run: |
+          report="$(mktemp)"
+          bash tests/run.sh windows_paths platform_smoke 2>&1 | tee "$report"
+          if grep -q '^SKIP ' "$report"; then
+            echo '::error::Windows plugin checks skipped'; exit 1
           fi
 
   shellcheck:

@@ -247,7 +247,11 @@ the same way, except `ui_language`, which falls back to `en` silently.
 
 - **OS:** macOS and Linux; CI runs the tests on both. Any CPU architecture: the plugin is bash
   scripts with no native code.
-  Windows needs [Git for Windows](https://git-scm.com/download/win), because the hooks run in Git Bash; it is untested.
+  On Windows, run the scripts with [Git for Windows](https://git-scm.com/download/win) Bash.
+  Use a local drive for the Core and projects. Git Bash accepts `C:\My Projects\Core`, `C:/My Projects/Core`
+  and `/c/My Projects/Core` for `core_dir`. The project layout needs permission to create native symbolic
+  links, for example through Windows Developer Mode. On Windows the one-suite hook can miss an active
+  test run when the process list does not expose the command line or working directory.
 - **Claude Code** 2.1.271 or newer (its settings with a list of choices need it), or the **Codex CLI** (tested with 0.166).
 - **git**, and the **GitHub CLI** `gh`, logged in with `gh auth login`. `gh` is used to create repos,
   to check that a new project's name is free, to check that the Core repo is private before a push,

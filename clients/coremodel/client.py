@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -13,11 +14,26 @@ from collections import deque
 HOOK = Path(__file__).resolve().parents[2] / "plugins/coremodel/codex/hint.sh"
 
 
+def windows_commands():
+    codex = shutil.which("codex.exe") or shutil.which("codex.cmd")
+    git = shutil.which("git.exe")
+    if not codex or not git:
+        raise RuntimeError("Install Codex CLI and Git for Windows and add them to PATH.")
+    git_bin = Path(git).resolve().parent
+    root = git_bin.parent
+    if root.name.lower() in ("mingw64", "mingw32", "clangarm64"):
+        root = root.parent
+    bash = root / "bin/bash.exe"
+    if not bash.is_file():
+        raise RuntimeError("Cannot locate Git Bash beside git.exe. Put Git for Windows on PATH.")
+    return codex, str(bash)
+
+
 class AppServer:
-    def __init__(self):
+    def __init__(self, codex):
         # This process handles CoreModel before the turn. Preserve the other plugins.
         self.process = subprocess.Popen(
-            ["codex", "-c", 'plugins."coremodel@corekit".enabled=false',
+            [codex, "-c", 'plugins."coremodel@corekit".enabled=false',
              "app-server", "--listen", "stdio://"],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8",
         )
@@ -125,14 +141,14 @@ def catalog(server, path):
     return models
 
 
-def recommend(prompt, model, reply, catalog_file, models):
+def recommend(bash, prompt, model, reply, catalog_file, models):
     event = {"hook_event_name": "UserPromptSubmit", "model": model,
              "prompt": prompt, "last_assistant_message": reply[-600:]}
-    env = dict(os.environ, COREMODEL_CATALOG=str(catalog_file))
+    env = dict(os.environ, COREMODEL_CATALOG=catalog_file.as_posix())
     env.pop("COREMODEL_NESTED", None)
     try:
-        call = subprocess.run(["bash", str(HOOK), "--recommend"], input=json.dumps(event),
-                              env=env, text=True, capture_output=True, check=True)
+        call = subprocess.run([bash, HOOK.as_posix(), "--recommend"], input=json.dumps(event),
+                              env=env, encoding="utf-8", capture_output=True, check=True)
         result = json.loads(call.stdout)
         if result.get("keep") is True:
             return None
@@ -144,7 +160,7 @@ def recommend(prompt, model, reply, catalog_file, models):
     return None
 
 
-def chat(server, auto, catalog_file):
+def chat(server, bash, auto, catalog_file):
     server.request("initialize", {"clientInfo": {"name": "coremodel_terminal", "version": "1"}})
     server.send({"method": "initialized"})
     models = catalog(server, catalog_file)
@@ -156,7 +172,7 @@ def chat(server, auto, catalog_file):
         prompt = input("> ")
         if not prompt.strip():
             continue
-        pick = recommend(prompt, current[0], reply, catalog_file, models)
+        pick = recommend(bash, prompt, current[0], reply, catalog_file, models)
         params = {"threadId": thread_id, "input": [{"type": "text", "text": prompt}]}
         if pick and pick != current:
             print(f"CoreModel recommends {pick[0]} · {pick[1]}.", flush=True)
@@ -178,9 +194,10 @@ def main():
     parser.add_argument("--auto", action="store_true", help="apply recommendations without asking")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="coremodel-client-") as temporary:
-        server = AppServer()
+        codex, bash = windows_commands() if os.name == "nt" else ("codex", "bash")
+        server = AppServer(codex)
         try:
-            chat(server, args.auto, Path(temporary) / "models.json")
+            chat(server, bash, args.auto, Path(temporary) / "models.json")
         finally:
             server.close()
 

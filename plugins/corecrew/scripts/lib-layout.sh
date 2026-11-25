@@ -53,6 +53,7 @@ worktree_of() {
       g="${g%$'\r'}"
       while case "$g" in *[[:blank:]]) true ;; *) false ;; esac; do g="${g%?}"; done
       case "$g" in "gitdir: "?*) x="${g#gitdir: }" ;; *) return 1 ;; esac
+      _host_path_r "$x"; x="$_HP"
       case "$x" in /*) ;; *) x="$d/$x" ;; esac
       case "$x" in */.git/worktrees/?*) ;; *) return 1 ;; esac
       e="$x"; x="${x%/.git/worktrees/*}"
@@ -60,6 +61,7 @@ worktree_of() {
       [ -d "$x/.git" ] || return 1
       b=""; { IFS= read -r b < "$e/gitdir"; } 2>/dev/null || [ -n "$b" ] || return 1
       b="${b%$'\r'}"
+      _host_path_r "$b"; b="$_HP"
       case "$b" in /*) ;; *) b="$e/$b" ;; esac
       case "$b" in */.git) b="$(canon_dir "${b%/.git}")/.git" ;; *) return 1 ;; esac
       [ "$b" = "$d/.git" ] || return 1
@@ -96,11 +98,11 @@ code_root_of() {
   local t n r here o
   here="$(canon_dir "${1:-.}")"
   if n="$(project_of "${1:-.}")" && o="$(old_code_of "$n")"; then old_layout_msg "$o" >&2; return 4; fi
-  t="$(git -C "${1:-.}" rev-parse --show-toplevel 2>/dev/null)" || t=""
+  t="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null)" || t=""
   if [ -n "$t" ] && project_of "$t" >/dev/null; then
     # only a root that holds the folder asked about: a forged gitfile or core.worktree must not point elsewhere
     r="$(canon_dir "$t")"
-    case "$here/" in "$r"/*) printf '%s\n' "$t"; return 0 ;; esac
+    case "$here/" in "$r"/*) printf '%s\n' "$r"; return 0 ;; esac
     echo "code-root: $here is not inside $r" >&2; return 1
   fi
   # a session in <Core>/<name>/ (git sees the Core): the project's main code folder

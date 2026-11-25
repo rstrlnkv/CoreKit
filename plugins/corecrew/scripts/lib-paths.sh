@@ -1,6 +1,16 @@
 # lib-paths.sh — path helpers of lib.sh (source lib.sh, not this file): expand_home, canon_dir, lc, norm_path, resolve_abs.
 # The *_r forms set a variable instead of printing, so a caller needs no "$(...)" subshell.
 
+# _host_path_r <path> — sets _HP to the shell spelling. Git for Windows reports native
+# drive paths from git and host events; POSIX hosts allow literal backslashes in names.
+_host_path_r() {
+  _HP="$1"
+  case "${OSTYPE:-}" in
+    msys*) _HP="${_HP//\\//}"
+      case "$_HP" in [a-zA-Z]:/*) _HP="$(cygpath -u "$_HP")" || _HP="$1" ;; esac ;;
+  esac
+}
+
 # _nl_trim <text> — sets _NT: the text without its trailing newlines, as "$(...)" gives a printed value.
 _nl_trim() { _NT="$1"; while [ "${_NT%$'\n'}" != "$_NT" ]; do _NT="${_NT%$'\n'}"; done; }
 
@@ -45,7 +55,7 @@ _dirname_r() {
 # the string stays the same after the directory is created. No trailing slash, no trailing newline.
 # One subshell: the cd -P.
 canon_dir_r() {
-  local p rest="" base c; expand_home_r "$1"; p="$_EH"
+  local p rest="" base c; _host_path_r "$1"; expand_home_r "$_HP"; p="$_EH"
   while [ "${#p}" -gt 1 ] && [ "${p%/}" != "$p" ]; do p="${p%/}"; done
   base="$p"
   # the missing parts are cut off with ${..%/*} and ${..##*/} (no basename/dirname process per part: a guard judges
@@ -88,6 +98,7 @@ norm_path() {
 resolve_abs() {
   local t="$1" dir base link n=0
   while :; do
+    _host_path_r "$t"; t="$_HP"
     case "$t" in "~"|"~/"*) t="$(expand_home "$t")" ;; esac
     case "$t" in /*) ;; *) t="$cwd/$t" ;; esac
     while [ "${#t}" -gt 1 ] && [ "${t%/}" != "$t" ]; do t="${t%/}"; done

@@ -851,4 +851,26 @@ assert_eq "$(recommend "$client_event")" '{"keep":true}' "explicit keep"
 assert_eq "$(recommend "$(event 'hello')")" '{"keep":true}' "local keep"
 answer 'invalid'
 assert_eq "$(recommend "$client_event")" '' "unavailable classifier"
+# Native Windows hosts pass drive paths into Git Bash. cygpath converts only absolute paths.
+mkdir -p "$SANDBOX/winpath"
+cat > "$SANDBOX/winpath/cygpath" <<'SH'
+#!/bin/bash
+case "$2" in
+  'C:\Core Model\settings') printf '%s\n' "$WIN_SETTINGS" ;;
+  'C:/Core Model/state') printf '%s\n' "$WIN_STATE" ;;
+  'C:/Core Model/catalog.json') printf '%s\n' "$WIN_CATALOG" ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$SANDBOX/winpath/cygpath"
+winpath="$SANDBOX/winpath:$PATHSTUB"
+export WIN_SETTINGS="$ON_SF" WIN_STATE="$SANDBOX/windows state" WIN_CATALOG="$SANDBOX/client-models.json"
+run_hint "$winpath" '{"session_id":"win","hook_event_name":"Stop","last_assistant_message":"saved reply"}' \
+  OSTYPE=msys COREMODEL_CONFIG='C:\Core Model\settings' XDG_STATE_HOME='C:/Core Model/state'
+assert_file "$WIN_STATE/coremodel/codex-replies/win"
+printf '%s' '{"models":[]}' > "$WIN_CATALOG"
+rm -f "$CALLS"
+printf '%s' "$client_event" | env PATH="$winpath" OSTYPE=msys COREMODEL_CATALOG='C:/Core Model/catalog.json' \
+  /bin/bash "$HINT" --recommend > "$SANDBOX/out"
+assert_eq "$(ncalls)" "0" "Windows client honors its empty native catalog"
 finish

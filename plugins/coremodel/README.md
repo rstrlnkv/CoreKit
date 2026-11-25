@@ -239,6 +239,14 @@ Each `Stop` also removes expired replies from other chats. Nothing is kept while
 
 With a CoreKit checkout, Python 3 and a signed-in Codex CLI, run `python3 /path/to/CoreKit/clients/coremodel/client.py` from your project directory. The client starts a new chat. Enter a prompt, then choose **y** to apply the suggested model and effort, **n** to keep the current settings, or **c** to cancel the prompt. Add `--auto` to apply suggestions automatically. End the chat with Ctrl+D. Each submitted prompt goes to the classifier when needed and the original prompt goes to the selected model once.
 
+In Windows PowerShell with the Python launcher, run:
+
+```powershell
+py -3 "C:\path to\CoreKit\clients\coremodel\client.py"
+```
+
+Put Git for Windows and the native Codex CLI on PATH. The client locates Bash beside Git and supports both `codex.exe` and the npm `codex.cmd` launcher. To end input in the Windows console, press Ctrl+Z, then Enter. Codex plugin hooks also require the `bash` command on PATH to resolve to Git Bash.
+
 ## Requirements
 
 - **OS:** whatever Claude Code runs on; the plugin is a TypeScript module with no native code.

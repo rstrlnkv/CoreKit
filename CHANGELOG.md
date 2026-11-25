@@ -9,6 +9,12 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+Codex: after updating the plugin, trust its hooks again in `/hooks`.
+
+### Fixed
+
+- Git Bash recognizes Windows drive paths in Core settings, project and worktree discovery, and file-tool events.
+
 ## [1.5.0] - 2026-11-25
 
 Codex: after the update, trust the hooks again in `/hooks`.

@@ -5,9 +5,11 @@
 # ui_language setting. Every other skill, every other tool and the main session pass with no output.
 # Codex has no Skill tool, so the hook never fires there; the task skill's Overview says the same rule in words.
 # Best effort, not a boundary (docs: the threat model): input it cannot read passes. No jq.
-S="$(dirname "$0")/../scripts"
+script="$0"
+case "$OSTYPE:$script" in msys*:*\\*) script="$(cygpath -u "$script")" || exit 0 ;; esac
+S="$(dirname "$script")/../scripts"
 . "$S/lib.sh" 2>/dev/null || exit 0                    # json_fields, json_text, load_settings
-. "$(dirname "$0")/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
+. "$(dirname "$script")/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting
 in="$(cat)"
 {
   IFS= read -r -d '' tool; IFS= read -r -d '' skill; IFS= read -r -d '' agent_id; IFS= read -r -d '' agent_type

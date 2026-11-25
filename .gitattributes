@@ -1,0 +1,5 @@
+# Keep shell entry points, templates and line-oriented configuration portable.
+* text=auto eol=lf
+*.png binary
+# Byte-for-byte fixture used by the wiki parser tests.
+tests/fixtures/wiki-index/docs/features/crlf-page.md -text

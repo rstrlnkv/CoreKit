@@ -72,7 +72,7 @@ Each plugin's README has the full description, its commands and its settings.
 
 - **Hosts:** Claude Code 2.1.271 or newer (coremodel needs 2.1.309), or the Codex CLI (tested with 0.166).
 - **OS:** macOS and Linux: CI runs the full suite on both, on macOS with its system bash 3.2.
-  Windows needs Git for Windows and is untested.
+  On Windows, install Git for Windows and use Git Bash for the shell commands. CoreCrew projects need permission to create symbolic links. The Windows CI job checks installation, drive paths and client startup.
 - **CPU architecture:** any; the plugins are bash scripts and a TypeScript module with no native
   code ([corecrew](plugins/corecrew/README.md#requirements), [coremodel](plugins/coremodel/README.md#requirements)).
 - **Per plugin:** corecrew needs git and the GitHub CLI (`gh`).

@@ -76,7 +76,9 @@
 #   cwd outside any project in tests/test_hook_guard_code.sh.
 #   No network, no git; only canon_dir, project_of and one grep of the CLAUDE.md public-docs line.
 # - Input it cannot read (not JSON, no cwd, no path or command) passes.
-SELF="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || exit 0
+script="$0"
+case "$OSTYPE:$script" in msys*:*\\*) script="$(cygpath -u "$script")" || exit 0 ;; esac
+SELF="$(cd "$(dirname "$script")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/scripts/shell-patch.sh" 2>/dev/null || exit 0   # shell_patch_host, shell_patch_refused (Codex)

@@ -3,6 +3,8 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import runpy
+from unittest.mock import patch
 import sys
 
 root = Path(__file__).resolve().parents[1]
@@ -10,6 +12,17 @@ stage = Path(sys.argv[1])
 client = stage / "clients/coremodel/client.py"
 client.parent.mkdir(parents=True)
 client.write_bytes((root / "clients/coremodel/client.py").read_bytes())
+# Git Bash must come from the Git for Windows installation, even when PATH names WSL bash.
+namespace = runpy.run_path(str(client))
+git_root = stage / "Git With Spaces"
+git_bash = git_root / "bin/bash.exe"
+git_bash.parent.mkdir(parents=True)
+git_bash.touch()
+for git_location in ("cmd/git.exe", "mingw64/bin/git.exe"):
+    executables = {"git.exe": str(git_root / git_location), "codex.cmd": "codex.cmd",
+                   "bash.exe": str(stage / "System32/bash.exe")}
+    with patch("shutil.which", side_effect=executables.get):
+        assert namespace["windows_commands"]() == ("codex.cmd", str(git_bash))
 hook = stage / "plugins/coremodel/codex/hint.sh"
 hook.parent.mkdir(parents=True)
 hook.write_text('test "$1" = --recommend || exit 3\ncat >> "$EVENTS"\necho \'{"model":"gpt-6.2-sol","effort":"medium"}\'\n')

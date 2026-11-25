@@ -6,7 +6,9 @@ a release is made. [ARCHITECTURE.md](ARCHITECTURE.md) explains how the repo is l
 ## Requirements
 
 - macOS or Linux with `bash`, `git` and the usual command-line tools. CI runs the suite on both
-  (macOS with the system bash 3.2, and Ubuntu).
+  (macOS with the system bash 3.2, and Ubuntu). For the Windows smoke checks, use Git Bash,
+  native Python 3 and the Codex CLI. Run `bash tests/test_windows_paths.sh` and
+  `bash tests/test_platform_smoke.sh` from the repository root.
 - Optional: the `claude` CLI and the `codex` CLI. Without them, the tests that need them print a
   `SKIP` line and the run names them after `ALL TESTS PASSED`. The full CI suite installs `claude`
   on both runners and `codex` on macOS, where the sandbox checks exercise native permissions.

@@ -65,8 +65,10 @@ coredev_set() {
 # ~/.config/corecrew/settings. With no usable HOME there is no file: _SFP empty, exit 1.
 _sfp_r() {
   _SFP=""
-  case "${CORECREW_CONFIG:-}" in /*) _SFP="$CORECREW_CONFIG"; return 0 ;; esac
-  case "${XDG_CONFIG_HOME:-}" in /*) _SFP="${XDG_CONFIG_HOME%/}/corecrew/settings"; return 0 ;; esac
+  _host_path_r "${CORECREW_CONFIG:-}"
+  case "$_HP" in /*) _SFP="$_HP"; return 0 ;; esac
+  _host_path_r "${XDG_CONFIG_HOME:-}"
+  case "$_HP" in /*) _SFP="${_HP%/}/corecrew/settings"; return 0 ;; esac
   case "${HOME:-}" in /*) _SFP="$HOME/.config/corecrew/settings" ;; *) return 1 ;; esac
 }
 # settings_file_path — prints what _sfp_r sets; exit 1 when there is no file.
@@ -160,6 +162,7 @@ _resolve_setting() {
     # shellcheck disable=SC2016  # the placeholder text is literal
     case "$v" in *'${user_config.'*) v="" ;; *) _nl_trim "$v"; v="$_NT" ;; esac
     [ -n "$v" ] || continue
+    if [ "$key" = core_dir ]; then _host_path_r "$v"; v="$_HP"; fi
     if _setting_valid "$key" "$v"; then REPLY="$v"; break; fi
     # an unknown ui_language is silently English (as documented in hooks/messages.sh); the rest is named in
     # SETTINGS_WARN, whose texts are msg_settings_warning in hooks/messages.sh

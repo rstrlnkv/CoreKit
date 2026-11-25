@@ -5,6 +5,7 @@
 codex_home() {
   local b="${CODEX_HOME:-}"
   if [ -z "$b" ]; then case "${HOME:-}" in /*) b="$HOME/.codex" ;; esac; fi
+  _host_path_r "$b"; b="$_HP"
   case "$b" in /*) printf '%s' "${b%/}" ;; *) return 1 ;; esac
 }
 

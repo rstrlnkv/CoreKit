@@ -79,8 +79,14 @@ compat="$(job "$WF" codex-compat)"
 for required in 'runs-on: ubuntu-latest' 'channel: [pinned, latest]' 'CODEX_CHANNEL: ${{ matrix.channel }}' \
   'version="$CODEX_VERSION"' '[ "$CODEX_CHANNEL" = latest ]' 'version=latest' \
   'npm install -g "@openai/codex@$version"' 'codex --version' \
-  'bash tests/run.sh -j 2 codex_install coremodel_codex' "grep -q '^SKIP '"; do
+  'bash tests/run.sh -j 2 codex_install coremodel_codex platform_smoke' "grep -q '^SKIP '"; do
   case "$compat" in *"$required"*) pass ;; *) fail "Codex compatibility check missing $required" ;; esac
+done
+
+# The Windows smoke installs the marketplace and exercises the installed plugins with Git Bash.
+win="$(job "$WF" windows-smoke)"
+for required in 'runs-on: windows-latest' 'shell: bash' 'npm install -g "@openai/codex@$CODEX_VERSION"' 'bash tests/run.sh windows_paths platform_smoke' "grep -q '^SKIP '"; do
+  case "$win" in *"$required"*) pass ;; *) fail "Windows plugin smoke missing $required" ;; esac
 done
 
 # The commit-subjects job: the whole history is fetched, the range is passed through env (never ${{ }} inside run:),

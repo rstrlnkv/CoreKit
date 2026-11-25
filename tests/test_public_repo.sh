@@ -87,6 +87,21 @@ done
 
 # --- self-check: a README in shape passes; each kind of error is caught
 new_sandbox
+# Windows clones commonly use core.autocrlf=true. Bash scripts and line-oriented
+# pattern files must retain their bytes, including files without an extension.
+checkout="$SANDBOX/checkout"
+git init -q "$checkout"
+for f in plugins/coremodel/codex/hint.sh plugins/corecrew/scripts/save plugins/corecrew/scripts/git-hooks/blocked-patterns tests/fixtures/wiki-index/docs/features/crlf-page.md; do
+  mkdir -p "$checkout/$(dirname "$f")"
+  cp "$ROOT/$f" "$checkout/$f"
+done
+[ ! -f "$ROOT/.gitattributes" ] || cp "$ROOT/.gitattributes" "$checkout/"
+git -C "$checkout" -c core.autocrlf=false add .
+mkdir "$SANDBOX/windows-tree"
+git -C "$checkout" -c core.autocrlf=true checkout-index --prefix="$SANDBOX/windows-tree/" --all
+while IFS= read -r f; do
+  cmp -s "$SANDBOX/windows-tree/$f" "$ROOT/$f" && pass || fail "core.autocrlf changed $f at checkout"
+done < <(git -C "$checkout" ls-files plugins tests)
 mkdir -p "$SANDBOX/plugins/x"
 X="$SANDBOX/plugins/x/README.md"
 REL='https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fexample.org%2Fplugins%2Fx%2F.claude-plugin%2Fplugin.json&query=%24.version&label=release'
