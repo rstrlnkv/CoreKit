@@ -7,6 +7,8 @@ full detail.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-25
+
 Codex: after updating the plugin, trust its hooks again in `/hooks`.
 
 ### Changed
