@@ -12,7 +12,7 @@ What the person sees when this change reaches them: where the eye lands, what th
 Every finding as a measurement off a rendered screen: a size, a contrast ratio, a distance, a hit area, the states shown. A finding with no measurement goes into "Not measured": taste is not evidence.
 ## What to read first
 Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:` and `project:` name it.
-1. `CLAUDE.md` (what the program is, who uses it, in what conditions).
+1. `AGENTS.md` (legacy projects: `CLAUDE.md`) (what the program is, who uses it, in what conditions).
 2. `docs/INDEX.md`, the generated map of the wiki.
 3. The wiki page the task needs, and engineer's `Screens` line in the brief: start from it, search the source only for what it does not name. Find the project's design document and its own measuring instruments rather than inventing a second way.
 4. Its standards: `docs/standards/<name>.md` of the project, else `<Core>/standards/<name>.md`, for every standard whose `applies-to` names designer.

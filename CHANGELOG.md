@@ -14,6 +14,14 @@ Codex: after updating the plugin, trust its hooks again in `/hooks`.
 ### Changed
 
 - Every CoreCrew hook now shows a status message describing its action.
+- New and adopted projects use one private `AGENTS.md`. Existing projects can migrate their
+  instructions with `prepare.sh --migrate-instructions`.
+
+### Fixed
+
+- Adopt merges tracked private instructions before removing the source files from the code repo
+  and preserves the existing check command.
+- CoreCrew creates the private `AGENTS.md` link only where Git ignores it, including nested Git worktrees.
 
 ## [1.5.1] - 2026-11-25
 

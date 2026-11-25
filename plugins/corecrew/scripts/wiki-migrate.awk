@@ -82,6 +82,10 @@ function links(s,   out, m, i, txt, tgt, anc, k, n) {
     txt = substr(m, 2, i - 2); tgt = substr(m, i + 2, length(m) - i - 2); gsub(/\|/, "/", txt)
     if (tgt ~ /^<.*>$/) tgt = substr(tgt, 2, length(tgt) - 2)
     anc = ""; if ((k = index(tgt, "#")) > 0) { anc = substr(tgt, k + 1); tgt = substr(tgt, 1, k - 1) }
+    if (LEGACY_LINK != "" && tgt == LEGACY_LINK && substr(m, 1, 1) != "!") {
+      out = out substr(m, 1, i + 1) SHARED_LINK (anc == "" ? "" : "#" anc) ")"
+      continue
+    }
     n = (substr(m, 1, 1) == "!") ? "" : pagename(tgt)
     out = out ((n == "") ? m : wlink(n, anc, txt))
   }

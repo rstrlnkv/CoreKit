@@ -58,6 +58,7 @@ PR="$SANDBOX/Projects"
 F="$PR/Foo"; mkdir -p "$F/docs" "$F/.claude/rules" "$F/.claude/commands" "$F/src"
 git init -q "$F" && git -C "$F" symbolic-ref HEAD refs/heads/main
 printf '# Foo\n\nOwn instructions.\n' > "$F/CLAUDE.md"
+printf '# Codex\n\nUse the project test command.' > "$F/AGENTS.md"
 printf '# A\n\nPage a.\n' > "$F/docs/a.md"
 printf -- '---\npaths: ["src/**"]\n---\n\n# Tests\n\nWrite the test first.\n' > "$F/.claude/rules/t.md"
 printf 'Always on.\n' > "$F/.claude/rules/always.md"
@@ -71,7 +72,7 @@ echo "$DRY_OUT" | grep -qxF "kept in Core, no longer loaded:" && pass || fail "p
 echo "$DRY_OUT" | grep -qxF "  .claude/commands/x.md" && pass || fail "plan lacks x.md: $DRY_OUT"
 echo "$DRY_OUT" | grep -qxF "  .claude/rules/t.md" && pass || fail "plan lacks the rule: $DRY_OUT"
 echo "$DRY_OUT" | grep -q '^move:' && fail "plan moves the folder: $DRY_OUT" || pass
-echo "$DRY_OUT" | grep -qF "$F/CLAUDE.local.md" && pass || fail "plan lacks the link: $DRY_OUT"
+echo "$DRY_OUT" | grep -qF "$F/AGENTS.md" && pass || fail "plan lacks the link: $DRY_OUT"
 assert_no_file "$F/CLAUDE.local.md"
 assert_exit 0 bash "$AD" --from "$F"
 P="$CORE_DIR/foo"
@@ -86,28 +87,28 @@ assert_eq "$(inode "$F")" "$I0" "folder inode"
 assert_eq "$(git -C "$F" rev-list --count HEAD)" "$((N0 + 1))" "commit count"
 assert_eq "$(git -C "$F" log -1 --format=%s)" "Move internal Claude files to Core" "repo commit subject"
 assert_eq "$(git -C "$F" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ';')" \
-  ".claude/commands/x.md;.claude/rules/always.md;.claude/rules/t.md;.gitignore;.worktreeinclude;CLAUDE.md;docs/a.md;" "repo commit files"
+  ".claude/commands/x.md;.claude/rules/always.md;.claude/rules/t.md;.gitignore;.worktreeinclude;AGENTS.md;CLAUDE.md;docs/a.md;" "repo commit files"
 assert_no_file "$F/CLAUDE.md"; assert_no_file "$F/docs"; assert_no_file "$F/.claude/rules"
 assert_eq "$(git -C "$F" ls-files -- CLAUDE.md)" "" "CLAUDE.md still tracked"
 assert_eq "$(git -C "$F" status --porcelain)" "" "repo dirty"
-assert_contains "$P/CLAUDE.md" "Own instructions."
-assert_contains "$P/CLAUDE.md" "### t"
-assert_contains "$P/CLAUDE.md" "Applies to: src/**"
-assert_contains "$P/CLAUDE.md" "Write the test first."
-assert_contains "$P/CLAUDE.md" "### always"
-assert_contains "$P/CLAUDE.md" "Always on."
-assert_not_contains "$P/CLAUDE.md" "paths:"
-assert_eq "$(grep -c '^## Rules$' "$P/CLAUDE.md")" "1" "one Rules section"
+assert_contains "$P/AGENTS.md" "Own instructions."
+assert_contains "$P/AGENTS.md" "Use the project test command."
+assert_contains "$P/AGENTS.md" "### t"
+assert_contains "$P/AGENTS.md" "Applies to: src/**"
+assert_contains "$P/AGENTS.md" "Write the test first."
+assert_contains "$P/AGENTS.md" "### always"
+assert_contains "$P/AGENTS.md" "Always on."
+assert_not_contains "$P/AGENTS.md" "paths:"
+assert_eq "$(grep -c '^## Rules$' "$P/AGENTS.md")" "1" "one Rules section"
 # the rules come after the Rules heading, the rule's own heading sits below ### t
 awk '/^## Rules$/ { r = NR } /^### t$/ { t = NR } /^#### Tests$/ { h = NR } END { exit !(r && t > r && h > t) }' \
-  "$P/CLAUDE.md" && pass || fail "rules not under ## Rules: $(cat "$P/CLAUDE.md")"
+  "$P/AGENTS.md" && pass || fail "rules not under ## Rules: $(cat "$P/AGENTS.md")"
 assert_file "$P/.claude/commands/x.md"
 assert_no_file "$P/.claude/rules"
 assert_file "$P/docs/a.md"
-[ -L "$F/CLAUDE.local.md" ] && pass || fail "no CLAUDE.local.md link"
-assert_eq "$(readlink "$F/CLAUDE.local.md")" "$P/CLAUDE.md" "link target"
+assert_no_file "$F/CLAUDE.local.md"
 [ -L "$F/AGENTS.md" ] && pass || fail "no AGENTS.md link"
-assert_eq "$(readlink "$F/AGENTS.md")" "$P/CLAUDE.md" "AGENTS.md link target"
+assert_eq "$(readlink "$F/AGENTS.md")" "$P/AGENTS.md" "AGENTS.md link target"
 assert_contains "$F/.claude/settings.local.json" "\"$P\""
 assert_eq "$(cat "$F/.worktreeinclude")" "$(cat "$PLUGIN/templates/code/worktreeinclude")" ".worktreeinclude from the template"
 echo "$DRY_OUT" | grep -qF ".worktreeinclude" && pass || fail "plan lacks .worktreeinclude: $DRY_OUT"
@@ -125,7 +126,7 @@ assert_contains "$CORE_DIR/.git/hooks/pre-push" "corecrew hook shim"
 ls -A "$CORE_DIR" | grep -q '^\.adopt' && fail "temp dir left in Core" || pass
 assert_eq "$(bash "$SCRIPTS/lib.sh" project-of "$F")" "foo" "project_of after adopt"
 # the line before the last asks for a new session in the code folder and names no host
-assert_eq "$(printf '%s\n' "$OUT" | tail -2 | head -1)" "start a new session in $F so CLAUDE.local.md loads" "restart line"
+assert_eq "$(printf '%s\n' "$OUT" | tail -2 | head -1)" "start a new session in $F to load the project instructions" "restart line"
 # a second adopt of the same folder: the Core folder is taken; nothing changes
 refuses "target exists: $CORE_DIR/foo" --from "$F"
 
@@ -142,7 +143,7 @@ assert_exit 0 bash "$AD" --from "$F"
 OUT1="$OUT"
 P="$CORE_DIR/my-app"
 assert_eq "$(last_line "$OUT1")" "open: $F" "last line"
-for f in CLAUDE.md docs/guide.md .claude/settings.json docs/INDEX.md docs/brief.md docs/architecture.md \
+for f in AGENTS.md docs/guide.md .claude/settings.json docs/INDEX.md docs/brief.md docs/architecture.md \
          docs/decisions/001-stack-and-architecture.md; do
   assert_file "$P/$f"
 done
@@ -163,9 +164,9 @@ assert_file "$F/src/a.sh"
 assert_no_file "$F/CLAUDE.md"; assert_no_file "$F/docs"
 assert_eq "$(git -C "$F" status --porcelain)" "" "code repo dirty"
 assert_eq "$(git -C "$F" log --format=%s | tail -1)" "initial" "history kept"
-assert_contains "$P/CLAUDE.md" "# Old project"
-assert_contains "$P/CLAUDE.md" "check: <set after scaffolding>"
-assert_not_contains "$P/CLAUDE.md" "public-docs:"
+assert_contains "$P/AGENTS.md" "# Old project"
+assert_contains "$P/AGENTS.md" "check: <set after scaffolding>"
+assert_not_contains "$P/AGENTS.md" "public-docs:"
 assert_contains "$P/docs/guide.md" "How to use it."
 head -1 "$P/docs/guide.md" | grep -qx -- '---' && pass || fail "guide.md: no front matter added"
 assert_not_contains "$P/docs/guide.md" "title:"
@@ -238,9 +239,9 @@ P="$CORE_DIR/foo"
 assert_file "$F/docs/a.md"
 assert_eq "$(git -C "$F" ls-files -- docs/a.md)" "docs/a.md" "public page still tracked"
 assert_no_file "$P/docs/a.md"
-assert_contains "$P/CLAUDE.md" "public-docs: docs/"
-assert_contains "$P/CLAUDE.md" "check: bash tests/run.sh"
-assert_not_contains "$P/CLAUDE.md" "check: <set after scaffolding>"
+assert_contains "$P/AGENTS.md" "public-docs: docs/"
+assert_contains "$P/AGENTS.md" "check: bash tests/run.sh"
+assert_not_contains "$P/AGENTS.md" "check: <set after scaffolding>"
 assert_eq "$(git -C "$F" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ';')" \
   ".gitignore;.worktreeinclude;CLAUDE.md;" "removed files (public docs kept)"
 assert_file "$P/docs/INDEX.md"
@@ -256,7 +257,7 @@ printf -- '---\npaths: [ "a/**", '"'"'b/**'"'"' ]\n---\n## Sub\nB.\n```\n# x\n``
 printf -- '---\r\npaths: win/**\r\n---\r\n# Head\r\nCRLF body.\r\n' > "$F/.claude/rules/crlf.md"; printf '# Plain\r\nNo front matter.\r\n' > "$F/.claude/rules/crlf2.md"
 git -C "$F" add -A && git -C "$F" commit -q -m initial
 assert_exit 0 bash "$AD" --from "$F"
-C="$CORE_DIR/rules-app/CLAUDE.md"
+C="$CORE_DIR/rules-app/AGENTS.md"
 assert_contains "$C" "### web/style"
 assert_contains "$C" "Applies to: src/**/*.{ts,tsx}, lib/**"
 assert_contains "$C" "Applies to: a/**, b/**"
@@ -328,7 +329,7 @@ refuses "target exists: $CORE_DIR/dirty-app" --from "$F"
 rm "$CORE_DIR/dirty-app"
 # a CLAUDE.local.md of the user's is never replaced by the link
 mkrepo "$PR/loc-app"; echo mine > "$PR/loc-app/CLAUDE.local.md"; echo CLAUDE.local.md >> "$PR/loc-app/.git/info/exclude"
-refuses "CLAUDE.local.md exists in $PR/loc-app: move it away first (adopt links that name to $CORE_DIR/loc-app/CLAUDE.md)" --from "$PR/loc-app"
+refuses "CLAUDE.local.md exists in $PR/loc-app: move it away first so Claude Code can discover AGENTS.md" --from "$PR/loc-app"
 # --dry-run refuses too
 mkrepo "$PR/ok-app"
 refuses "invalid project name 'Bad Name' (rename the folder)" --from "$PR/ok-app" --name "Bad Name" --dry-run
@@ -428,7 +429,7 @@ if [ -d "$SANDBOX/projects/case-app/.git" ]; then
   assert_eq "$(last_line "$OUT")" "open: $F" "last line (--from in another case)"
   grep -qxF -- '- case-app — Adopted existing project — Case-App/' "$CORE_DIR/PROJECTS.md" && pass \
     || fail "PROJECTS.md entry lacks the on-disk case: $(cat "$CORE_DIR/PROJECTS.md")"
-  assert_eq "$(readlink "$F/CLAUDE.local.md")" "$CORE_DIR/case-app/CLAUDE.md" "link (--from in another case)"
+  assert_eq "$(readlink "$F/AGENTS.md")" "$CORE_DIR/case-app/AGENTS.md" "link (--from in another case)"
 else
   skip "--from letter case" "case-sensitive disk"
 fi
@@ -445,9 +446,11 @@ assert_exit 0 bash "$AD" --from "$F" --check "make test"
 P="$CORE_DIR/bare-app"
 assert_eq "$(git -C "$F" rev-list --count HEAD)" "2" "one repo commit"
 assert_eq "$(git -C "$F" show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ';')" ".gitignore;.worktreeinclude;" "the repo commit holds .gitignore and .worktreeinclude"
-assert_contains "$P/CLAUDE.md" "# bare-app"
-assert_contains "$P/CLAUDE.md" "check: make test"
-assert_contains "$P/CLAUDE.md" "## Rules"
+assert_contains "$P/AGENTS.md" "# bare-app"
+assert_contains "$P/AGENTS.md" "check: make test"
+assert_contains "$P/AGENTS.md" "## Rules"
+assert_no_file "$F/CLAUDE.local.md"
+assert_eq "$(readlink "$F/AGENTS.md")" "$P/AGENTS.md" "bare repo: Codex link"
 bash "$WC" "$P" >/dev/null 2>&1 && pass || fail "wiki-check (bare): $(bash "$WC" "$P" 2>&1)"
 
 # --- an existing check: line stays unless --check is given; existing wiki front matter is kept
@@ -458,8 +461,8 @@ printf -- '---\ntitle: Mine\ndescription: Does things.\nstatus: active\n---\n\n#
 git -C "$F" add -A && git -C "$F" commit -q -m "wiki"
 assert_exit 0 bash "$AD" --from "$F"
 P="$CORE_DIR/keep-app"
-assert_contains "$P/CLAUDE.md" "check: npm test"
-assert_eq "$(grep -c '^check:' "$P/CLAUDE.md")" "1" "check lines"
+assert_contains "$P/AGENTS.md" "check: npm test"
+assert_eq "$(grep -c '^check:' "$P/AGENTS.md")" "1" "check lines"
 # the 0.6 `title` goes; the owner's description and status stay; the missing fields are added
 assert_not_contains "$P/docs/guide.md" "title:"
 assert_eq "$(sed -n '1,/^---$/p;' "$P/docs/guide.md" | head -3 | tr '\n' '|')" "---|status: active|description: Does things.|" "kept fields, canonical order"
@@ -555,7 +558,7 @@ echo "$OUT" | grep -qF "$F" && pass || fail "message lacks the folder: $OUT"
 STAGED="$(ls -d "$CORE_DIR"/.adopt.*/p 2>/dev/null)"
 [ -n "$STAGED" ] && pass || fail "staged copy gone"
 echo "$OUT" | grep -qF "$STAGED" && pass || fail "message lacks the staged copy: $OUT"
-assert_file "$STAGED/CLAUDE.md"; assert_file "$STAGED/docs/guide.md"; assert_file "$STAGED/.claude/settings.json"
+assert_file "$STAGED/AGENTS.md"; assert_file "$STAGED/docs/guide.md"; assert_file "$STAGED/.claude/settings.json"
 assert_file "$F/src/a.sh"; assert_dir "$F/.git"
 assert_eq "$(git -C "$F" log -1 --format=%s)" "Move internal Claude files to Core" "repo commit kept"
 git -C "$F" cat-file -e HEAD~1:CLAUDE.md 2>/dev/null && pass || fail "history lost"
@@ -571,12 +574,12 @@ refuses "$LW" --from "$F"
 refuses "$LW" --from "$F" --dry-run
 REC="$(printf '%s\n' "$OUT" | sed -n 's/.*undo its repo commit with \(git -C .* revert --no-edit [0-9a-f]*\), then .*/\1/p')"
 [ -n "$REC" ] && pass || fail "no revert command in the refusal: $OUT"
-assert_eq "$(head -1 "$STAGED/CLAUDE.md")" "# Old project" "staged CLAUDE.md after the rerun"
+assert_eq "$(head -1 "$STAGED/AGENTS.md")" "# Old project" "staged CLAUDE.md after the rerun"
 assert_no_file "$CORE_DIR/mv-app"
 # another project's leftover does not block adopt of this one
 mkrepo "$SANDBOX/Projects/other-app"
 assert_exit 0 bash "$AD" --from "$SANDBOX/Projects/other-app"
-assert_file "$CORE_DIR/other-app/CLAUDE.md"; assert_dir "$LEFT"
+assert_file "$CORE_DIR/other-app/AGENTS.md"; assert_dir "$LEFT"
 # the recovery the refusal prints, followed literally: the revert brings the user's pages back to the repo; while
 # the leftover is still there, the refusal now says only to remove it
 [ -n "$REC" ] && eval "$REC >/dev/null" && pass || fail "the printed revert failed: $REC"
@@ -584,7 +587,7 @@ assert_file "$F/CLAUDE.md"; assert_file "$F/docs/guide.md"; assert_file "$F/src/
 refuses "leftover staged copy of mv-app: $LEFT (an earlier adopt stopped; its repo commit is undone); remove $LEFT and run adopt again" --from "$F"
 rm -rf "$LEFT"
 assert_exit 0 bash "$AD" --from "$F"
-assert_eq "$(head -1 "$CORE_DIR/mv-app/CLAUDE.md")" "# Old project" "CLAUDE.md after the recovery"
+assert_eq "$(head -1 "$CORE_DIR/mv-app/AGENTS.md")" "# Old project" "CLAUDE.md after the recovery"
 assert_file "$CORE_DIR/mv-app/docs/guide.md"
 assert_eq "$(last_line "$OUT")" "open: $F" "last line after the recovery"
 # a leftover with no repo commit (a run killed while staging): the refusal says only to remove it
@@ -691,25 +694,40 @@ echo "$OUT" | grep -qxF "  ... and 2 more" && pass || fail "plan lacks the count
 # the count is the full number
 echo "$OUT" | grep -q "git tracks 17 CLAUDE.md" && pass || fail "plan count: $OUT"
 
-# --- AGENTS.md moves to the Core like CLAUDE.md (personal agent instructions; guard-code blocks it)
+# --- an AGENTS.md by itself is merged with the template and both hosts read the result
 new_sandbox; setup_core
 F="$SANDBOX/Projects/ag-app"; mkrepo "$F"
-printf '# Agents\n\nCross-tool rules.\n' > "$F/AGENTS.md"; printf 'sub\n' > "$F/src/AGENTS.md"
+git -C "$F" rm -q -- CLAUDE.md
+printf '# Agents\n\nCross-tool rules.\ncheck: make verify\n' > "$F/AGENTS.md"; printf 'sub\n' > "$F/src/AGENTS.md"
+printf 'AGENTS.md\n!/AGENTS.md\n' > "$F/.gitignore"
 git -C "$F" add -A && git -C "$F" commit -q -m agents
 assert_exit 0 bash "$AD" --from "$F" --dry-run
-echo "$OUT" | grep -qxF "  AGENTS.md" && pass || fail "plan lacks AGENTS.md: $OUT"
-assert_exit 0 bash "$AD" --from "$F"
 P="$CORE_DIR/ag-app"
-assert_contains "$P/AGENTS.md" "Cross-tool rules."
-# M7: the Core copy blocks the AGENTS.md link; it is kept and a warning names it (adopt goes on)
-echo "$OUT" | grep -q "^warning:.*$P/AGENTS.md" && pass || fail "no warning naming the Core AGENTS.md: $OUT"
-[ -L "$F/AGENTS.md" ] && fail "AGENTS.md linked despite the Core copy" || pass
-assert_no_file "$F/AGENTS.md"
+echo "$OUT" | grep -qxF "merge: AGENTS.md -> $P/AGENTS.md" && pass || fail "plan lacks the merge: $OUT"
+echo "$OUT" | grep -qxF "link: $F/AGENTS.md -> $P/AGENTS.md" && pass || fail "plan lacks the Codex link: $OUT"
+assert_no_file "$P/AGENTS.md"
+assert_exit 0 bash "$AD" --from "$F"
+assert_contains "$P/AGENTS.md" "# ag-app"
+assert_contains "$F/AGENTS.md" "Cross-tool rules."
+assert_eq "$(grep '^check:' "$P/AGENTS.md")" 'check: make verify' "adopt preserves the existing check command"
+assert_eq "$(readlink "$F/AGENTS.md")" "$P/AGENTS.md" "AGENTS.md link target"
+assert_no_file "$P/CLAUDE.md"
 git -C "$F" show --name-only --format= HEAD | grep -qxF AGENTS.md && pass || fail "repo commit lacks AGENTS.md"
 grep -qxF AGENTS.md "$F/.gitignore" && pass || fail ".gitignore lacks AGENTS.md"
-git -C "$CORE_DIR" ls-files -- ag-app/AGENTS.md | grep -qxF ag-app/AGENTS.md && pass || fail "AGENTS.md not in the Core commit"
+git -C "$F" check-ignore -q -- AGENTS.md && pass || fail "adopted AGENTS.md link is not ignored"
+assert_eq "$(git -C "$CORE_DIR" ls-files -- ag-app/CLAUDE.md)" "" "no second Core copy"
 # like a nested CLAUDE.md, a nested AGENTS.md is not moved (only the root one is)
 assert_file "$F/src/AGENTS.md"
+
+# --- an explicitly public root AGENTS.md is kept without being copied into shared instructions
+new_sandbox; setup_core
+F="$SANDBOX/Projects/public-agents"; mkrepo "$F"; P="$CORE_DIR/public-agents"
+printf 'Public agent rules.\n' > "$F/AGENTS.md"
+git -C "$F" add AGENTS.md && git -C "$F" commit -q -m agents
+assert_exit 0 bash "$AD" --from "$F" --public-docs AGENTS.md
+assert_eq "$(cat "$F/AGENTS.md")" "Public agent rules." "public AGENTS.md preserved"
+[ ! -L "$F/AGENTS.md" ] && pass || fail "public AGENTS.md was replaced by a link"
+assert_not_contains "$P/AGENTS.md" "Public agent rules."
 }
 bg part_nested
 
@@ -741,7 +759,9 @@ part_late_phases() {
 # pages): exit 1 before the repo commit; the repo and the Core are as they were, no temp folder is left
 new_sandbox; setup_core
 F="$SANDBOX/Projects/fold-fail"; mkrepo "$F"
-mkdir -p "$F/.claude/rules"; printf 'Rule.\n' > "$F/.claude/rules/r.md"; git -C "$F" add -A && git -C "$F" commit -q -m rule
+mkdir -p "$F/.claude/rules"; printf 'Rule.\n' > "$F/.claude/rules/r.md"
+printf 'Codex rule.\n' > "$F/AGENTS.md"
+git -C "$F" add -A && git -C "$F" commit -q -m rule
 mkdir -p "$SANDBOX/stub"
 cat > "$SANDBOX/stub/awk" <<'STUB'
 #!/bin/sh
@@ -752,10 +772,11 @@ chmod +x "$SANDBOX/stub/awk"
 before="$(snap_tree "$SANDBOX")"
 OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$AD" --from "$F" 2>&1)"; rc=$?
 assert_eq "$rc" "1" "fold failure exit"
-echo "$OUT" | grep -qF "adopt: could not fold the rules into CLAUDE.md" && pass || fail "fold failure message: $OUT"
+echo "$OUT" | grep -qF "adopt: could not fold the rules into AGENTS.md" && pass || fail "fold failure message: $OUT"
 assert_eq "$(snap_tree "$SANDBOX")" "$before" "a failed fold changed the repo or the Core"
 assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "temp folder left in the Core (failed fold)"
 assert_eq "$(git -C "$F" log -1 --format=%s)" "rule" "repo commit made although the fold failed"
+assert_eq "$(cat "$F/AGENTS.md")" "Codex rule." "failed staging preserved AGENTS.md"
 assert_no_file "$F/CLAUDE.local.md"
 
 # --- the Core commit fails (the last step that changes anything): the project is in place and nothing is
@@ -776,10 +797,10 @@ assert_eq "$rc" "0" "Core commit failure exit: $(cat "$SANDBOX/err")"
 assert_contains "$SANDBOX/err" "warning: the Core commit failed; commit cc-app/ and PROJECTS.md in $CORE_DIR yourself"
 assert_eq "$(last_line "$OUT")" "open: $F" "last line (Core commit failed)"
 echo "$OUT" | grep -q "^Core commit:" && fail "report claims a Core commit: $OUT" || pass
-assert_contains "$P/CLAUDE.md" "# Old project"; assert_file "$P/docs/guide.md"; assert_file "$P/.claude/settings.json"
+assert_contains "$P/AGENTS.md" "# Old project"; assert_file "$P/docs/guide.md"; assert_file "$P/.claude/settings.json"
 assert_eq "$(git -C "$F" log -1 --format=%s)" "Move internal Claude files to Core" "repo commit (Core commit failed)"
 assert_eq "$(git -C "$F" status --porcelain)" "" "repo dirty (Core commit failed)"
-assert_eq "$(readlink "$F/CLAUDE.local.md")" "$P/CLAUDE.md" "link (Core commit failed)"
+assert_eq "$(readlink "$F/AGENTS.md")" "$P/AGENTS.md" "link (Core commit failed)"
 assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s | grep -c '^Adopt')" "0" "a Core commit was made"
 [ -n "$(git -C "$CORE_DIR" status --porcelain)" ] && pass || fail "the Core has nothing left to commit"
 grep -qxF -- "- cc-app — Adopted existing project — cc-app/" "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md line (Core commit failed): $(cat "$CORE_DIR/PROJECTS.md")"
@@ -892,7 +913,7 @@ F="$SANDBOX/Projects/winlink"; mkrepo "$F"
 OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$AD" --from "$F" 2>&1)"; rc=$?
 assert_eq "$rc" "0" "adopt with a copying ln exit ($OUT)"
 P="$CORE_DIR/winlink"
-[ -L "$F/CLAUDE.local.md" ] && pass || fail "CLAUDE.local.md is not a symlink (copying ln)"
+assert_no_file "$F/CLAUDE.local.md"
 [ -L "$F/AGENTS.md" ] && pass || fail "AGENTS.md is not a symlink (copying ln)"
 assert_file "$P/docs/INDEX.md"
 assert_eq "$(head -1 "$P/docs/INDEX.md")" "# winlink wiki" "INDEX title (staged copy converted under the project name)"

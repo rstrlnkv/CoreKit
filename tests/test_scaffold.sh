@@ -22,13 +22,13 @@ new_sandbox; setup_core
 # treats specially in a replacement: the files hold it as typed, and the shorter name still gets its own line)
 TRICKY='A | tricky & purpose \ here'
 assert_exit 0 bash "$S" --name demo-app-two --purpose "$TRICKY"
-for f in CLAUDE.md docs/brief.md; do
+for f in AGENTS.md docs/brief.md; do
   grep -qxF -- "$TRICKY" "$CORE_DIR/demo-app-two/$f" && pass || fail "purpose kept as typed: $f: $(grep -n tricky "$CORE_DIR/demo-app-two/$f")"
 done
 grep -qxF -- "- demo-app-two — $TRICKY — demo-app-two/" "$CORE_DIR/PROJECTS.md" && pass || fail "purpose kept as typed: PROJECTS.md: $(cat "$CORE_DIR/PROJECTS.md")"
 assert_exit 0 bash "$S" --name demo-app --purpose "Test app"
 want1="$(cat <<'W'
-created demo-app/CLAUDE.md
+created demo-app/AGENTS.md
 created demo-app/docs/brief.md
 created demo-app/docs/architecture.md
 created demo-app/docs/decisions/001-stack-and-architecture.md
@@ -45,7 +45,6 @@ created ../demo-app/.git
 created ../demo-app/.gitignore
 created ../demo-app/.claude/settings.local.json
 created ../demo-app/.worktreeinclude
-created ../demo-app/CLAUDE.local.md
 created ../demo-app/AGENTS.md
 created PROJECTS.md entry
 W
@@ -53,7 +52,7 @@ W
 assert_eq "$OUT" "$want1" "first run output"
 assert_eq "$(grep -c '^- demo-app ' "$CORE_DIR/PROJECTS.md") $(grep -c '^- demo-app-two ' "$CORE_DIR/PROJECTS.md")" "1 1" "two PROJECTS.md lines"
 P="$CORE_DIR/demo-app"
-for f in CLAUDE.md docs/INDEX.md docs/brief.md docs/architecture.md \
+for f in AGENTS.md docs/INDEX.md docs/brief.md docs/architecture.md \
          docs/decisions/001-stack-and-architecture.md \
          docs/wiki.base docs/.obsidian/app.json docs/.obsidian/.gitignore; do
   assert_file "$P/$f"
@@ -86,9 +85,9 @@ grep -q '^stage:' "$P/docs/brief.md" && fail "brief.md: front matter has a stage
 assert_contains "$P/docs/brief.md" "## Progress"
 assert_contains "$P/docs/brief.md" "Stage: interviewed"
 assert_eq "$(grep '^## ' "$P/docs/brief.md" | tail -1)" "## Progress" "brief.md: ## Progress is not the last ## heading"
-# CLAUDE.md: specs and plans are wiki pages with the six fields; no 0.6 wording wiki-migrate warns about
-grep 'docs/specs/' "$P/CLAUDE.md" | grep -qF 'six front-matter fields (`type: spec` / `type: plan`)' && pass || fail "CLAUDE.md: the specs/plans line does not name the six fields"
-grep -qE 'docs/superpowers|map line' "$P/CLAUDE.md" && fail "CLAUDE.md still has a 0.6 line: $(grep -nE 'docs/superpowers|map line' "$P/CLAUDE.md")" || pass
+# AGENTS.md: specs and plans are wiki pages with the six fields; no 0.6 wording wiki-migrate warns about
+grep 'docs/specs/' "$P/AGENTS.md" | grep -qF 'six front-matter fields (`type: spec` / `type: plan`)' && pass || fail "AGENTS.md: the specs/plans line does not name the six fields"
+grep -qE 'docs/superpowers|map line' "$P/AGENTS.md" && fail "AGENTS.md still has a 0.6 line: $(grep -nE 'docs/superpowers|map line' "$P/AGENTS.md")" || pass
 # wiki.base excludes only the top-level INDEX.md, by path
 W0="$P/docs/wiki.base"
 assert_contains "$W0" "'!file.path.startsWith(\"INDEX.md\")'"
@@ -127,27 +126,27 @@ assert_no_file "$PLUGIN/templates/docs/INDEX.md.tmpl"
 # new-project text templates ship the vault files
 for t in wiki.base obsidian-app.json obsidian-gitignore; do assert_file "$PLUGIN/templates/docs/$t"; done
 
-# CLAUDE.md: plain link to wiki, no @-imports, placeholders filled
-assert_contains "$P/CLAUDE.md" "$P/docs/INDEX.md"
-assert_contains "$P/CLAUDE.md" "## Rules"
-assert_contains "$P/CLAUDE.md" '**/test/**'
-assert_contains "$P/CLAUDE.md" "$P/docs/specs/"
-assert_contains "$P/CLAUDE.md" "$P/docs/plans/"
-assert_contains "$P/CLAUDE.md" "wiki-index.sh"
-assert_contains "$P/CLAUDE.md" "wikilink"
-assert_not_contains "$P/CLAUDE.md" "superpowers"
-grep -qF '../docs/' "$P/CLAUDE.md" && fail "CLAUDE.md has ../docs/" || pass
-grep -qE '^\s*-?\s*@' "$P/CLAUDE.md" && fail "CLAUDE.md has @-import" || pass
+# AGENTS.md: plain link to wiki, no @-imports, placeholders filled
+assert_contains "$P/AGENTS.md" "$P/docs/INDEX.md"
+assert_contains "$P/AGENTS.md" "## Rules"
+assert_contains "$P/AGENTS.md" '**/test/**'
+assert_contains "$P/AGENTS.md" "$P/docs/specs/"
+assert_contains "$P/AGENTS.md" "$P/docs/plans/"
+assert_contains "$P/AGENTS.md" "wiki-index.sh"
+assert_contains "$P/AGENTS.md" "wikilink"
+assert_not_contains "$P/AGENTS.md" "superpowers"
+grep -qF '../docs/' "$P/AGENTS.md" && fail "AGENTS.md has ../docs/" || pass
+grep -qE '^\s*-?\s*@' "$P/AGENTS.md" && fail "AGENTS.md has @-import" || pass
 grep -rq '{{' "$P" --exclude-dir=.git && fail "unfilled placeholder" || pass
 
-# wiki: a fresh scaffold passes wiki-check; CLAUDE.md has the check: line; knowledge/ exists
+# wiki: a fresh scaffold passes wiki-check; AGENTS.md has the check: line; knowledge/ exists
 assert_exit 0 bash "$SCRIPTS/wiki-check.sh" "$P"
 [ -z "$OUT" ] && pass || fail "wiki-check printed: $OUT"
-grep -q '^check: ' "$P/CLAUDE.md" && pass || fail "CLAUDE.md has no 'check: ' line"
-assert_eq "$(grep -c '^check: ' "$P/CLAUDE.md")" "1" "check: lines"
+grep -q '^check: ' "$P/AGENTS.md" && pass || fail "AGENTS.md has no 'check: ' line"
+assert_eq "$(grep -c '^check: ' "$P/AGENTS.md")" "1" "check: lines"
 assert_dir "$P/docs/knowledge"
-# the map is a plain path in CLAUDE.md, not a link wiki-check would resolve elsewhere
-grep -qF '](../docs/INDEX.md' "$P/CLAUDE.md" && fail "CLAUDE.md links INDEX.md" || pass
+# the map is a plain path in AGENTS.md, not a link wiki-check would resolve elsewhere
+grep -qF '](../docs/INDEX.md' "$P/AGENTS.md" && fail "AGENTS.md links INDEX.md" || pass
 # a page added without regenerating the index turns wiki-check red; wiki-index.sh makes it green
 printf -- '---\ntype: feature\nstatus: draft\ndescription: d\nfiles: []\nrelated: []\nupdated: 2026-01-01\n---\n\n# T\n' \
   > "$P/docs/features/t.md"
@@ -167,15 +166,15 @@ bash "$SCRIPTS/wiki-index.sh" "$P" >/dev/null
 
 # settings.local.json grants the absolute project dir
 assert_contains "$K/.claude/settings.local.json" "\"$P\""
-# the private CLAUDE.md reaches the code folder through a symlink
-[ -L "$K/CLAUDE.local.md" ] && pass || fail "CLAUDE.local.md is not a symlink"
-assert_eq "$(readlink "$K/CLAUDE.local.md")" "$P/CLAUDE.md" "symlink target"
+# the private AGENTS.md reaches the code folder through a symlink
+[ -f "$P/AGENTS.md" ] && [ ! -e "$P/CLAUDE.md" ] && pass || fail "new projects need a single private AGENTS.md"
+[ ! -e "$K/CLAUDE.local.md" ] && [ ! -L "$K/CLAUDE.local.md" ] && pass || fail "new projects need only the AGENTS.md link"
 # the same file is the cross-tool AGENTS.md (M7); the scaffold output names it
 [ -L "$K/AGENTS.md" ] && pass || fail "AGENTS.md is not a symlink"
-assert_eq "$(readlink "$K/AGENTS.md")" "$P/CLAUDE.md" "AGENTS.md target"
-assert_no_file "$P/AGENTS.md"
+assert_eq "$(readlink "$K/AGENTS.md")" "$P/AGENTS.md" "AGENTS.md target"
+assert_no_file "$P/CLAUDE.md"
 # code .gitignore blocks internal files
-for pat in CLAUDE.md CLAUDE.local.md .claude/ docs/superpowers/ .env '*.pem' '*.key' \
+for pat in AGENTS.md CLAUDE.md CLAUDE.local.md .claude/ docs/superpowers/ .env '*.pem' '*.key' \
            '!.env.example' '!.env.sample' '!.env.template'; do
   assert_contains "$K/.gitignore" "$pat"
 done
@@ -193,10 +192,10 @@ assert_contains "$CORE_DIR/PROJECTS.md" "- demo-app — Test app — demo-app/"
 
 # --- second run changes nothing (tree_sum skips links: their targets are read separately)
 before=$(tree_sum "$CORE_DIR")
-before_k=$(tree_sum "$K"); before_l="$(readlink "$K/CLAUDE.local.md") $(readlink "$K/AGENTS.md")"
+before_k=$(tree_sum "$K"); before_l="$(readlink "$K/AGENTS.md")"
 assert_exit 0 bash "$S" --name demo-app --purpose "Test app"
 want2="$(cat <<'W'
-skipped demo-app/CLAUDE.md
+skipped demo-app/AGENTS.md
 skipped demo-app/docs/brief.md
 skipped demo-app/docs/architecture.md
 skipped demo-app/docs/decisions/001-stack-and-architecture.md
@@ -208,7 +207,6 @@ skipped ../demo-app/.git
 skipped ../demo-app/.gitignore
 skipped ../demo-app/.claude/settings.local.json
 skipped ../demo-app/.worktreeinclude
-skipped ../demo-app/CLAUDE.local.md
 skipped ../demo-app/AGENTS.md
 skipped PROJECTS.md entry
 W
@@ -217,8 +215,8 @@ assert_eq "$OUT" "$want2" "second run output"
 after=$(tree_sum "$CORE_DIR")
 assert_eq "$before" "$after" "tree changed on re-run"
 assert_eq "$(tree_sum "$K")" "$before_k" "code folder changed on re-run"
-assert_eq "$(readlink "$K/CLAUDE.local.md") $(readlink "$K/AGENTS.md")" "$before_l" "links changed on re-run"
-[ "$before_l" = "$P/CLAUDE.md $P/CLAUDE.md" ] && pass || fail "links do not point to the private CLAUDE.md: $before_l"
+assert_eq "$(readlink "$K/AGENTS.md")" "$before_l" "links changed on re-run"
+[ "$before_l" = "$P/AGENTS.md" ] && pass || fail "links do not point to the private AGENTS.md: $before_l"
 
 # --- a folder that is not ours blocks the run; nothing is written
 new_sandbox; setup_core
@@ -231,7 +229,9 @@ assert_no_file "$CORE_DIR/taken-app"
 new_sandbox; setup_core
 bash "$S" --name real-app >/dev/null
 R="$(dirname "$CORE_DIR")/real-app"
-rm "$R/CLAUDE.local.md"; printf 'mine\n' > "$R/CLAUDE.local.md"
+mv "$CORE_DIR/real-app/AGENTS.md" "$CORE_DIR/real-app/CLAUDE.md"
+rm "$R/AGENTS.md"; ln -s "$CORE_DIR/real-app/CLAUDE.md" "$R/AGENTS.md"
+printf 'mine\n' > "$R/CLAUDE.local.md"
 assert_exit 1 bash "$S" --name real-app
 echo "$OUT" | grep -qF "CLAUDE.local.md exists and is not a link to $CORE_DIR/real-app/CLAUDE.md; leave it or remove it yourself" && pass || fail "link message: $OUT"
 assert_eq "$(cat "$R/CLAUDE.local.md")" "mine" "real file kept"
@@ -253,7 +253,7 @@ echo "$OUT" | grep -qxF 'created ../ag-app/AGENTS.md' && pass || fail "first run
 R="$(dirname "$CORE_DIR")/ag-app"
 rm "$R/AGENTS.md"; printf 'mine\n' > "$R/AGENTS.md"
 assert_exit 1 bash "$S" --name ag-app
-echo "$OUT" | grep -qF "AGENTS.md exists and is not a link to $CORE_DIR/ag-app/CLAUDE.md; leave it or remove it yourself" && pass || fail "AGENTS link message: $OUT"
+echo "$OUT" | grep -qF "AGENTS.md exists and is not a link to $CORE_DIR/ag-app/AGENTS.md; leave it or remove it yourself" && pass || fail "AGENTS link message: $OUT"
 assert_eq "$(cat "$R/AGENTS.md")" "mine" "real AGENTS.md kept"
 [ -L "$R/AGENTS.md" ] && fail "AGENTS.md file replaced by link" || pass
 # a link elsewhere is kept
@@ -261,7 +261,8 @@ rm -f "$R/AGENTS.md"; echo x > "$SANDBOX/elsewhere.md"; ln -s "$SANDBOX/elsewher
 assert_exit 1 bash "$S" --name ag-app
 assert_eq "$(readlink "$R/AGENTS.md")" "$SANDBOX/elsewhere.md" "AGENTS.md link changed"
 # a Core AGENTS.md blocks the link and stays; the message names it
-rm -f "$R/AGENTS.md"; printf 'core\n' > "$CORE_DIR/ag-app/AGENTS.md"
+rm -f "$R/AGENTS.md"; mv "$CORE_DIR/ag-app/AGENTS.md" "$CORE_DIR/ag-app/CLAUDE.md"
+printf 'core\n' > "$CORE_DIR/ag-app/AGENTS.md"
 assert_exit 1 bash "$S" --name ag-app
 echo "$OUT" | grep -qF "$CORE_DIR/ag-app/AGENTS.md" && pass || fail "message does not name the Core AGENTS.md: $OUT"
 assert_eq "$(cat "$CORE_DIR/ag-app/AGENTS.md")" "core" "Core AGENTS.md changed"
@@ -283,7 +284,6 @@ echo "$OUT" | grep -q 'would create' && pass || fail "dry-run printed nothing"
 for f in docs/INDEX.md docs/specs/ docs/plans/ docs/wiki.base docs/.obsidian/app.json docs/.obsidian/.gitignore; do
   echo "$OUT" | grep -qxF "would create dry-app/$f" && pass || fail "dry-run lacks 'would create dry-app/$f': $OUT"
 done
-echo "$OUT" | grep -qxF 'would create ../dry-app/CLAUDE.local.md' && pass || fail "dry-run link line: $OUT"
 echo "$OUT" | grep -qxF 'would create ../dry-app/AGENTS.md' && pass || fail "dry-run AGENTS.md line: $OUT"
 
 # --- wiki-index.sh fails during scaffold: non-zero exit and a plain message, no silent success
@@ -297,20 +297,20 @@ echo "$OUT" | grep -q 'created.*INDEX.md' && fail "scaffold claims INDEX.md was 
 
 # wiki.base leaves out superpowers/ like knowledge/ and standards/
 assert_contains "$PLUGIN/templates/docs/wiki.base" "superpowers/"
-# the rendered CLAUDE.md names wiki-index.sh by its plugin path and does not say it is printed at session start
+# the rendered AGENTS.md names wiki-index.sh by its plugin path and does not say it is printed at session start
 new_sandbox; setup_core
 bash "$S" --name cm-app >/dev/null
-CM="$CORE_DIR/cm-app/CLAUDE.md"
+CM="$CORE_DIR/cm-app/AGENTS.md"
 assert_contains "$CM" "<plugin>/scripts/wiki-index.sh"
-grep -q 'wiki-index.sh.*printed at session start\|printed at session start.*wiki-index' "$CM" && fail "CLAUDE.md says wiki-index.sh is printed at session start" || pass
-sed -n '/wiki-index.sh/,/^- /p' "$CM" | grep -qi 'printed at session start' && fail "CLAUDE.md: wiki-index bullet says printed at session start" || pass
+grep -q 'wiki-index.sh.*printed at session start\|printed at session start.*wiki-index' "$CM" && fail "AGENTS.md says wiki-index.sh is printed at session start" || pass
+sed -n '/wiki-index.sh/,/^- /p' "$CM" | grep -qi 'printed at session start' && fail "AGENTS.md: wiki-index bullet says printed at session start" || pass
 
 # a purpose with line breaks becomes one line
 new_sandbox; setup_core
 assert_exit 0 bash "$S" --name nl-app --purpose "$(printf 'First line.\r\nSecond line.')"
 assert_eq "$(grep -c 'nl-app' "$CORE_DIR/PROJECTS.md")" "1" "PROJECTS.md entry split"
 assert_contains "$CORE_DIR/PROJECTS.md" "First line. Second line."
-assert_contains "$CORE_DIR/nl-app/CLAUDE.md" "First line. Second line."
+assert_contains "$CORE_DIR/nl-app/AGENTS.md" "First line. Second line."
 
 # --- --name or --purpose without a value: a usage error, never an endless loop (time limit 10 s)
 new_sandbox; setup_core

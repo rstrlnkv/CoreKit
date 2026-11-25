@@ -173,8 +173,9 @@ Each hook rule, by host (the test file holds the cases of both hosts):
   comments, in the example prompts of coremodel's classifiers and in the Codex hint's
   `codex/replies.txt`, which no person reads).
 - **The Core.** The private repo (`~/Projects/Core` by default) holds the standards, knowledge and
-  each project's `CLAUDE.md` and `docs/` wiki. The code lives in its own repo beside it; a
-  gitignored `CLAUDE.local.md` link in the code folder loads the private `CLAUDE.md`.
+  each project's `AGENTS.md` and `docs/` wiki. The code lives in its own repo beside it. A
+  gitignored `AGENTS.md` link in the checkout root loads the private instructions in both clients.
+  Existing projects can keep using `CLAUDE.md` until they run the instructions migration.
 
 ## Invariants
 

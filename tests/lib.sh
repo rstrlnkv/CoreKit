@@ -94,6 +94,15 @@ new_sandbox() {
 # a copy differs from a build only in its times: the commit's (and so its SHA) and the files'. The key holds what
 # else could change the result: the GIT_* variables and the global git config (identity, dates, init settings),
 # PATH (a fake git), umask (the modes) and the scripts folder. A Core folder that exists is built as before.
+scaffold_legacy() {
+  local p="$CORE_DIR/$1" c="$(dirname "$CORE_DIR")/$1"
+  bash "$SKILL/scripts/scaffold.sh" --name "$1" >/dev/null &&
+    mv "$p/AGENTS.md" "$p/CLAUDE.md" &&
+    rm "$c/AGENTS.md" &&
+    ln -s "$p/CLAUDE.md" "$c/AGENTS.md" &&
+    ln -s "$p/CLAUDE.md" "$c/CLAUDE.local.md"
+}
+
 setup_core() {
   local cache fresh=""
   cache="$TEST_TMP/core-cache.$(core_cache_key)"

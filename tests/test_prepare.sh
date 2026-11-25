@@ -7,9 +7,9 @@ unset CLAUDE_PLUGIN_OPTION_CORE_DIR COREKIT_HOST
 PREP="$SCRIPTS/prepare.sh"
 assert_file "$PREP"
 setup_core
-bash "$SKILL/scripts/scaffold.sh" --name prep >/dev/null
+scaffold_legacy prep || fail "legacy scaffold"
 P="$CORE_DIR/prep"; PR="$(dirname "$CORE_DIR")"; C="$PR/prep"
-git -C "$C" commit -q --allow-empty -m init
+git -C "$C" add .gitignore && git -C "$C" commit -q -m init
 mkdir -p "$SANDBOX/elsewhere"
 VER="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN/.claude-plugin/plugin.json" | head -1)"
 MARK="$XDG_CONFIG_HOME/corecrew/state/hooks-seen-codex"
@@ -130,9 +130,20 @@ run claude --cwd "$W/src-none"
 assert_eq "$(readlink "$W/AGENTS.md")" "$P/CLAUDE.md" "worktree AGENTS.md link"
 assert_eq "$(readlink "$W/CLAUDE.local.md")" "$P/CLAUDE.md" "worktree CLAUDE.local.md link"
 run claude --cwd "$W"; assert_eq "$OUT" "" "worktree: second run silent"
-# a Claude worktree under the main folder gets no links of its own (the main folder's are found above it)
+# A nested worktree is a project root for Codex. Claude Code finds the main folder's link above it.
 CW="$C/.claude/worktrees/w1"; git -C "$C" worktree add -q "$CW" -b b2
-run claude --cwd "$CW"; assert_no_file "$CW/AGENTS.md"; assert_no_file "$CW/CLAUDE.local.md"
+run codex --part project --cwd "$CW"
+assert_eq "$(readlink "$CW/AGENTS.md")" "$P/CLAUDE.md" "nested worktree: Codex link"
+assert_no_file "$CW/CLAUDE.local.md"
+git -C "$CW" check-ignore -q -- AGENTS.md && pass || fail "nested worktree: AGENTS.md is not ignored"
+assert_eq "$(git -C "$CW" status --porcelain)" "" "nested worktree: link stays out of git status"
+run codex --part project --cwd "$CW"; assert_eq "$OUT" "" "nested worktree: second run is silent"
+# An older branch may lack the ignore rule. Do not leave the private link eligible for staging.
+UW="$C/.claude/worktrees/unignored"; git -C "$C" worktree add -q "$UW" -b unignored
+git -C "$UW" rm -q .gitignore
+run codex --part project --cwd "$UW"
+assert_no_file "$UW/AGENTS.md"
+echo "$OUT" | grep -qF "$UW/AGENTS.md must be ignored by Git" && pass || fail "unignored worktree link: $OUT"
 # the same from the Core project folder: links belong to the main folder
 rm -f "$C/AGENTS.md"; run claude --cwd "$P"; assert_eq "$(readlink "$C/AGENTS.md")" "$P/CLAUDE.md" "link made from the Core project folder"
 
@@ -268,4 +279,48 @@ touch -t 200001010000 "$MARK"; printf '%s' "$SS" | COREKIT_HOST=codex CLAUDE_PLU
 echo "0.0.1" > "$MARK"; printf '%s' "$SS" | COREKIT_HOST=codex CLAUDE_PLUGIN_ROOT="$PLUGIN" bash "$HOOKS/session-start.sh" >/dev/null 2>&1
 assert_eq "$(cat "$MARK")" "$VER" "an older marker is replaced"
 run codex --cwd "$C"; assert_eq "$OUT" "" "after session-start: no trust note"
+
+# Migration changes the source name and switches only CoreCrew's ignored links.
+new_sandbox; setup_core
+scaffold_legacy migrate-app || fail "legacy scaffold"
+P="$CORE_DIR/migrate-app"; C="$(dirname "$CORE_DIR")/migrate-app"
+git -C "$C" add .gitignore && git -C "$C" commit -q -m init
+MW="$C/.claude/worktrees/migrate"; git -C "$C" worktree add -q "$MW" -b migrate
+run codex --part project --cwd "$MW"
+assert_eq "$(readlink "$MW/AGENTS.md")" "$P/CLAUDE.md" "worktree begins with the legacy link"
+cat "$P/CLAUDE.md" > "$SANDBOX/instructions"
+printf 'Separate instructions.\n' > "$P/AGENTS.md"
+run claude --migrate-instructions --cwd "$C"
+assert_eq "$RC" "1" "migration refuses two independent files"
+assert_contains "$P/AGENTS.md" "Separate instructions."
+cmp -s "$P/CLAUDE.md" "$SANDBOX/instructions" && pass || fail "failed migration changed Claude instructions"
+rm "$P/AGENTS.md"
+mkdir "$SANDBOX/failed-link"
+printf '#!/bin/sh\nexit 1\n' > "$SANDBOX/failed-link/ln"
+chmod +x "$SANDBOX/failed-link/ln"
+PATH="$SANDBOX/failed-link:$PATH" run claude --migrate-instructions --cwd "$C"
+assert_eq "$RC" "1" "migration fails when it cannot replace the link"
+assert_eq "$(readlink "$C/AGENTS.md")" "$P/CLAUDE.md" "rollback kept the old link"
+cmp -s "$P/CLAUDE.md" "$SANDBOX/instructions" && pass || fail "rollback did not restore instructions"
+assert_no_file "$P/AGENTS.md"
+run claude --migrate-instructions --cwd "$C"
+assert_eq "$RC" "0" "migrate instructions: $OUT"
+cmp -s "$P/AGENTS.md" "$SANDBOX/instructions" && pass || fail "migration lost instructions"
+assert_no_file "$P/CLAUDE.md"
+assert_no_file "$C/CLAUDE.local.md"
+assert_eq "$(readlink "$C/AGENTS.md")" "$P/AGENTS.md" "migration updates the shared link"
+run codex --part project --cwd "$MW"
+assert_eq "$(readlink "$MW/AGENTS.md")" "$P/AGENTS.md" "worktree reconnects to the renamed instructions"
+run claude --part project --cwd "$C"
+assert_eq "$OUT" "" "migrated project: prepare remains silent"
+
+# A checkout can override the shared ignore rule. Preparing it must never expose the Core path.
+for checkout in "$C" "$PR/external-unignored"; do
+  [ "$checkout" = "$C" ] || git -C "$C" worktree add -q "$checkout" -b external-unignored
+  rm -f "$checkout/AGENTS.md"
+  printf '\n!/AGENTS.md\n' >> "$checkout/.gitignore"
+  run codex --part project --cwd "$checkout"
+  assert_no_file "$checkout/AGENTS.md"
+  echo "$OUT" | grep -qF "$checkout/AGENTS.md must be ignored by Git" && pass || fail "unignored checkout link: $OUT"
+done
 finish

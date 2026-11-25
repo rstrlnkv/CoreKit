@@ -33,11 +33,12 @@
 # Exit 1 (nothing deleted; the message says where the files are): a failed mv after the repo commit. The staged
 # copy stays in <Core>/.adopt.<name>.XXXXXX; a rerun refuses (leftover staged copy) until it is recovered.
 # Exit 1 (nothing changed; the stderr lines say why): a step before the repo commit fails (the temp folder,
-# a copy, a rule file, the fold, wiki-migrate on the staged copy, .gitignore, .worktreeinclude).
-# Steps: copy CLAUDE.md, AGENTS.md, docs/ and .claude/ (not settings.local.json, not
+# a copy, the AGENTS.md merge, a rule file, the fold, wiki-migrate on the staged copy, .gitignore, .worktreeinclude).
+# Steps: copy CLAUDE.md, docs/ and .claude/ (not settings.local.json, not
 # worktrees/, not --public-docs paths) into a temp folder in the Core; add the pages the new-project
-# templates have that are missing, the check: line and public-docs: line; fold each tracked
-# .claude/rules/<f>.md into CLAUDE.md as "### <f>" under "## Rules" (the heading is added at the end when
+# templates have that are missing, the check: line and public-docs: line; append the tracked root
+# AGENTS.md to the staged project instructions unless it is public; fold each tracked
+# .claude/rules/<f>.md into AGENTS.md as "### <f>" under "## Rules" (the heading is added at the end when
 # missing; "Applies to: <paths>" from its paths: front matter, the front matter itself dropped, its
 # headings moved three levels down); other tracked .claude/ files are kept in <Core>/<name>/.claude/,
 # where they no longer load (the plan and the report list them); convert the copied wiki with
@@ -52,8 +53,8 @@
 # folder becomes <Core>/<name>/.
 # Warnings (plan and report): tracked CLAUDE.md / AGENTS.md / CLAUDE.local.md files that stay in the repo
 # (nested ones, public ones), which corecrew's hooks block changing or adding after adopt.
-# Then: CLAUDE.local.md and AGENTS.md in the code folder become links to <Core>/<name>/CLAUDE.md
-# (AGENTS.md is not linked while <Core>/<name>/AGENTS.md exists: a warning: line asks to fold it);
+# Then: AGENTS.md in the code folder links to <Core>/<name>/AGENTS.md
+# (a public or ignored AGENTS.md already in the code folder is left in place, with a warning);
 # .claude/settings.local.json is created from the template when missing (else left as is, with a
 # warning: line naming the additionalDirectories entry to add when it lacks it); git hook shims are
 # installed; PROJECTS.md gets (or has updated) its line "- <name> — <purpose> — <Name>/"; the Core gets
@@ -186,7 +187,9 @@ preconditions() {
     "$CORE_DIR"/?*)
       rest="${FROM#"$CORE_DIR"/}"; first="${rest%%/*}"
       case "$first" in .*|standards|knowledge) ;; *)
-        if [ "$rest" = "$first/code" ] && [ -f "$CORE_DIR/$first/CLAUDE.md" ]; then refuse "old layout: $(old_layout_msg "$FROM")"; fi ;;
+        if [ "$rest" = "$first/code" ] && [ -f "$(project_instructions "$CORE_DIR/$first")" ]; then
+          refuse "old layout: $(old_layout_msg "$FROM")"
+        fi ;;
       esac ;;
   esac
   [ -z "$(git -C "$FROM" status --porcelain 2>&1)" ] || refuse "uncommitted changes"
@@ -220,16 +223,16 @@ preconditions() {
   done
   { core_ready && [ -d "$CORE_DIR/.git" ]; } || refuse "Core is not set up"
   symlinks_work || refuse "cannot create symbolic links here; on Windows turn on Developer Mode (Settings > System > For developers), then run adopt again"
-  # CLAUDE.local.md becomes the link to the private CLAUDE.md: a file of the user's there is never replaced.
+  # A local CLAUDE.local.md can prevent Claude Code from discovering the new AGENTS.md.
   LOC="$FROM/CLAUDE.local.md"
   if { [ -e "$LOC" ] || [ -L "$LOC" ]; } && ! { [ -L "$LOC" ] && [ "$(readlink "$LOC")" = "$P/CLAUDE.md" ]; }; then
-    refuse "CLAUDE.local.md exists in $FROM: move it away first (adopt links that name to $P/CLAUDE.md)"
+    refuse "CLAUDE.local.md exists in $FROM: move it away first so Claude Code can discover AGENTS.md"
   fi
 }
 
 # --- Phase: plan. Read-only: what goes where, and the last refusals that need that list. Sets PUB_LIST,
-# TRACKED, COPY, PUBKEEP, RULES, KEPT, REMOVE, the counts, the .gitignore and .worktreeinclude additions
-# (GI, GI_ADD, GI_SKIP, GI_N, WTI, WTI_ADD), the warnings (NEST, NNEST, NEST_WARN, SL_STATE,
+# TRACKED, COPY, PUBKEEP, RULES, KEPT, REMOVE, MERGE_AGENTS, AGENTS_WARN, the counts, the .gitignore and
+# .worktreeinclude additions (GI, GI_ADD, GI_SKIP, GI_N, WTI, WTI_ADD), the warnings (NEST, NNEST, NEST_WARN, SL_STATE,
 # SL_WARN).
 plan() {
   PUB_LIST=""
@@ -251,6 +254,7 @@ plan() {
   # they are (so nothing private ends up in the Core's git).
   TRACKED="$(git -C "$FROM" -c core.quotepath=false ls-files -- CLAUDE.md AGENTS.md docs .claude)"
   COPY=""; PUBKEEP=""; RULES=""; KEPT=""; NCOPY=0; NSTAY=0; NRULES=0
+  MERGE_AGENTS=0
   REMOVE=()
   while IFS= read -r f; do
     [ -n "$f" ] || continue
@@ -258,6 +262,7 @@ plan() {
       copy)
         REMOVE[${#REMOVE[@]}]="$f"
         case "$f" in
+          AGENTS.md) MERGE_AGENTS=1 ;;
           .claude/rules/*.md) RULES="$RULES$f
 "; NRULES=$((NRULES + 1)) ;;
           *) COPY="$COPY$f
@@ -270,6 +275,11 @@ plan() {
       stay) NSTAY=$((NSTAY + 1)) ;;
     esac
   done <<< "$TRACKED"
+  AGENTS_WARN=""
+  if [ "$MERGE_AGENTS" -eq 0 ] && { [ -e "$K/AGENTS.md" ] || [ -L "$K/AGENTS.md" ]; } \
+    && ! { [ -L "$K/AGENTS.md" ] && [ "$(readlink "$K/AGENTS.md")" = "$P/AGENTS.md" ]; }; then
+    AGENTS_WARN="warning: $K/AGENTS.md exists and will stay in place; the shared instructions will not be linked there"
+  fi
   # The corecrew ignore lines the repo's .gitignore lacks (internal Claude files and .env, from the
   # new-project template), so local Claude files (CLAUDE.local.md, .claude/settings.local.json,
   # .claude/worktrees/) never end up in a `save`. When .env.* is added, its exceptions are added after it
@@ -284,6 +294,7 @@ plan() {
       l="${l%$'\r'}"
       case "$l" in CLAUDE*|AGENTS.md|.claude/*|docs/superpowers/*|.env*|'!.env'*) ;; *) continue ;; esac
       case "$l" in
+        AGENTS.md) if GIT_LITERAL_PATHSPECS=0 git -C "$FROM" check-ignore -q --no-index -- AGENTS.md; then continue; fi ;;
         '!'*) if [ "$envstar" -eq 0 ] && gi_has "$l"; then continue; fi ;;
         *) if gi_has "$l"; then continue; fi ;;
       esac
@@ -302,6 +313,7 @@ plan() {
   NEST=""; NNEST=0
   while IFS= read -r f; do
     [ -n "$f" ] || continue
+    [ "$f" = AGENTS.md ] && [ "$MERGE_AGENTS" -eq 1 ] && continue
     printf '%s' "$COPY$RULES" | grep -qxF -- "$f" && continue   # moved to the Core: not a warning
     NEST="$NEST$f
 "; NNEST=$((NNEST + 1))
@@ -339,10 +351,11 @@ plan() {
 print_plan() {
   echo "Plan: adopt $FROM as '$NAME' (the folder stays where it is)"
   show "copy to $P/:" "$COPY"
-  show "fold into $P/CLAUDE.md under ## Rules:" "$RULES"
+  [ "$MERGE_AGENTS" -eq 0 ] || echo "merge: AGENTS.md -> $P/AGENTS.md"
+  show "fold into $P/AGENTS.md under ## Rules:" "$RULES"
   show "kept in Core, no longer loaded:" "$KEPT"
   if [ "${#REMOVE[@]}" -gt 0 ]; then
-    echo "remove from the repo in one commit \"Move internal Claude files to Core\": ${#REMOVE[@]} file(s) (the copied and folded ones that git tracks)"
+    echo "remove from the repo in one commit \"Move internal Claude files to Core\": ${#REMOVE[@]} file(s) (the copied and merged instructions and files that git tracks)"
   elif [ -n "$GI_ADD" ] || [ "$WTI_ADD" -eq 1 ]; then
     echo "one repo commit \"Move internal Claude files to Core\" with only the lines below (git tracks none of the internal files)"
   else
@@ -362,12 +375,13 @@ print_plan() {
   while IFS='|' read -r a b; do
     [ "$a" != mkdir ] || { [ -d "$FROM/$b" ] || CRE="$CRE$b/
 "; continue; }
-    printf '%s\n' "$COPY" | grep -qxF -- "$b" || CRE="$CRE$b
+    f="$b"; [ "$b" != AGENTS.md ] || f=CLAUDE.md
+    printf '%s\n' "$COPY" | grep -qxF -- "$f" || CRE="$CRE$b
 "
   done <<< "$(project_docs_manifest)"
   show "create in $P/ (missing pages from the new-project templates):" "$CRE"
   echo "add to $P/: the check: line$([ -n "$PUB_LIST" ] && echo ', the public-docs: line'), then the wiki converted by wiki-migrate.sh (front matter, wikilinks, Obsidian files, generated INDEX.md)"
-  echo "link: $K/CLAUDE.local.md -> $P/CLAUDE.md"
+  if [ -n "$AGENTS_WARN" ]; then echo "$AGENTS_WARN"; else echo "link: $K/AGENTS.md -> $P/AGENTS.md"; fi
   case "$SL_STATE" in
     create) echo "create: $K/$SL_REL (permissions.additionalDirectories: $P)" ;;
     warn) echo "$SL_WARN" ;;
@@ -382,6 +396,7 @@ print_plan() {
 # (the trap only removes the temp folder while it is empty).
 # Sets TMP, STAGE, COMMITTED, CREATED, MIG.
 stage() {
+  local staged_check agents_check check_command="$CHECK"
   COMMITTED=0
   TMP="$(mktemp -d "$CORE_DIR/.adopt.$NAME.XXXXXX")" || { echo "adopt: cannot create a temp folder in $CORE_DIR" >&2; exit 1; }
   trap cleanup EXIT
@@ -394,22 +409,35 @@ stage() {
   mkdir "$STAGE" || exit 1
   while IFS= read -r f; do
     [ -n "$f" ] || continue
-    mkdir -p "$STAGE/$(dirname "$f")" && cp -pP "$FROM/$f" "$STAGE/$f" \
+    dest="$f"; [ "$f" != CLAUDE.md ] || dest=AGENTS.md
+    mkdir -p "$STAGE/$(dirname "$dest")" && cp -pP "$FROM/$f" "$STAGE/$dest" \
       || { echo "adopt: could not copy $f" >&2; exit 1; }
   done <<< "$COPY"
 
-  # Missing wiki pages and vault files (from the new-project templates); CLAUDE.md if there was none.
+  # Missing wiki pages and vault files (from the new-project templates); AGENTS.md if there were no Claude instructions.
   CR="$(put_project_docs "$TPL" "$STAGE")" || exit 1
   CREATED="$(printf '%s\n' "$CR" | sed -n 's|^created \.adopt\.[^/]*/p/||p')"
-  if [ -n "$CHECK" ]; then set_line "$STAGE/CLAUDE.md" check "$CHECK" || exit 1
-  elif ! grep -q '^check:' "$STAGE/CLAUDE.md"; then set_line "$STAGE/CLAUDE.md" check "<set after scaffolding>" || exit 1
+  # Merge the original Markdown before removing either source. Keep one check command, with
+  # --check taking priority, followed by CLAUDE.md and then AGENTS.md.
+  if [ "$MERGE_AGENTS" -eq 1 ]; then
+    staged_check="$(sed -n '/^check:[[:space:]]*/{s///;p;q;}' "$STAGE/AGENTS.md")"
+    agents_check="$(sed -n '/^check:[[:space:]]*/{s///;p;q;}' "$FROM/AGENTS.md")"
+    if [ -z "$check_command" ] && { [ -z "$staged_check" ] || [ "$staged_check" = '<set after scaffolding>' ]; }; then
+      check_command="$agents_check"
+    fi
+    { cat "$STAGE/AGENTS.md" && printf '\n\n' && sed '/^check:/d' "$FROM/AGENTS.md" && printf '\n'; } > "$TMP/instructions.md" \
+      && mv "$TMP/instructions.md" "$STAGE/AGENTS.md" \
+      || { echo "adopt: could not merge the project instructions into AGENTS.md" >&2; exit 1; }
   fi
-  [ -z "$PUB_LIST" ] || set_line "$STAGE/CLAUDE.md" public-docs "$PUBLIC" || exit 1
+  if [ -n "$check_command" ]; then set_line "$STAGE/AGENTS.md" check "$check_command" || exit 1
+  elif ! grep -q '^check:' "$STAGE/AGENTS.md"; then set_line "$STAGE/AGENTS.md" check "<set after scaffolding>" || exit 1
+  fi
+  [ -z "$PUB_LIST" ] || set_line "$STAGE/AGENTS.md" public-docs "$PUBLIC" || exit 1
 
   # Tracked rule files become subsections of the Rules section (rule files in the Core would not load).
   if [ -n "$RULES" ]; then
     read_rules "$FROM"
-    fold_rules "$STAGE/CLAUDE.md" "$TMP/rules.md" || { echo "adopt: could not fold the rules into CLAUDE.md" >&2; exit 1; }
+    fold_rules "$STAGE/AGENTS.md" "$TMP/rules.md" || { echo "adopt: could not fold the rules into AGENTS.md" >&2; exit 1; }
     rm -f "$TMP/rules.md"
   fi
 
@@ -474,7 +502,8 @@ move_into_place() {
 # the links, settings.local.json, the git hook shims, the PROJECTS.md line, the Core commit, a wiki check.
 finish() {
   echo "copied ${NCOPY} file(s) to $P/"
-  [ "$NRULES" -eq 0 ] || echo "folded ${NRULES} rule file(s) into $P/CLAUDE.md (## Rules)"
+  [ "$MERGE_AGENTS" -eq 0 ] || echo "merged AGENTS.md into $P/AGENTS.md"
+  [ "$NRULES" -eq 0 ] || echo "folded ${NRULES} rule file(s) into $P/AGENTS.md (## Rules)"
   # The wiki was converted in the staged copy; its moved and warning: lines.
   printf '%s\n' "$MIG" | grep -E '^(moved|warning:) '
   show "kept in Core, no longer loaded:" "$KEPT"
@@ -486,8 +515,11 @@ finish() {
   [ -z "$CREATED" ] || { echo "created:"; printf '%s\n' "$CREATED" | sed 's/^/  /'; }
   echo "folder unchanged: $K"
   [ "$NNEST" -eq 0 ] || show "$NEST_WARN" "$NEST" >&2
-  link_local_claude "$K" "$P" || echo "warning: $K/CLAUDE.local.md was not linked; make it a link to $P/CLAUDE.md" >&2
-  link_agents "$K" "$P" || echo "warning: $K/AGENTS.md was not linked; fold $P/AGENTS.md into CLAUDE.md if it exists, then make AGENTS.md a link to $P/CLAUDE.md" >&2
+  if [ -n "$AGENTS_WARN" ]; then
+    printf '%s\n' "$AGENTS_WARN" >&2
+  else
+    link_agents "$K" "$P" || echo "warning: $K/AGENTS.md was not linked; make it a link to $P/AGENTS.md" >&2
+  fi
   case "$SL_STATE" in
     create) put "$TPL/code/settings.local.json.tmpl" "$K/$SL_REL" \
               || echo "warning: could not create $K/$SL_REL; add \"$P\" to permissions.additionalDirectories in it" >&2 ;;
@@ -511,7 +543,7 @@ finish() {
   fi
   WOUT="$(bash "$ROOT_DIR/scripts/wiki-check.sh" "$P" 2>&1)"
   if [ -n "$WOUT" ]; then echo "the wiki has problems to fix:"; printf '%s\n' "$WOUT"; else echo "wiki: green"; fi
-  echo "start a new session in $K so CLAUDE.local.md loads"
+  echo "start a new session in $K to load the project instructions"
   echo "open: $K"
 }
 

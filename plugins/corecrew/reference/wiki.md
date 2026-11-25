@@ -1,7 +1,7 @@
 # Wiki rules
 
 A project's wiki is `<Core>/<project>/docs/`, one Obsidian vault per project. An agent reads
-`CLAUDE.md`, then the map `docs/INDEX.md`, then the one page its task needs. A user standard `<Core>/standards/wiki.md` wins over this file.
+`AGENTS.md` (or a legacy project's `CLAUDE.md`), then the map `docs/INDEX.md`, then the one page its task needs. A user standard `<Core>/standards/wiki.md` wins over this file.
 
 ## Pages
 

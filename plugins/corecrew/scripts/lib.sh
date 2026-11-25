@@ -121,6 +121,7 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     schema) printf '%s\n' "$COREDEV_SCHEMA" ;;
     code-root) [ $# -eq 2 ] || { echo "Usage: lib.sh code-root <path>" >&2; exit 2; }; code_root_of "$2" ;;
     project-of) [ $# -eq 2 ] || { echo "Usage: lib.sh project-of <path>" >&2; exit 2; }; project_of "$2" ;;
+    project-instructions) [ $# -eq 2 ] && [ -d "$2" ] || { echo "Usage: lib.sh project-instructions <Core project folder>" >&2; exit 2; }; project_instructions "$2" ;;
     code-dir) [ $# -eq 2 ] || { echo "Usage: lib.sh code-dir <name>" >&2; exit 2; }; code_dir_of "$2" ;;
     core-paths)
       [ $# -eq 2 ] && [ -n "$2" ] || { echo "Usage: lib.sh core-paths <project>" >&2; exit 2; }

@@ -73,9 +73,9 @@ rm -f "${TMPDIR:-/tmp}/wt.$$"
 assert_contains "$WK" 'INDEX.md: missing'
 assert_contains "$WK" 'missing docs/ directory'
 
-# 6. AGENTS.md link is taught next to CLAUDE.local.md.
+# 6. Both entry points document the same private source and checkout link.
 for f in "$NP" "$ADO"; do
-  grep 'CLAUDE.local.md' "$f" | grep -q 'AGENTS.md' && pass || fail "$f never names AGENTS.md next to CLAUDE.local.md"
+  assert_contains "$f" '<Core>/<name>/AGENTS.md'
 done
 
 # 7. corecrew's README names no removed behaviour in its wiki lines.

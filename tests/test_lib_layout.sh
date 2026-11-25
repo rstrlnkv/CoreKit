@@ -76,6 +76,8 @@ mkdir -p "$CORE_DIR/ag" "$P/Ag"; : > "$CORE_DIR/ag/CLAUDE.md"
 T="$CORE_DIR/ag/CLAUDE.md"
 OUT="$(DRY=1 la "$P/Ag" "$CORE_DIR/ag" 2>&1)"; assert_eq "$OUT" "would create ../Ag/AGENTS.md" "link_agents dry-run line"
 [ -e "$P/Ag/AGENTS.md" ] || [ -L "$P/Ag/AGENTS.md" ] && fail "DRY=1 wrote AGENTS.md" || pass
+git -C "$P/Ag" init -q
+printf 'AGENTS.md\n' > "$P/Ag/.gitignore"
 assert_exit 0 la "$P/Ag" "$CORE_DIR/ag"; assert_eq "$OUT" "created ../Ag/AGENTS.md" "link_agents created line"
 [ -L "$P/Ag/AGENTS.md" ] && pass || fail "AGENTS.md is not a symlink"
 assert_eq "$(readlink "$P/Ag/AGENTS.md")" "$T" "link_agents target"
@@ -183,7 +185,7 @@ HELPERS="expand_home canon_dir coredev_get core_ready coredev_set settings_file_
   _resolve_setting _settings_file_check resolve_setting _core_raw load_settings json_str json_fields
   _project_of_path worktree_of project_of wt_is_main_of code_root_of code_dir_of old_code_of old_layout_msg valid_project_name lc norm_path
   resolve_abs codex_home host tools_dir hooks_marker_path plugin_version rel_core esc render put mkdir_p git_init
-  project_docs_manifest put_project_docs link_file_to_claude link_local_claude link_agents projects_entry projects_upsert"
+  project_docs_manifest put_project_docs link_project_instructions link_local_claude link_agents projects_entry projects_upsert"
 # shellcheck disable=SC1090,SC2086
 missing="$( ( . "$LIB"; for fn in $HELPERS; do type "$fn" >/dev/null 2>&1 || echo "$fn"; done ) 2>&1 )"
 assert_eq "$missing" "" "helpers not defined after sourcing lib.sh"

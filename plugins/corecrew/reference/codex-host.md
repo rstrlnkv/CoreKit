@@ -27,7 +27,7 @@ hint), say `$corecrew:<skill>`. Use each skill’s invocation policy. The task s
 
 Where a skill tells the user to open or restart Claude Code in a folder (`cd <folder> && claude`),
 say instead: open Codex there with `cd "<folder>" && codex --add-dir "<Core>"`. The private
-`CLAUDE.md` loads in Codex through the folder's `AGENTS.md` link, also only in a new session.
+instructions load in Codex through the folder's `AGENTS.md` link, also only in a new session.
 
 ## Writable folders
 Codex writes only inside the folder it was started in and the folders given with `--add-dir`.

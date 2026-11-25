@@ -96,7 +96,7 @@ attribution value resolved at Start" instead of placeholders:
    worktree, wherever it lives; else the project's main code folder `<Projects>/<Name>` beside the Core;
    exit 1 means the directory is in neither: fall back to
    `CORE_DIR="<Core>" bash "<scripts>/lib.sh" code-dir <name>`). Use the code root for briefs, tests,
-   release and `git`. The wiki and `CLAUDE.md` stay in `<Core>/<name>/`.
+   release and `git`. The wiki and the project instructions stay in `<Core>/<name>/`.
    - exit 1 from `code-dir`: the project has no code folder (for example the Core is
      synced to this machine but the code is not cloned). Say so in one line, name where the code
      is expected (`<Projects>/<Name>`, a folder beside the Core whose lower-case name is `<name>`),
@@ -115,7 +115,7 @@ attribution value resolved at Start" instead of placeholders:
    Explorer), and act as it." before the brief. Say once that
    `/plugin install feature-dev@claude-plugins-official` adds the deeper feature-dev agents; no
    path stops for it. If neither kind is listed, a step that needs one stops and says why.
-4. **Read.** Read `<Core>/<project>/CLAUDE.md` and its `check: <command>` line. A line that still reads
+4. **Read.** Resolve the private instructions with `bash "<scripts>/lib.sh" project-instructions "<Core>/<project>"`. Read that file and its `check: <command>` line. A line that still reads
    `check: <set after scaffolding>`, or no line at all, means unset. Do not ask yet: the top of
    `references/paths.md` says when to ask and where the answer is written. List the file names of
    `<Core>/standards/`, `<Core>/knowledge/` and `<Core>/<project>/docs/knowledge/`, and read the
@@ -166,7 +166,7 @@ full name of the agent chosen in Start, **Architect and explorer** (`feature-dev
    Do not pass `model` to the architect and explorer agents. In Codex see `references/codex.md`.
 7. Only the touched modules' tests per pass; the full `check:` once, at the end, as its own
    tester call.
-8. Never retell `CLAUDE.md` in a brief; give paths.
+8. Never retell the project instructions in a brief; give paths.
 9. A reply without `Standards:` goes back once, asking for the line, when the role has standards
    whose `applies-to` names it (in `<Core>/standards/` or the project's `docs/standards/`).
    A second reply without it: note it in `Open`.

@@ -6,7 +6,7 @@ source "$(dirname "$0")/lib-hook.sh"
 new_sandbox
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR COREKIT_HOST
 setup_core
-bash "$SKILL/scripts/scaffold.sh" --name trust >/dev/null
+scaffold_legacy trust || fail "legacy scaffold"
 PR="$(dirname "$CORE_DIR")"; C="$PR/trust"; P="$CORE_DIR/trust"
 git -C "$C" commit -q --allow-empty -m init
 # wt_of and guard: tests/lib-hook.sh

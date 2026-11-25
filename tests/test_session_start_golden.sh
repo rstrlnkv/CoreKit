@@ -29,7 +29,7 @@ run_cases() {
   case_run "no core" "$SANDBOX/elsewhere"
   setup_core
   case_run "core ready, elsewhere" "$SANDBOX/elsewhere"
-  bash "$SKILL/scripts/scaffold.sh" --name gold >/dev/null
+  scaffold_legacy gold || fail "legacy scaffold"
   P="$CORE_DIR/gold"; C="$(dirname "$CORE_DIR")/gold"
   printf -- '---\nname: alpha\n---\n' > "$CORE_DIR/standards/alpha.md"
   printf 'Rule one.\n' > "$CORE_DIR/session-rules.md"

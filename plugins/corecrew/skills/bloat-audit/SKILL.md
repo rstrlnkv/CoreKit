@@ -25,14 +25,14 @@ To know whether this is a corecrew project, resolve `<Core>`:
 `CORE_DIR='${user_config.core_dir}' bash "<scripts>/lib.sh" core-dir`, then run
 `CORE_DIR="<Core>" bash "<scripts>/lib.sh" project-of "<repo>"`. It prints the project name, or exits 1
 when the repository is not in a project. Both only read. In a project, also read
-`<Core>/<name>/CLAUDE.md` for the map.
+the private instructions file returned by `lib.sh project-instructions "<Core>/<name>"` for the map.
 
 Audit the tracked files (`git ls-files`). Leave out what nobody writes by hand: vendored code, lock
 files, generated code, build output and test fixtures. When the repository is too big for one pass,
 audit the largest modules first and name in the report what was not covered.
 
 ## Order
-1. **Map first.** Read `CLAUDE.md` or `AGENTS.md`, the README, the build manifest and the directory
+1. **Map first.** Read the project instructions, the README, the build manifest and the directory
    layout. Write down the modules and where the project keeps shared code. A duplicate without that
    map cannot say where the one copy should live.
 2. **Look for five kinds, each with a command (`git grep`, a count), not by eye:**

@@ -27,7 +27,7 @@ MSG_LANGS="en ru"
 # shellcheck disable=SC2034  # MSG_KEYS is read by tests/test_hook_messages.sh (every language for every key)
 MSG_KEYS="sync_failed sync_not_ours agents_in_core hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
 session_rules schema_none run_starting layout_note hooks_path hooks_path_empty guard_code_blocked guard_code_public guard_code_unread guard_code_too_many patch_too_many patch_unjudgeable patch_no_reader patch_shell secrets_blocked secrets_ask
-local_link_created agents_link_created agents_link_wrong agents_link_failed local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind task_agent_ask
+local_link_created agents_link_created agents_link_wrong agents_link_failed agents_link_unignored local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind task_agent_ask
 readonly_agent settings_invalid_path settings_invalid_value settings_unreadable settings_no_home allowed_attribution allowed_model_profile
 src_env src_option src_file fix_env fix_option fix_file codex_trust codex_profile"
 # readonly_agent: the read-only checker's refusal is read only by a subagent (designer, localizer, security,
@@ -105,6 +105,8 @@ _msg_text() {
     ru:agents_link_wrong) MSG_T='corecrew: @1 — ссылка не на @2, поэтому инструменты, читающие AGENTS.md, не получают приватный CLAUDE.md. Удалите эту ссылку и выполните: ln -s "@2" "@1"' ;;
     en:agents_link_failed) MSG_T='corecrew: could not create @1, so tools that read AGENTS.md do not get the private CLAUDE.md. Run: ln -s "@2" "@1"' ;;
     ru:agents_link_failed) MSG_T='corecrew: не удалось создать @1, поэтому инструменты, читающие AGENTS.md, не получают приватный CLAUDE.md. Выполните: ln -s "@2" "@1"' ;;
+    en:agents_link_unignored) MSG_T='corecrew: @1 must be ignored by Git before corecrew can link it to the private instructions' ;;
+    ru:agents_link_unignored) MSG_T='corecrew: добавьте @1 в исключения Git, чтобы corecrew мог связать его с приватными инструкциями' ;;
     en:local_link_wrong) MSG_T='corecrew: @1 exists and is not a link to @2, so the private CLAUDE.md is not loaded. Move that file away, then run: ln -s "@2" "@1"' ;;
     ru:local_link_wrong) MSG_T='corecrew: @1 уже существует и не ведёт на @2, поэтому приватный CLAUDE.md не загружается. Уберите этот файл и выполните: ln -s "@2" "@1"' ;;
     en:local_link_failed) MSG_T='corecrew: could not create @1, so the private CLAUDE.md is not loaded. Run: ln -s "@2" "@1"' ;;

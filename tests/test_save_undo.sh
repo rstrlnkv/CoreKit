@@ -262,7 +262,7 @@ fi
 mkdir -p "$SANDBOX/Projects/Brain"; git -C "$SANDBOX/Projects/Brain" init -q
 (cd "$SANDBOX/Projects/Brain" && bash "$SAVE" "x") > "$SANDBOX/out" 2>&1; rc=$?
 assert_eq "$rc" "1" "save in a non-project repo"
-assert_contains "$SANDBOX/out" "This folder is not a corecrew project (<Projects>/<Name> with <Core>/<name>/CLAUDE.md)."
+assert_contains "$SANDBOX/out" "This folder is not a corecrew project (<Projects>/<Name> with instructions in <Core>/<name>/)."
 mkdir -p "$SANDBOX/plain"
 (cd "$SANDBOX/plain" && bash "$SAVE" "x") > "$SANDBOX/out" 2>&1
 assert_contains "$SANDBOX/out" "Run this inside a project's code folder."

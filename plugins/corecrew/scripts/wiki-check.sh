@@ -83,6 +83,8 @@ T="$(mktemp -d "${TMPDIR:-/tmp}/wiki-check.XXXXXX")" || exit 2
 trap 'rm -rf "$T"' EXIT
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$HERE/lib-layout.sh" || exit 2
+INSTRUCTIONS="$(project_instructions "$PROJ")"
 
 # Wiki pages (docs-relative, one per line) and every file under docs/ (wikilinks may name any).
 bash "$HERE/wiki-pages.sh" "$DOCS" > "$T/pages" || exit 2
@@ -127,7 +129,7 @@ OUT="$(
     d="$(dirname "$page")"; if [ "$d" = . ]; then d=docs; else d="docs/$d"; fi
     run_checked page "$page" "$DOCS/$page" "$d"
   done < "$T/pages"
-  if [ -f "$PROJ/CLAUDE.md" ]; then run_checked claude ../CLAUDE.md "$PROJ/CLAUDE.md" ""; fi
+  if [ -f "$INSTRUCTIONS" ]; then run_checked claude "../${INSTRUCTIONS##*/}" "$INSTRUCTIONS" ""; fi
 )"
 
 if [ -s "$T/failed" ]; then

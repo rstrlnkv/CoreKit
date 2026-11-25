@@ -3,9 +3,9 @@
 Choose one path per call and name it in your first line to the user. When the task does not
 fit one path, say so and pick the closest; never mix two chains in one call. Briefs follow
 `brief.md`; the final report follows `report.md`. Everywhere below, `check:` is the line in
-`<Core>/<project>/CLAUDE.md`; a line that still reads `check: <set after scaffolding>` means
+the project instructions file; a line that still reads `check: <set after scaffolding>` means
 unset (or missing): ask the user once, before the first tester call that needs it (on `release`, before
-postcondition 1; every path except `question`), and write the confirmed command into the `check:` line of that `CLAUDE.md`
+postcondition 1; every path except `question`), and write the confirmed command into the `check:` line of that file
 (it is committed with the chain) so the next chain does not ask.
 
 ## fix

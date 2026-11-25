@@ -24,10 +24,10 @@ locate() {
   # CDPATH='' and >/dev/null: with CDPATH exported, cd to the relative .git could print the folder or go elsewhere
   common=$(cd "$CODE" && CDPATH='' cd -- "$(git rev-parse --git-common-dir)" >/dev/null && pwd)
   MAIN=$(dirname "$common")
-  link=$(readlink "$MAIN/CLAUDE.local.md" 2>/dev/null)
+  link=$(readlink "$MAIN/CLAUDE.local.md" 2>/dev/null) || link=$(readlink "$MAIN/AGENTS.md" 2>/dev/null)
   case "$link" in
-    /*/CLAUDE.md) ;;
-    */CLAUDE.md) link="$MAIN/$link" ;;
+    /*/CLAUDE.md|/*/AGENTS.md) ;;
+    */CLAUDE.md|*/AGENTS.md) link="$MAIN/$link" ;;
     *) link="" ;;
   esac
   if [ -n "$link" ]; then
@@ -37,7 +37,7 @@ locate() {
   if n=$(project_of "$MAIN") && o=$(old_code_of "$n"); then old_layout_msg "$o" >&2; return 1; fi
   NAME=$(project_of "$MAIN") && [ "$(code_dir_of "$NAME" 2>/dev/null)" = "$(canon_dir "$MAIN")" ] \
     && [ -d "$CORE_DIR/.git" ] || {
-    echo "This folder is not a corecrew project (<Projects>/<Name> with <Core>/<name>/CLAUDE.md)." >&2
+    echo "This folder is not a corecrew project (<Projects>/<Name> with instructions in <Core>/<name>/)." >&2
     return 1; }
   _name_splits "$NAME" && return 1
   CORE="$CORE_DIR"; PROJECT="$CORE/$NAME"

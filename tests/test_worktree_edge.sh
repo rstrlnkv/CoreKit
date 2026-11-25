@@ -7,9 +7,9 @@ source "$(dirname "$0")/lib-hook.sh"
 new_sandbox
 unset CLAUDE_PLUGIN_OPTION_CORE_DIR COREKIT_HOST
 setup_core
-bash "$SKILL/scripts/scaffold.sh" --name edge >/dev/null
+scaffold_legacy edge || fail "legacy scaffold"
 PR="$(dirname "$CORE_DIR")"; C="$PR/edge"; P="$CORE_DIR/edge"
-git -C "$C" commit -q --allow-empty -m init
+git -C "$C" add .gitignore && git -C "$C" commit -q -m init
 # proj, wt_of and guard: tests/lib-hook.sh
 
 # --- the .git file of a worktree, rewritten: relative gitdir, trailing blanks, CRLF
@@ -65,7 +65,7 @@ rm -f "$W/CLAUDE.local.md" "$W/AGENTS.md"; rm -rf "$COREDEV_TOOLS"
 for i in 1 2 3 4 5 6; do bash "$SCRIPTS/prepare.sh" --cwd "$W" > "$SANDBOX/conc$i" 2>&1 & done; wait
 assert_eq "$(readlink "$W/CLAUDE.local.md")" "$P/CLAUDE.md" "concurrent: CLAUDE.local.md"
 assert_eq "$(readlink "$W/AGENTS.md")" "$P/CLAUDE.md" "concurrent: AGENTS.md"
-bad="$(cat "$SANDBOX"/conc* | grep 'is a link to somewhere other\|exists and is not a link' | head -1)"; assert_eq "$bad" "" "concurrent: no false 'link to somewhere other' warning (link_file_to_claude ln race)"
+bad="$(cat "$SANDBOX"/conc* | grep 'is a link to somewhere other\|exists and is not a link' | head -1)"; assert_eq "$bad" "" "concurrent: no false 'link to somewhere other' warning"
 bad="$(cat "$SANDBOX"/conc* | grep 'tools not refreshed' | head -1)"; assert_eq "$bad" "" "concurrent: no false 'tools not refreshed' (sync-tools.sh mv race)"
 assert_file "$COREDEV_TOOLS/VERSION"; assert_file "$COREDEV_TOOLS/save"
 assert_eq "$(ls -A "$COREDEV_TOOLS" | grep -c 'tmp\|\.new\|\.part')" "0" "concurrent: no temp leftovers in tools"
@@ -108,7 +108,7 @@ LD="$SANDBOX/lnd"; mkdir -p "$LD"; STUB2="$SANDBOX/lnstub"; mkdir -p "$STUB2"
 REALLN="$(command -v ln)"
 # the stub makes the directory just before the real ln runs: the race between the -e test and ln
 printf '#!/bin/sh\nmkdir -p "%s/CLAUDE.local.md"\nexec "%s" "$@"\n' "$LD" "$REALLN" > "$STUB2/ln"; chmod +x "$STUB2/ln"
-OUT="$(PATH="$STUB2:$PATH" bash -c '. "$1"; link_file_to_claude "$2" "$3" CLAUDE.local.md' _ "$SCRIPTS/lib.sh" "$LD" "$P" 2>&1)"; RCLN=$?
+OUT="$(PATH="$STUB2:$PATH" bash -c '. "$1"; link_project_instructions "$2" "$3" CLAUDE.local.md' _ "$SCRIPTS/lib.sh" "$LD" "$P" 2>&1)"; RCLN=$?
 assert_eq "$RCLN" "1" "ln into a new directory: exit 1"
 assert_eq "$(ls -A "$LD/CLAUDE.local.md" | wc -l | tr -d ' ')" "0" "ln into a new directory: no link created inside it"
 finish

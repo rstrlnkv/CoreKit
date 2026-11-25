@@ -7,7 +7,7 @@ description: Use when the user wants to start a new app, program, bot, website o
 
 ## Overview
 Turns an idea into a project that follows one standard: interview → analysis → recorded
-decisions → scaffold → GitHub → build check. **Core principle:** internal files (CLAUDE.md,
+decisions → scaffold → GitHub → build check. **Core principle:** internal files (AGENTS.md,
 docs/, .claude/) live in the Core, a private docs repo, and physically never sit inside the code repo,
 so a public code repo cannot leak them.
 
@@ -47,9 +47,9 @@ stored in `<Core>/.coredev`:
 ```
 <Core>/                          private GitHub repo <CoreName> (default ~/Projects/Core)
   .coredev, PROJECTS.md, README.md, standards/, knowledge/
-  <name>/CLAUDE.md, docs/
+  <name>/AGENTS.md, docs/
 <Projects>/<name>/               beside the Core (<Projects> = parent of <Core>): separate git repo "<name>";
-                                 Claude Code is launched here; CLAUDE.local.md and AGENTS.md -> <Core>/<name>/CLAUDE.md
+                                 the agent is launched here; AGENTS.md -> <Core>/<name>/AGENTS.md
 ```
 
 ## Stages
@@ -120,7 +120,7 @@ never invent it) and save it with
 This runs on every entry to stage 4, so it also happens when resuming at `decided`. Generate the app with the stack's command from `references/stacks.md` **in a temp
 dir**, then `CORE_DIR="<Core>" bash "<skill>/scripts/merge-generated.sh" <tmp>/<folder> "<Projects>/<name>"`. Never run a
 generator with `--force`/`--overwrite` in the code folder. Fill the Build/Test/Run and Stack sections of
-`CLAUDE.md` (leave the `check:` line for stage 6). `CORE_DIR="<Core>" bash "<scripts>/install-hooks.sh" "<Core>/<name>"`. Then from `<Projects>/<name>`:
+`AGENTS.md` (leave the `check:` line for stage 6). `CORE_DIR="<Core>" bash "<scripts>/install-hooks.sh" "<Core>/<name>"`. Then from `<Projects>/<name>`:
 `bash "<scripts>/save" "Scaffold <stack> project"`. Set `Stage: scaffolded`.
 
 **5. GitHub.** This stage needs `gh`, logged in (`gh auth status`); without it, stop here with
@@ -132,7 +132,7 @@ is created, naming it and its visibility:
 
 **6. Verify.** Run the stack's check command from `references/stacks.md` (from `<Projects>/<name>`). Once the
 first build and that command succeed, replace the placeholder line `check: <set after scaffolding>`
-in `<Core>/<name>/CLAUDE.md` with the real single command, e.g. `check: flutter test` (the one
+in `<Core>/<name>/AGENTS.md` with the real single command, e.g. `check: flutter test` (the one
 test/check command, run in `<Projects>/<name>`; hooks and the verifier read it). Then run
 `bash "<scripts>/wiki-check.sh" "<Core>/<name>"` and fix every
 `wiki-check:` line it prints (silent = green). Set `Stage: ready` and, from `<Projects>/<name>`,
@@ -157,7 +157,7 @@ decision is a new file `docs/decisions/NNN-<slug>.md`. `docs/knowledge/`,
 ## Red flags — stop
 | Thought | Reality |
 |---------|---------|
-| "One repo is simpler" | CLAUDE.md and docs in the code repo leak the moment it is public. Use the layout. |
+| "One repo is simpler" | AGENTS.md and docs in the code repo leak the moment it is public. Use the layout. |
 | "The stack is obvious" | Show 2–3 scored options anyway; the user approves, not you. |
 | "I'll write the first features now" | This skill ends at a building empty project + optional plan. |
 | "Docs in the user's language are friendlier" | Files are English; summaries in chat are in their language. |

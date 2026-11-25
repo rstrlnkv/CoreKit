@@ -1,6 +1,13 @@
 # lib-layout.sh — where a path belongs, for lib.sh (source lib.sh, not this file): the project of a path, linked worktrees,
 # the code folder of a project, the old layout it refuses, and the project name rule.
 
+# An existing legacy file keeps priority so a separate, unmerged AGENTS.md cannot shadow it.
+# New projects have only AGENTS.md. Return that path even before it has been created.
+project_instructions() {
+  if [ -f "$1/CLAUDE.md" ]; then printf '%s\n' "$1/CLAUDE.md"
+  else printf '%s\n' "$1/AGENTS.md"; fi
+}
+
 # _project_of_path <path> — with CORE_DIR loaded (load_settings), prints <project> and exits 0 when the path is
 # inside a project; otherwise prints nothing and exits 1. Two places count:
 #  - inside the Core: <Core>/<project> or anything below it; a project is a top-level folder of the Core that
@@ -18,7 +25,7 @@ _project_of_path() {
       rest="${p#"$CORE_DIR"/}"; first="${rest%%/*}"
       case "$first" in ""|.*|standards|knowledge) return 1 ;; esac
       [ -d "$CORE_DIR/$first" ] || return 1
-      [ -f "$CORE_DIR/$first/CLAUDE.md" ] || return 1
+      [ -f "$(project_instructions "$CORE_DIR/$first")" ] || return 1
       printf '%s\n' "$first" ;;
     "$CORE_DIR") return 1 ;;
     *)
@@ -27,7 +34,7 @@ _project_of_path() {
       rest="${p#"$pd"/}"; first="${rest%%/*}"
       name="$(lc "$first")"
       case "$name" in ""|.*|standards|knowledge|*$'\n'*|*$'\r'*) return 1 ;; esac
-      [ -f "$CORE_DIR/$name/CLAUDE.md" ] || return 1
+      [ -f "$(project_instructions "$CORE_DIR/$name")" ] || return 1
       printf '%s\n' "$name" ;;
   esac
 }

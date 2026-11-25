@@ -12,7 +12,7 @@ Which sentence this change adds claims something the tree does not hold, which a
 Every untrue sentence with its location and the command that refutes it, the number of claims resolved, and what should now go (delete or repair, with why it is dead). A claim you could not resolve goes into "Not resolved", never into the findings.
 ## What to read first
 Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:` and `project:` name it.
-1. `CLAUDE.md` (how this project writes about itself).
+1. `AGENTS.md` (legacy projects: `CLAUDE.md`) (how this project writes about itself).
 2. `docs/INDEX.md`, the generated map of the wiki.
 3. The wiki pages the task needs, the diff, and the whole of every file whose prose it touched.
 4. Its standards: `docs/standards/<name>.md` of the project, else `<Core>/standards/<name>.md`, for every standard whose `applies-to` names verifier.

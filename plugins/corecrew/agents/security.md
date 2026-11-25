@@ -12,7 +12,7 @@ What the program deletes, runs, reads, sends and which permissions it uses, and 
 Every finding with a path: where the input comes from, how far it reaches, what happens at the end (input → effect). Without a path it is a suspicion and goes into "Not checked", not into the findings.
 ## What to read first
 Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:` and `project:` name it.
-1. `CLAUDE.md` (what the program may touch).
+1. `AGENTS.md` (legacy projects: `CLAUDE.md`) (what the program may touch).
 2. `docs/INDEX.md`, the generated map of the wiki.
 3. The wiki page the task needs, and tester's report in the brief: do not look for the same thing twice.
 4. Its standards: `docs/standards/<name>.md` of the project, else `<Core>/standards/<name>.md`, for every standard whose `applies-to` names security.

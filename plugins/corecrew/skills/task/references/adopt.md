@@ -3,7 +3,7 @@
 `/corecrew:task adopt <folder>`: bring an existing project into the corecrew layout. The repo
 stays where it is, in `<Projects>/<Name>` (`<Projects>` is the folder that holds `<Core>`); its
 internal files move to `<Core>/<name>/` (`<name>` is `<Name>` in lower case) and reach the
-session through `CLAUDE.local.md` and `AGENTS.md`, gitignored links to `<Core>/<name>/CLAUDE.md`.
+session through `AGENTS.md`, a gitignored link to `<Core>/<name>/AGENTS.md`.
 Start has already resolved `<Core>`, checked that it is set up, and noted `<scripts>` (the plugin
 scripts folder). Steps 1–8 are only you and the script; the crew comes in at step 9. Talk to the
 user in plain words; never run `adopt.sh` before "ok".
@@ -36,8 +36,11 @@ user in plain words; never run `adopt.sh` before "ok".
    Otherwise tell the user in plain words:
    - the name, and that the folder stays where it is;
    - which files go to `<Core>/<name>/` (under "copy to");
+   - when the plan lists an `AGENTS.md` merge, its text is appended to the private `AGENTS.md`.
+     Both clients then load those instructions through their links, so flag any conflicting
+     project rules when showing the plan;
    - the rule files under "fold into ... under ## Rules": their text becomes a subsection of the
-     Rules section of the private `CLAUDE.md` (with "Applies to: ..." for rules limited to some
+     Rules section of the private `AGENTS.md` (with "Applies to: ..." for rules limited to some
      files), because rule files kept in the Core would not load;
    - the files under "kept in Core, no longer loaded": they are kept in `<Core>/<name>/.claude/`
      but Claude Code no longer reads them (for example `settings.json` permissions or hooks,
@@ -47,16 +50,16 @@ user in plain words; never run `adopt.sh` before "ok".
      under "add to .gitignore"; the user's own lines stay as they are), so local Claude files never
      reach a commit, and, when the repo has none, a `.worktreeinclude` that copies
      `.claude/settings.local.json` into new worktrees (an existing one is left as is);
-   - the `CLAUDE.local.md` and `AGENTS.md` links and `.claude/settings.local.json` (created, or a
-     `warning:` line: the user's own file is left as is and needs the `additionalDirectories`
-     entry it names; a `<Core>/<name>/AGENTS.md` blocks the `AGENTS.md` link until its rules are
-     folded into `CLAUDE.md`);
+   - the `AGENTS.md` link shown in the plan. A warning about an existing
+     code-repo `AGENTS.md` means the file keeps its own instructions;
+   - the creation of `.claude/settings.local.json`, or the `additionalDirectories` entry named
+     by its warning;
    - the conversion of the old wiki by `wiki-migrate.sh` (a failure stops adopt with nothing changed);
    - what gets created.
    - that after it the private pages are filled from the repo and the public documents are
      checked against the Core standards; each rewrite waits for the user's own ok (step 9).
    If the plan lists `CLAUDE.md` or `.claude/` under "stays in the repo (ignored by git)", tell
-   the user: the Core gets a template `CLAUDE.md`, and their own file stays in the repo.
+   the user: the Core gets a template `AGENTS.md`, and their own file stays in the repo.
    If the plan has the `warning: git tracks N CLAUDE.md / AGENTS.md file(s) that stay in the repo`
    line, raise it before asking for "ok": those files (often test fixtures) stay in the repo, but
    after adopt corecrew's hooks and guard block changing them or adding new ones there, so the
@@ -85,10 +88,10 @@ user in plain words; never run `adopt.sh` before "ok".
 10. **Report** in plain words, with these lines:
    - `Path: adopt`
    - the code folder (unchanged); the `check:` command or that it is not set yet
-   - the rules folded into `CLAUDE.md`, and the files "kept in Core, no longer loaded"
+   - the rules folded into `AGENTS.md`, and the files "kept in Core, no longer loaded"
    - the wiki result
    - the `Private pages:` and `Documents:` lines of `adopt-docs.md`
    - `Open Claude Code in: <code folder>` (the script's last line, `open: ...`), and tell the
-     user to restart Claude Code in that folder: the private `CLAUDE.md` loads through
-     `CLAUDE.local.md` only in a new session. In Codex, say `Open Codex in: <code folder>` with
+     user to restart Claude Code in that folder: the private `AGENTS.md` loads through
+     `AGENTS.md` in a new session. In Codex, say `Open Codex in: <code folder>` with
      the command `<plugin>/reference/codex-host.md` gives.

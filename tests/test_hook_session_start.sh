@@ -143,7 +143,7 @@ run_rc "$C"; echo "$OUT" | grep -qF "install-hooks.sh" && fail "fresh shims repo
 
 # --- the CLAUDE.local.md link, created once, never overwritten; the old layout is named
 PR="$(dirname "$CORE_DIR")"
-bash "$SKILL/scripts/scaffold.sh" --name newapp >/dev/null
+scaffold_legacy newapp || fail "legacy scaffold"
 NP="$CORE_DIR/newapp"; NC="$PR/newapp"
 rm -f "$NC/CLAUDE.local.md"
 run_rc "$NC"; assert_eq "$RC" "0" "new layout: exit"

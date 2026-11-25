@@ -16,7 +16,7 @@ assert_file "$C/a.txt"; assert_no_file "$C/b.txt"
 bash "$UNDO" >/dev/null; assert_no_file "$C/a.txt"
 assert_exit 1 bash "$UNDO"
 echo "$OUT" | grep -qi 'first step' && pass || fail "no first-step message"
-assert_file "$SAVE"; assert_file "$CORE_DIR/edge-app/CLAUDE.md"
+assert_file "$SAVE"; assert_file "$CORE_DIR/edge-app/AGENTS.md"
 
 # new layout: undo-step from a worktree under <Projects>/Bar reverts the main checkout's step
 B="$SANDBOX/Projects/Bar"; mkdir -p "$B" "$CORE_DIR/bar"; echo "# bar" > "$CORE_DIR/bar/CLAUDE.md"
@@ -40,7 +40,7 @@ echo two > "$C/two.txt"; echo two > "$P/docs/f.md"; bash "$SAVE" two >/dev/null 
 echo three > "$P/docs/f.md"; bash "$SAVE" three >/dev/null 2>&1
 # another project's work in the Core: a staged file, an untracked one, an unsaved edit
 mkdir -p "$CORE_DIR/other"; echo notes > "$CORE_DIR/other/notes.md"; git -C "$CORE_DIR" add other/notes.md
-echo loose > "$CORE_DIR/other/loose.md"; echo edited >> "$CORE_DIR/edge-app/CLAUDE.md"
+echo loose > "$CORE_DIR/other/loose.md"; echo edited >> "$CORE_DIR/edge-app/AGENTS.md"
 
 # failure path: a conflicting undo (code revert applied, Core revert conflicts) leaves both repos
 # exactly as they were, the other project's staged file included
@@ -59,7 +59,7 @@ assert_eq "$(cat "$P/docs/f.md")" "two" "step three not undone"
 git -C "$CORE_DIR" log -1 --format=%s | grep -q '^Undo step' && pass || fail "no Undo commit in the Core"
 git -C "$CORE_DIR" show --name-only --format= HEAD | grep -q '^other/' && fail "unrelated staged file in the Undo commit" || pass
 assert_eq "$(git -C "$CORE_DIR" diff --cached --name-only)" "other/notes.md" "unrelated staged file not left staged"
-assert_file "$CORE_DIR/other/loose.md"; assert_contains "$CORE_DIR/edge-app/CLAUDE.md" edited
+assert_file "$CORE_DIR/other/loose.md"; assert_contains "$CORE_DIR/edge-app/AGENTS.md" edited
 no_revert_left
 
 # unsaved changes in a shared Core file the step could include block the undo
@@ -79,7 +79,7 @@ assert_no_file "$C/k.txt"; assert_no_file "$K/git-undo.md"
 (cd "$SANDBOX/Projects/edge-app" && echo e > "$K/edge.md" && bash "$SAVE" "edge knowledge") >/dev/null 2>&1
 EDGE=$(step_id "$CORE_DIR")
 assert_exit 0 bash "$UNDO" "$EDGE"
-assert_file "$K/edge.md"; assert_contains "$CORE_DIR/edge-app/CLAUDE.md" edited
+assert_file "$K/edge.md"; assert_contains "$CORE_DIR/edge-app/AGENTS.md" edited
 
 # two projects that save in the same second get different Step-Ids (a fake date pins the clock)
 FD="$SANDBOX/fakedate"; mkdir -p "$FD"

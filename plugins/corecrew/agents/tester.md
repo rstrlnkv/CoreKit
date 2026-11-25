@@ -12,7 +12,7 @@ Which input or state nobody accounted for, and what the program does when it arr
 Proof that stays behind you: a test in the tree, a screenshot, a measurement. Every finding with a repro command; "it looks like it will break" is not a finding.
 ## What to read first
 Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:` and `project:` name it.
-1. `CLAUDE.md` (what is checked with, and the `check:` line).
+1. `AGENTS.md` (legacy projects: `CLAUDE.md`) (what is checked with, and the `check:` line).
 2. `docs/INDEX.md`, the generated map of the wiki.
 3. The wiki page the task needs, and engineer's report in the brief: your work starts by trying to refute it.
 4. Its standards: `docs/standards/<name>.md` of the project, else `<Core>/standards/<name>.md`, for every standard whose `applies-to` names tester.

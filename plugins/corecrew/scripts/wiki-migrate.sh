@@ -43,6 +43,7 @@
 # .obsidian is a symlink); 2 usage error.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$HERE/lib-layout.sh" || exit 2
 TPL="$HERE/../templates/docs"
 usage() { echo "usage: wiki-migrate.sh <project_dir> [--dry-run]" >&2; exit 2; }
 dry=0; proj=""; seen=0
@@ -56,6 +57,7 @@ done
 proj="${proj%/}"
 [ -n "$proj" ] && [ -d "$proj/docs" ] || usage
 docs="$proj/docs"; name="${WIKI_MIGRATE_NAME:-$(basename "$proj")}"
+instructions="$(project_instructions "$proj")"
 case "$name" in ""|.|..|*/*) usage ;; esac
 DATES="${WIKI_MIGRATE_DATES:-$proj}"
 TODAY="$(date +%Y-%m-%d)"
@@ -142,7 +144,16 @@ while IFS= read -r pg; do
   if LC_ALL=C awk '{ sub(/\r$/, "") } NR == 1 { if ($0 !~ /^---[ \t]*$/) exit 1; next }
       /^---[ \t]*$/ { exit 1 } /^updated:[ \t]*[^ \t]/ { exit 0 } END { if (NR < 2) exit 1 }' "$f"; then d=""
   else d="$(git -C "$DATES" log -1 --format=%cd --date=short -- "docs/${orig:-$pg}" 2>/dev/null)"; fi
+  legacy_link=""; shared_link=""
+  if [ "${instructions##*/}" = AGENTS.md ] && [ -f "$instructions" ]; then
+    from_parent=../; level="${orig:-$pg}"
+    while [ "${level#*/}" != "$level" ]; do from_parent="../$from_parent"; level="${level#*/}"; done
+    to_parent=../; level="$pg"
+    while [ "${level#*/}" != "$level" ]; do to_parent="../$to_parent"; level="${level#*/}"; done
+    legacy_link="${from_parent}CLAUDE.md"; shared_link="${to_parent}AGENTS.md"
+  fi
   LC_ALL=C awk -v SQ="'" -v NAME="$n" -v TYPE="$ty" -v DATE="${d:-$TODAY}" -v NAMES="$W/names" \
+    -v LEGACY_LINK="$legacy_link" -v SHARED_LINK="$shared_link" \
     -v HEADS="$W/heads" -v WARN="$W/warn" -f "$HERE/wiki-migrate.awk" "$f" > "$W/page" || die "could not convert docs/$pg; nothing was changed"
   # awk ends every line with a newline: a page that had no final one keeps having none
   if [ -s "$f" ] && [ -n "$(tail -c1 "$f")" ] && [ -z "$(tail -c1 "$W/page")" ]; then
@@ -171,10 +182,10 @@ done >> "$W/lines"
 # (the pages' type warnings are above; wiki-index's own notes about them would repeat them)
 WIKI_INDEX_UNTYPED=1 bash "$HERE/wiki-index.sh" "$SP" >> "$W/lines" 2>/dev/null || die "wiki-index.sh failed; nothing was changed"
 # 0.6 instructions in CLAUDE.md, and leftovers of a killed run: named, never touched.
-if [ -f "$proj/CLAUDE.md" ]; then
-  awk '/docs\/superpowers/ { print "warning: CLAUDE.md:" NR ": still says docs/superpowers; update it by hand"; next }
-       /map line/ { print "warning: CLAUDE.md:" NR ": still says map line; update it by hand" }' "$proj/CLAUDE.md" >> "$W/warn" \
-    || die "could not read $proj/CLAUDE.md; nothing was changed"
+if [ -f "$instructions" ]; then
+  awk -v name="${instructions##*/}" '/docs\/superpowers/ { print "warning: " name ":" NR ": still says docs/superpowers; update it by hand"; next }
+       /map line/ { print "warning: " name ":" NR ": still says map line; update it by hand" }' "$instructions" >> "$W/warn" \
+    || die "could not read $instructions; nothing was changed"
 fi
 printf '%s' "$LEFT" | while IFS= read -r f; do
   [ -n "$f" ] && printf 'warning: leftover %s from an interrupted run; check and remove it by hand\n' "$f"

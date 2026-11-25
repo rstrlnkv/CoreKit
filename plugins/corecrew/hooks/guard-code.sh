@@ -102,7 +102,8 @@ need_settings() {
 
 # is_public <project> <lower-case path relative to the code root> — exit 0 when a public-docs: entry covers it.
 is_public() {
-  local f="$CORE_DIR/$1/CLAUDE.md" line t
+  local f line t
+  f="$(project_instructions "$CORE_DIR/$1")"
   [ -f "$f" ] || return 1
   line="$(LC_ALL=C grep -m1 '^public-docs:' "$f" 2>/dev/null)" || return 1
   line="$(printf '%s' "${line#public-docs:}" | LC_ALL=C tr 'A-Z,\r`' 'a-z   ')"
@@ -192,7 +193,12 @@ check_path() {
     agents.md) tgt="AGENTS.md" ;;
     */agents.md) tgt="${tgt%/*}/AGENTS.md" ;;
   esac
-  guard_refuse "$(msg guard_code_blocked "$shown" "$CORE_DIR/$proj/$tgt")" "$(msg guard_code_public "$CORE_DIR/$proj/CLAUDE.md")"
+  local instructions dest="$CORE_DIR/$proj/$tgt"
+  instructions="$(project_instructions "$CORE_DIR/$proj")"
+  if [ "${instructions##*/}" = AGENTS.md ]; then
+    case "$sub_l" in agents.md|claude.md|claude.local.md) dest="$instructions" ;; esac
+  fi
+  guard_refuse "$(msg guard_code_blocked "$shown" "$dest")" "$(msg guard_code_public "$instructions")"
 }
 
 # --- The read-only checkers: the second rule of the header.

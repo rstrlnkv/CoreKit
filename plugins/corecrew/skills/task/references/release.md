@@ -30,7 +30,7 @@ commands of postcondition 3, with `--changed` given the files the version edit c
 
 1. **Tests.** Chains with a tester: show the result of the final tester `check:` run (rule 7
    in SKILL.md); do not run the suite again. Release path (no tester): run the `check:`
-   command of `<Core>/<project>/CLAUDE.md` once from the code root. An unset line is asked about
+   command of the project instructions file once from the code root. An unset line is asked about
    and written first, as the top of `paths.md` says; then run it. Never run the placeholder
    `check: <set after scaffolding>`.
 2. **Checkers.** Every checker called in this chain (verifier, security, localizer, designer)

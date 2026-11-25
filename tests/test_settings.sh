@@ -147,8 +147,8 @@ assert_not_contains "$SCRIPTS/setup-core.sh" 'echo "schema: 1"'
 unset CORE_DIR
 mkdir -p "$SANDBOX/optcore"; CORE_DIR="$SANDBOX/optcore" setup_core
 CLAUDE_PLUGIN_OPTION_CORE_DIR="$SANDBOX/optcore" bash "$SKILL/scripts/scaffold.sh" --name opt-app >/dev/null
-assert_file "$SANDBOX/optcore/opt-app/CLAUDE.md"
-assert_contains "$SANDBOX/optcore/opt-app/CLAUDE.md" "optcore"
+assert_file "$SANDBOX/optcore/opt-app/AGENTS.md"
+assert_contains "$SANDBOX/optcore/opt-app/AGENTS.md" "optcore"
 
 # --- settings file: ~/.config/corecrew/settings (or $CORECREW_CONFIG), "key: value" lines, never executed
 unset CORE_DIR CLAUDE_PLUGIN_OPTION_UI_LANGUAGE CORECREW_CONFIG

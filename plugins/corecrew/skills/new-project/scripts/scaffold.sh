@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Creates a project skeleton from templates: the internal docs in $CORE_DIR/<name>/ and the code
-# repo beside the Core in $PROJECTS_DIR/<name> (with CLAUDE.local.md and AGENTS.md symlinks to the private CLAUDE.md).
+# repo beside the Core in $PROJECTS_DIR/<name> (with an AGENTS.md symlink to the private AGENTS.md).
 # Never overwrites existing files. Needs a set-up Core (scripts/setup-core.sh); exits 3 if not.
 # Usage:
 #   bash scaffold.sh --name <name> [--purpose "<text>"] [--dry-run]
@@ -69,7 +69,7 @@ git_init "$K" || exit 1
 put "$TPL/code/gitignore-common"          "$K/.gitignore" copy || exit 1
 put "$TPL/code/settings.local.json.tmpl"  "$K/.claude/settings.local.json" || exit 1
 put "$TPL/code/worktreeinclude"           "$K/.worktreeinclude" copy || exit 1
-link_local_claude "$K" "$P" || exit 1
+[ ! -f "$P/CLAUDE.md" ] || link_local_claude "$K" "$P" || exit 1
 link_agents "$K" "$P" || exit 1
 
 # Project list

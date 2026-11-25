@@ -12,8 +12,8 @@ How to make the decided change the way this project already does it, and how to 
 A working change and its proof: the command and its output. A change without a run is not done. For UI work, the screens involved (`Screens`).
 ## What to read first
 Paths are relative to the project folder `<Core>/<project>/`; the brief's `core:` and `project:` name it.
-1. `CLAUDE.md` (build and check commands, rules of the house).
-2. `<Core>/session-rules.md`, if it exists: the owner's rules for every session. Follow its rules for code. The brief and the project's `CLAUDE.md` win where they differ, and its rules about talking to the owner (language, parallel sessions) do not change your reply format or language.
+1. `AGENTS.md` (legacy projects: `CLAUDE.md`) (build and check commands, rules of the house).
+2. `<Core>/session-rules.md`, if it exists: the owner's rules for every session. Follow its rules for code. The brief and the project's `AGENTS.md` (legacy projects: `CLAUDE.md`) win where they differ, and its rules about talking to the owner (language, parallel sessions) do not change your reply format or language.
 3. `docs/INDEX.md`, the generated map of the wiki.
 4. The wiki page the task needs, and the affected files in full with their neighbours.
 5. Its standards: `docs/standards/<name>.md` of the project, else `<Core>/standards/<name>.md`, for every standard whose `applies-to` names engineer.

@@ -5,8 +5,8 @@ private side gets filled in from what the repo already says, and the public docu
 against the Core standards and rewritten on the user's ok. `<folder>` is the code root, `<name>` the
 project, `<P>` is `<Core>/<name>`.
 
-The session was not started in `<folder>`, so the private `CLAUDE.md` is not loaded here: read
-`<P>/CLAUDE.md` yourself, and give every agent absolute paths. Talk to the user in plain words;
+The session was not started in `<folder>`, so the private `AGENTS.md` is not loaded here: read
+`<P>/AGENTS.md` yourself, and give every agent absolute paths. Talk to the user in plain words;
 everything written to disk is English.
 
 ## 1. Private pages
@@ -17,7 +17,7 @@ One `corecrew:engineer` call, then one `corecrew:verifier` call, as the `fix` pa
 - **Sources**, the only ones: the repo's `README*`, `INTERNALS*`, `ARCHITECTURE*`, `CONTRIBUTING*`,
   build and test scripts, manifests (`package.json`, `*.csproj`, `Cargo.toml`, ...), the CI files,
   and the pages adopt copied to `<P>/docs/`. Never `.env` files or `~/.ssh`.
-- **Engineer fills:** in `<P>/CLAUDE.md` the Stack and Commands sections and the `check:` line
+- **Engineer fills:** in `<P>/AGENTS.md` the Stack and Commands sections and the `check:` line
   (the command the user confirmed in adopt step 5; none confirmed: leave the line as it is);
   `docs/brief.md` (purpose and audience, what it stores, scope);
   `docs/architecture.md` (modules, data flow, boundaries); `docs/decisions/001-*.md` (the stack
@@ -49,7 +49,7 @@ skip the public-repository checks, keep the leftovers and the language.
    private files, mentions of folders that no longer exist (`docs/` pages that moved, old tool
    names). `git -C "<folder>" grep -n` for them.
 3. **Language.** Ask the user the project's language for code, comments and documents (the
-   private `CLAUDE.md` Rules may already say it). List the tracked files whose comments or
+   private `AGENTS.md` Rules may already say it). List the tracked files whose comments or
    documents are in another language (UI text files the project localizes stay out).
 
 Show the result as one numbered list, one line per item: the file, what is wrong, the rule

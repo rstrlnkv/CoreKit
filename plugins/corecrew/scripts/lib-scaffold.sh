@@ -74,7 +74,7 @@ git_init() {
 # "<template path under the templates dir>|<path in the project folder>", or "mkdir|<dir>".
 project_docs_manifest() {
   cat <<'EOF'
-CLAUDE.md.tmpl|CLAUDE.md
+CLAUDE.md.tmpl|AGENTS.md
 docs/brief.md.tmpl|docs/brief.md
 docs/architecture.md.tmpl|docs/architecture.md
 docs/decisions/001-stack-and-architecture.md.tmpl|docs/decisions/001-stack-and-architecture.md
@@ -93,6 +93,7 @@ EOF
 put_project_docs() {
   local tpl="$1" dest="$2" a b
   while IFS='|' read -r a b; do
+    [ "$b" != AGENTS.md ] || b="$(basename "$(project_instructions "$dest")")"
     if [ "$a" = mkdir ]; then mkdir_p "$dest/$b" || return 1
     else put "$tpl/$a" "$dest/$b" || return 1; fi
   done <<< "$(project_docs_manifest)"
@@ -115,19 +116,29 @@ symlinks_work() {
   rm -rf "$d"; return $rc
 }
 
-# link_file_to_claude <code_dir> <core_project_dir> <file name> — make <code_dir>/<file name> a
-# symlink to <core_project_dir>/CLAUDE.md. Prints "created|skipped <path>" ("would create" with DRY=1,
-# nothing written). Exit 1 when the target CLAUDE.md is missing (no dangling link). A real file or a link to somewhere else is never touched: exit 1 with a plain line.
-link_file_to_claude() {
-  local link="$1/$3" target="$2/CLAUDE.md" lnerr lnrc
+# Link the code-side name to the private instructions. Existing user files and unrelated links stay in place.
+# Return 2 if Git does not ignore the AGENTS.md link. Dry runs can plan links in folders that do not exist yet.
+link_project_instructions() {
+  local link="$1/$3" target lnerr lnrc
+  target="$(project_instructions "$2")"
   # (a DRY=1 plan for a project folder that is not there yet, as scaffold --dry-run, is let through)
   if [ ! -f "$target" ] && { [ "${DRY:-0}" -ne 1 ] || [ -d "$2" ]; }; then echo "$target does not exist; nothing to link $3 to" >&2; return 1; fi
+  if [ -e "$link" ] || [ -L "$link" ]; then
+    if [ ! -L "$link" ] || [ "$(readlink "$link")" != "$target" ]; then
+      echo "$3 exists and is not a link to $target; leave it or remove it yourself" >&2
+      return 1
+    fi
+  fi
+  if [ "$3" = AGENTS.md ] && [ "${DRY:-0}" -ne 1 ]; then
+    GIT_LITERAL_PATHSPECS=0 git -C "$1" check-ignore -q -- AGENTS.md
+    case "$?" in
+      0) ;;
+      1) echo "$link must be ignored by Git before corecrew can link it to the private instructions" >&2; return 2 ;;
+      *) return 1 ;;
+    esac
+  fi
   if [ -L "$link" ] && [ "$(readlink "$link")" = "$target" ]; then
     echo "skipped $(rel_core "$link")"; return 0
-  fi
-  if [ -e "$link" ] || [ -L "$link" ]; then
-    echo "$3 exists and is not a link to $target; leave it or remove it yourself" >&2
-    return 1
   fi
   if [ "${DRY:-0}" -eq 1 ]; then echo "would create $(rel_core "$link")"; return 0; fi
   mkdir -p "$1" || return 1
@@ -135,7 +146,7 @@ link_file_to_claude() {
   # only cover a link to a directory, so look again right after and take our stray link out)
   lnerr="$(symlink "$target" "$link" 2>&1)"; lnrc=$?
   if [ -d "$link" ] && [ ! -L "$link" ]; then
-    [ ! -L "$link/CLAUDE.md" ] || [ "$(readlink "$link/CLAUDE.md")" != "$target" ] || rm -f "$link/CLAUDE.md"
+    [ ! -L "$link/${target##*/}" ] || [ "$(readlink "$link/${target##*/}")" != "$target" ] || rm -f "$link/${target##*/}"
     echo "$3 exists and is not a link to $target; leave it or remove it yourself" >&2
     return 1
   fi
@@ -149,17 +160,15 @@ link_file_to_claude() {
 }
 
 # link_local_claude <code_dir> <core_project_dir> — <code_dir>/CLAUDE.local.md links to the private CLAUDE.md.
-link_local_claude() { link_file_to_claude "$1" "$2" CLAUDE.local.md; }
+link_local_claude() { link_project_instructions "$1" "$2" CLAUDE.local.md; }
 
-# link_agents <code_dir> <core_project_dir> — <code_dir>/AGENTS.md links to the private CLAUDE.md, like
-# link_local_claude. Refuses (exit 1) when <core_project_dir>/AGENTS.md exists and the code folder has no AGENTS.md link yet
-# (the link would hide it); an existing link is judged by link_file_to_claude alone.
+# A legacy project with two private files must resolve them before creating a new AGENTS.md link.
 link_agents() {
-  if [ ! -L "$1/AGENTS.md" ] && [ -e "$2/AGENTS.md" ]; then
+  if [ ! -L "$1/AGENTS.md" ] && [ -f "$2/CLAUDE.md" ] && [ -e "$2/AGENTS.md" ]; then
     echo "AGENTS.md exists in the Core at $2/AGENTS.md and the link would hide it; fold $2/AGENTS.md into CLAUDE.md, then remove it" >&2
     return 1
   fi
-  link_file_to_claude "$1" "$2" AGENTS.md
+  link_project_instructions "$1" "$2" AGENTS.md
 }
 
 # projects_entry <name> <purpose> <entry> — add "- <name> — <purpose> — <entry>" to $CORE_DIR/PROJECTS.md
