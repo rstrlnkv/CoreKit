@@ -9,6 +9,8 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-11-25
+
 Codex: after updating the plugin, trust its hooks again in `/hooks`.
 
 ### Fixed
