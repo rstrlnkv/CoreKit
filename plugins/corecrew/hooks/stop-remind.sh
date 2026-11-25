@@ -6,7 +6,9 @@
 # its code folder beside the Core): a repo with the same shape elsewhere passes.
 # _locate.sh, lib.sh and `save` sit under ../scripts in the plugin.
 script="$0"
-case "$OSTYPE:$script" in msys*:*\\*) script="$(cygpath -u "$script")" || exit 0 ;; esac
+case "$OSTYPE:${OS:-}" in
+  msys*|cygwin*|mingw*|*:Windows_NT) case "$script" in *\\*) script="$(cygpath -u "$script")" || exit 0 ;; esac ;;
+esac
 D="$(dirname "$script")/../scripts"
 . "$D/_locate.sh"
 . "$D/lib.sh" 2>/dev/null || exit 0   # json_str, load_settings, project_of; next to _locate.sh

@@ -22,6 +22,12 @@ for plugin in corecrew coremodel; do assert_exit 0 cx plugin add "$plugin@coreki
 # The cache is fresh, so each plugin has exactly one version.
 set -- "$cache"/plugins/cache/corekit/corecrew/*/scripts/lib.sh
 assert_file "$1"
+cmp -s "$(dirname "$1")/lib-paths.sh" "$SCRIPTS/lib-paths.sh" || fail "Codex installed a different CoreCrew revision"
+if [ -n "${RUNNER_OS:-}" ] && [ "$RUNNER_OS" = Windows ]; then
+  echo "Windows shell: $OSTYPE, ${MSYSTEM:-}, $(uname -s)"
+  command -v bash git cygpath
+  git --exec-path
+fi
 CORE_DIR="$(native_path "$core")"; export CORE_DIR
 assert_exit 0 bash "$1" core-dir
 assert_eq "$OUT" "$(cd "$core" && pwd -P)" "installed CoreCrew resolves the host path"

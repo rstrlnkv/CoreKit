@@ -6,11 +6,12 @@ new_sandbox
 base="$SANDBOX/Windows Projects"
 mkdir -p "$base/Core/demo" "$base/Demo" "$base/Linked" "$base/Demo/.git/worktrees/linked"
 : > "$base/Core/demo/CLAUDE.md"
-case "$OSTYPE" in
-  msys*) native="$(cygpath -w "$base")" ;;
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*) native="$(cygpath -w "$base")" ;;
   *) # Model the cygpath conversion only; use real directories and the shipped scripts.
+    [ "${RUNNER_OS:-}" != Windows ] || { fail "Windows CI needs real Git Bash and cygpath"; finish; }
     native='C:\Windows Projects'
-    export WIN_ROOT="$SANDBOX" OSTYPE=msys
+    export WIN_ROOT="$SANDBOX" OSTYPE=cygwin MSYSTEM=MINGW64
     mkdir "$SANDBOX/path-tools"
     cat > "$SANDBOX/path-tools/cygpath" <<'STUB'
 #!/usr/bin/env bash

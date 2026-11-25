@@ -3,10 +3,7 @@ absolute_path() {
   case "$1" in
     /*) printf '%s' "$1" ;;
     [A-Za-z]:[\\/]*|\\\\*)
-      case "$OSTYPE" in
-        msys*|cygwin*) cygpath -u "$1" ;;
-        *) return 1 ;;
-      esac ;;
+      command -v cygpath >/dev/null 2>&1 && cygpath -u "$1" ;;
     *) return 1 ;;
   esac
 }

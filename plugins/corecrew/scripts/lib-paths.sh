@@ -5,8 +5,8 @@
 # drive paths from git and host events; POSIX hosts allow literal backslashes in names.
 _host_path_r() {
   _HP="$1"
-  case "${OSTYPE:-}" in
-    msys*) _HP="${_HP//\\//}"
+  case "${OSTYPE:-}:${OS:-}" in
+    msys*|cygwin*|mingw*|*:Windows_NT) _HP="${_HP//\\//}"
       case "$_HP" in [a-zA-Z]:/*) _HP="$(cygpath -u "$_HP")" || _HP="$1" ;; esac ;;
   esac
 }

@@ -10,7 +10,9 @@
 # prepare.sh is sourced, not run: its parts are functions that return and never exit, so a failing part
 # (a tools sync that fails, a code folder that cannot be read) cannot end this hook early.
 script="$0"
-case "$OSTYPE:$script" in msys*:*\\*) script="$(cygpath -u "$script")" || exit 0 ;; esac
+case "$OSTYPE:${OS:-}" in
+  msys*|cygwin*|mingw*|*:Windows_NT) case "$script" in *\\*) script="$(cygpath -u "$script")" || exit 0 ;; esac ;;
+esac
 SELF="$(cd "$(dirname "$script")/.." 2>/dev/null && pwd)"
 ROOT="${CLAUDE_PLUGIN_ROOT:-$SELF}"
 in=""; [ -t 0 ] || in="$(cat)"

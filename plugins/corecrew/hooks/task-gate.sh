@@ -6,7 +6,9 @@
 # Codex has no Skill tool, so the hook never fires there; the task skill's Overview says the same rule in words.
 # Best effort, not a boundary (docs: the threat model): input it cannot read passes. No jq.
 script="$0"
-case "$OSTYPE:$script" in msys*:*\\*) script="$(cygpath -u "$script")" || exit 0 ;; esac
+case "$OSTYPE:${OS:-}" in
+  msys*|cygwin*|mingw*|*:Windows_NT) case "$script" in *\\*) script="$(cygpath -u "$script")" || exit 0 ;; esac ;;
+esac
 S="$(dirname "$script")/../scripts"
 . "$S/lib.sh" 2>/dev/null || exit 0                    # json_fields, json_text, load_settings
 . "$(dirname "$script")/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting

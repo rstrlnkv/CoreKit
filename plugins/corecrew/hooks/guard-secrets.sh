@@ -85,7 +85,9 @@
 # content mentions .env or ~/.ssh passes, and so does odd input that has no secret-looking string.
 # An odd input with no cwd, or with a cwd outside a project, is inert like any other.
 script="$0"
-case "$OSTYPE:$script" in msys*:*\\*) script="$(cygpath -u "$script")" || exit 0 ;; esac
+case "$OSTYPE:${OS:-}" in
+  msys*|cygwin*|mingw*|*:Windows_NT) case "$script" in *\\*) script="$(cygpath -u "$script")" || exit 0 ;; esac ;;
+esac
 SELF="$(cd "$(dirname "$script")/.." 2>/dev/null && pwd)" || exit 0
 in=""; [ -t 0 ] || in="$(cat)"
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0

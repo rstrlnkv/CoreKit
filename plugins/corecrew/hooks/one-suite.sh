@@ -42,7 +42,9 @@ in=""; [ -t 0 ] || in="$(cat)"
 bs=\\
 case "$in" in *[tT]est*|*"$bs"[!\"/bfnrt"$bs"]*|*\'*|*"$bs"\"*|*'(('*) ;; *) exit 0 ;; esac
 script="$0"
-case "$OSTYPE:$script" in msys*:*\\*) script="$(cygpath -u "$script")" || exit 0 ;; esac
+case "$OSTYPE:${OS:-}" in
+  msys*|cygwin*|mingw*|*:Windows_NT) case "$script" in *\\*) script="$(cygpath -u "$script")" || exit 0 ;; esac ;;
+esac
 SELF="$(cd "$(dirname "$script")/.." 2>/dev/null && pwd)" || exit 0
 . "$SELF/scripts/lib.sh" 2>/dev/null || exit 0
 . "$SELF/hooks/messages.sh" 2>/dev/null || exit 0   # msg: every text, in the ui_language setting

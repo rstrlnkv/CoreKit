@@ -23,6 +23,21 @@ for git_location in ("cmd/git.exe", "mingw64/bin/git.exe"):
                    "bash.exe": str(stage / "System32/bash.exe")}
     with patch("shutil.which", side_effect=executables.get):
         assert namespace["windows_commands"]() == ("codex.cmd", str(git_bash))
+# Git Bash sessions can put Git's internal executable or a PATH shim first.
+usr_bash = git_root / "usr/bin/bash.exe"
+usr_bash.parent.mkdir(parents=True)
+usr_bash.touch()
+cygpath = usr_bash.with_name("cygpath.exe")
+cygpath.touch()
+executables = {"git.exe": str(stage / "shims/git.exe"), "codex.exe": "codex.exe",
+               "cygpath.exe": str(cygpath), "bash.exe": str(stage / "System32/bash.exe")}
+with patch("shutil.which", side_effect=executables.get):
+    assert namespace["windows_commands"]() == ("codex.exe", str(usr_bash))
+# A PowerShell PATH can have neither Bash nor cygpath. The shim still reports Git's exec path.
+del executables["cygpath.exe"]
+with patch("shutil.which", side_effect=executables.get), patch("subprocess.check_output",
+        return_value=str(git_root / "mingw64/libexec/git-core") + "\n"):
+    assert namespace["windows_commands"]() == ("codex.exe", str(git_bash))
 hook = stage / "plugins/coremodel/codex/hint.sh"
 hook.parent.mkdir(parents=True)
 hook.write_text('test "$1" = --recommend || exit 3\ncat >> "$EVENTS"\necho \'{"model":"gpt-6.2-sol","effort":"medium"}\'\n')

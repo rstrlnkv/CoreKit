@@ -24,9 +24,30 @@ def windows_commands():
     if root.name.lower() in ("mingw64", "mingw32", "clangarm64"):
         root = root.parent
     bash = root / "bin/bash.exe"
-    if not bash.is_file():
-        raise RuntimeError("Cannot locate Git Bash beside git.exe. Put Git for Windows on PATH.")
-    return codex, str(bash)
+    if bash.is_file():
+        return codex, str(bash)
+
+    # Git Bash puts its MSYS utilities on PATH even if git.exe is a shim.
+    cygpath = shutil.which("cygpath.exe")
+    if cygpath:
+        bash = Path(cygpath).with_name("bash.exe")
+        if bash.is_file():
+            return codex, str(bash)
+
+    # A native shell may expose only the Git shim. Ask Git for its installation prefix.
+    try:
+        exec_path = subprocess.check_output([git, "--exec-path"], encoding="utf-8").strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise RuntimeError(f"Cannot query Git for Windows at {git}: {error}") from error
+    for prefix in Path(exec_path).parents:
+        if prefix.name.casefold() in ("mingw64", "mingw32", "clangarm64", "ucrt64", "usr"):
+            for relative in ("bin/bash.exe", "usr/bin/bash.exe"):
+                bash = prefix.parent / relative
+                if bash.is_file():
+                    return codex, str(bash)
+            break
+    raise RuntimeError(f"Cannot locate Git Bash for {git} (exec path: {exec_path}). "
+                       "Start the client in Git Bash or add its usr/bin directory to PATH.")
 
 
 class AppServer:

@@ -14,7 +14,9 @@
 [ -z "${COREMODEL_NESTED:-}" ] || exit 0
 command -v codex >/dev/null 2>&1 || exit 0
 script="$0"
-case "$OSTYPE" in msys*|cygwin*) script="${script//\\//}" ;; esac
+case "$script" in
+  [A-Za-z]:[\\/]*|\\\\*) command -v cygpath >/dev/null 2>&1 && script="$(cygpath -u "$script")" ;;
+esac
 here="$(cd "$(dirname "$script")" 2>/dev/null && pwd)" || exit 0
 [ -f "$here/classifier.txt" ] || exit 0
 . "$here/paths.sh" || exit 0
