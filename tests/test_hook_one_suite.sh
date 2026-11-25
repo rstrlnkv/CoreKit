@@ -510,7 +510,7 @@ assert_contains "$H" 'limit="${ONE_SUITE_WAIT:-120}"'
 HJ="$HOOKS/hooks.json"
 suite_to="$(awk '/one-suite.sh/ { on = 1 } on && /"timeout":/ { print; exit }' "$HJ" | sed -n 's/.*"timeout": *\([0-9]*\).*/\1/p')"
 [ -n "$suite_to" ] && [ "$suite_to" -gt 120 ] && [ "$suite_to" -le 180 ] && pass || fail "one-suite timeout in hooks.json: '$suite_to' (want 121..180)"
-assert_contains "$HJ" '"statusMessage": "corecrew: checking for a running test suite"'
+assert_contains "$HJ" '"statusMessage": "CoreCrew: Checking for a running test suite"'
 
 # --- the default process pattern (checked as text: it never touches real processes)
 DEF="$(sed -n "s/^default_procs='\(.*\)'\$/\1/p" "$H")"

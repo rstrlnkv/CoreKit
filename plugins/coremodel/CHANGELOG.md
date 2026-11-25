@@ -7,6 +7,12 @@ full detail.
 
 ## [Unreleased]
 
+Codex: after updating the plugin, trust its hooks again in `/hooks`.
+
+### Changed
+
+- Codex hook statuses describe model and effort selection and when reply context is saved.
+
 ## [0.13.1] - 2026-11-25
 
 Codex: after updating the plugin, trust its hooks again in `/hooks`.

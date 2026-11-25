@@ -258,7 +258,15 @@ case "$suite_to" in ''|*[!0-9]*) fail "one-suite has no timeout in hooks.json" ;
   [ "$suite_to" -gt "${wait_default:-0}" ] && pass || fail "one-suite timeout $suite_to <= default wait $wait_default" ;; esac
 # well-formed JSON (test-only use of python3; plugin code never uses it)
 if command -v python3 >/dev/null 2>&1; then
-  assert_exit 0 python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$H"
+  for hook_file in "$H" "$PLUGIN/../coremodel/codex/hooks.json"; do
+    assert_exit 0 python3 -c '
+import json, sys
+for groups in json.load(open(sys.argv[1]))["hooks"].values():
+    for group in groups:
+        for handler in group["hooks"]:
+            assert handler.get("statusMessage", "").strip(), handler["command"]
+' "$hook_file"
+  done
 else
   skip hooks-json "python3 not on PATH; JSON well-formedness of hooks.json not checked"
 fi

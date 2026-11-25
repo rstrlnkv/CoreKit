@@ -9,6 +9,12 @@ commit log has the full detail.
 
 ## [Unreleased]
 
+Codex: after updating the plugin, trust its hooks again in `/hooks`.
+
+### Changed
+
+- Every CoreCrew hook now shows a status message describing its action.
+
 ## [1.5.1] - 2026-11-25
 
 Codex: after updating the plugin, trust its hooks again in `/hooks`.

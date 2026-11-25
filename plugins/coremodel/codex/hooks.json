@@ -3,14 +3,14 @@
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/codex/hint.sh\"", "timeout": 25, "statusMessage": "coremodel: choosing a model" }
+          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/codex/hint.sh\"", "timeout": 25, "statusMessage": "CoreModel: Choosing a model and reasoning effort" }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/codex/hint.sh\"", "timeout": 5 }
+          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/codex/hint.sh\"", "timeout": 5, "statusMessage": "CoreModel: Saving reply context for the next prompt" }
         ]
       }
     ]

@@ -73,8 +73,7 @@ if [ -f "$HJSON" ]; then
   assert_eq "$(grep -cE '"(PreToolUse|PostToolUse|SessionStart|PermissionRequest|SubagentStop)"' "$HJSON")" "0" "no other event"
   assert_eq "$(grep -c 'bash \\"${CLAUDE_PLUGIN_ROOT}/codex/hint.sh\\"' "$HJSON")" "2" "both events run hint.sh"
   # Codex shows this while the hook runs, instead of a silent wait
-  assert_contains "$HJSON" '"statusMessage": "coremodel: choosing a model"'
-  assert_eq "$(grep -c '"statusMessage"' "$HJSON")" "1" "only the prompt hook shows a status"
+  assert_eq "$(grep -c '"statusMessage"' "$HJSON")" "2" "both events show a status"
   t="$(grep '"statusMessage"' "$HJSON" | sed -n 's/.*"timeout": *\([0-9][0-9]*\).*/\1/p' | head -1)"
   if [ -n "$t" ] && [ "$t" -ge 1 ] && [ "$t" -le 30 ]; then pass; else fail "explicit timeout 1..30 s in hooks.json (got '${t:-none}')"; fi
   # the hook's own wait (default 20 s) fits inside the hook timeout

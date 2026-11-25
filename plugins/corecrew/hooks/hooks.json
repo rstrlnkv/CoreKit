@@ -8,7 +8,8 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\"",
-            "timeout": 30
+            "timeout": 30,
+            "statusMessage": "CoreCrew: Loading project context"
           }
         ]
       }
@@ -21,7 +22,7 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/one-suite.sh\"",
             "timeout": 150,
-            "statusMessage": "corecrew: checking for a running test suite"
+            "statusMessage": "CoreCrew: Checking for a running test suite"
           }
         ]
       },
@@ -31,7 +32,8 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-code.sh\"",
-            "timeout": 15
+            "timeout": 15,
+            "statusMessage": "CoreCrew: Checking project write permissions"
           }
         ]
       },
@@ -41,7 +43,8 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-secrets.sh\"",
-            "timeout": 15
+            "timeout": 15,
+            "statusMessage": "CoreCrew: Checking access to sensitive files"
           }
         ]
       },
@@ -51,7 +54,8 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/task-gate.sh\"",
-            "timeout": 10
+            "timeout": 10,
+            "statusMessage": "CoreCrew: Checking who can start the task"
           }
         ]
       }
@@ -62,7 +66,8 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-remind.sh\"",
-            "timeout": 10
+            "timeout": 10,
+            "statusMessage": "CoreCrew: Checking for uncommitted changes"
           }
         ]
       }
