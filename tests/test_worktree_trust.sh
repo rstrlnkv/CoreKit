@@ -116,7 +116,7 @@ assert_eq "$RC" "1" "ln fails and nothing is there: exit 1"
 assert_contains "$SANDBOX/err" "no space"
 # a link to somewhere else is still refused
 ln -s /nowhere "$SANDBOX/lk2/AGENTS.md"
-bash -c '. "$1"; load_settings; link_agents "$2" "$3"' _ "$SCRIPTS/lib.sh" "$SANDBOX/lk2" "$P" >/dev/null 2>&1; assert_eq "$?" "1" "link elsewhere: refused"
+bash -c '. "$1"; load_settings; write_agents_entry "$2" "$3"' _ "$SCRIPTS/lib.sh" "$SANDBOX/lk2" "$P" >/dev/null 2>&1; assert_eq "$?" "1" "link elsewhere: refused"
 assert_eq "$(readlink "$SANDBOX/lk2/AGENTS.md")" "/nowhere" "link elsewhere: untouched"
 
 # --- failing sync, translated: no English sentence in ru, no host-specific advice, one prefix
@@ -141,7 +141,7 @@ for L in en ru; do
   OUT="$(CLAUDE_PLUGIN_OPTION_UI_LANGUAGE=$L bash "$SCRIPTS/prepare.sh" --part project --cwd "$C" 2>&1)"
   echo "$OUT" | grep -qF "$P/AGENTS.md" && pass || fail "$L: AGENTS.md in the Core not named: $OUT"
 done
-case "$OUT" in *"перенесите"*) pass ;; *) fail "ru AGENTS.md text: $OUT" ;; esac
+case "$OUT" in *"Разберите эти файлы"*) pass ;; *) fail "ru AGENTS.md text: $OUT" ;; esac
 [ ! -e "$C/AGENTS.md" ] && pass || fail "link made over the Core's AGENTS.md"
 rm -f "$P/AGENTS.md"
 finish

@@ -22,8 +22,6 @@
 #       staging; the line says how to recover: revert the repo commit, named by its hash, unless there is none or
 #       it is reverted already; remove the folder; rerun)
 #   Core is not set up
-#   cannot create symbolic links here; ... Developer Mode ...   (CLAUDE.local.md and AGENTS.md are links; on
-#       Windows Git Bash copies a file for ln -s unless winsymlinks:nativestrict, which adopt sets)
 #   CLAUDE.local.md exists in <folder>: move it away first (...)    (a file, or a link elsewhere)
 #   not found: <path>                  a --public-docs path that is not in the repo
 #   symlink: <path> -> <target>; replace it with a file first   (a tracked file to be copied)
@@ -53,7 +51,7 @@
 # folder becomes <Core>/<name>/.
 # Warnings (plan and report): tracked CLAUDE.md / AGENTS.md / CLAUDE.local.md files that stay in the repo
 # (nested ones, public ones), which corecrew's hooks block changing or adding after adopt.
-# Then: AGENTS.md in the code folder links to <Core>/<name>/AGENTS.md
+# Then: the ignored AGENTS.md in the code folder points to the Core and project rules
 # (a public or ignored AGENTS.md already in the code folder is left in place, with a warning);
 # .claude/settings.local.json is created from the template when missing (else left as is, with a
 # warning: line naming the additionalDirectories entry to add when it lacks it); git hook shims are
@@ -222,7 +220,6 @@ preconditions() {
     refuse "leftover staged copy of $NAME: $d (an earlier adopt stopped); undo its repo commit with git -C \"$FROM\" revert --no-edit $mc, then remove $d and run adopt again"
   done
   { core_ready && [ -d "$CORE_DIR/.git" ]; } || refuse "Core is not set up"
-  symlinks_work || refuse "cannot create symbolic links here; on Windows turn on Developer Mode (Settings > System > For developers), then run adopt again"
   # A local CLAUDE.local.md can prevent Claude Code from discovering the new AGENTS.md.
   LOC="$FROM/CLAUDE.local.md"
   if { [ -e "$LOC" ] || [ -L "$LOC" ]; } && ! { [ -L "$LOC" ] && [ "$(readlink "$LOC")" = "$P/CLAUDE.md" ]; }; then
@@ -277,8 +274,8 @@ plan() {
   done <<< "$TRACKED"
   AGENTS_WARN=""
   if [ "$MERGE_AGENTS" -eq 0 ] && { [ -e "$K/AGENTS.md" ] || [ -L "$K/AGENTS.md" ]; } \
-    && ! { [ -L "$K/AGENTS.md" ] && [ "$(readlink "$K/AGENTS.md")" = "$P/AGENTS.md" ]; }; then
-    AGENTS_WARN="warning: $K/AGENTS.md exists and will stay in place; the shared instructions will not be linked there"
+    && ! { [ -L "$K/AGENTS.md" ] && [ "$(agents_link_target "$K/AGENTS.md")" = "$P/AGENTS.md" ]; }; then
+    AGENTS_WARN="warning: $K/AGENTS.md exists and will stay in place; configure it yourself to read the private instructions"
   fi
   # The corecrew ignore lines the repo's .gitignore lacks (internal Claude files and .env, from the
   # new-project template), so local Claude files (CLAUDE.local.md, .claude/settings.local.json,
@@ -381,7 +378,7 @@ print_plan() {
   done <<< "$(project_docs_manifest)"
   show "create in $P/ (missing pages from the new-project templates):" "$CRE"
   echo "add to $P/: the check: line$([ -n "$PUB_LIST" ] && echo ', the public-docs: line'), then the wiki converted by wiki-migrate.sh (front matter, wikilinks, Obsidian files, generated INDEX.md)"
-  if [ -n "$AGENTS_WARN" ]; then echo "$AGENTS_WARN"; else echo "link: $K/AGENTS.md -> $P/AGENTS.md"; fi
+  if [ -n "$AGENTS_WARN" ]; then echo "$AGENTS_WARN"; else echo "entry: $K/AGENTS.md -> $CORE_DIR/AGENTS.md, $P/AGENTS.md"; fi
   case "$SL_STATE" in
     create) echo "create: $K/$SL_REL (permissions.additionalDirectories: $P)" ;;
     warn) echo "$SL_WARN" ;;
@@ -499,7 +496,7 @@ move_into_place() {
 }
 
 # --- Phase: finish. From here the project is in place; problems are reported, not undone: the report,
-# the links, settings.local.json, the git hook shims, the PROJECTS.md line, the Core commit, a wiki check.
+# the local entry, settings.local.json, the git hook shims, the PROJECTS.md line, the Core commit, a wiki check.
 finish() {
   echo "copied ${NCOPY} file(s) to $P/"
   [ "$MERGE_AGENTS" -eq 0 ] || echo "merged AGENTS.md into $P/AGENTS.md"
@@ -518,7 +515,7 @@ finish() {
   if [ -n "$AGENTS_WARN" ]; then
     printf '%s\n' "$AGENTS_WARN" >&2
   else
-    link_agents "$K" "$P" || echo "warning: $K/AGENTS.md was not linked; make it a link to $P/AGENTS.md" >&2
+    write_agents_entry "$K" "$P" || echo "warning: could not prepare $K/AGENTS.md; rerun prepare.sh --part project from $K" >&2
   fi
   case "$SL_STATE" in
     create) put "$TPL/code/settings.local.json.tmpl" "$K/$SL_REL" \

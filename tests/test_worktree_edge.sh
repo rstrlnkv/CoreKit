@@ -57,14 +57,15 @@ assert_eq "$(wt_of "$WS")" "0 $WS $C" "worktree path with spaces"
 guard Write "$WS/docs/a.md" "$WS"; assert_eq "$RC" "2" "guard blocks docs/ in a worktree with spaces"
 rm -f "$WS/CLAUDE.local.md" "$WS/AGENTS.md"
 OUT="$(bash "$SCRIPTS/prepare.sh" --cwd "$WS" 2>&1)"; assert_eq "$?" "0" "prepare with spaces: exit"
-[ -L "$WS/CLAUDE.local.md" ] && [ -L "$WS/AGENTS.md" ] && pass || fail "links in a worktree path with spaces: $OUT"
+[ -L "$WS/CLAUDE.local.md" ] && pass || fail "legacy link in a worktree path with spaces: $OUT"
+assert_agents_entry "$WS/AGENTS.md" "$P/CLAUDE.md"
 OUT="$(bash "$SCRIPTS/prepare.sh" --cwd "$WS" 2>&1)"; assert_eq "$OUT" "" "prepare with spaces: second run silent"
 
 # --- prepare twice at once: no error output, no stray files, links right
 rm -f "$W/CLAUDE.local.md" "$W/AGENTS.md"; rm -rf "$COREDEV_TOOLS"
 for i in 1 2 3 4 5 6; do bash "$SCRIPTS/prepare.sh" --cwd "$W" > "$SANDBOX/conc$i" 2>&1 & done; wait
 assert_eq "$(readlink "$W/CLAUDE.local.md")" "$P/CLAUDE.md" "concurrent: CLAUDE.local.md"
-assert_eq "$(readlink "$W/AGENTS.md")" "$P/CLAUDE.md" "concurrent: AGENTS.md"
+assert_agents_entry "$W/AGENTS.md" "$P/CLAUDE.md"
 bad="$(cat "$SANDBOX"/conc* | grep 'is a link to somewhere other\|exists and is not a link' | head -1)"; assert_eq "$bad" "" "concurrent: no false 'link to somewhere other' warning"
 bad="$(cat "$SANDBOX"/conc* | grep 'tools not refreshed' | head -1)"; assert_eq "$bad" "" "concurrent: no false 'tools not refreshed' (sync-tools.sh mv race)"
 assert_file "$COREDEV_TOOLS/VERSION"; assert_file "$COREDEV_TOOLS/save"

@@ -156,20 +156,22 @@ Say "new project" (or run `/corecrew:new-project`) and Claude:
 
 ```
 ~/Projects/Core/              your private Core repo
-  .coredev, PROJECTS.md, standards/, knowledge/
+  AGENTS.md, .coredev, PROJECTS.md, standards/, knowledge/
   my-app/AGENTS.md, docs/    the private files of one project (<Core>/<name>/)
 ~/Projects/my-app/            the code (<Projects>/<name>): its own repo, may be public
-  AGENTS.md                   gitignored link to Core/my-app/AGENTS.md
+  AGENTS.md                   Git-ignored file pointing to the Core and project instructions
 ```
 
-Start your agent in the code folder. Claude Code and Codex load the same `AGENTS.md` link, which
-session start makes and repairs. In Claude Code, keep built-in `AGENTS.md` support enabled.
+Start your agent in the code folder. Its local `AGENTS.md` tells the agent where to read both sets
+of private rules. Session start creates the file where Git ignores it and converts known old
+symlinks; it leaves user files and unrelated links in place. Open a new session after preparation.
+In Claude Code, keep built-in `AGENTS.md` support enabled.
 Use `claude-md-and-agents-md` in Claude Code's Project instructions setting if a separate
 `CLAUDE.md` is also needed.
 
 For an existing project with private `CLAUDE.md`, run
 `bash "<plugin>/scripts/prepare.sh" --migrate-instructions --cwd "<code folder>"` with both
-folders writable. This renames the private file and updates the managed links. Other worktrees
+folders writable. This renames the private file and updates the managed entry. Other worktrees
 reconnect when prepared. Open a new session after migration.
 
 Projects made by 0.4 and older keep
@@ -185,7 +187,7 @@ rules for code; the brief and the project's instructions win where they differ).
 
 Inside a Core project (the project's folder in the Core, `<Core>/<name>/`, or its code folder beside the Core):
 
-- **Session start** refreshes the plugin's tools, links `AGENTS.md`, and
+- **Session start** refreshes the plugin's tools, prepares the local `AGENTS.md`, and
   prints the project, the docs index, the save and undo commands and your `session-rules.md`.
 - **Secrets guard** refuses to read `.env`, `.env.*` (not `.env.example`, `.env.sample` or
   `.env.template`) and `~/.ssh`. For Bash it is a best-effort check, not a sandbox;
@@ -258,8 +260,8 @@ the same way, except `ui_language`, which falls back to `en` silently.
   scripts with no native code.
   On Windows, run the scripts with [Git for Windows](https://git-scm.com/download/win) Bash.
   Use a local drive for the Core and projects. Git Bash accepts `C:\My Projects\Core`, `C:/My Projects/Core`
-  and `/c/My Projects/Core` for `core_dir`. The project layout needs permission to create native symbolic
-  links, for example through Windows Developer Mode. On Windows the one-suite hook can miss an active
+  and `/c/My Projects/Core` for `core_dir`. New and adopted projects do not need native symbolic
+  links. Only legacy Claude-specific `CLAUDE.local.md` links still use them. On Windows the one-suite hook can miss an active
   test run when the process list does not expose the command line or working directory.
 - **Claude Code** 2.1.281 or newer with built-in `AGENTS.md` support, or the **Codex CLI** (tested with 0.166).
 - **git**, and the **GitHub CLI** `gh`, logged in with `gh auth login`. `gh` is used to create repos,
@@ -292,10 +294,10 @@ the same way, except `ui_language`, which falls back to `en` silently.
   run the scripts from there. Installed from a marketplace with another name, the folder is
   `corecrew-<marketplace>`.
 - Your Core (the `core_dir` setting): read and written.
-- In each code repo beside the Core: the `AGENTS.md` link, git hooks
+- In each code repo beside the Core: the ignored `AGENTS.md` entry, git hooks
   (pre-commit, pre-push), and ignore lines in `.gitignore` when a project is adopted. In the Core: a
   pre-push hook. `/corecrew:task adopt` moves tracked internal files into the Core, combines
-  project instructions in the private `AGENTS.md` and links to that file.
+  project instructions in the private `AGENTS.md` and writes its path in the local entry.
   It shows the plan first and commits the move in the repo ("Move internal Claude files to Core"),
   adding a `.worktreeinclude`. A public or ignored `AGENTS.md` stays in place.
 - The settings file, only if you create it ([Settings](#settings) has its path).
@@ -332,11 +334,9 @@ with `corecrew: ... is missing`. So remove the shims first.
    done
    ```
 
-2. In every code folder, remove the two links (only if they are links):
-
-   ```bash
-   for l in CLAUDE.local.md AGENTS.md; do [ -L "$l" ] && rm "$l"; done
-   ```
+2. In every code folder, inspect the ignored `AGENTS.md`. Remove it only if it is the entry
+   CoreCrew generated and you no longer need it. The same applies to old CoreCrew symlinks
+   (`AGENTS.md` and `CLAUDE.local.md`). Leave your own instructions in place.
 
 3. Uninstall the plugin:
    - Claude Code: `claude plugin uninstall corecrew@corekit`. It deletes

@@ -27,7 +27,7 @@ MSG_LANGS="en ru"
 # shellcheck disable=SC2034  # MSG_KEYS is read by tests/test_hook_messages.sh (every language for every key)
 MSG_KEYS="sync_failed sync_not_ours agents_in_core hint_not_set_up hint_not_found project_header docs_index save_hint standards standards_none
 session_rules schema_none run_starting layout_note hooks_path hooks_path_empty guard_code_blocked guard_code_public guard_code_unread guard_code_too_many patch_too_many patch_unjudgeable patch_no_reader patch_shell secrets_blocked secrets_ask
-local_link_created agents_link_created agents_link_wrong agents_link_failed agents_link_unignored local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind task_agent_ask
+local_link_created agents_entry_created agents_entry_wrong agents_entry_failed agents_entry_unignored local_link_wrong local_link_failed old_layout one_suite_wait dirty_code dirty_docs dirty_both stop_remind task_agent_ask
 readonly_agent settings_invalid_path settings_invalid_value settings_unreadable settings_no_home allowed_attribution allowed_model_profile
 src_env src_option src_file fix_env fix_option fix_file codex_trust codex_profile"
 # readonly_agent: the read-only checker's refusal is read only by a subagent (designer, localizer, security,
@@ -44,8 +44,8 @@ _msg_text() {
     ru:sync_failed) MSG_T='corecrew: инструменты не обновлены: не удалось обновить @1' ;;
     en:sync_not_ours) MSG_T='corecrew: tools not refreshed: @1 is not a corecrew tools folder; move it away and start a new session' ;;
     ru:sync_not_ours) MSG_T='corecrew: инструменты не обновлены: @1 — не папка инструментов corecrew; уберите её и начните новую сессию' ;;
-    en:agents_in_core) MSG_T='corecrew: AGENTS.md exists in the Core at @1; fold it into CLAUDE.md and remove it, then the AGENTS.md link can be made' ;;
-    ru:agents_in_core) MSG_T='corecrew: AGENTS.md есть в Core в @1; перенесите его в CLAUDE.md и удалите, тогда можно будет создать ссылку AGENTS.md' ;;
+    en:agents_in_core) MSG_T='corecrew: AGENTS.md and CLAUDE.md both exist in the Core project at @1; resolve the two private files before preparing the local entry' ;;
+    ru:agents_in_core) MSG_T='corecrew: в проекте Core есть и AGENTS.md (@1), и CLAUDE.md. Разберите эти файлы перед подготовкой локального AGENTS.md' ;;
     en:codex_trust) MSG_T="corecrew's guards (project docs in code, secrets) and the save reminder are not active in Codex until you trust the corecrew hooks: open /hooks, review them, trust them, then start a new session (or restart if you just did)." ;;
     ru:codex_trust) MSG_T='Защита corecrew (внутренние документы в коде, секреты) и напоминание сохранить изменения не работают в Codex, пока вы не доверите хуки corecrew: откройте /hooks, просмотрите хуки и доверьте их, затем начните новую сессию (или перезапустите Codex, если только что это сделали).' ;;
     en:codex_profile) MSG_T="corecrew's sandbox profile is not the default in Codex, so secrets (.env files, keys) are protected only partly, by corecrew's hooks. To protect them better, run this in a terminal (it only prints text): bash \"@1\" codex-profile    then copy what it prints and paste it into @2. The profile applies to every Codex session, and afterwards Codex asks for approval before each git commit. It is a default only: command-line sandbox flags or a trusted project's settings can switch it off (the comments in the pasted text say how). corecrew never writes that file." ;;
@@ -99,14 +99,14 @@ _msg_text() {
     ru:secrets_ask) MSG_T='Попросите пользователя проверить значение самому или используйте .env.example.' ;;
     en:local_link_created) MSG_T='corecrew: linked CLAUDE.local.md to @1; restart the session to load it' ;;
     ru:local_link_created) MSG_T='corecrew: CLAUDE.local.md связан с @1; перезапустите сессию, чтобы он загрузился' ;;
-    en:agents_link_created) MSG_T='corecrew: linked AGENTS.md to @1 for tools that read AGENTS.md' ;;
-    ru:agents_link_created) MSG_T='corecrew: AGENTS.md связан с @1 для инструментов, читающих AGENTS.md' ;;
-    en:agents_link_wrong) MSG_T='corecrew: @1 is a link to somewhere other than @2, so tools that read AGENTS.md do not get the private CLAUDE.md. Remove that link, then run: ln -s "@2" "@1"' ;;
-    ru:agents_link_wrong) MSG_T='corecrew: @1 — ссылка не на @2, поэтому инструменты, читающие AGENTS.md, не получают приватный CLAUDE.md. Удалите эту ссылку и выполните: ln -s "@2" "@1"' ;;
-    en:agents_link_failed) MSG_T='corecrew: could not create @1, so tools that read AGENTS.md do not get the private CLAUDE.md. Run: ln -s "@2" "@1"' ;;
-    ru:agents_link_failed) MSG_T='corecrew: не удалось создать @1, поэтому инструменты, читающие AGENTS.md, не получают приватный CLAUDE.md. Выполните: ln -s "@2" "@1"' ;;
-    en:agents_link_unignored) MSG_T='corecrew: @1 must be ignored by Git before corecrew can link it to the private instructions' ;;
-    ru:agents_link_unignored) MSG_T='corecrew: добавьте @1 в исключения Git, чтобы corecrew мог связать его с приватными инструкциями' ;;
+    en:agents_entry_created) MSG_T='corecrew: prepared @1 with paths to the private Core instructions (@2); restart the session to load it' ;;
+    ru:agents_entry_created) MSG_T='corecrew: в @1 записаны пути к приватным правилам Core (@2). Перезапустите сессию, чтобы прочитать их' ;;
+    en:agents_entry_wrong) MSG_T='corecrew: @1 is a link to somewhere other than @2 and was left in place; move it aside before preparing the project again' ;;
+    ru:agents_entry_wrong) MSG_T='corecrew: @1 — ссылка не на @2. Она оставлена на месте. Переместите её перед повторной подготовкой проекта' ;;
+    en:agents_entry_failed) MSG_T='corecrew: could not write @1; check folder permissions and run prepare.sh --part project again' ;;
+    ru:agents_entry_failed) MSG_T='corecrew: не удалось записать @1. Проверьте права на папку и повторите prepare.sh --part project' ;;
+    en:agents_entry_unignored) MSG_T='corecrew: @1 must be ignored by Git and untracked before corecrew can write it' ;;
+    ru:agents_entry_unignored) MSG_T='corecrew: файл @1 должен быть в исключениях Git и не должен отслеживаться' ;;
     en:local_link_wrong) MSG_T='corecrew: @1 exists and is not a link to @2, so the private CLAUDE.md is not loaded. Move that file away, then run: ln -s "@2" "@1"' ;;
     ru:local_link_wrong) MSG_T='corecrew: @1 уже существует и не ведёт на @2, поэтому приватный CLAUDE.md не загружается. Уберите этот файл и выполните: ln -s "@2" "@1"' ;;
     en:local_link_failed) MSG_T='corecrew: could not create @1, so the private CLAUDE.md is not loaded. Run: ln -s "@2" "@1"' ;;

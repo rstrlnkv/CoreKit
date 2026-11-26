@@ -88,6 +88,6 @@ if [ -f "$CORE_DIR/session-rules.md" ]; then
   [ -z "$(tail -c 1 "$CORE_DIR/session-rules.md")" ] || echo   # no final newline: end the line
 fi
 
-# Layout and old-layout notes, the CLAUDE.local.md and AGENTS.md links, the core.hooksPath note: scripts/prepare.sh prepare_project.
+# Layout notes, the AGENTS.md entry and legacy CLAUDE.local.md link: scripts/prepare.sh prepare_project.
 prepare_project "$cwd"
 exit 0

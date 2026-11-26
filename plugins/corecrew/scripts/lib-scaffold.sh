@@ -108,16 +108,7 @@ symlink() {
   if [ -L "$2" ] || [ -d "$2" ]; then return 0; fi
   rm -f "$2"; echo "ln -s made a copy, not a link: $2" >&2; return 1
 }
-# symlinks_work — a symlink can be made (a probe in a temp folder of the system's own).
-symlinks_work() {
-  local d rc=1
-  d="$(mktemp -d "${TMPDIR:-/tmp}/corecrew-ln.XXXXXX")" || return 1
-  : > "$d/t" && symlink t "$d/l" 2>/dev/null && rc=0
-  rm -rf "$d"; return $rc
-}
-
-# Link the code-side name to the private instructions. Existing user files and unrelated links stay in place.
-# Return 2 if Git does not ignore the AGENTS.md link. Dry runs can plan links in folders that do not exist yet.
+# Legacy Claude Code entry point. Existing user files and unrelated links stay in place.
 link_project_instructions() {
   local link="$1/$3" target lnerr lnrc
   target="$(project_instructions "$2")"
@@ -129,14 +120,7 @@ link_project_instructions() {
       return 1
     fi
   fi
-  if [ "$3" = AGENTS.md ] && [ "${DRY:-0}" -ne 1 ]; then
-    GIT_LITERAL_PATHSPECS=0 git -C "$1" check-ignore -q -- AGENTS.md
-    case "$?" in
-      0) ;;
-      1) echo "$link must be ignored by Git before corecrew can link it to the private instructions" >&2; return 2 ;;
-      *) return 1 ;;
-    esac
-  fi
+
   if [ -L "$link" ] && [ "$(readlink "$link")" = "$target" ]; then
     echo "skipped $(rel_core "$link")"; return 0
   fi
@@ -162,13 +146,87 @@ link_project_instructions() {
 # link_local_claude <code_dir> <core_project_dir> — <code_dir>/CLAUDE.local.md links to the private CLAUDE.md.
 link_local_claude() { link_project_instructions "$1" "$2" CLAUDE.local.md; }
 
-# A legacy project with two private files must resolve them before creating a new AGENTS.md link.
-link_agents() {
-  if [ ! -L "$1/AGENTS.md" ] && [ -f "$2/CLAUDE.md" ] && [ -e "$2/AGENTS.md" ]; then
-    echo "AGENTS.md exists in the Core at $2/AGENTS.md and the link would hide it; fold $2/AGENTS.md into CLAUDE.md, then remove it" >&2
+# Write paths as text, not imports or copies. An older Core may not have a root entry yet.
+agents_entry_text() {
+  local project="${1%/*}"
+  printf '# Local agent entry point\n\nRead the private Core instructions before working on this project:\n\n'
+  printf -- '- Core (if present): %s/AGENTS.md\n- Project: %s\n' "${project%/*}" "$1"
+}
+
+agents_entry_matches() {
+  [ ! -L "$1" ] && [ -f "$1" ] && cmp -s "$1" <(agents_entry_text "$2")
+}
+
+# Existing relative and absolute links count only when they name this project's instruction file.
+agents_link_target() {
+  local dest
+  # BSD readlink may omit its own line ending when the target already ends in a newline.
+  dest="$(readlink -n "$1" && printf '.')" || return 1
+  dest="${dest%.}"
+  case "$dest" in *$'\n'*|*$'\r'*) return 1 ;; esac
+  _host_path_r "$dest"; dest="$_HP"
+  case "$dest" in /*) ;; *) dest="${1%/*}/$dest" ;; esac
+  printf '%s/%s\n' "$(canon_dir "${dest%/*}")" "${dest##*/}"
+}
+
+# Identify the exact old entry so that a recheck before publishing can detect a change.
+agents_entry_state() {
+  local file="$1" target="$2" dest old="${2%/*}/CLAUDE.md"
+  if [ -L "$file" ]; then
+    [ ! -d "$file" ] || return 1
+    dest="$(agents_link_target "$file")" || return 1
+    [ "$dest" = "$target" ] || { [ "$dest" = "$old" ] && [ ! -e "$old" ] && [ ! -L "$old" ]; } || return 1
+    readlink "$file"
+  elif agents_entry_matches "$file" "$target"; then
+    printf 'current\n'
+  elif [ "$target" != "$old" ] && [ ! -e "$old" ] && [ ! -L "$old" ] && agents_entry_matches "$file" "$old"; then
+    printf 'legacy entry\n'
+  elif [ ! -e "$file" ]; then
+    printf 'missing\n'
+  else
     return 1
   fi
-  link_project_instructions "$1" "$2" AGENTS.md
+}
+
+# Return 2 if Git does not ignore the entry, including when the old link or file is tracked.
+# A dry run may plan the entry before scaffold creates its checkout or private project.
+write_agents_entry() {
+  local file="$1/AGENTS.md" target state tmp rc=1
+  target="$(project_instructions "$2")"
+  if [ -f "$2/CLAUDE.md" ] && { [ -e "$2/AGENTS.md" ] || [ -L "$2/AGENTS.md" ]; }; then
+    echo "AGENTS.md exists in the Core at $2/AGENTS.md; resolve the two private instruction files first" >&2
+    return 1
+  fi
+  if [ ! -f "$target" ] && { [ "${DRY:-0}" -ne 1 ] || [ -d "$2" ]; }; then return 1; fi
+  case "$target" in *$'\n'*|*$'\r'*) echo 'Core instruction paths must be on one line' >&2; return 1 ;; esac
+  if ! state="$(agents_entry_state "$file" "$target")"; then
+    echo "$file exists and will stay in place; configure it yourself to read $target" >&2
+    return 1
+  fi
+  if [ "${DRY:-0}" -ne 1 ]; then
+    if GIT_LITERAL_PATHSPECS=0 git -C "$1" check-ignore -q -- AGENTS.md; then
+      :
+    elif [ "$?" -eq 1 ]; then
+      echo "$file must be ignored by Git before CoreCrew can write it" >&2; return 2
+    else
+      return 1
+    fi
+  fi
+  if [ "$state" = current ]; then echo "skipped $(rel_core "$file")"; return 0; fi
+  if [ "${DRY:-0}" -eq 1 ]; then echo "would create $(rel_core "$file")"; return 0; fi
+  tmp="$(mktemp -d "$1/.corecrew-entry.XXXXXX")" || return 1
+  if agents_entry_text "$target" > "$tmp/AGENTS.md"; then
+    if [ "$state" = missing ]; then
+      # Use the checkout directory as the destination, so an AGENTS.md directory cannot take our file.
+      mv -n "$tmp/AGENTS.md" "$1/" && agents_entry_matches "$file" "$target" && rc=0
+    elif [ "$(agents_entry_state "$file" "$target")" = "$state" ]; then
+      mv -f "$tmp/AGENTS.md" "$1/" && rc=0
+    fi
+  fi
+  rm -f "$tmp/AGENTS.md"
+  rmdir "$tmp"
+  [ "$rc" -eq 0 ] || return 1
+  echo "created $(rel_core "$file")"
 }
 
 # projects_entry <name> <purpose> <entry> — add "- <name> — <purpose> — <entry>" to $CORE_DIR/PROJECTS.md

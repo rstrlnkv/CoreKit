@@ -179,11 +179,10 @@ assert_eq "$RC" "0" "read-only folder: exit"
 echo "$OUT" | grep -qF "exists and is not a link" && fail "read-only folder: claims a file exists: $OUT" || pass
 echo "$OUT" | grep -qF "corecrew: could not create $NC/CLAUDE.local.md, so the private CLAUDE.md is not loaded. Run: ln -s \"$NP/CLAUDE.md\" \"$NC/CLAUDE.local.md\"" \
   && pass || fail "read-only folder: could-not-create line missing: $OUT"
-# --- AGENTS.md link (M7): made once with one line; a Core AGENTS.md gets one line
+# --- AGENTS.md entry: made once with one line; a private conflict gets one line
 rm -f "$NC/AGENTS.md" "$NP/AGENTS.md"; [ -L "$NC/CLAUDE.local.md" ] || ln -s "$NP/CLAUDE.md" "$NC/CLAUDE.local.md"
 run_rc "$NC"; assert_eq "$RC" "0" "AGENTS link: exit"
-[ -L "$NC/AGENTS.md" ] && pass || fail "hook did not create the AGENTS.md link"
-assert_eq "$(readlink "$NC/AGENTS.md")" "$NP/CLAUDE.md" "AGENTS.md link target"
+assert_agents_entry "$NC/AGENTS.md" "$NP/CLAUDE.md"
 assert_eq "$(echo "$OUT" | grep -c 'AGENTS.md')" "1" "one AGENTS.md line: $OUT"
 echo "$OUT" | grep 'AGENTS.md' | grep -qF "$NP/CLAUDE.md" && pass || fail "AGENTS.md line lacks the target: $OUT"
 echo "$OUT" | grep -qF "created " && fail "link_agents line leaked: $OUT" || pass
@@ -200,10 +199,10 @@ assert_eq "$(cat "$NC/AGENTS.md")" "mine" "real AGENTS.md untouched"; [ -L "$NC/
 echo "$OUT" | grep -qF "AGENTS.md" && fail "real AGENTS.md: noise: $OUT" || pass
 rm "$NC/AGENTS.md"; echo x > "$SANDBOX/else.md"; ln -s "$SANDBOX/else.md" "$NC/AGENTS.md"
 run_rc "$NC"; assert_eq "$(readlink "$NC/AGENTS.md")" "$SANDBOX/else.md" "AGENTS.md link elsewhere untouched"
-# (M4) a link elsewhere is named once, like a wrong CLAUDE.local.md, with the command that fixes it
+# A link elsewhere is named once, with advice that does not recreate a symlink.
 assert_eq "$(echo "$OUT" | grep -c 'AGENTS.md')" "1" "link elsewhere: one AGENTS.md line: $OUT"
 echo "$OUT" | grep -qF "corecrew: $NC/AGENTS.md is a link to somewhere other than $NP/CLAUDE.md" && pass || fail "link elsewhere: line missing: $OUT"
-echo "$OUT" | grep -qF "ln -s \"$NP/CLAUDE.md\" \"$NC/AGENTS.md\"" && pass || fail "link elsewhere: no fix command: $OUT"
+echo "$OUT" | grep -qF "move it aside before preparing the project again" && pass || fail "link elsewhere: no recovery advice: $OUT"
 CLAUDE_PLUGIN_OPTION_UI_LANGUAGE=ru run_rc "$NC"
 echo "$OUT" | grep 'AGENTS.md' | grep -qF "$NP/CLAUDE.md" && pass || fail "ru link elsewhere line missing: $OUT"
 echo "$OUT" | grep 'AGENTS.md' | grep -q 'somewhere' && fail "ru link elsewhere line is English: $OUT" || pass
@@ -273,6 +272,7 @@ PC="$SANDBOX/pcopy"; cp -R "$PLUGIN" "$PC"
 pc_run() {  # pc_run <cwd> — the plugin copy's hook: stdout in OUT, stderr in ERR, exit code in RC
   OUT="$(hook_event claude SessionStart "$1" source=startup | CORE_DIR="$CD0" CLAUDE_PLUGIN_ROOT="$PC" bash "$PC/hooks/session-start.sh" 2>"$SANDBOX/err")"; RC=$?; ERR="$(cat "$SANDBOX/err")"
 }
+pc_run "$NC"  # convert the old entry before comparing steady-state output
 pc_run "$NC"; OK_OUT="$OUT"
 assert_eq "$RC$ERR" "0" "plugin copy, sync works: exit 0, nothing on stderr"
 printf '#!/usr/bin/env bash\nexit 1\n' > "$PC/scripts/sync-tools.sh"
@@ -294,7 +294,7 @@ assert_eq "$RC" "0" "unreadable code folder: exit"
 assert_eq "$ERR" "" "unreadable code folder: nothing on stderr"
 assert_eq "$OUT" "$NC_OUT
 corecrew: could not create $NC/CLAUDE.local.md, so the private CLAUDE.md is not loaded. Run: ln -s \"$NP/CLAUDE.md\" \"$NC/CLAUDE.local.md\"
-corecrew: could not create $NC/AGENTS.md, so tools that read AGENTS.md do not get the private CLAUDE.md. Run: ln -s \"$NP/CLAUDE.md\" \"$NC/AGENTS.md\"" \
+corecrew: could not write $NC/AGENTS.md; check folder permissions and run prepare.sh --part project again" \
   "unreadable code folder: the context, then the two link lines"
 
 # --- cost: in a project with the tools current, the hook starts one bash (sync-tools.sh); the hook itself, started

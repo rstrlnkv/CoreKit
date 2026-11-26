@@ -166,12 +166,10 @@ bash "$SCRIPTS/wiki-index.sh" "$P" >/dev/null
 
 # settings.local.json grants the absolute project dir
 assert_contains "$K/.claude/settings.local.json" "\"$P\""
-# the private AGENTS.md reaches the code folder through a symlink
+# The checkout entry points to the private instructions without copying them.
 [ -f "$P/AGENTS.md" ] && [ ! -e "$P/CLAUDE.md" ] && pass || fail "new projects need a single private AGENTS.md"
-[ ! -e "$K/CLAUDE.local.md" ] && [ ! -L "$K/CLAUDE.local.md" ] && pass || fail "new projects need only the AGENTS.md link"
-# the same file is the cross-tool AGENTS.md (M7); the scaffold output names it
-[ -L "$K/AGENTS.md" ] && pass || fail "AGENTS.md is not a symlink"
-assert_eq "$(readlink "$K/AGENTS.md")" "$P/AGENTS.md" "AGENTS.md target"
+[ ! -e "$K/CLAUDE.local.md" ] && [ ! -L "$K/CLAUDE.local.md" ] && pass || fail "new projects need only AGENTS.md"
+assert_agents_entry "$K/AGENTS.md" "$P/AGENTS.md"
 assert_no_file "$P/CLAUDE.md"
 # code .gitignore blocks internal files
 for pat in AGENTS.md CLAUDE.md CLAUDE.local.md .claude/ docs/superpowers/ .env '*.pem' '*.key' \
@@ -190,9 +188,9 @@ c=$(grep -c '^- demo-app ' "$CORE_DIR/PROJECTS.md"); assert_eq "$c" "1" "PROJECT
 assert_contains "$CORE_DIR/PROJECTS.md" "Test app"
 assert_contains "$CORE_DIR/PROJECTS.md" "- demo-app — Test app — demo-app/"
 
-# --- second run changes nothing (tree_sum skips links: their targets are read separately)
+# --- second run changes nothing
 before=$(tree_sum "$CORE_DIR")
-before_k=$(tree_sum "$K"); before_l="$(readlink "$K/AGENTS.md")"
+before_k=$(tree_sum "$K")
 assert_exit 0 bash "$S" --name demo-app --purpose "Test app"
 want2="$(cat <<'W'
 skipped demo-app/AGENTS.md
@@ -215,8 +213,6 @@ assert_eq "$OUT" "$want2" "second run output"
 after=$(tree_sum "$CORE_DIR")
 assert_eq "$before" "$after" "tree changed on re-run"
 assert_eq "$(tree_sum "$K")" "$before_k" "code folder changed on re-run"
-assert_eq "$(readlink "$K/AGENTS.md")" "$before_l" "links changed on re-run"
-[ "$before_l" = "$P/AGENTS.md" ] && pass || fail "links do not point to the private AGENTS.md: $before_l"
 
 # --- a folder that is not ours blocks the run; nothing is written
 new_sandbox; setup_core
@@ -253,7 +249,7 @@ echo "$OUT" | grep -qxF 'created ../ag-app/AGENTS.md' && pass || fail "first run
 R="$(dirname "$CORE_DIR")/ag-app"
 rm "$R/AGENTS.md"; printf 'mine\n' > "$R/AGENTS.md"
 assert_exit 1 bash "$S" --name ag-app
-echo "$OUT" | grep -qF "AGENTS.md exists and is not a link to $CORE_DIR/ag-app/AGENTS.md; leave it or remove it yourself" && pass || fail "AGENTS link message: $OUT"
+echo "$OUT" | grep -qF "$R/AGENTS.md exists and will stay in place" && pass || fail "AGENTS entry message: $OUT"
 assert_eq "$(cat "$R/AGENTS.md")" "mine" "real AGENTS.md kept"
 [ -L "$R/AGENTS.md" ] && fail "AGENTS.md file replaced by link" || pass
 # a link elsewhere is kept

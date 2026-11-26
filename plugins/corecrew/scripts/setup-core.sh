@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates or completes the Core skeleton: a git repo with .gitignore, README.md, PROJECTS.md,
+# Creates or completes the Core skeleton: a git repo with .gitignore, AGENTS.md, README.md, PROJECTS.md,
 # standards/README.md, knowledge/README.md and .coredev ("schema: 2"). Run it again any time:
 # existing files are never overwritten (a user's README.md or PROJECTS.md stays as it is) and
 # nothing is deleted. It never creates a GitHub repo.
@@ -40,7 +40,7 @@ load_settings
 [ -n "$CORE_DIR" ] || { echo "setup-core: no Core path (give <core_dir>, or set core_dir, CORE_DIR or HOME); nothing was created." >&2; exit 2; }
 
 # The setup files as "template|path in the Core", in the order their lines are printed (.coredev is written below).
-FILES=("gitignore|.gitignore" "README.md|README.md" "PROJECTS.md|PROJECTS.md"
+FILES=("gitignore|.gitignore" "AGENTS.md.tmpl|AGENTS.md" "README.md|README.md" "PROJECTS.md|PROJECTS.md"
        "standards-README.md|standards/README.md" "knowledge-README.md|knowledge/README.md")
 
 # schema_old — true when .coredev holds a schema number below this plugin's (core_ready is true).

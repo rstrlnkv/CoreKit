@@ -8,7 +8,7 @@ Each project's code lives in its own repository in the folder next to this one
 for the project `my-app`), so internal files never get into it.
 
 Layout: `<project>/{AGENTS.md, docs/}` here; the code repository is `../<Name>/`.
-Its `AGENTS.md` is a gitignored symlink to the project's `AGENTS.md` here.
+Its ignored `AGENTS.md` tells the agent where to read the Core and project instructions.
 Each project's `docs/` is an Obsidian vault; `docs/INDEX.md` is generated, never edited by hand.
 Start your agent in the code folder, `../<Name>/`: Claude Code as is, or Codex with
 `codex --add-dir "<Core>"` (the path of this folder), so it may also write here.

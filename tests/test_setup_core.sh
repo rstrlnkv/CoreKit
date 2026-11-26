@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/lib.sh"
 SC="$SCRIPTS/setup-core.sh"
-ITEMS="./.git .gitignore README.md PROJECTS.md standards/README.md knowledge/README.md .coredev"
+ITEMS="./.git .gitignore AGENTS.md README.md PROJECTS.md standards/README.md knowledge/README.md .coredev"
 
-# --- fresh run: seven items, one commit
+# --- fresh run: eight items, one commit
 new_sandbox
 assert_exit 0 bash "$SC" "$CORE_DIR"
 for i in $ITEMS; do
   echo "$OUT" | grep -qxF "created $i" && pass || fail "no 'created $i' in: $OUT"
 done
-assert_eq "$(echo "$OUT" | grep -c '^created')" "7" "created lines"
-for f in .gitignore README.md PROJECTS.md standards/README.md knowledge/README.md .coredev; do
+assert_eq "$(echo "$OUT" | grep -c '^created')" "8" "created lines"
+for f in .gitignore AGENTS.md README.md PROJECTS.md standards/README.md knowledge/README.md .coredev; do
   assert_file "$CORE_DIR/$f"
 done
 assert_dir "$CORE_DIR/.git"
@@ -46,7 +46,7 @@ core_ready_in "$CORE_DIR" && pass || fail "core_ready false after setup"
 before=$(tree_sum "$CORE_DIR")
 assert_exit 0 bash "$SC" "$CORE_DIR"
 echo "$OUT" | grep -q '^created' && fail "second run created: $OUT" || pass
-assert_eq "$(echo "$OUT" | grep -c '^skipped')" "7" "skipped lines"
+assert_eq "$(echo "$OUT" | grep -c '^skipped')" "8" "skipped lines"
 assert_eq "$(git -C "$CORE_DIR" rev-list --count HEAD)" "1" "second run added a commit"
 assert_eq "$before" "$(tree_sum "$CORE_DIR")" "tree changed on re-run"
 
@@ -54,7 +54,7 @@ assert_eq "$before" "$(tree_sum "$CORE_DIR")" "tree changed on re-run"
 new_sandbox
 assert_exit 0 bash "$SC" "$CORE_DIR" --dry-run
 assert_no_file "$CORE_DIR"
-assert_eq "$(echo "$OUT" | grep -c '^would create')" "7" "would-create lines"
+assert_eq "$(echo "$OUT" | grep -c '^would create')" "8" "would-create lines"
 # dry run on an existing partial Core changes nothing either
 mkdir -p "$CORE_DIR"; echo keep > "$CORE_DIR/PROJECTS.md"; before=$(tree_sum "$CORE_DIR")
 assert_exit 0 bash "$SC" --dry-run "$CORE_DIR"
@@ -242,7 +242,7 @@ assert_no_file "$HOME/Projects/Core"; assert_no_file "$PH"
 assert_no_file "$HOME/Projects/Core"; assert_eq "$(ls -A "$W")" "" "the work folder after the refused arguments"
 # "~" with a trailing newline is the home folder, as the settings judge it: offered, not refused
 assert_exit 0 in_dir "$W" env -u CORE_DIR bash "$SC" --dry-run '~'$'\n'
-assert_eq "$(echo "$OUT" | grep -c '^would create')" "7" "~ with a newline: the Core in HOME is offered"
+assert_eq "$(echo "$OUT" | grep -c '^would create')" "8" "~ with a newline: the Core in HOME is offered"
 assert_no_file "$HOME/.coredev"
 # an absolute argument with a trailing newline still sets up that Core (the newline is dropped)
 assert_exit 0 in_dir "$W" env -u CORE_DIR bash "$SC" "$SANDBOX/nl/Core"$'\n'
@@ -252,7 +252,7 @@ assert_exit 0 in_dir "$W" env -u CORE_DIR CLAUDE_PLUGIN_OPTION_CORE_DIR=rel-opti
 assert_file "$SANDBOX/abs/Core/.coredev"; assert_no_file "$HOME/Projects/Core"
 # only the argument is refused: an invalid plugin option or CORE_DIR with no argument keeps the documented default
 assert_exit 0 in_dir "$W" env -u CORE_DIR CLAUDE_PLUGIN_OPTION_CORE_DIR=rel-option bash "$SC" --dry-run
-assert_eq "$(echo "$OUT" | grep -c '^would create')" "7" "invalid option: the default Core is offered"
+assert_eq "$(echo "$OUT" | grep -c '^would create')" "8" "invalid option: the default Core is offered"
 assert_exit 0 in_dir "$W" env CORE_DIR=rel-env bash "$SC"
 assert_file "$HOME/Projects/Core/.coredev"; assert_no_file "$W/rel-env"
 finish

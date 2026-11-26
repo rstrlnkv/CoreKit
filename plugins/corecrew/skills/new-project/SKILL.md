@@ -46,10 +46,10 @@ stored in `<Core>/.coredev`:
 ## Layout (a deliberate requirement: do not improvise another one)
 ```
 <Core>/                          private GitHub repo <CoreName> (default ~/Projects/Core)
-  .coredev, PROJECTS.md, README.md, standards/, knowledge/
+  AGENTS.md, .coredev, PROJECTS.md, README.md, standards/, knowledge/
   <name>/AGENTS.md, docs/
 <Projects>/<name>/               beside the Core (<Projects> = parent of <Core>): separate git repo "<name>";
-                                 the agent is launched here; AGENTS.md -> <Core>/<name>/AGENTS.md
+                                 launch the agent here; ignored AGENTS.md points to both private rules files
 ```
 
 ## Stages

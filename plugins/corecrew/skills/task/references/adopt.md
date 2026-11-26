@@ -3,7 +3,7 @@
 `/corecrew:task adopt <folder>`: bring an existing project into the corecrew layout. The repo
 stays where it is, in `<Projects>/<Name>` (`<Projects>` is the folder that holds `<Core>`); its
 internal files move to `<Core>/<name>/` (`<name>` is `<Name>` in lower case) and reach the
-session through `AGENTS.md`, a gitignored link to `<Core>/<name>/AGENTS.md`.
+session through an ignored `AGENTS.md` with paths to `<Core>/AGENTS.md` and `<Core>/<name>/AGENTS.md`.
 Start has already resolved `<Core>`, checked that it is set up, and noted `<scripts>` (the plugin
 scripts folder). Steps 1–8 are only you and the script; the crew comes in at step 9. Talk to the
 user in plain words; never run `adopt.sh` before "ok".
@@ -23,8 +23,6 @@ user in plain words; never run `adopt.sh` before "ok".
      case, must be 3-40 Latin letters, digits and hyphens; the user renames the folder.
    - `target exists: <path>`: that folder is taken; nothing is merged or overwritten.
    - `CLAUDE.local.md exists`: the user moves their own file away first.
-   - `cannot create symbolic links here; on Windows turn on Developer Mode ...`: the links need it;
-     the user turns it on (Settings > System > For developers) and runs adopt again.
    - `leftover staged copy of <name>: <Core>/.adopt.<name>.XXXXXX`: an earlier adopt of this project
      stopped before its files reached `<Core>/<name>`. Follow the recovery the line gives, in order. When
      it names a `git -C "<folder>" revert --no-edit <hash>` command, run it first: it undoes the repo
@@ -37,7 +35,7 @@ user in plain words; never run `adopt.sh` before "ok".
    - the name, and that the folder stays where it is;
    - which files go to `<Core>/<name>/` (under "copy to");
    - when the plan lists an `AGENTS.md` merge, its text is appended to the private `AGENTS.md`.
-     Both clients then load those instructions through their links, so flag any conflicting
+     The local entry tells both clients where to read those instructions, so flag any conflicting
      project rules when showing the plan;
    - the rule files under "fold into ... under ## Rules": their text becomes a subsection of the
      Rules section of the private `AGENTS.md` (with "Applies to: ..." for rules limited to some
@@ -50,7 +48,7 @@ user in plain words; never run `adopt.sh` before "ok".
      under "add to .gitignore"; the user's own lines stay as they are), so local Claude files never
      reach a commit, and, when the repo has none, a `.worktreeinclude` that copies
      `.claude/settings.local.json` into new worktrees (an existing one is left as is);
-   - the `AGENTS.md` link shown in the plan. A warning about an existing
+   - the `AGENTS.md` entry shown in the plan. A warning about an existing
      code-repo `AGENTS.md` means the file keeps its own instructions;
    - the creation of `.claude/settings.local.json`, or the `additionalDirectories` entry named
      by its warning;
@@ -92,6 +90,6 @@ user in plain words; never run `adopt.sh` before "ok".
    - the wiki result
    - the `Private pages:` and `Documents:` lines of `adopt-docs.md`
    - `Open Claude Code in: <code folder>` (the script's last line, `open: ...`), and tell the
-     user to restart Claude Code in that folder: the private `AGENTS.md` loads through
-     `AGENTS.md` in a new session. In Codex, say `Open Codex in: <code folder>` with
+     user to restart Claude Code in that folder so it reads the local `AGENTS.md` and follows its
+     instructions. In Codex, say `Open Codex in: <code folder>` with
      the command `<plugin>/reference/codex-host.md` gives.

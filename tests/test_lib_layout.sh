@@ -69,8 +69,8 @@ else
   assert_eq "$(snap_tree "$CORE_DIR")" "$before" "a failed projects_upsert changed the Core"
 fi
 
-# --- link_agents <code_dir> <core_project_dir>: <code_dir>/AGENTS.md -> <core_project_dir>/CLAUDE.md (M7)
-la() { ( source "$LIB"; load_settings; link_agents "$@" ); }
+# --- write_agents_entry <code_dir> <core_project_dir>: a regular file with both private paths.
+la() { ( source "$LIB"; load_settings; write_agents_entry "$@" ); }
 new_sandbox; P="$SANDBOX/Projects"
 mkdir -p "$CORE_DIR/ag" "$P/Ag"; : > "$CORE_DIR/ag/CLAUDE.md"
 T="$CORE_DIR/ag/CLAUDE.md"
@@ -79,14 +79,13 @@ OUT="$(DRY=1 la "$P/Ag" "$CORE_DIR/ag" 2>&1)"; assert_eq "$OUT" "would create ..
 git -C "$P/Ag" init -q
 printf 'AGENTS.md\n' > "$P/Ag/.gitignore"
 assert_exit 0 la "$P/Ag" "$CORE_DIR/ag"; assert_eq "$OUT" "created ../Ag/AGENTS.md" "link_agents created line"
-[ -L "$P/Ag/AGENTS.md" ] && pass || fail "AGENTS.md is not a symlink"
-assert_eq "$(readlink "$P/Ag/AGENTS.md")" "$T" "link_agents target"
+assert_agents_entry "$P/Ag/AGENTS.md" "$T"
 assert_exit 0 la "$P/Ag" "$CORE_DIR/ag"; assert_eq "$OUT" "skipped ../Ag/AGENTS.md" "link_agents second run"
-assert_eq "$(readlink "$P/Ag/AGENTS.md")" "$T" "link kept on second run"
+assert_agents_entry "$P/Ag/AGENTS.md" "$T"
 # a real file is never touched: content and type stay, exit 1, a plain line
 rm "$P/Ag/AGENTS.md"; printf 'mine\n' > "$P/Ag/AGENTS.md"
 assert_exit 1 la "$P/Ag" "$CORE_DIR/ag"
-echo "$OUT" | grep -qF "AGENTS.md exists and is not a link to $T; leave it or remove it yourself" && pass || fail "real-file message: $OUT"
+echo "$OUT" | grep -qF "AGENTS.md exists and will stay in place" && pass || fail "real-file message: $OUT"
 assert_eq "$(cat "$P/Ag/AGENTS.md")" "mine" "real AGENTS.md content"
 [ -L "$P/Ag/AGENTS.md" ] && fail "real AGENTS.md replaced by a link" || pass
 # DRY=1 on a real file: still exit 1, still untouched
@@ -96,13 +95,13 @@ assert_eq "$(cat "$P/Ag/AGENTS.md")" "mine" "real AGENTS.md content after DRY=1"
 for tgt in "$SANDBOX/elsewhere.md" "$SANDBOX/no/such.md"; do
   rm -f "$P/Ag/AGENTS.md"; ln -s "$tgt" "$P/Ag/AGENTS.md"
   assert_exit 1 la "$P/Ag" "$CORE_DIR/ag"
-  echo "$OUT" | grep -qF "AGENTS.md exists and is not a link to $T; leave it or remove it yourself" && pass || fail "elsewhere message: $OUT"
+  echo "$OUT" | grep -qF "AGENTS.md exists and will stay in place" && pass || fail "elsewhere message: $OUT"
   assert_eq "$(readlink "$P/Ag/AGENTS.md")" "$tgt" "link to elsewhere changed"
 done
 # a Core AGENTS.md blocks the link, stays as it is, and the line names it
 rm -f "$P/Ag/AGENTS.md"; printf 'core rules\n' > "$CORE_DIR/ag/AGENTS.md"
 assert_exit 1 la "$P/Ag" "$CORE_DIR/ag"
-echo "$OUT" | grep -qF "fold $CORE_DIR/ag/AGENTS.md into CLAUDE.md, then remove it" && pass || fail "core AGENTS.md message: $OUT"
+echo "$OUT" | grep -qF "$CORE_DIR/ag/AGENTS.md; resolve the two private instruction files first" && pass || fail "core AGENTS.md message: $OUT"
 [ -e "$P/Ag/AGENTS.md" ] || [ -L "$P/Ag/AGENTS.md" ] && fail "link made despite Core AGENTS.md" || pass
 assert_eq "$(cat "$CORE_DIR/ag/AGENTS.md")" "core rules" "Core AGENTS.md changed"
 OUT="$(DRY=1 la "$P/Ag" "$CORE_DIR/ag" 2>&1)"; [ $? -eq 1 ] && pass || fail "DRY=1 with Core AGENTS.md did not exit 1"
@@ -185,7 +184,7 @@ HELPERS="expand_home canon_dir coredev_get core_ready coredev_set settings_file_
   _resolve_setting _settings_file_check resolve_setting _core_raw load_settings json_str json_fields
   _project_of_path worktree_of project_of wt_is_main_of code_root_of code_dir_of old_code_of old_layout_msg valid_project_name lc norm_path
   resolve_abs codex_home host tools_dir hooks_marker_path plugin_version rel_core esc render put mkdir_p git_init
-  project_docs_manifest put_project_docs link_project_instructions link_local_claude link_agents projects_entry projects_upsert"
+  project_docs_manifest put_project_docs link_project_instructions link_local_claude write_agents_entry projects_entry projects_upsert"
 # shellcheck disable=SC1090,SC2086
 missing="$( ( . "$LIB"; for fn in $HELPERS; do type "$fn" >/dev/null 2>&1 || echo "$fn"; done ) 2>&1 )"
 assert_eq "$missing" "" "helpers not defined after sourcing lib.sh"

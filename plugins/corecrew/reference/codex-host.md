@@ -26,8 +26,8 @@ Codex calls a skill `$corecrew:<skill>`. Where a skill says `/corecrew:<skill>` 
 hint), say `$corecrew:<skill>`. Use each skill’s invocation policy. The task skill defines when the orchestrator starts it and when a user must name a subcommand.
 
 Where a skill tells the user to open or restart Claude Code in a folder (`cd <folder> && claude`),
-say instead: open Codex there with `cd "<folder>" && codex --add-dir "<Core>"`. The private
-instructions load in Codex through the folder's `AGENTS.md` link, also only in a new session.
+say instead: open Codex there with `cd "<folder>" && codex --add-dir "<Core>"`. In a new session
+Codex reads the folder's `AGENTS.md`, which tells it where to read the private rules.
 
 ## Writable folders
 Codex writes only inside the folder it was started in and the folders given with `--add-dir`.

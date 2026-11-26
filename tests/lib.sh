@@ -20,6 +20,12 @@ assert_file()    { [ -f "$1" ] && pass || fail "missing file $1"; }
 assert_dir()     { [ -d "$1" ] && pass || fail "missing dir $1"; }
 assert_no_file() { [ ! -e "$1" ] && pass || fail "should not exist: $1"; }
 assert_contains() { grep -qF -- "$2" "$1" 2>/dev/null && pass || fail "$1 lacks: $2"; }
+# Assert both paths and the file type without relying on the exact wording of the entry.
+assert_agents_entry() {
+  [ -f "$1" ] && [ ! -L "$1" ] && pass || fail "not a regular agent entry: $1"
+  assert_contains "$1" "$CORE_DIR/AGENTS.md"
+  assert_contains "$1" "$2"
+}
 assert_not_contains() {
   if [ ! -e "$1" ]; then fail "missing file $1 (cannot check it lacks: $2)"
   elif grep -qF -- "$2" "$1"; then fail "$1 contains: $2"

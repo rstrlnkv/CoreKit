@@ -46,7 +46,7 @@ refuses() {
   assert_eq "$after" "$before" "refusal changed something ($want)"
 }
 inode() { ls -di "$1" | awk '{ print $1 }'; }
-NOLINK_MSG="cannot create symbolic links here; on Windows turn on Developer Mode (Settings > System > For developers), then run adopt again"
+
 
 # The sections below each start their own sandbox and share nothing: six groups run side by side
 # (bg, lib.sh), which keeps the file well under its serial time.
@@ -107,8 +107,7 @@ assert_file "$P/.claude/commands/x.md"
 assert_no_file "$P/.claude/rules"
 assert_file "$P/docs/a.md"
 assert_no_file "$F/CLAUDE.local.md"
-[ -L "$F/AGENTS.md" ] && pass || fail "no AGENTS.md link"
-assert_eq "$(readlink "$F/AGENTS.md")" "$P/AGENTS.md" "AGENTS.md link target"
+assert_agents_entry "$F/AGENTS.md" "$P/AGENTS.md"
 assert_contains "$F/.claude/settings.local.json" "\"$P\""
 assert_eq "$(cat "$F/.worktreeinclude")" "$(cat "$PLUGIN/templates/code/worktreeinclude")" ".worktreeinclude from the template"
 echo "$DRY_OUT" | grep -qF ".worktreeinclude" && pass || fail "plan lacks .worktreeinclude: $DRY_OUT"
@@ -429,7 +428,7 @@ if [ -d "$SANDBOX/projects/case-app/.git" ]; then
   assert_eq "$(last_line "$OUT")" "open: $F" "last line (--from in another case)"
   grep -qxF -- '- case-app — Adopted existing project — Case-App/' "$CORE_DIR/PROJECTS.md" && pass \
     || fail "PROJECTS.md entry lacks the on-disk case: $(cat "$CORE_DIR/PROJECTS.md")"
-  assert_eq "$(readlink "$F/AGENTS.md")" "$CORE_DIR/case-app/AGENTS.md" "link (--from in another case)"
+  assert_agents_entry "$F/AGENTS.md" "$CORE_DIR/case-app/AGENTS.md"
 else
   skip "--from letter case" "case-sensitive disk"
 fi
@@ -450,7 +449,7 @@ assert_contains "$P/AGENTS.md" "# bare-app"
 assert_contains "$P/AGENTS.md" "check: make test"
 assert_contains "$P/AGENTS.md" "## Rules"
 assert_no_file "$F/CLAUDE.local.md"
-assert_eq "$(readlink "$F/AGENTS.md")" "$P/AGENTS.md" "bare repo: Codex link"
+assert_agents_entry "$F/AGENTS.md" "$P/AGENTS.md"
 bash "$WC" "$P" >/dev/null 2>&1 && pass || fail "wiki-check (bare): $(bash "$WC" "$P" 2>&1)"
 
 # --- an existing check: line stays unless --check is given; existing wiki front matter is kept
@@ -704,13 +703,14 @@ git -C "$F" add -A && git -C "$F" commit -q -m agents
 assert_exit 0 bash "$AD" --from "$F" --dry-run
 P="$CORE_DIR/ag-app"
 echo "$OUT" | grep -qxF "merge: AGENTS.md -> $P/AGENTS.md" && pass || fail "plan lacks the merge: $OUT"
-echo "$OUT" | grep -qxF "link: $F/AGENTS.md -> $P/AGENTS.md" && pass || fail "plan lacks the Codex link: $OUT"
+echo "$OUT" | grep -qxF "entry: $F/AGENTS.md -> $CORE_DIR/AGENTS.md, $P/AGENTS.md" && pass || fail "plan lacks the private paths: $OUT"
 assert_no_file "$P/AGENTS.md"
 assert_exit 0 bash "$AD" --from "$F"
 assert_contains "$P/AGENTS.md" "# ag-app"
-assert_contains "$F/AGENTS.md" "Cross-tool rules."
+assert_contains "$P/AGENTS.md" "Cross-tool rules."
+assert_not_contains "$F/AGENTS.md" "Cross-tool rules."
 assert_eq "$(grep '^check:' "$P/AGENTS.md")" 'check: make verify' "adopt preserves the existing check command"
-assert_eq "$(readlink "$F/AGENTS.md")" "$P/AGENTS.md" "AGENTS.md link target"
+assert_agents_entry "$F/AGENTS.md" "$P/AGENTS.md"
 assert_no_file "$P/CLAUDE.md"
 git -C "$F" show --name-only --format= HEAD | grep -qxF AGENTS.md && pass || fail "repo commit lacks AGENTS.md"
 grep -qxF AGENTS.md "$F/.gitignore" && pass || fail ".gitignore lacks AGENTS.md"
@@ -800,7 +800,7 @@ echo "$OUT" | grep -q "^Core commit:" && fail "report claims a Core commit: $OUT
 assert_contains "$P/AGENTS.md" "# Old project"; assert_file "$P/docs/guide.md"; assert_file "$P/.claude/settings.json"
 assert_eq "$(git -C "$F" log -1 --format=%s)" "Move internal Claude files to Core" "repo commit (Core commit failed)"
 assert_eq "$(git -C "$F" status --porcelain)" "" "repo dirty (Core commit failed)"
-assert_eq "$(readlink "$F/AGENTS.md")" "$P/AGENTS.md" "link (Core commit failed)"
+assert_agents_entry "$F/AGENTS.md" "$P/AGENTS.md"
 assert_eq "$(git -C "$CORE_DIR" log -1 --format=%s | grep -c '^Adopt')" "0" "a Core commit was made"
 [ -n "$(git -C "$CORE_DIR" status --porcelain)" ] && pass || fail "the Core has nothing left to commit"
 grep -qxF -- "- cc-app — Adopted existing project — cc-app/" "$CORE_DIR/PROJECTS.md" && pass || fail "PROJECTS.md line (Core commit failed): $(cat "$CORE_DIR/PROJECTS.md")"
@@ -892,9 +892,7 @@ echo "$OUT" | grep -qxF "updated PROJECTS.md entry" && pass || fail "no 'updated
 bg part_late_phases
 
 part_copying_ln() {
-# --- Git Bash on Windows: "ln -s" copies unless MSYS has winsymlinks:nativestrict, which makes a real link
-# (Developer Mode on) or fails (off). The stub plays that ln. With a real link: CLAUDE.local.md and AGENTS.md
-# are links, the wiki converted through the stage link keeps its INDEX.md, no staging folder is left behind.
+# --- Git Bash on Windows: adoption works even when symbolic links are unavailable.
 new_sandbox; setup_core
 REAL_LN="$(command -v ln)"
 mkdir -p "$SANDBOX/stub"
@@ -914,20 +912,18 @@ OUT="$(PATH="$SANDBOX/stub:$PATH" bash "$AD" --from "$F" 2>&1)"; rc=$?
 assert_eq "$rc" "0" "adopt with a copying ln exit ($OUT)"
 P="$CORE_DIR/winlink"
 assert_no_file "$F/CLAUDE.local.md"
-[ -L "$F/AGENTS.md" ] && pass || fail "AGENTS.md is not a symlink (copying ln)"
+assert_agents_entry "$F/AGENTS.md" "$P/AGENTS.md"
 assert_file "$P/docs/INDEX.md"
 assert_eq "$(head -1 "$P/docs/INDEX.md")" "# winlink wiki" "INDEX title (staged copy converted under the project name)"
 assert_eq "$(ls -A "$CORE_DIR" | grep -c '^\.adopt\.')" "0" "staging folder left in the Core (copying ln)"
 echo "$OUT" | grep -q 'Is a directory' && fail "rm on a directory: $OUT" || pass
-# Developer Mode off: no symlinks at all. A refusal before anything changes, in the plan as well.
+# Developer Mode off: no symlinks at all. The plan remains read-only; adoption still works.
 F="$SANDBOX/Projects/nolink"; mkrepo "$F"
 before="$(snap_tree "$SANDBOX")"
-for dry in --dry-run ""; do
-  OUT="$(LN_NO_LINKS=1 PATH="$SANDBOX/stub:$PATH" bash "$AD" --from "$F" $dry 2>&1)"; rc=$?
-  assert_eq "$rc" "2" "no-symlink refusal exit ($dry)"
-  assert_eq "$OUT" "$NOLINK_MSG" "no-symlink refusal message ($dry)"
-done
-assert_eq "$(snap_tree "$SANDBOX")" "$before" "the no-symlink refusal changed something"
+assert_exit 0 env LN_NO_LINKS=1 PATH="$SANDBOX/stub:$PATH" bash "$AD" --from "$F" --dry-run
+assert_eq "$(snap_tree "$SANDBOX")" "$before" "the no-symlink plan changed something"
+assert_exit 0 env LN_NO_LINKS=1 PATH="$SANDBOX/stub:$PATH" bash "$AD" --from "$F"
+assert_agents_entry "$F/AGENTS.md" "$CORE_DIR/nolink/AGENTS.md"
 }
 bg part_copying_ln
 

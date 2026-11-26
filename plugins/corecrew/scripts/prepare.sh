@@ -6,8 +6,8 @@
 #  tools    sync the tools copy the git hook shims run (tools_dir); on error print the sync_not_ours (exit 2) or sync_failed line.
 #           Nothing happens when no data folder is known (no usable HOME).
 #  project  when --cwd is in a project: the layout note, the old-layout note (code in <Core>/<name>/code, which this
-#           version does not support; nothing else is done for such a project), the CLAUDE.local.md and AGENTS.md links
-#           in the main code folder and external worktrees; nested worktrees get the AGENTS.md link if Git ignores it.
+#           version does not support; nothing else is done for such a project), the ignored AGENTS.md entry file
+#           in the main code folder and worktrees, and CLAUDE.local.md only for legacy projects.
 #           Also prints the core.hooksPath note.
 #  host     on Codex: the trust note until the hooks are known to have run (the marker session-start writes), and the
 #           sandbox profile note while config.toml names no default_permissions (read as data, never written).
@@ -30,11 +30,11 @@ prepare_tools() {
   return 0
 }
 
-# link_notes <code folder> <Core project folder> — make the two links; say what was made or what is in the way.
+# link_notes <code folder> <Core project folder> — prepare the entry and the legacy Claude-only link.
 link_notes() {
   local dir="$1" P="$2" lout
   # Only legacy projects use the Claude-specific entry point.
-  if [ ! -f "$P/CLAUDE.md" ]; then link_agents_note "$dir" "$P"; return; fi
+  if [ ! -f "$P/CLAUDE.md" ]; then prepare_agents_entry "$dir" "$P"; return; fi
   if lout="$(link_local_claude "$dir" "$P" 2>/dev/null)"; then
     case "$lout" in created*) printf '%s\n' "$(msg local_link_created "$P/CLAUDE.md")" ;; esac
   elif [ -e "$dir/CLAUDE.local.md" ] || [ -L "$dir/CLAUDE.local.md" ]; then
@@ -42,50 +42,36 @@ link_notes() {
   else   # nothing there, yet ln failed (for example a read-only folder)
     printf '%s\n' "$(msg local_link_failed "$dir/CLAUDE.local.md" "$P/CLAUDE.md")"
   fi
-  link_agents_note "$dir" "$P"
+  prepare_agents_entry "$dir" "$P"
 }
 
-# link_agents_note <code folder> <Core project folder> — link AGENTS.md and report any result that needs attention.
-# A real AGENTS.md stays silent (its owner may want it).
-link_agents_note() {
-  local dir="$1" P="$2" aout target
+# An existing user file stays silent. Report a symlink conflict or an error writing the entry.
+prepare_agents_entry() {
+  local dir="$1" P="$2" aout target rc
   target="$(project_instructions "$P")"
-  if [ "$target" = "$P/AGENTS.md" ]; then
-    update_legacy_agents_link "$dir" "$P"
-  fi
-  if aout="$(link_agents "$dir" "$P" 2>/dev/null)"; then
-    case "$aout" in created*) printf '%s\n' "$(msg agents_link_created "$target")" ;; esac
-  elif [ "$?" -eq 2 ]; then
-    printf '%s\n' "$(msg agents_link_unignored "$dir/AGENTS.md")"
-    return 0
-  elif [ -L "$dir/AGENTS.md" ]; then   # a link elsewhere (or dangling)
-    printf '%s\n' "$(msg agents_link_wrong "$dir/AGENTS.md" "$target")"
-  elif [ -f "$P/CLAUDE.md" ] && [ -e "$P/AGENTS.md" ]; then
-    printf '%s\n' "$(msg agents_in_core "$P/AGENTS.md")"
-  elif [ ! -e "$dir/AGENTS.md" ]; then   # nothing there, yet ln failed (for example a read-only folder)
-    printf '%s\n' "$(msg agents_link_failed "$dir/AGENTS.md" "$target")"
+  if aout="$(write_agents_entry "$dir" "$P" 2>/dev/null)"; then
+    case "$aout" in created*) printf '%s\n' "$(msg agents_entry_created "$dir/AGENTS.md" "$target")" ;; esac
+  else
+    rc=$?
+    if [ "$rc" -eq 2 ]; then
+      printf '%s\n' "$(msg agents_entry_unignored "$dir/AGENTS.md")"
+    elif [ -f "$P/CLAUDE.md" ] && { [ -e "$P/AGENTS.md" ] || [ -L "$P/AGENTS.md" ]; }; then
+      printf '%s\n' "$(msg agents_in_core "$P/AGENTS.md")"
+    elif [ -L "$dir/AGENTS.md" ] && ! agents_entry_state "$dir/AGENTS.md" "$target" >/dev/null; then
+      printf '%s\n' "$(msg agents_entry_wrong "$dir/AGENTS.md" "$target")"
+    elif [ -L "$dir/AGENTS.md" ] || [ ! -e "$dir/AGENTS.md" ]; then
+      printf '%s\n' "$(msg agents_entry_failed "$dir/AGENTS.md")"
+    fi
+    return 1
   fi
   # Remove only a managed, ignored link to the old name, after the replacement is ready.
-  if [ "$target" = "$P/AGENTS.md" ] && [ -L "$dir/AGENTS.md" ] \
-    && [ "$(readlink "$dir/AGENTS.md")" = "$target" ] && [ -L "$dir/CLAUDE.local.md" ] \
-    && [ "$(readlink "$dir/CLAUDE.local.md")" = "$P/CLAUDE.md" ] \
+  if [ "$target" = "$P/AGENTS.md" ] && [ -L "$dir/CLAUDE.local.md" ] \
+    && [ "$(agents_link_target "$dir/CLAUDE.local.md")" = "$P/CLAUDE.md" ] \
+    && [ ! -e "$P/CLAUDE.md" ] && [ ! -L "$P/CLAUDE.md" ] \
     && git -C "$dir" check-ignore -q -- CLAUDE.local.md 2>/dev/null; then
     rm -f "$dir/CLAUDE.local.md"
   fi
-}
-
-# Swap a managed dangling link after its source was renamed. Stage the new link on the same filesystem.
-update_legacy_agents_link() {
-  local dir="$1" P="$2" link="$1/AGENTS.md" tmp
-  [ -f "$P/AGENTS.md" ] && [ -L "$link" ] && [ "$(readlink "$link")" = "$P/CLAUDE.md" ] \
-    && git -C "$dir" check-ignore -q -- AGENTS.md 2>/dev/null || return 0
-  tmp="$(mktemp -d "$dir/.corecrew-link.XXXXXX")" || return 1
-  if symlink "$P/AGENTS.md" "$tmp/AGENTS.md" && [ -L "$link" ] \
-    && [ "$(readlink "$link")" = "$P/CLAUDE.md" ]; then
-    mv -f "$tmp/AGENTS.md" "$link"
-  fi
-  rm -f "$tmp/AGENTS.md"
-  rmdir "$tmp"
+  return 0
 }
 
 # An explicit migration renames the source and connects the main checkout before retiring the old link.
@@ -102,15 +88,12 @@ migrate_project_instructions() {
   if [ ! -f "$P/CLAUDE.md" ] || [ -L "$P/CLAUDE.md" ] || [ -e "$P/AGENTS.md" ] || [ -L "$P/AGENTS.md" ]; then
     echo "prepare: resolve the instruction files in $P before migrating" >&2; return 1
   fi
-  if ! git -C "$code" check-ignore -q -- AGENTS.md || {
-    { [ -e "$code/AGENTS.md" ] || [ -L "$code/AGENTS.md" ]; } \
-      && { [ ! -L "$code/AGENTS.md" ] || [ "$(readlink "$code/AGENTS.md")" != "$P/CLAUDE.md" ]; }
-  }; then
-    echo "prepare: $code/AGENTS.md must be ignored by Git and available for the Core link" >&2; return 1
+  if ! git -C "$code" check-ignore -q -- AGENTS.md || ! agents_entry_state "$code/AGENTS.md" "$P/CLAUDE.md" >/dev/null; then
+    echo "prepare: $code/AGENTS.md must be ignored by Git and available for the Core entry" >&2; return 1
   fi
   if [ -f "$code/CLAUDE.md" ] || [ -f "$code/.claude/CLAUDE.md" ] || {
     [ -f "$code/CLAUDE.local.md" ] &&
-      { [ ! -L "$code/CLAUDE.local.md" ] || [ "$(readlink "$code/CLAUDE.local.md")" != "$P/CLAUDE.md" ]; }
+      { [ ! -L "$code/CLAUDE.local.md" ] || [ "$(agents_link_target "$code/CLAUDE.local.md")" != "$P/CLAUDE.md" ]; }
   }; then
     echo "prepare: existing Claude Code instructions in $code can shadow AGENTS.md; resolve them before migrating" >&2
     return 1
@@ -118,12 +101,11 @@ migrate_project_instructions() {
   if ! mv -n "$P/CLAUDE.md" "$P/AGENTS.md" || [ -e "$P/CLAUDE.md" ]; then
     echo "prepare: could not rename $P/CLAUDE.md to AGENTS.md" >&2; return 1
   fi
-  link_agents_note "$code" "$P"
-  if [ ! -L "$code/AGENTS.md" ] || [ "$(readlink "$code/AGENTS.md")" != "$P/AGENTS.md" ]; then
+  if ! prepare_agents_entry "$code" "$P"; then
     if mv -n "$P/AGENTS.md" "$P/CLAUDE.md" && [ -f "$P/CLAUDE.md" ]; then
-      echo "prepare: could not link $code/AGENTS.md; restored $P/CLAUDE.md" >&2
+      echo "prepare: could not update $code/AGENTS.md; restored $P/CLAUDE.md" >&2
     else
-      echo "prepare: could not link $code/AGENTS.md; the instructions are at $P/AGENTS.md" >&2
+      echo "prepare: could not update $code/AGENTS.md; the instructions are at $P/AGENTS.md" >&2
     fi
     return 1
   fi
@@ -159,7 +141,7 @@ prepare_project() {
       link_notes "$code" "$P"
       if worktree_of "$cwd" && wt_is_main_of "$proj"; then
         case "$WT_ROOT" in
-          "$WT_MAIN"/*) link_agents_note "$WT_ROOT" "$P" ;;
+          "$WT_MAIN"/*) prepare_agents_entry "$WT_ROOT" "$P" ;;
           *) link_notes "$WT_ROOT" "$P" ;;
         esac
       fi

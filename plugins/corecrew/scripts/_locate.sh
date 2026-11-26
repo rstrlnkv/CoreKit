@@ -1,12 +1,12 @@
 # Shared by save and undo-step: locate repos from the current directory (locate), and check that a
 # repo can commit before anything changes (can_commit).
 # Sets: CODE (code repo or worktree toplevel), MAIN (main code checkout), PROJECT (<Core>/<name>),
-# NAME, CORE, CORE_PATHS. The layout: the code repo at <Projects>/<Name> beside the Core, with a CLAUDE.local.md
-# symlink to <Core>/<name>/CLAUDE.md. A project in the old layout of corecrew 0.4 and older (<Core>/<name>/code,
+# NAME, CORE, CORE_PATHS. The code repo sits beside the Core and has a local AGENTS.md entry or an older
+# instructions symlink. A project in the old layout of corecrew 0.4 and older (<Core>/<name>/code,
 # old_code_of) is refused with old_layout_msg, whichever folder of it the session is in.
 # shellcheck disable=SC2034  # CODE MAIN PROJECT NAME CORE CORE_PATHS are read by save and undo-step, which source this file
 locate() {
-  local here="$PWD" common link ldir n o
+  local here="$PWD" common link ldir="" n o
   CODE=$(git -C "$here" rev-parse --show-toplevel 2>/dev/null) || {
     echo "Run this inside a project's code folder." >&2; return 1; }
   # lib.sh sits next to this file (in the plugin and in the tools copy).
@@ -19,20 +19,24 @@ locate() {
       if o=$(old_code_of "$n"); then old_layout_msg "$o" >&2; return 1; fi
       here=$(code_dir_of "$n" 2>/dev/null) && CODE=$(git -C "$here" rev-parse --show-toplevel 2>/dev/null) || {
         echo "Run this inside a project's code folder." >&2; return 1; }
+      ldir="$CORE_DIR"
     fi
   fi
   # CDPATH='' and >/dev/null: with CDPATH exported, cd to the relative .git could print the folder or go elsewhere
   common=$(cd "$CODE" && CDPATH='' cd -- "$(git rev-parse --git-common-dir)" >/dev/null && pwd)
   MAIN=$(dirname "$common")
-  link=$(readlink "$MAIN/CLAUDE.local.md" 2>/dev/null) || link=$(readlink "$MAIN/AGENTS.md" 2>/dev/null)
-  case "$link" in
-    /*/CLAUDE.md|/*/AGENTS.md) ;;
-    */CLAUDE.md|*/AGENTS.md) link="$MAIN/$link" ;;
-    *) link="" ;;
-  esac
-  if [ -n "$link" ]; then
-    ldir=$(cd "$(dirname "$link")/.." 2>/dev/null && pwd -P) && CORE_DIR="$ldir"
+  if [ -z "$ldir" ] && ! ldir="$(core_from_agents_entry "$MAIN")"; then
+    link=$(readlink "$MAIN/CLAUDE.local.md" 2>/dev/null) || link=$(readlink "$MAIN/AGENTS.md" 2>/dev/null)
+    case "$link" in
+      /*/CLAUDE.md|/*/AGENTS.md) ;;
+      */CLAUDE.md|*/AGENTS.md) link="$MAIN/$link" ;;
+      *) link="" ;;
+    esac
+    if [ -n "$link" ]; then
+      ldir=$(cd "$(dirname "$link")/.." 2>/dev/null && pwd -P)
+    fi
   fi
+  [ -z "$ldir" ] || CORE_DIR="$ldir"
   load_settings
   if n=$(project_of "$MAIN") && o=$(old_code_of "$n"); then old_layout_msg "$o" >&2; return 1; fi
   NAME=$(project_of "$MAIN") && [ "$(code_dir_of "$NAME" 2>/dev/null)" = "$(canon_dir "$MAIN")" ] \
@@ -43,6 +47,18 @@ locate() {
   CORE="$CORE_DIR"; PROJECT="$CORE/$NAME"
   CORE_PATHS="$(core_paths "$CORE" "$NAME")"
   return 0
+}
+
+# Discover a non-default Core only from an ignored, unmodified entry of our own format.
+core_from_agents_entry() {
+  local entry="$1/AGENTS.md" target project core
+  [ -f "$entry" ] && [ ! -L "$entry" ] && git -C "$1" check-ignore -q -- AGENTS.md || return 1
+  target="$(sed -n '6{s/^- Project: //p;q;}' "$entry")" || return 1
+  case "$target" in /*/AGENTS.md|/*/CLAUDE.md) ;; *) return 1 ;; esac
+  project="${target%/*}"; core="${project%/*}"
+  [ "${1%/*}" = "${core%/*}" ] && [ "$(lc "${1##*/}")" = "${project##*/}" ] \
+    && agents_entry_matches "$entry" "$target" && [ -d "$core/.git" ] && [ -f "$target" ] || return 1
+  printf '%s\n' "$core"
 }
 
 # _name_splits <project> — exit 0 (and a line on stderr) when the project name holds a space or a tab. save and
@@ -65,7 +81,7 @@ _name_splits() {
 # component, the entry it is under. The output keeps the fixed order of the list.
 core_paths() {
   local core="$1" out="$2" f p missing="" tracked=" " IFS=$' \t\n'
-  local list="PROJECTS.md README.md .gitignore .coredev standards knowledge session-rules.md"
+  local list="PROJECTS.md README.md .gitignore .coredev standards knowledge session-rules.md AGENTS.md"
   for f in $list; do
     [ -e "$core/$f" ] || missing="$missing $f"
   done

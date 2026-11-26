@@ -11,7 +11,7 @@ Standards: alpha
 Session rules (@SB@/Projects/Core/session-rules.md):
 Rule one.
 corecrew: linked CLAUDE.local.md to @SB@/Projects/Core/gold/CLAUDE.md; restart the session to load it
-corecrew: linked AGENTS.md to @SB@/Projects/Core/gold/CLAUDE.md for tools that read AGENTS.md
+corecrew: prepared @SB@/Projects/gold/AGENTS.md with paths to the private Core instructions (@SB@/Projects/Core/gold/CLAUDE.md); restart the session to load it
 rc=0
 == new layout, links current
 corecrew: you are in the Core project "gold" (Core: @SB@/Projects/Core)
