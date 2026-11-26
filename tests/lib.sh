@@ -101,7 +101,8 @@ new_sandbox() {
 # else could change the result: the GIT_* variables and the global git config (identity, dates, init settings),
 # PATH (a fake git), umask (the modes) and the scripts folder. A Core folder that exists is built as before.
 scaffold_legacy() {
-  local p="$CORE_DIR/$1" c="$(dirname "$CORE_DIR")/$1"
+  local p="$CORE_DIR/$1" c
+  c="$(dirname "$CORE_DIR")/$1" || return 1
   bash "$SKILL/scripts/scaffold.sh" --name "$1" >/dev/null &&
     mv "$p/AGENTS.md" "$p/CLAUDE.md" &&
     rm "$c/AGENTS.md" &&
