@@ -1,6 +1,6 @@
 {
   "name": "coremodel",
-  "version": "0.13.1",
+  "version": "0.14.0",
   "description": "Recommends settings for each Codex task. Choose a model and effort, or effort alone, and apply changes with /model.",
   "author": { "name": "rstrlnkv", "url": "https://github.com/rstrlnkv" },
   "homepage": "https://github.com/rstrlnkv/CoreKit",
